@@ -280,6 +280,11 @@ C===================================================================70
       use xbl_inc
       IMPLICIT REAL(M)
 
+! jx-mod Under strange circumstances U2 and then RT2 will become
+!     negative leading to a SIGFPE (floating point exception)
+!     which is currently trapped with acompiler option in release mode
+!     --> further investigation needed!
+
 C     DP mod: set explicitly (otherwise initialized as 0 here)
       HVRAT = 0.0
 C
@@ -323,7 +328,9 @@ C
       HK2_MS =                HK2_M2*M2_MS
 C
 C---- set momentum thickness Reynolds number
+
       RT2    = R2*U2*T2/V2
+
       RT2_U2 = RT2*(1.0/U2 + R2_U2/R2 - V2_U2/V2)
       RT2_T2 = RT2/T2
       RT2_MS = RT2*(         R2_MS/R2 - V2_MS/V2)
