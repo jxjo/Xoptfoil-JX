@@ -376,6 +376,8 @@ subroutine check_seed()
     if ((op_point(i) <= 0.d0) .and. (op_mode(i) == 'spec-cl')) then
       if ( (trim(opt_type) /= 'min-drag') .and.                                &
            (trim(opt_type) /= 'max-xtr') .and.                                 &
+            ! jx-mod Geo targets - allow target < 0 
+           (trim(opt_type) /= 'target-drag') .and.                             &
            (trim(opt_type) /= 'max-lift-slope') ) then
         write(*,*) "Error: operating point "//trim(text)//" is at Cl = 0. "//  &
                  "Cannot use '"//trim(opt_type)//"' optimization in this case."

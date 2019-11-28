@@ -141,7 +141,7 @@ function aero_objective_function(designvars, include_penalty)
   double precision :: penaltyi
   double precision :: geo_objective_function
   double precision :: ref_value, tar_value, cur_value
-  character(100)   :: penalty_info, text, numstring
+  character(100)   :: penalty_info, text
   ! jx-mod Smoothing
   double precision :: perturbation_bot, perturbation_top
 
@@ -204,7 +204,7 @@ function aero_objective_function(designvars, include_penalty)
 
     ! Penality for too many curve_reservals for speed-up reason already here 
     penaltyval = penaltyval + max(0.d0,dble(nreversalst-max_curv_reverse_top))
-    if (max(0.d0,dble(nreversalst-max_curv_reverse_top)) > 0.d0) penalty_info = trim(penalty_info) // ' PerT'
+    if (max(0.d0,dble(nreversalst-max_curv_reverse_top)) > 0.d0) penalty_info = trim(penalty_info) // ' RevT'
 
     call assess_surface ('Bottom ',  .false., max_curv_reverse_bot, xseedb, zb_new, nreversalsb, perturbation_bot)
     if ((do_smoothing .and. (perturbation_bot > 0.6)) .and. penalize) then     ! do not smooth seed
@@ -214,7 +214,7 @@ function aero_objective_function(designvars, include_penalty)
 
     ! Penality for too many curve_reservals for speed-up reason already here 
     penaltyval = penaltyval + max(0.d0,dble(nreversalsb-max_curv_reverse_bot))
-    if (max(0.d0,dble(nreversalsb-max_curv_reverse_bot)) > 0.d0) penalty_info = trim(penalty_info) // ' PerB'
+    if (max(0.d0,dble(nreversalsb-max_curv_reverse_bot)) > 0.d0) penalty_info = trim(penalty_info) // ' RevB'
 
     ! Calculate geometry objective based on the assessed quality (pertubation)
     if (do_smoothing) then 
@@ -789,8 +789,7 @@ function aero_objective_function(designvars, include_penalty)
           penaltyi = 2.222d0 * epsupdate
         end if 
         penaltyval = penaltyval + penaltyi 
-        write (numstring,'(F6.4)') mindrag(i)
-        penalty_info = trim(penalty_info) // ' cdflip' // text // ' Min' // trim(adjustl(numstring))
+        penalty_info = trim(penalty_info) // ' cdflip' // text
       end if
     end if
 
@@ -839,7 +838,8 @@ function aero_objective_function(designvars, include_penalty)
 !        Now always the last good value (= iteration with no penalties)
 !        is taken for succeeding flip detection in the next iteration
 !        Attention: hack: Name of variable is still maxlift and mindrag !                                                           
-  if (penaltyval <= epsupdate) then
+
+  if (penaltyval == 0.d0) then
     do i = 1, noppoint
       ! jx-mod under strange circumstances cl changes although "spec-cl" - s.a. - supress update 
       if ((op_mode(i) /= 'spec-cl') .or. (maxlift(i) == -100.d0))  then
