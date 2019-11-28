@@ -628,10 +628,11 @@ subroutine assess_surface (info, show_it, max_curv_reverse, x, y, nreversals2, p
   logical, intent(in)   :: show_it
   integer, intent(out)  :: nreversals2
 
-  integer :: nhighlows2, nspikes, max_spikes
+  integer :: nhighlows2, nspikes, max_spikes, max_highlows2
   character (size(x)) :: result_info
 
-  max_spikes = 2
+  max_spikes    = 0                             ! don't like spikes 
+  max_highlows2 = max(0, max_curv_reverse - 1)  ! also a curve with 1 reversal shouldn't have a high/low
   
   nreversals2 = 0
   nhighlows2  = 0
@@ -646,8 +647,9 @@ subroutine assess_surface (info, show_it, max_curv_reverse, x, y, nreversals2, p
   call find_curvature_reversals(size(x), 5, highlow_treshold, curv_threshold, x, y, &
                                 nhighlows2,nreversals2, result_info)
 
+  ! calculate an overall index for all the reversal, spikes, etc...
   perturbation    =   1.00d0 * max(0.d0,dble(nreversals2 - max_curv_reverse))    &
-                    + 0.30d0 * max(0.d0,dble(nhighlows2  - max_curv_reverse))    &
+                    + 0.30d0 * max(0.d0,dble(nhighlows2  - max_highlows2))    &
                     + 0.03d0 * max(0.d0,dble(nspikes - max_spikes))
 
   if ( show_it ) then       

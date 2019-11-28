@@ -643,7 +643,10 @@ subroutine find_curvature_reversals(npt, i_start, highlow_treshold, curve_thresh
   double precision, dimension(npt) :: deriv2
   double precision :: curv1, d_minmax, d_cur
   integer :: i, i_first, nhighs, nlows, i_firstHighLow, i_max, i_min
-  character (1) ::  reversal_sign = 'R', high_point = 'H', low_point = 'L', prev_highlow
+                                        ! strange: Looking at the derivative plot
+                                        ! highs and lows are just the opposite
+                                        ! --> hack the character (don't know the reason)
+  character (1) ::  reversal_sign = 'R', high_point = 'L', low_point = 'H', prev_highlow
 
   nreversals2 = 0
   nhighs = 0
@@ -664,9 +667,9 @@ subroutine find_curvature_reversals(npt, i_start, highlow_treshold, curve_thresh
   do i = i_firstHighLow, npt
 
     ! low detect
-    if ( deriv2(i) - deriv2(i-1)> 0.d0 ) then
-      d_minmax = abs(deriv2(i_max) - deriv2(i_min))       ! diff betwenn min-max
-      d_cur    = abs(deriv2(i_min) - deriv2(i))           ! diff current-max
+    if ( deriv2(i) - deriv2(i-1)> 0.d0 ) then             !.. going up now
+      d_minmax = abs(deriv2(i_max) - deriv2(i_min))       ! diff between last min-max
+      d_cur    = abs(deriv2(i_min) - deriv2(i))           ! diff between current -lastmin
       if (((d_minmax > highlow_treshold) .and. (d_cur > highlow_treshold)) & 
          .and. (prev_highlow /= low_point)) then          ! no succeding lows
         if (prev_highlow /= ' ') then                     ! skip count for very first point
@@ -680,7 +683,7 @@ subroutine find_curvature_reversals(npt, i_start, highlow_treshold, curve_thresh
         if (deriv2(i) >deriv2(i_max)) i_max = i
       end if
     ! high detect
-    else 
+    else                                                  ! going down
       d_minmax = abs(deriv2(i_max) - deriv2(i_min))       ! diff betwenn min-max
       d_cur    = abs(deriv2(i_max) - deriv2(i))           ! diff current-max
       if (((d_minmax > highlow_treshold) .and. (d_cur > highlow_treshold)) &
