@@ -84,6 +84,9 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
   double precision, dimension(max_geo_targets) :: x_pos, target_geo
   double precision, dimension(max_geo_targets) :: weighting_geo
   character(10), dimension(max_geo_targets) :: target_type
+
+  ! jx-mod re_as_resqrtcl - to ease Type2 polar op points
+  logical :: re_as_resqrtcl
   
   namelist /optimization_options/ search_type, global_search, local_search,    &
             seed_airfoil, airfoil_file, shape_functions, nfunctions_top,       &
@@ -93,6 +96,8 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
             use_flap, x_flap, y_flap, y_flap_spec, flap_selection,             &
 ! jx-mod Aero targets - new option: target_value
             target_value,                                                      &
+! jx-mod re_as_resqrtcl - to ease Type2 polar op points
+            re_as_resqrtcl,                                                    &
             flap_degrees, weighting, optimization_type, ncrit_pt
   namelist /constraints/ min_thickness, max_thickness, moment_constraint_type, &
                          min_moment, min_te_angle, check_curvature,            &
@@ -172,6 +177,8 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
   op_point(:) = 0.d0
   optimization_type(:) = 'min-drag'
   reynolds(:) = 1.0D+05
+! jx-mod re_as_resqrtcl - to ease Type2 polar op points
+  re_as_resqrtcl = .false.                                                   
   mach(:) = 0.d0
   flap_selection(:) = 'specify'
   flap_degrees(:) = 0.d0
@@ -623,6 +630,8 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
   write(*,*) " x_flap = ", x_flap
   write(*,*) " y_flap = ", y_flap
   write(*,*) " y_flap_spec = "//trim(y_flap_spec)
+! jx-mod re_as_resqrtcl - to ease Type2 polar op points
+  write(*,*) " re_as_resqrtcl = ", re_as_resqrtcl
   write(*,*)
   do i = 1, noppoint
     write(text,*) i
@@ -862,6 +871,14 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
   do i = 1, noppoint
     if (trim(op_mode(i)) /= 'spec-cl' .and. trim(op_mode(i)) /= 'spec-al')     &
       call my_stop("op_mode must be 'spec-al' or 'spec-cl'.")
+    ! jx-mod re_as_resqrtcl - to ease Type2 polar op points
+    if (re_as_resqrtcl) then                                                   
+      if (trim(op_mode(i)) /= 'spec-cl' )                                      &
+        call my_stop("op_mode must be 'spec-cl' if re_as_resqrtcl = .true.")
+      ! transform Reynolds * Sqrt(cl) to Reynolds (not too nice at this place...)
+      !    allowing inverted flight ...
+      reynolds(i) = reynolds(i) / (abs(op_point(i)) ** 0.5d0)  
+    end if
     if (reynolds(i) <= 0.d0) call my_stop("reynolds must be > 0.")
     if (mach(i) < 0.d0) call my_stop("mach must be >= 0.")
     if (trim(flap_selection(i)) /= 'specify' .and.                             &
