@@ -199,12 +199,12 @@ subroutine create_shape(x, modes, shapetype, shape_function)
 
       counter1 = 3*(i-1)
       st = modes(counter1+1)
-      t1 = modes(counter1+2)/t1fact
-      t2 = modes(counter1+3)/t2fact
+      t1 = modes(counter1+2)/t1fact       ! location
+      t2 = modes(counter1+3)/t2fact       ! width
 
 !     Check for problems with bump location and width parameters
 
-      if (t1 <= 0.d0) t1 = 0.001d0
+      if (t1 <= 0.d0) t1 = 0.001d0      
       if (t1 >= 1.d0) t1 = 0.999d0
       if (t2 <= 0.d0) t2 = 0.001d0
 
@@ -214,9 +214,17 @@ subroutine create_shape(x, modes, shapetype, shape_function)
       do j = 2, npt-1
         xs = (x(j)-xle)/chord
         shape_function(i,j) = st*sin(pi*xs**power1)**t2
+
       end do
 
     end do
+
+    !write (*,'(1x,4(A7,F10.6),A)')  &
+    !'meanloc ', meanloc, &
+    !'meanwid ', meanwid, &
+    !'meanxmi ', meanxmi, &
+    !'meanxma ', meanxma, &
+    !' '  
 
   else
 

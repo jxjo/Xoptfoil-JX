@@ -64,7 +64,7 @@ subroutine particleswarm(xopt, fmin, step, fevals, objfunc, x0, xmin, xmax,    &
   use math_deps,         only : norm_2
   use optimization_util, only : init_random_seed, initial_designs,             &
                                 design_radius, write_design, read_run_control
-  use vardef, only : output_prefix
+  use vardef,            only: do_smoothing
 
   double precision, dimension(:), intent(inout) :: xopt
   double precision, intent(out) :: fmin
@@ -106,7 +106,10 @@ subroutine particleswarm(xopt, fmin, step, fevals, objfunc, x0, xmin, xmax,    &
   character(20) :: fminchar, radchar
   character(25) :: relfminchar
   character(80), dimension(20) :: commands
-  character(100) :: histfile
+
+! jx-mod Smoothing - save do_smoothing status
+  logical :: save_do_smoothing
+
 
   nconstrained = size(constrained_dvs,1)
 
@@ -151,6 +154,10 @@ subroutine particleswarm(xopt, fmin, step, fevals, objfunc, x0, xmin, xmax,    &
     f0 = objfunc(x0)
     f0_ref = f0
   end if
+
+! jx-mod Smoothing - switch off smoothing for initial designs 
+  save_do_smoothing = do_smoothing
+  do_smoothing = .false.
 
 !$omp parallel default(shared) private(i, j, var)
 
@@ -216,13 +223,13 @@ subroutine particleswarm(xopt, fmin, step, fevals, objfunc, x0, xmin, xmax,    &
   end if
 
 ! Open file for writing iteration history
-  histfile = trim(output_prefix)//'_optimization_history.dat'
+
   iunit = 17
   new_history_file = .false.
   if (step == 0) then
     new_history_file = .true.
   else
-    open(unit=iunit, file=histfile, status='old',            &
+    open(unit=iunit, file='optimization_history.dat', status='old',            &
          position='append', iostat=ioerr)
     if (ioerr /= 0) then
       write(*,*) 
@@ -233,7 +240,7 @@ subroutine particleswarm(xopt, fmin, step, fevals, objfunc, x0, xmin, xmax,    &
     end if
   end if
   if (new_history_file) then
-    open(unit=iunit, file=histfile, status='replace')
+    open(unit=iunit, file='optimization_history.dat', status='replace')
     if (pso_options%relative_fmin_report) then
       write(iunit,'(A)') "Iteration  Objective function  "//&
                          "% Improvement over seed  Design radius"
@@ -244,6 +251,9 @@ subroutine particleswarm(xopt, fmin, step, fevals, objfunc, x0, xmin, xmax,    &
   end if
 
 ! Begin optimization
+
+  ! jx-mod Smoothing - switch back smoothing to original value
+  do_smoothing = save_do_smoothing
 
   restartcounter = 1
   converged = .false.

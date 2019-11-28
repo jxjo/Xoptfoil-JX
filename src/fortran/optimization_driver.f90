@@ -38,7 +38,7 @@ subroutine matchfoils_preprocessing(matchfoil_file)
                                  split_airfoil, my_stop
   use math_deps,          only : interp_vector
   use naca,               only : naca_options_type
-
+  
   character(*), intent(in) :: matchfoil_file
 
   type(airfoil_type) :: match_foil
@@ -174,7 +174,6 @@ subroutine optimize(search_type, global_search, local_search, constrained_dvs, &
   ndv = size(optdesign,1)
 
 ! Scale all variables to have a range of initial_perturb
-
   t1fact = initial_perturb/(1.d0 - 0.001d0)
   t2fact = initial_perturb/(10.d0 - min_bump_width)
   ffact = initial_perturb/(max_flap_degrees - min_flap_degrees)
@@ -201,7 +200,6 @@ subroutine optimize(search_type, global_search, local_search, constrained_dvs, &
     nfuncs = (ndv - nflap_optimize)/3
 
 !   Bump strength = 0 (aka seed airfoil)
-
     do i = 1, nfuncs
       counter = 3*(i-1)
       x0(counter+1) = 0.d0
@@ -410,6 +408,10 @@ subroutine write_final_design(optdesign, f0, fmin, shapetype)
   use vardef
   use memory_util,        only : allocate_airfoil, deallocate_airfoil
   use airfoil_operations, only : airfoil_write
+
+! jx-mod Smoothing
+  use airfoil_operations, only : assess_surface, smooth_it
+    
   use parametrization,    only : top_shape_function, bot_shape_function,       &
                                  create_airfoil
   use airfoil_evaluation, only : xfoil_geom_options, xfoil_options
@@ -432,6 +434,11 @@ subroutine write_final_design(optdesign, f0, fmin, shapetype)
   character(30) :: text
   character(12) :: flapnote
 
+! jx-mod Smoothing
+  integer :: dummyint
+  double precision :: pertubation_top, pertubation_bot
+
+  
   nmodest = size(top_shape_function,1)
   nmodesb = size(bot_shape_function,1)
   nptt = size(xseedt,1)
@@ -462,6 +469,19 @@ subroutine write_final_design(optdesign, f0, fmin, shapetype)
   call create_airfoil(xseedt, zseedt, xseedb, zseedb,                          &
                       optdesign(dvtbnd1:dvtbnd2), optdesign(dvbbnd1:dvbbnd2),  &
                       zt_new, zb_new, shapetype, symmetrical)
+
+! jx-mod Smoothing - begin ---------------------------------------------------------
+
+  if (do_smoothing) then 
+    call smooth_it (xseedt, zt_new)
+    call assess_surface ('Top    final', show_smoothing, max_curv_reverse_top, xseedt, zt_new, dummyint,pertubation_top) 
+    call smooth_it (xseedb, zb_new)
+    call assess_surface ('Bottom final', show_smoothing, max_curv_reverse_bot, xseedb, zb_new, dummyint,pertubation_bot)  
+
+  end if 
+
+! jx-mod Smoothing - end ---------------------------------------------------------
+
 
 ! Format coordinates in a single loop (in airfoil_type derived type)
 
@@ -550,6 +570,16 @@ subroutine write_final_design(optdesign, f0, fmin, shapetype)
         write(iunit,*)
       end if
     end do
+
+! jx-mod Smoothing - write final info about smoothing
+    if (do_smoothing) then
+      write(*,*)
+      write(*,'(A33F6.2)') " Smoothed final surface quality: ",      &
+           (pertubation_top + pertubation_bot) 
+      write(iunit,*)
+      write(iunit,'(A33F6.2)') " Smoothed final surface quality: ",      &
+           (pertubation_top + pertubation_bot) 
+    end if 
 
     write(*,*)
     write(*,'(A43F8.4A1)') " Objective function improvement over seed: ",      &

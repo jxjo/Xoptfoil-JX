@@ -517,4 +517,341 @@ subroutine sort_vector(vec, idxs)
 
 end subroutine sort_vector
 
+!=============================================================================80
+!
+! jx-mod Smoothing - Additional functions 
+!
+!=============================================================================80
+
+!------------------------------------------------------------------------------
+! smooth polyline (x,y) with a Chaikin corner cutting see
+!     https://www.codeproject.com/Articles/1093960/D-Polyline-Vertex-Smoothing
+!------------------------------------------------------------------------------
+
+subroutine smooth_it_Chaikin (i_start, i_end, tension, niterations, x, y)
+
+  integer, intent(in) :: i_start, i_end, niterations
+  double precision, dimension(:), intent(inout) :: x, y
+  double precision, intent(in) :: tension
+
+  double precision, dimension(:), allocatable :: x_in, y_in
+  double precision, dimension(:), allocatable :: x_out, y_out
+  double precision  :: cuttingDist
+  integer :: i, npoints
+
+    
+  ! the tension factor defines a scale between corner cutting distance in segment half length,
+  ! i.e. between 0.05 and 0.45. The opposite corner will be cut by the inverse
+  ! (i.e. 1-cutting distance) to keep symmetry.
+  ! with a tension value of 0.5 this amounts to 0.25 = 1/4 and 0.75 = 3/4,
+  ! the original Chaikin values
+
+  cuttingDist = 0.05d0 + (tension*0.4d0)
+  npoints = i_end - i_start + 1
+
+  allocate (x_in(npoints))
+  allocate (y_in(npoints))
+
+  ! cut the area to smooth out of the original polyline
+  x_in = x(i_start : i_end)
+  y_in = y(i_start : i_end) 
+  npoints = i_end - i_start + 1
+  
+  do i = 1, niterations
+    call getSmootherChaikin(x_in, y_in, cuttingDist, x_out, y_out)
+    x_in = x_out
+    y_in = y_out
+  end do
+  
+  ! replace the area to smooth in original polyline with the smoothed result
+  call interp_vector(x_in, y_in, x(i_start : i_end), y(i_start : i_end))
+
+end subroutine smooth_it_Chaikin
+
+! Core smoothing function 
+Subroutine getSmootherChaikin(x, y, cuttingDist, x_smooth, y_smooth)
+    
+  double precision, dimension(:), intent(in) :: x, y
+  double precision, dimension(:), allocatable, intent(out) :: x_smooth, y_smooth
+  double precision, intent(in) :: cuttingDist
+  double precision :: local_cuttingDist, delta_cutdist
+
+  integer :: i, is, np_smooth, npt
+  
+  npt       = size(x)
+  np_smooth = (npt-1)*2+1
+
+  allocate (x_smooth(np_smooth))
+  allocate (y_smooth(np_smooth))
+
+  ! The original Chaikin is modifiied to have a much smaller cutting distance
+  ! at the first points of the smoothed range to achieve a continuos transition
+  ! from non smoothed to smoothed. Especially critical in LE with high curvature!
+                                          ! will grow up to 'cuttingDist'
+  delta_cutdist     = (cuttingDist - local_cuttingDist) / 25
+  local_cuttingDist = delta_cutdist       ! start value for cutting distance
+
+  ! always add the first point - this won't be changed
+  x_smooth(1) = x(1)
+  y_smooth(1) = y(1)
+
+  is = 1
+  do i = 1, (npt-1)
+
+    is = is + 1
+    x_smooth(is) = (1-local_cuttingDist) * x(i) + local_cuttingDist * x(i+1)
+    y_smooth(is) = (1-local_cuttingDist) * y(i) + local_cuttingDist * y(i+1)
+
+    is = is + 1
+    x_smooth(is) = local_cuttingDist * x(i) + (1-local_cuttingDist) * x(i+1)
+    y_smooth(is) = local_cuttingDist * y(i) + (1-local_cuttingDist) * y(i+1)
+
+    if (local_cuttingDist < cuttingDist) then     ! increase cutting distance going backwards from LE
+      local_cuttingDist = local_cuttingDist + delta_cutdist
+      delta_cutdist = delta_cutdist * 1.0d0       ! ramp up cutting_dist smoothly
+    else  
+      local_cuttingDist = cuttingDist
+    end if 
+
+  end do
+
+  ! always add the last point so it never will be changed
+  x_smooth(np_smooth) = x(npt)
+  y_smooth(np_smooth) = y(npt)
+
+end subroutine
+
+
+!------------------------------------------------------------------------------
+! Counts reversals and high/lows of 2nd derivative of polyline (x,y)
+!    
+! To find the "real" reversals only curve value greater curve_threshold
+!    are taken to check against the change from + to -
+! To find high/lows all high/lows of 2nd derivation with a distance
+!    greater highlow_treshold are taken
+!
+! result_info holds a string of npoints for user entertainment 
+!------------------------------------------------------------------------------
+subroutine find_curvature_reversals(npt, i_start, highlow_treshold, curve_threshold, x, y, nhighlows2, nreversals2, result_info)
+
+  integer, intent(in) :: npt, i_start
+  double precision, intent(in) :: curve_threshold, highlow_treshold
+  double precision, dimension(npt), intent(in) :: x, y
+  integer, intent(out) :: nreversals2, nhighlows2
+  character (npt), intent(inout) :: result_info
+
+  double precision, dimension(npt) :: deriv2
+  double precision :: curv1, d_minmax, d_cur
+  integer :: i, i_first, nhighs, nlows, i_firstHighLow, i_max, i_min
+  character (1) ::  reversal_sign = 'R', high_point = 'H', low_point = 'L', prev_highlow
+
+  nreversals2 = 0
+  nhighs = 0
+  nlows = 0
+  nhighlows2 = 0
+
+  curv1 = 0.d0
+  i_first = max (i_start, 1)        
+  i_firstHighLow = i_first +1       ! ... highLow detection needs point (i-1)
+
+  deriv2 = derivation2(npt, x, y)   ! get 2nd derivation 
+
+  i_min = i_firstHighLow
+  i_max = i_firstHighLow
+  prev_highlow = ' '
+
+  ! find the highs and lows in 2nd derivation - dist between must be > highlow_treshold 
+  do i = i_firstHighLow, npt
+
+    ! low detect
+    if ( deriv2(i) - deriv2(i-1)> 0.d0 ) then
+      d_minmax = abs(deriv2(i_max) - deriv2(i_min))       ! diff betwenn min-max
+      d_cur    = abs(deriv2(i_min) - deriv2(i))           ! diff current-max
+      if (((d_minmax > highlow_treshold) .and. (d_cur > highlow_treshold)) & 
+         .and. (prev_highlow /= low_point)) then          ! no succeding lows
+        if (prev_highlow /= ' ') then                     ! skip count for very first point
+          ! we passed a low - the curve is going highlow_treshold up
+          nlows = nlows + 1
+          result_info (i_min:i_min) = low_point
+        end if 
+        prev_highlow = low_point
+        i_max = i
+      else
+        if (deriv2(i) >deriv2(i_max)) i_max = i
+      end if
+    ! high detect
+    else 
+      d_minmax = abs(deriv2(i_max) - deriv2(i_min))       ! diff betwenn min-max
+      d_cur    = abs(deriv2(i_max) - deriv2(i))           ! diff current-max
+      if (((d_minmax > highlow_treshold) .and. (d_cur > highlow_treshold)) &
+        .and. (prev_highlow /= high_point)) then          ! no succeding highs
+        ! we passed a high - the curve is going highlow_treshold down
+        if (prev_highlow /= ' ') then                     ! skip count for very first point
+          nhighs = nhighs + 1
+          result_info (i_max:i_max) = high_point
+        end if  
+        prev_highlow = high_point
+        i_min = i
+      else
+        if (deriv2(i) < deriv2(i_min)) i_min = i
+      end if
+    end if  
+  end do
+  nhighlows2 = nlows + nhighs
+
+  ! get the real reversals with curve values from + to - 
+  !    just the same as in the original function 
+  do i = i_first, npt
+    if (abs(deriv2(i)) >= curve_threshold) then
+      if (deriv2(i) * curv1 < 0.d0) then 
+        nreversals2 = nreversals2 + 1
+        result_info (i:i) = reversal_sign
+      end if
+      curv1 = deriv2(i)
+    end if
+  end do
+
+end subroutine find_curvature_reversals
+
+
+!------------------------------------------------------------------------------
+! counts der curvature spikes of polyline (x,y)
+!     which a reversals of the third derivation 
+!------------------------------------------------------------------------------
+subroutine find_curvature_spikes(npt, i_start, spike_threshold, x, y, nspikes, result_info)
+
+  integer, intent(in) :: npt, i_start
+  double precision, intent(in) :: spike_threshold
+  double precision, dimension(npt), intent(in) :: x, y
+  integer, intent(out) :: nspikes
+  character (npt), intent(inout) :: result_info
+
+  double precision, dimension(npt) :: deriv3
+  double precision :: prev_deriv3
+  integer :: i, i_first
+  character (1) :: spikeSign = 's'
+
+  nspikes = 0
+
+  i_first = max (i_start, 1)            
+  prev_deriv3 = 0.d0
+  deriv3 = derivation3(npt, x, y)
+
+  do i = i_first, npt
+    if (abs(deriv3(i)) >= spike_threshold) then
+      if (deriv3(i) * prev_deriv3 < 0.d0) then
+        nspikes = nspikes + 1
+        result_info (i:i) = spikeSign
+      end if
+      prev_deriv3 = deriv3(i)
+    end if
+  end do
+
+end subroutine find_curvature_spikes
+
+!------------------------------------------------------------------------------
+! get third derivative of polyline (x,y)
+!     ! only approx because 1st derivative of 2nd derivative is used 
+!------------------------------------------------------------------------------
+function derivation3(npt, x, y)
+
+  integer, intent(in) :: npt
+  double precision, dimension(npt), intent(in) :: x, y
+  double precision, dimension(npt) :: derivation3
+
+  derivation3 = derivation1(npt, x, derivation2(npt, x, y))
+ 
+end function derivation3
+
+!------------------------------------------------------------------------------
+! get second derivative of polyline (x,y)
+!     the original Xoptfoil function is used (after some false tries ;-)) 
+!------------------------------------------------------------------------------
+function derivation2(npt, x, y)
+
+  integer, intent(in) :: npt
+  double precision, dimension(npt), intent(in) :: x, y
+  double precision, dimension(npt) :: derivation2
+
+  ! --> use Dans original function 
+  derivation2 = curvature(npt, x, y)
+
+end function derivation2
+
+!------------------------------------------------------------------------------
+! get first derivative of polyline (x,y)
+!     using Backward, center, forward adapted difference approximation 
+!     based on "A simple finite-difference grid with non-constant intervals"
+!               by HILDING SUNDQVIST
+!     and on "http://web.media.mit.edu/~crtaylor/calculator.html"
+!------------------------------------------------------------------------------
+function derivation1(npt, x, y)
+
+  integer, intent(in) :: npt
+  double precision, dimension(npt), intent(in) :: x, y
+  double precision, dimension(npt) :: derivation1
+  integer :: i
+  double precision :: h_2minus, h_minus, h, h_plus, hr
+ 
+  do i = 1, npt
+    if (i == 1) then                                                 ! forward
+      h      = x(i+1) - x(i)
+      h_plus = x(i+2) - x(i+1)
+      hr      = h_plus / h 
+      derivation1(i) = (-y(i+2) - 3.d0*hr*hr*y(i) + 4.d0*(1-hr*hr)*y(i+1))/ (h_plus * (1.d0 +hr)) 
+    else if (i ==npt) then                                           ! backward
+      h_minus  = x(i) - x(i-1)
+      h_2minus = x(i-1) - x(i-2)
+      hr      = h_minus / h_2minus 
+      derivation1(i) = (3.d0*y(i) + hr*hr*y(i-2) -4.d0*(1-hr*hr)*y(i-1))/ (h_minus * (1.d0 +hr)) 
+    else                                                             ! center
+      h       = x(i+1) - x(i)
+      h_minus = x(i) - x(i-1)
+      hr      = h / h_minus 
+      derivation1(i) = (y(i+1) - hr*hr*y(i-1) -(1-hr*hr)*y(i))/ (h * (1.d0 +hr)) 
+    end if 
+  end do
+
+end function derivation1
+
+!------------------------------------------------------------------------------
+! Interpolate a point (xnew, ynew) within a vector (x,y) - returns ynew
+!------------------------------------------------------------------------------
+function interp_point(x, y, xnew)
+
+  double precision, dimension(:), intent(in) :: x, y 
+  double precision, intent(in)  :: xnew
+  double precision :: interp_point
+  
+  logical :: isbtwn
+  integer :: pt1, npt
+
+  npt = size(x,1)
+  pt1 = 1
+
+! Find interpolants
+  isbtwn = .false.
+  do while (.not. isbtwn .and. (pt1 < npt))
+    isbtwn = between(x(pt1), xnew, x(pt1+1))
+    if (.not. isbtwn) then
+      pt1 = pt1 + 1
+      if (pt1 == npt) then
+        write(*,*)
+        write(*,*) 'Warning: could not find interpolants.'
+        write(*,*) 'x: ', xnew, 'xmax: ', x(npt)
+        stop
+      end if
+    end if
+  end do
+
+! Interpolate points
+  interp_point = interp1(x(pt1), x(pt1+1), xnew, y(pt1), y(pt1+1))
+
+end function interp_point
+
+!=============================================================================80
+! jx-mod Smoothing - End Additional functions 
+!=============================================================================80
+
+
 end module math_deps

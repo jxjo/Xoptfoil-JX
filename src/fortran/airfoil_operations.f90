@@ -69,14 +69,12 @@ subroutine get_seed_airfoil(seed_airfoil, airfoil_file, naca_options, foil,    &
   end if
 
 ! Use Xfoil to smooth airfoil paneling
-
-  call smooth_paneling(tempfoil, 200, foil)
+call smooth_paneling(tempfoil, 200, foil)
 
 ! Calculate leading edge information
 
   call le_find(foil%x, foil%z, foil%leclose, foil%xle, foil%zle,               &
                foil%addpoint_loc)
-
 ! Translate and scale
 
   call transform_airfoil(foil, xoffset, zoffset, foilscale)
@@ -596,5 +594,140 @@ subroutine my_stop(message, stoptype)
   end if
 
 end subroutine my_stop
+
+!------------------------------------------------------------------------------
+!
+! jx-mod Smoothing - High level functions
+!
+!------------------------------------------------------------------------------
+
+!------------------------------------------------------------------------------
+! Assess polyline (x,y) on surface quality (curves of2nd and 3rd derivation)
+!   info                Id-String to print for User e.g. 'Top surface'
+!   show_it             Print infos about pertubations  
+!   max_curv_reverse    Max number of reversal as defined by xoptfoil
+!
+! Returns
+!    nreversal2         as defined by xoptfoil (2nd derivative reversals)
+!    perturbation       as an indicator of perturbation of the surface which is
+!                       the sum of 2nd and 3rd derivative reversals and highlows
+!                       = 0.  - super - no indications 
+!                       < 1. not too bad
+!                       > ... getting worse and worse 
+!------------------------------------------------------------------------------
+
+subroutine assess_surface (info, show_it, max_curv_reverse, x, y, nreversals2, perturbation)
+
+  use math_deps, only : find_curvature_reversals, find_curvature_spikes
+  use vardef,    only:  curv_threshold, spike_threshold, highlow_treshold
+
+  character(*), intent(in) :: info
+  double precision, dimension(:), intent(inout) :: x, y
+  double precision, intent(out)  :: perturbation
+  integer, intent(in)   :: max_curv_reverse
+  logical, intent(in)   :: show_it
+  integer, intent(out)  :: nreversals2
+
+  integer :: nhighlows2, nspikes, max_spikes
+  character (size(x)) :: result_info
+
+  max_spikes = 2
+  
+  nreversals2 = 0
+  nhighlows2  = 0
+  nspikes     = 0
+
+  result_info = repeat ('-', size(x) ) 
+
+  ! have a look at 3rd derivation ...
+  call find_curvature_spikes   (size(x), 5, spike_threshold, x, y, nspikes, result_info)
+
+  ! have a look at 2nd derivation ...
+  call find_curvature_reversals(size(x), 5, highlow_treshold, curv_threshold, x, y, &
+                                nhighlows2,nreversals2, result_info)
+
+  perturbation    =   1.00d0 * max(0.d0,dble(nreversals2 - max_curv_reverse))    &
+                    + 0.30d0 * max(0.d0,dble(nhighlows2  - max_curv_reverse))    &
+                    + 0.03d0 * max(0.d0,dble(nspikes - max_spikes))
+
+  if ( show_it ) then       
+    write (*,'(14x,A,A,F5.2,1x,3(I2,A),A)') info//'  ','P=', perturbation, nreversals2, 'R ', &
+      nhighlows2, 'HL ', nspikes, 's ', '   '// result_info
+  end if
+
+end subroutine assess_surface
+
+!-------------------------------------------------------------------------------------
+! Central entrypoint for smoothing a polyline (x,y) being the top or bottom surface
+!
+! Smoothing of the polyline is done until 
+!   - a certain quality (= min number of spikes) is reached
+!   - no more improvment for reduction of spikes happens
+!   - or max. number of iterations reached (max_iterations)
+!
+! Two nested loops are used for smoothing
+!   The inner loop is the modified Chaikin (Corner Cut) algorithm. This loop is limited
+!   to n_Chaikin_iter (typically = 5) because
+!     - in each iteration the number of points will be doubled (memory / speed)
+!     - there will be no real improvement ...
+!   The outer loop calls Chaikin is until one of the above criteria is reached.
+!
+! The starting point for smoothing in the polyline is set by i_range_start.
+! Currently LE area is excluded from smoothing because the LE high curvature is a 
+! welcome target to be smoothed...  Special care must be done at the transition point 
+! from non-smoothed to smoothed to avoid jumps in the 1st and 2nd derivation
+! (xfoil doesn't like this ...) (see sub getSmootherChaikin)
+! 
+! Be careful in changin the parameters and always take a look at the result 
+!    delta = ysmoothed - yoriginal
+!------------------------------------------------------------------------------
+
+subroutine smooth_it (x, y)
+
+  use math_deps, only : find_curvature_spikes
+  use math_deps, only : smooth_it_Chaikin
+  use vardef,    only:  spike_threshold
+
+  double precision, dimension(:), intent(inout) :: x, y
+
+  integer :: max_iterations, nspikes_target, i_range_start, i_range_end
+  integer :: nspikes
+  integer :: i, n_Chaikin_iter, best_nspikes_index, best_nspikes
+  double precision :: tension
+  character (size(x)) :: result_info
+
+  i_range_start  = 17             ! smooth polyline from point number - leave nose area
+                                  ! i=17 is approx at x=0.07 (Xoptfoil 200 panelling)  
+  i_range_end    = size (x)       ! ... and end
+                                  ! count the number of current spikes in the polyline
+  call find_curvature_spikes(size(x), i_range_start, spike_threshold, x, y, nspikes, result_info)
+
+  nspikes_target = int(nspikes/5) ! how many curve spikes should be at the end?
+                                  !   Reduce by factor 5 --> not too much as smoothing become critical for surface
+  tension        = 0.5d0          ! = 0.5 equals to the original Chaikin cutting distance of 0.25 
+  n_Chaikin_iter = 5              ! number of iterations within Chaikin
+  max_iterations = 10             ! max iterations over n_Chaikin_iter 
+
+  best_nspikes = nspikes          ! init with current to check if there is improvement of nspikes over iterations
+  best_nspikes_index = 1          ! iterate only until improvements of nspikes within  i+2
+
+  i = 1
+
+  do while ((i <= max_iterations) .and. (nspikes > nspikes_target) .and. (i <= (best_nspikes_index+2)))
+
+    call smooth_it_Chaikin (i_range_start, i_range_end, tension, n_Chaikin_iter, x, y)
+
+    call find_curvature_spikes    (size(x), i_range_start, spike_threshold, x, y, nspikes, result_info)
+
+    if (nspikes < best_nspikes) then
+      best_nspikes = nspikes
+      best_nspikes_index = i  
+    end if 
+
+    i = i +1
+
+  end do
+
+end subroutine smooth_it
 
 end module airfoil_operations

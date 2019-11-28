@@ -35,6 +35,12 @@ subroutine check_seed()
   use xfoil_driver,       only : run_xfoil
   use xfoil_inc,          only : AMAX, CAMBR
   use airfoil_evaluation, only : xfoil_options, xfoil_geom_options
+! jx-mod Smoothing
+  use airfoil_operations, only : assess_surface, smooth_it
+  use airfoil_operations, only : my_stop
+
+  use math_deps,          only : interp_point
+
 
   double precision, dimension(:), allocatable :: x_interp, thickness
   double precision, dimension(:), allocatable :: zt_interp, zb_interp
@@ -51,14 +57,41 @@ subroutine check_seed()
   character(30) :: text, text2
   character(14) :: opt_type
   logical :: addthick_violation
+! jx-mod Smoothing 
+  double precision :: perturbation_top , perturbation_bot
+! jx-mod Geo targets
+  double precision :: ref_value, seed_value, tar_value
 
   penaltyval = 0.d0
   pi = acos(-1.d0)
   nptt = size(xseedt,1)
   nptb = size(xseedb,1)
 
+
   write(*,*) 'Checking to make sure seed airfoil passes all constraints ...'
   write(*,*)
+
+! jx-mod Smoothing ---- Ask user for Smoothing -----------------
+
+  ! smooth surfaces of airfoil *before* other checks are made
+
+  if (do_smoothing) then
+
+    call check_surface_and_smooth ('Top surface   ', max_curv_reverse_top, nptt, xseedt, zseedt)
+    call check_surface_and_smooth ('Bottom surface', max_curv_reverse_bot, nptb, xseedb, zseedb)
+
+    call assess_surface ('Top    ', .false., max_curv_reverse_top, xseedt, zseedt, nreversalst, perturbation_top)
+    call assess_surface ('Bot    ', .false., max_curv_reverse_bot, xseedb, zseedb, nreversalsb, perturbation_bot)
+
+    ! set scaling for pertubation of surface for smoothing being part of geo targets
+    ! add a base value because pertubation is quite volatile
+    scale_pertubation = 1.d0/(10.d0 + perturbation_top + perturbation_bot)
+
+  else
+    scale_pertubation = 0.d0
+  end if
+
+! jx-mod Smoothig - end  -----------------------------------------------------------------
 
 ! Get allowable panel growth rate
 
@@ -102,11 +135,13 @@ subroutine check_seed()
   
 ! Too blunt or sharp leading edge
 
+
   panang1 = atan((zseedt(2)-zseedt(1))/(xseedt(2)-xseedt(1))) *                &
             180.d0/acos(-1.d0)
   panang2 = atan((zseedb(1)-zseedb(2))/(xseedb(2)-xseedb(1))) *                &
             180.d0/acos(-1.d0)
   maxpanang = max(panang2,panang1)
+
   if (maxpanang > 89.99d0) then
     write(text,'(F8.4)') maxpanang
     text = adjustl(text)
@@ -200,8 +235,44 @@ subroutine check_seed()
 
     if (addthick_violation)                                                    &
       call ask_stop("Seed airfoil violates one or more thickness constraints.")
+
   end if
+
+! jx-mod Geo targets start -------------------------------------------------
+
+! Evaluate seed value of geomtry targets and scale factor 
   
+  do i = 1, ngeo_targets
+
+    select case (trim(geo_targets(i)%type))
+
+      case ('zTop')           ! get z_value top side 
+        seed_value = interp_point(x_interp, zt_interp, geo_targets(i)%x)
+        ref_value  = interp_point(x_interp, thickness, geo_targets(i)%x)
+      case ('zBot')           ! get z_value bot side
+        seed_value = interp_point(x_interp, zb_interp, geo_targets(i)%x)
+        ref_value  = interp_point(x_interp, thickness, geo_targets(i)%x)
+      case ('Thickness')      ! take foil thickness calculated above
+        seed_value = maxthick
+        ref_value  = maxthick
+      case default
+        call my_stop("Unknown target_type '"//trim(geo_targets(i)%type))
+    end select
+
+    geo_targets(i)%reference_value = ref_value
+
+    ! target value = -1 --> take current seed value as target 
+    if (geo_targets(i)%target_value == -1.d0)                                  &
+        geo_targets(i)%target_value = seed_value 
+    tar_value = geo_targets(i)%target_value
+
+    ! will scale objective to 1 ( = no improvement) 
+    geo_targets(i)%scale_factor = 1 / ( ref_value + abs(tar_value - seed_value))
+
+  end do 
+
+! jx-mod Geo targets - end --------------------------------------------
+
 ! Free memory
 
   deallocate(x_interp)
@@ -231,12 +302,13 @@ subroutine check_seed()
 
   if (check_curvature) then
 
+
 !   Compute curvature on top and bottom surfaces
 
     curvt = curvature(nptt, xseedt, zseedt)
     curvb = curvature(nptb, xseedb, zseedb)
 
-!   Check number of reversals that exceed the threshold
+!   Check number of reversals exceeding threshold
 
     nreversalst = 0
     curv1 = 0.d0
@@ -252,7 +324,7 @@ subroutine check_seed()
           text2 = adjustl(text2)
           write(*,*) "Curvature reversal on top surface near (x, z) = ("//&
                          trim(text)//", "//trim(text2)//")"
-          write(text,'(F8.4)') curvt(i)
+          write(text,'(F8.4)') (abs(curv2-curv1))
           text = adjustl(text)
           write(*,*) "Curvature: "//trim(text)
           nreversalst = nreversalst + 1
@@ -269,7 +341,7 @@ subroutine check_seed()
     nreversalsb = 0
     curv1 = 0.d0
     do i = 2, nptb - 1
-      if (abs(curvb(i)) >= curv_threshold) then
+        if (abs(curvb(i)) >= curv_threshold) then
         curv2 = curvb(i)
         if (curv2*curv1 < 0.d0) then
           xtrans = xseedb(i)/foilscale - xoffset
@@ -406,6 +478,17 @@ subroutine check_seed()
       checkval = drag(i)/lift(i)
     elseif (trim(optimization_type(i)) == 'min-drag') then
       checkval = drag(i)
+! jx-mod Geo targets - new op point type - minimize the difference between current drag and target value
+    elseif (trim(optimization_type(i)) == 'target-drag') then
+      ! target_value = -1 equals to value of seed airfoil
+      if (target_value(i) == -1.d0) target_value(i) = drag(i)
+      checkval = target_value(i) + ABS (target_value(i)-drag(i))
+    elseif (trim(optimization_type(i)) == 'target-moment') then
+! jx-mod Geo targets - new op point type - minimize the difference between current moment and target value
+      ! target_value = -1 equals to value of seed airfoil
+      if (target_value(i) == -1.d0) target_value(i) = drag(i)
+      ! add a base value (Clark y or so ;-) to the moment difference so the relative change won't be to high
+      checkval = ABS (target_value(i)-moment(i)) + 0.05d0
     elseif (trim(optimization_type(i)) == 'max-lift') then
       checkval = 1.d0/lift(i)
     elseif (trim(optimization_type(i)) == 'max-xtr') then
@@ -493,5 +576,132 @@ subroutine ask_stop(message)
   if (choice == 'n') stop
 
 end subroutine ask_stop
+
+!------------------------------------------------------------------------------
+! jx-mod Smoothing - Additional functions - Start
+!------------------------------------------------------------------------------
+
+subroutine check_surface_and_smooth (info, maxreversals, npoints, x, y)
+
+  use math_deps, only : derivation2, derivation3
+  use airfoil_operations, only : smooth_it, assess_surface
+
+  integer, intent(in) :: npoints, maxreversals
+  character(*), intent(in) :: info
+  double precision, dimension(npoints), intent(inout) :: x, y
+
+  integer :: nreversals
+  character (1) :: answer
+  double precision, dimension(npoints) :: deriv2, deriv3, y_sav
+  double precision :: perturbation
+
+  nreversals = 99
+  answer = 'y'
+
+  ! store old value for output file
+  deriv2 = derivation2(npoints, x, y)
+  deriv3 = derivation3(npoints, x, y)
+  y_sav  = y
+
+
+  call assess_surface (info, .true., maxreversals, x, y, nreversals, perturbation)
+
+  if ((nreversals >= maxreversals) .or. (perturbation > 0.5d0)) then 
+    answer = ask_smoothing()
+    if (answer == 'y') then
+      write(*,*)
+
+      call smooth_it (x, y)
+      call assess_surface (info, .true., maxreversals, x, y, nreversals, perturbation)
+      write (*,*)
+
+      if ((nreversals <= maxreversals) .and. (perturbation < 0.5d0)) then 
+        write (*,'(1x,A)') info // ' ... succesfully smoothed'
+        write (*,*)
+      end if
+    end if  
+  end if
+
+  ! write data to a local csv file to visualize in Excel smoothing results 
+  call write_deriv_to_file (info, npoints, x, y_sav, deriv2, deriv3, y, derivation2(npoints, x, y), derivation3(npoints, x, y))
+
+end subroutine check_surface_and_smooth
+
+!-----------------------------------------------------------------------------
+! Write smoothed derivations to file 
+!       local csv file to visualize in Excel smoothing results 
+!-----------------------------------------------------------------------------
+subroutine write_deriv_to_file (info, npoints, x, y, deriv2, deriv3, & 
+           y_smoothed, deriv2_smoothed, deriv3_smoothed)
+
+use math_deps, only : curvature
+
+integer, intent(in) :: npoints
+character(*), intent(in) :: info
+double precision, dimension(npoints), intent(in) :: x, y, deriv2, deriv3
+double precision, dimension(npoints), intent(in) :: y_smoothed, deriv2_smoothed, deriv3_smoothed
+
+integer :: smoothunit, i
+character(100) :: smoothfile
+
+smoothunit = 21 
+smoothfile = trim(info)//'_smoothed_derivations.csv'
+
+!write(*,*) "  Writing smoothed derivations for "//trim(info)//             &
+!" to file "//trim(smoothfile)//" ..."
+open(unit=smoothunit, file=smoothfile, status='replace', err=901)
+
+write(smoothunit,*) 'x, y, y 2nd deriv, y 3rd deriv,'                                 //  &
+                    'y_smooth, y_smooth-y ,  y_smooth 2nd deriv, y_smooth 3rd deriv'
+do i = 1, npoints
+  write(smoothunit, '(7(G16.8, A),G16.8)') x(i),', ', y(i), ', ', deriv2(i),', ',deriv3(i),', ', &
+                    y_smoothed(i), ', ', (y_smoothed(i)-y(i)),', ',deriv2_smoothed(i),', ',deriv3_smoothed(i)
+end do
+close (smoothunit)
+return
+
+901 write(*,*) "Warning: unable to open "//trim(smoothfile)//". Skipping ..."
+  return
+
+
+end subroutine write_deriv_to_file
+
+!-----------------------------------------------------------------------------
+! Asks user for smoothing
+!-----------------------------------------------------------------------------
+function ask_smoothing()
+
+  character :: ask_smoothing
+  logical :: valid_choice
+
+! Get user input
+
+  valid_choice = .false.
+  do while (.not. valid_choice)
   
+    write(*,*)
+    write(*,'(A)', advance='no') ' Spikes and reversals detected. Try to smooth? (y/n): '
+    read(*,'(A)') ask_smoothing
+
+    if ( (ask_smoothing == 'y') .or.                                  &
+         (ask_smoothing == 'Y') ) then
+      valid_choice = .true.
+      ask_smoothing = 'y'
+    else if ( (ask_smoothing == 'n') .or.                             &
+         (ask_smoothing == 'N') ) then
+      valid_choice = .true.
+      ask_smoothing = 'n'
+    else
+      write(*,'(A)') ' Please enter y or n.'
+      valid_choice = .false.
+    end if
+
+  end do
+
+end function ask_smoothing
+
+!------------------------------------------------------------------------------
+! jx-mod Smoothing - Additional functions - End
+!------------------------------------------------------------------------------
+
 end module input_sanity

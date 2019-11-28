@@ -55,7 +55,6 @@ function objective_function(designvars)
   else
     objective_function = aero_objective_function(designvars)
   end if
-
 end function objective_function
 
 !=============================================================================80
@@ -90,6 +89,13 @@ end function objective_function_nopenalty
 function aero_objective_function(designvars, include_penalty)
 
   use math_deps,       only : interp_vector, curvature, derv1f1, derv1b1
+
+  ! jx-mod Smoothing
+  use airfoil_operations, only : assess_surface, smooth_it
+  ! jx-mod Geo targets
+  use airfoil_operations, only : my_stop
+  use math_deps,          only : interp_point
+
   use parametrization, only : top_shape_function, bot_shape_function,          &
                               create_airfoil
   use xfoil_driver,    only : run_xfoil
@@ -131,6 +137,14 @@ function aero_objective_function(designvars, include_penalty)
   double precision :: pi
   logical :: penalize
 
+  ! jx-mod Geo targets
+  double precision :: penaltyi
+  double precision :: geo_objective_function
+  double precision :: ref_value, tar_value, cur_value
+  character(100)   :: penalty_info, text, numstring
+  ! jx-mod Smoothing
+  double precision :: perturbation_bot, perturbation_top
+
   pi = acos(-1.d0)
   nmodest = size(top_shape_function,1)
   nmodesb = size(bot_shape_function,1)
@@ -169,6 +183,57 @@ function aero_objective_function(designvars, include_penalty)
                       designvars(dvtbnd1:dvtbnd2), designvars(dvbbnd1:dvbbnd2),&
                       zt_new, zb_new, shape_functions, symmetrical)
 
+
+! jx-mod Smoothing ---- Start  -----------------------------------------------------------
+
+! Check surface quality - do smoothing  
+
+  penaltyval = 0.d0
+  penalty_info = ''                            ! user info on the type of penalities given
+  geo_objective_function  = 0.d0               ! new geo_objective
+
+  if (check_curvature .or. do_smoothing) then
+
+! Check surface for pertubation (ups and downs) and number of reversals
+
+    call assess_surface ('Top    ', .false., max_curv_reverse_top, xseedt, zt_new, nreversalst, perturbation_top)
+    if ((do_smoothing .and. (perturbation_top > 0.6)) .and. penalize) then    ! do not smooth seed ! (penalize==false) 
+      call smooth_it (xseedt, zt_new)
+      call assess_surface ('Top    ', .false., max_curv_reverse_top, xseedt, zt_new, nreversalst, perturbation_top)
+    end if
+
+    ! Penality for too many curve_reservals for speed-up reason already here 
+    penaltyval = penaltyval + max(0.d0,dble(nreversalst-max_curv_reverse_top))
+    if (max(0.d0,dble(nreversalst-max_curv_reverse_top)) > 0.d0) penalty_info = trim(penalty_info) // ' PerT'
+
+    call assess_surface ('Bottom ',  .false., max_curv_reverse_bot, xseedb, zb_new, nreversalsb, perturbation_bot)
+    if ((do_smoothing .and. (perturbation_bot > 0.6)) .and. penalize) then     ! do not smooth seed
+      call smooth_it (xseedb, zb_new)
+      call assess_surface ('Bottom ', .false., max_curv_reverse_bot, xseedb, zb_new, nreversalsb, perturbation_bot)
+    end if
+
+    ! Penality for too many curve_reservals for speed-up reason already here 
+    penaltyval = penaltyval + max(0.d0,dble(nreversalsb-max_curv_reverse_bot))
+    if (max(0.d0,dble(nreversalsb-max_curv_reverse_bot)) > 0.d0) penalty_info = trim(penalty_info) // ' PerB'
+
+    ! Calculate geometry objective based on the assessed quality (pertubation)
+    if (do_smoothing) then 
+      ! add a empirical base value - pertubation can be quite volatile
+      geo_objective_function = geo_objective_function +                           &
+        (10.d0 + perturbation_top + perturbation_bot) * weighting_smoothing * scale_pertubation
+    end if 
+
+    ! Speedup - early exit if there are too many reversals 
+    if (penaltyval > epsexit) then
+      aero_objective_function = penaltyval*1.0D+06
+      return
+    end if
+  end if
+
+! jx-mod Smoothing ---- End  -----------------------------------------------------------
+
+
+
 ! Format coordinates in a single loop in derived type. Also remove translation
 ! and scaling to ensure Cm_x=0.25 doesn't change.
 
@@ -181,9 +246,10 @@ function aero_objective_function(designvars, include_penalty)
     curr_foil%z(i+nptt) = zb_new(i+1)/foilscale - zoffset
   end do
 
+
 ! Check geometry before running Xfoil: growth rates, LE and TE angles, etc.
 
-  penaltyval = 0.d0
+!  penaltyval = 0.d0
   maxgrowth = 0.d0
 
   len1 = sqrt((curr_foil%x(2)-curr_foil%x(1))**2.d0 +                          &
@@ -200,6 +266,8 @@ function aero_objective_function(designvars, include_penalty)
 ! Penalty for too large growth rate
 
   penaltyval = penaltyval + max(0.d0,maxgrowth-growth_allowed)/1.d0
+  ! jx-mod Build user info string
+  if (max(0.d0,maxgrowth-growth_allowed)/1.d0 > 0.d0) penalty_info = trim(penalty_info) // ' Grow'
 
 ! Penalty for too blunt leading edge
 
@@ -208,11 +276,16 @@ function aero_objective_function(designvars, include_penalty)
   panang2 = atan((zb_new(1)-zb_new(2))/(xseedb(2)-xseedb(1))) *                &
             180.d0/acos(-1.d0)
   maxpanang = max(panang2,panang1)
+
   penaltyval = penaltyval + max(0.d0,maxpanang-89.99d0)/0.01d0
+  ! jx-mod Build user info string
+  if (max(0.d0,maxpanang-89.99d0)/0.01d0 > 0.d0) penalty_info = trim(penalty_info) // ' LEbl'
 
 ! Penalty for too sharp leading edge
 
   penaltyval = penaltyval + max(0.d0,abs(panang1-panang2)-20.d0)/5.d0
+  ! jx-mod Build user info string
+  if (max(0.d0,maxpanang-89.99d0)/0.01d0 > 0.d0) penalty_info = trim(penalty_info) // ' LEsh'
 
 ! Interpolate bottom surface to xseedt points (to check thickness)
 
@@ -247,11 +320,44 @@ function aero_objective_function(designvars, include_penalty)
       gapallow = tegap + 2.d0 * heightfactor * (x_interp(nptint) -             &
                                                 x_interp(i))
       penaltyval = penaltyval + max(0.d0,gapallow-thickness(i))/0.1d0
+      ! jx-mod Build user info string
+      if (max(0.d0,gapallow-thickness(i))/0.1d0 > 0.d0) penalty_info = trim(penalty_info) // ' Gap'
     end if
 
   end do
 
-! Check additional thickness constraints
+
+! jx-mod Geo targets - Start --------------------------------------------
+
+! Evaluate current value of geomtry targets - calculate geo_objective 
+  do i = 1, ngeo_targets
+
+    select case (trim(geo_targets(i)%type))
+      case ('zTop')           ! get z_value top side 
+        cur_value = interp_point(x_interp, zt_interp, geo_targets(i)%x)
+      case ('zBot')           ! get z_value bot side
+        cur_value = interp_point(x_interp, zb_interp, geo_targets(i)%x)
+      case ('Thickness')      ! take foil thickness calculated above
+        cur_value = maxthick
+      case default
+        call my_stop("Unknown target_type '"//trim(geo_targets(i)%type))
+    end select
+
+    ref_value = geo_targets(i)%reference_value
+    tar_value = geo_targets(i)%target_value
+
+    ! scale objective to 1 ( = no improvement) 
+    increment = (ref_value + abs(tar_value - cur_value)) * geo_targets(i)%scale_factor 
+    geo_objective_function = geo_objective_function + geo_targets(i)%weighting * increment
+
+    if (.false.)                                                          &
+      write (*,'(22x,A,F8.6)') "Geo targets '"//geo_targets(i)%type//"' ", increment
+
+  end do 
+
+! jx-mod Geo targets - end ------------------------------------------------
+
+
 
   if (naddthickconst > 0) then
     call interp_vector(x_interp, thickness,                                    &
@@ -260,6 +366,9 @@ function aero_objective_function(designvars, include_penalty)
     do i = 1, naddthickconst
       penaltyval = penaltyval + max(0.d0,addthick_min(i)-add_thickvec(i))/0.1d0
       penaltyval = penaltyval + max(0.d0,add_thickvec(i)-addthick_max(i))/0.1d0
+      ! jx-mod Build user info string
+      if (max(0.d0,add_thickvec(i)-addthick_max(i))/0.1d0 > 0.d0) penalty_info = trim(penalty_info) // ' aThmax'
+      if (max(0.d0,addthick_min(i)-add_thickvec(i))/0.1d0 > 0.d0) penalty_info = trim(penalty_info) // ' aThmin'
     end do
   end if
 
@@ -267,6 +376,11 @@ function aero_objective_function(designvars, include_penalty)
 
   penaltyval = penaltyval + max(0.d0,min_thickness-maxthick)/0.1d0
   penaltyval = penaltyval + max(0.d0,maxthick-max_thickness)/0.1d0
+
+  ! jx-mod Build user info string
+  if (max(0.d0,min_thickness-maxthick)/0.1d0 > 0.d0) penalty_info = trim(penalty_info) // ' Thmax'
+  if (max(0.d0,maxthick-max_thickness)/0.1d0 > 0.d0) penalty_info = trim(penalty_info) // ' Thmax'
+
 
 ! Check for curvature reversals
 
@@ -301,6 +415,9 @@ function aero_objective_function(designvars, include_penalty)
 
     penaltyval = penaltyval + max(0.d0,dble(nreversalst-max_curv_reverse_top))
     penaltyval = penaltyval + max(0.d0,dble(nreversalsb-max_curv_reverse_bot))
+
+    if (max(0.d0,dble(nreversalst-max_curv_reverse_top)) > 0.d0) penalty_info = trim(penalty_info) // ' RevT'
+    if (max(0.d0,dble(nreversalsb-max_curv_reverse_bot)) > 0.d0) penalty_info = trim(penalty_info) // ' RevB'
 
   end if
 
@@ -344,14 +461,21 @@ function aero_objective_function(designvars, include_penalty)
                  actual_flap_degrees(1:noppoint), xfoil_options, lift, drag,   &
                  moment, viscrms, alpha, xtrt, xtrb, ncrit_pt)
 
-! Add penalty for too large panel angles
-
   penaltyval = penaltyval + max(0.0d0,AMAX-25.d0)/5.d0
+
+  ! jx-mod Build user info string
+  if (max(0.0d0,AMAX-25.d0)/5.d0 > 0.d0) penalty_info = trim(penalty_info) // ' AMAX'
+
 
 ! Add penalty for camber outside of constraints
 
   penaltyval = penaltyval + max(0.d0,CAMBR-max_camber)/0.025d0
   penaltyval = penaltyval + max(0.d0,min_camber-CAMBR)/0.025d0
+
+  ! jx-mod Build user info string
+  if (max(0.d0,CAMBR-max_camber) > 0.d0) penalty_info = trim(penalty_info) // ' CAMmax'
+  if (max(0.d0,min_camber-CAMBR) > 0.d0) penalty_info = trim(penalty_info) // ' CAMmin'
+
 
 ! Exit if panel angles and camber constraints don't check out
 
@@ -374,11 +498,25 @@ function aero_objective_function(designvars, include_penalty)
 !   Check when lift or drag values are suspect
 
     check = .false.
-    if (trim(optimization_type(i)) == 'min-drag') then
-      if (drag(i) < (1.d0 - checktol)*mindrag(i)) check = .true.
-    else
-      if ((lift(i) > (1.d0 + checktol)*maxlift(i)) .or.                        &
-          (drag(i) < (1.d0 - checktol)*mindrag(i))) check = .true.
+
+!   jx-mod Flip detection of cd/cl due to xfoil behaviour
+!            Attention cl could be 0.0
+    if (( abs(lift(i)-maxlift(i))/max(0.0001d0,abs(maxlift(i))) > checktol) .or.                          &
+       ((abs((drag(i)-mindrag(i))/mindrag(i))) > checktol)) then                          
+       check = .true.
+    end if
+
+!   jx-mod Flip detection of cd/cl due to xfoil behaviour
+!            In strange circumstances though op_mode = spec-cl 
+!            xfoil-calculation will result in new lift-values (!?) 
+    if ((op_mode(i) == 'spec-cl') .and. (abs(lift(i) - op_point(i)) > 0.01d0)) then
+      check = .true.
+    end if 
+
+!   jx-mod Flip detection of cd/cl due to xfoil behaviour
+!            Do not trust if no early convergence --> better re-check
+    if (viscrms(i) > 1.D-4) then
+      check = .true.
     end if
 
     if (check) then
@@ -393,7 +531,6 @@ function aero_objective_function(designvars, include_penalty)
 
 !     Perturb Reynolds number slightly to check that XFoil result is 
 !     repeatable
-
       re_check(ncheckpt) = 0.997d0*reynolds(i)
  
     end if
@@ -419,20 +556,38 @@ function aero_objective_function(designvars, include_penalty)
 
         check_idx = checkpt_list(i)
 
-        checklift: if (clcheck(check_idx) < lift(i)) then
+!   jx-mod Flip repair of cd/cl due to xfoil behaviour
+!            Take cl value which is closer to maxlift 
+!            Att: maxlift holds now "last good value of cl"
+        !checklift: if (clcheck(check_idx) < lift(i)) then
+        checklift: if (abs(lift(i)-maxlift(i)) > abs(clcheck(check_idx)-maxlift(i))) then
           lift(i) = clcheck(check_idx)
         end if checklift
 
-        checkdrag: if (cdcheck(check_idx) > drag(i)) then
+!   jx-mod Flip repair of cd/cl due to xfoil behaviour
+!            Take cd value which is closer to mindrag 
+!            Att: mindrag holds now "last good value of cd"
+        !checkdrag: if (cdcheck(check_idx) > drag(i)) then
+        checkdrag: if (abs(drag(i)-mindrag(i)) > abs(cdcheck(check_idx)-mindrag(i))) then
           drag(i) = cdcheck(check_idx)
+!   jx-mod take the belonging convergence value 
+!            Otherwise wrong following penalizing -see below --
+          viscrms(i) = rmscheck(check_idx)
         end if checkdrag
 
         checkmoment: if (cmcheck(check_idx) < moment(i)) then
           moment(i) = cmcheck(check_idx)
         end if checkmoment
 
-        checkrms: if (rmscheck(check_idx) > viscrms(i)) then
+!   jx-mod Flip repair of cd/cl due to xfoil behaviour
+!            In case of former non convergence take new value 
+!            - else normal handling
+        checkrms: if (viscrms(i) > 1.D-4) then
           viscrms(i) = rmscheck(check_idx)
+        else
+          if (rmscheck(check_idx) > viscrms(i)) then
+            viscrms(i) = rmscheck(check_idx)
+          end if 
         end if checkrms
 
         checkxtrt: if (xtrtcheck(check_idx) < xtrt(i)) then
@@ -449,19 +604,26 @@ function aero_objective_function(designvars, include_penalty)
 
   end if anychecked
 
+!   jx-mod Flip repair of cd/cl due to xfoil behaviour
+!            Early exit with a high penalty if no convergence reached
+!            to avoid any following trouble with bad values 
+  do i = 1, noppoint
+    !   Extra checks for really bad designs
+    if (viscrms(i) >= 1.d0) then
+      write (*,'(A40,I3, F10.3)') "... No convergence ...    i  viscrms", i, viscrms(i)
+      aero_objective_function = 3.33333d0 *1.0D+06
+      return
+    end if
+  end do
+
+
+
 ! Get objective function contribution from aerodynamics (aero performance
 ! times normalized weight)
 
   aero_objective_function = 0.d0
 
   do i = 1, noppoint
-!   Extra checks for really bad designs
-
-    if (viscrms(i) >= 1.d0) then
-      lift(i) = -0.1d0
-      drag(i) = 1000.d0
-      moment(i) = -10.d0
-    end if
 
 !   Objective function evaluation
 
@@ -491,6 +653,19 @@ function aero_objective_function(designvars, include_penalty)
 
       increment = drag(i)*scale_factor(i)
 
+    elseif (trim(optimization_type(i)) == 'target-drag') then
+
+! jx-mod Geo targets - Minimize difference between target cd value and current value 
+    
+      increment = (target_value(i) + ABS (target_value(i)-drag(i))) * scale_factor(i) 
+
+    elseif (trim(optimization_type(i)) == 'target-moment') then
+
+! jx-mod Geo targets - Minimize difference between target moment value and current value 
+!                     Add a base value (Clark y or so ;-) to the moment difference
+!                     so the relative change won't be to high
+      increment = (ABS (target_value(i)-moment(i))+ 0.05d0)*scale_factor(i)
+         
     elseif (trim(optimization_type(i)) == 'max-lift') then
 
 !     Maximize Cl (at given angle of attack)
@@ -554,31 +729,129 @@ function aero_objective_function(designvars, include_penalty)
 
   do i = 1, noppoint
     penaltyval = penaltyval + max(0.d0,viscrms(i)-1.0D-04)/1.0D-04
+
+    ! jx-mod Build user info string
+    if ( max(0.d0,viscrms(i)-1.0D-04) > 0.d0) penalty_info = trim(penalty_info) // ' Visc'
+
   end do
 
 ! Add penalty for too low moment
 
   do i = 1, noppoint
-    if (trim(moment_constraint_type(i)) /= 'none') then
-      penaltyval = penaltyval + max(0.d0,min_moment(i)-moment(i))/0.1d0
+  ! jx-mod Geo targets -no penalty when special op point type 
+    if (trim(optimization_type(i)) /= 'target-moment') then
+      if (trim(moment_constraint_type(i)) /= 'none')  then
+        penaltyval = penaltyval + max(0.d0,min_moment(i)-moment(i))/0.1d0
+      end if
     end if
   end do
 
-! Add all penalties to objective function, and make them very large
 
+  do i = 1, noppoint
+
+
+    if (maxlift(i) /= -100.d0) then     ! no penalties for very first seed eval
+
+!------------------------------------------------------------------------------
+! jx-mod Start many single patches for flip detection and geo targets 
+!------------------------------------------------------------------------------
+
+      write (text,*) i
+      text = '(' // trim(adjustl(text)) // ')'
+
+      ! jx-mod cl had changed although should be constant -> penalize
+
+      if ((op_mode(i) == 'spec-cl') .and. (abs(lift(i) - op_point(i)) > 0.01d0)) then
+        penaltyval = penaltyval + 4.444d0 *  epsupdate             ! = 4.444%
+        penalty_info = trim(penalty_info) // ' clchange' // text
+      end if 
+
+      ! jx-mod cd or cl still flipped away -> penalize
+
+      if ( abs(lift(i)-maxlift(i))/max(0.0001d0,abs(maxlift(i))) > checktol) then              
+        penaltyi = 1.111d0 *  epsupdate                             ! = 1.111%
+        penaltyval = penaltyval + penaltyi  
+        penalty_info = trim(penalty_info) // ' clflip' // text
+      end if
+    end if
+
+    ! jx-mod if flaps are set, there could be bigger value jumps of cd
+    !            --> do not penalize
+    !        in normal mode penalize for flipped value
+    if ((mindrag(i) /= 100d0) .and. (actual_flap_degrees(i) == 0.d0)) then
+
+      if ((abs(drag(i) -mindrag(i))/mindrag(i)) > checktol) then
+        if (drag(i) < mindrag(i)) then
+          ! proportional penalty for decrease of cd
+          penaltyi = abs(drag(i) -mindrag(i))*scale_factor(i)*weighting(i) * 2.2222d0 *  epsupdate
+        else
+          ! fixed high penalty for increase of cd
+          penaltyi = 2.222d0 * epsupdate
+        end if 
+        penaltyval = penaltyval + penaltyi 
+        write (numstring,'(F6.4)') mindrag(i)
+        penalty_info = trim(penalty_info) // ' cdflip' // text // ' Min' // trim(adjustl(numstring))
+      end if
+    end if
+
+  end do
+  
+! jx-mod Show surface quality for entertainment and info
+!          about objectives at the end of iteration 
+  if (show_smoothing .and. do_smoothing) then
+
+    write (*,*) 
+
+    call assess_surface ('Top    ', show_smoothing, max_curv_reverse_top, xseedt, zt_new, nreversalst, perturbation_top)
+    call assess_surface ('Bottom ', show_smoothing, max_curv_reverse_bot, xseedb, zb_new, nreversalsb, perturbation_bot)
+
+    if (penaltyval > 0.d0) write (*,'(53x,A)') 'Pen: ' // penalty_info 
+
+    write(*,'(3x,4(A11,G11.4),1(A13,F8.4),A1)')                                 &
+        "    Obj: ", aero_objective_function,                                    &
+        "  + Geo: ", geo_objective_function,                                     &
+        "  + Pen: ", (penaltyval * 1.0D+06),                                     &
+        "  = New: ", (aero_objective_function + geo_objective_function + penaltyval*1.0D+06),  &
+        " Improv: ", (1 - (aero_objective_function + geo_objective_function + penaltyval*1.0D+06))*100.d0, '%'
+  end if
+
+! jx-mod Exit wenn flip
+
+  if ( (penaltyval > epsexit) .and. penalize ) then
+    aero_objective_function = penaltyval * 1.0D+06
+    return
+  end if                           
+
+! jx-mod Geo targets - add to aero target for final objective function
+  aero_objective_function = aero_objective_function + geo_objective_function
+
+! Add all penalties to objective function, and make them very large
   if (penalize) aero_objective_function =                                      &
                 aero_objective_function + penaltyval*1.0D+06
 
 ! Update maxlift and mindrag only if it is a good design
 
+! jx-mod Flip detection 
+!        The approach for detection with a min odr max value is changed.
+!        It turned out, that if a "bad value" made its way into min or max,
+!        it's nearly impossible that a succeeding "good value" will replace it
+!        leading to a wrong flip detection for all succeeding iterations ...
+!        Now always the last good value (= iteration with no penalties)
+!        is taken for succeeding flip detection in the next iteration
+!        Attention: hack: Name of variable is still maxlift and mindrag !                                                           
   if (penaltyval <= epsupdate) then
     do i = 1, noppoint
-!$omp critical
-      if (lift(i) > maxlift(i)) maxlift(i) = lift(i)
-      if (drag(i) < mindrag(i)) mindrag(i) = drag(i)
-!$omp end critical
+      ! jx-mod under strange circumstances cl changes although "spec-cl" - s.a. - supress update 
+      if ((op_mode(i) /= 'spec-cl') .or. (maxlift(i) == -100.d0))  then
+        maxlift(i) = lift(i)
+      end if  
+      mindrag(i) = drag(i)
     end do
   end if
+
+
+! jx-mod End many single patches for flip detection and geo targets 
+!------------------------------------------------------------------------------
 
 end function aero_objective_function
 
@@ -662,6 +935,10 @@ end function write_function
 function write_airfoil_optimization_progress(designvars, designcounter)
 
   use math_deps,       only : interp_vector 
+
+! jx-mod Smoothing
+  use math_deps,       only : derivation2, derivation3 
+
   use parametrization, only : top_shape_function, bot_shape_function,          &
                               create_airfoil
   use xfoil_driver,    only : run_xfoil, xfoil_geometry_info
@@ -683,6 +960,9 @@ function write_airfoil_optimization_progress(designvars, designcounter)
   character(100) :: foilfile, polarfile, text
   character(8) :: maxtchar, xmaxtchar, maxcchar, xmaxcchar
   integer :: foilunit, polarunit
+
+! jx-mod Smoothing
+  double precision, dimension(size(curr_foil%x)) :: deriv2, deriv3
 
   nmodest = size(top_shape_function,1)
   nmodesb = size(bot_shape_function,1)
@@ -726,6 +1006,20 @@ function write_airfoil_optimization_progress(designvars, designcounter)
     curr_foil%z(i+nptt) = zb_new(i+1)/foilscale - zoffset
   end do
 
+! jx-mod Smoothing
+!        Write the original, not smoothed seed airfoil to
+!        ...design_coordinates.dat to show it in visualizer
+
+  if (do_smoothing .and. designcounter == 0) then
+    do i = 1, nptt
+      curr_foil%z(i)      = zseedt_not_smoothed(nptt-i+1)/foilscale - zoffset
+    end do
+    do i = 1, nptb-1
+      curr_foil%z(i+nptt) = zseedb_not_smoothed(i+1)/foilscale - zoffset
+    end do
+  end if
+
+
 ! Check that number of flap optimize points are correct
 
   ndvs = size(designvars,1)
@@ -754,6 +1048,7 @@ function write_airfoil_optimization_progress(designvars, designcounter)
                  actual_flap_degrees(1:noppoint), xfoil_options, lift, drag,   &
                  moment, viscrms, alpha, xtrt, xtrb, ncrit_pt)
 
+             
 ! Get geometry info
 
   call xfoil_geometry_info(maxt, xmaxt, maxc, xmaxc)
@@ -784,7 +1079,12 @@ function write_airfoil_optimization_progress(designvars, designcounter)
                trim(foilfile)//" ..."
     open(unit=foilunit, file=foilfile, status='replace')
     write(foilunit,'(A)') 'title="Airfoil coordinates"'
-    write(foilunit,'(A)') 'variables="x" "z"'
+
+! jx-mod Smoothing
+!        Add 2nd and 3rd derivative to
+!        ...design_coordinates.dat to show it in visualizer
+    write(foilunit,'(A)') 'variables="x" "z" "2nd derivative" "3rd derivative"'
+
     write(foilunit,'(A)') 'zone t="Seed airfoil, maxt='//trim(maxtchar)//&
                           ', xmaxt='//trim(xmaxtchar)//', maxc='//&
                           trim(maxcchar)//', xmaxc='//trim(xmaxcchar)//'"'
@@ -795,7 +1095,10 @@ function write_airfoil_optimization_progress(designvars, designcounter)
                trim(polarfile)//" ..."
     open(unit=polarunit, file=polarfile, status='replace')
     write(polarunit,'(A)') 'title="Airfoil polars"'
-    write(polarunit,'(A)') 'variables="alpha" "cl" "cd" "cm" "xtrt" "xtrb"'
+
+! jx-mod Entertainment
+!        Add current flap angle to polars to show it in visualizer
+    write(polarunit,'(A)') 'variables="alpha" "cl" "cd" "cm" "xtrt" "xtrb" "flapangle"'
     write(polarunit,'(A)') 'zone t="Seed airfoil polar"'
 
   else
@@ -828,15 +1131,23 @@ function write_airfoil_optimization_progress(designvars, designcounter)
 
 ! Write coordinates to file
 
+! jx-mod Smoothing
+!        Add 2nd and 3rd derivative to
+!        ...design_coordinates.dat to show it in visualizer
+  deriv2 = derivation2 ((nptt + nptb - 1), curr_foil%x, curr_foil%z)
+  deriv3 = derivation3 ((nptt + nptb - 1), curr_foil%x, curr_foil%z)
+
   do i = 1, nptt + nptb - 1
-    write(foilunit,'(2F12.6)') curr_foil%x(i), curr_foil%z(i)
+    write(foilunit,'(2F12.6,2G18.8)') curr_foil%x(i), curr_foil%z(i), deriv2(i), deriv3(i)
   end do
 
 ! Write polars to file
 
   do i = 1, noppoint
-    write(polarunit,'(6ES14.6)') alpha(i), lift(i), drag(i), moment(i),        &
-                                 xtrt(i), xtrb(i)
+! jx-mod Entertainment
+!        Add current flap angle to polars to show it in visualizer
+    write(polarunit,'(6ES14.6, 1ES14.3)') alpha(i), lift(i), drag(i), moment(i), &
+                                 xtrt(i), xtrb(i), actual_flap_degrees (i)
   end do
 
 ! Close output files
@@ -994,7 +1305,7 @@ function write_function_restart_cleanup(restart_status, global_search,         &
                                                    moment, xtrt, xtrb
   double precision, dimension(:), allocatable :: fmin, relfmin, rad
   character(150), dimension(:), allocatable :: zoneinfo
-  character(100) :: restfile, foilfile, polarfile, histfile, text
+  character(100) :: restfile, foilfile, polarfile, text
   character(11) :: stepchar
   character(20) :: fminchar, radchar
   character(25) :: relfminchar
@@ -1105,8 +1416,7 @@ function write_function_restart_cleanup(restart_status, global_search,         &
 
 ! Open history file
 
-  histfile = trim(output_prefix)//'_optimization_history.dat'
-  open(unit=histunit, file=histfile, status='old',           &
+  open(unit=histunit, file='optimization_history.dat', status='old',           &
        iostat=ioerr)
   if (ioerr /= 0) then
     write_function_restart_cleanup = 3
@@ -1129,7 +1439,7 @@ function write_function_restart_cleanup(restart_status, global_search,         &
 
 ! Re-write history file without the unused iterations
 
-  open(unit=histunit, file=histfile, status='replace')
+  open(unit=histunit, file='optimization_history.dat', status='replace')
   write(histunit,'(A)') "Iteration  Objective function  "//&
                         "% Improvement over seed  Design radius"
   do i = 1, step

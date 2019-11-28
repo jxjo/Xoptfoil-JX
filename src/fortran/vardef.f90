@@ -22,7 +22,6 @@ module vardef
   implicit none
 
   type airfoil_type
-
     integer :: npoint
     double precision, dimension(:), allocatable :: x, z ! Airfoil coordinates
     double precision :: xle, zle                        ! Leading edge coords
@@ -30,8 +29,17 @@ module vardef
     integer :: addpoint_loc                             ! Whether to add point 
                                                         !  for LE before or
                                                         !  after leclose
-
   end type airfoil_type
+
+! jx-mod Geo targets - type
+  type geo_target_type
+    character(10) :: type                               ! eg 'zBot' zTop'
+    double precision :: x                               ! x-value of target
+    double precision :: target_value                    ! target value to achieve
+    double precision :: reference_value                 ! to scale improvement (depends on type)
+    double precision :: weighting                       ! weighting within objective function
+    double precision :: scale_factor                    ! scale for objective function
+  end type geo_target_type
 
 ! Global variables (mainly needed to preserve generality of optimization
 ! routines)
@@ -43,6 +51,10 @@ module vardef
   character(8), dimension(max_op_points) :: flap_selection
   double precision, dimension(max_op_points) :: op_point, reynolds, mach,      &
                                  flap_degrees, weighting, scale_factor, ncrit_pt
+
+! jx-mod Aero targets - new Option: target_value for op_mode target-moment and target-drag
+  double precision, dimension(max_op_points) :: target_value
+
   double precision :: x_flap, y_flap
   character(3) :: y_flap_spec
   logical :: use_flap
@@ -78,6 +90,17 @@ module vardef
   double precision, dimension(max_addthickconst) :: addthick_x, addthick_min,  &
                                                     addthick_max
 
+! jx-mod Geo targets - new vars
+  integer :: ngeo_targets
+  integer, parameter :: max_geo_targets = 10
+  type(geo_target_type), dimension(max_geo_targets) :: geo_targets
+                                                  
+! jx-mod Smoothing - parameters for smoothing 
+  double precision :: spike_threshold, highlow_treshold
+  logical :: do_smoothing, show_smoothing
+  double precision :: scale_pertubation, weighting_smoothing
+  double precision, dimension(:), allocatable :: zseedt_not_smoothed, zseedb_not_smoothed
+  
 !$omp threadprivate(curr_foil)
 
 end module vardef

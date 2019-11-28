@@ -59,6 +59,11 @@ program main
   write(*,*)
   write(*,*) 'This is Xoptfoil: airfoil optimization with Xfoil'
   write(*,*) 'Copyright 2017-2019 Daniel Prosser'
+  write(*,*) 
+  write(*,*) '*** JX - patched version to define optimization targets'
+  write(*,*) '         and to implement basic smoothing capabilities'
+  write(*,*) '    by Jochen Guenzel 2019-11'
+  
 
 ! Read inputs from namelist file
 
@@ -113,6 +118,18 @@ program main
     write(*,*)
   end if
 
+! jx-mod Smoothing ---- save original seed surface before smoothing
+
+  if (do_smoothing) then
+    allocate(zseedt_not_smoothed(size(zseedt)))
+    allocate(zseedb_not_smoothed(size(zseedb)))
+    zseedt_not_smoothed = zseedt
+    zseedb_not_smoothed = zseedb
+  end if
+
+! jx-mod Smoothing ---- end 
+
+
 ! Make sure seed airfoil passes constraints, and get scaling factors for
 ! operating points
 
@@ -143,5 +160,9 @@ program main
   deallocate(zseedb)
   deallocate(optdesign)
   if (allocated(constrained_dvs)) deallocate(constrained_dvs)
+
+! jx-mod Smoothing ---- Deallocate save arrays
+  if (allocated(zseedt_not_smoothed)) deallocate(zseedt_not_smoothed)
+  if (allocated(zseedb_not_smoothed)) deallocate(zseedb_not_smoothed)
 
 end program main

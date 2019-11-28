@@ -79,12 +79,20 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
   character(10) :: pso_convergence_profile, parents_selection_method
   character :: choice
 
+  ! jx-mod Geo targets 
+  double precision :: sum_weightings
+  double precision, dimension(max_geo_targets) :: x_pos, target_geo
+  double precision, dimension(max_geo_targets) :: weighting_geo
+  character(10), dimension(max_geo_targets) :: target_type
+  
   namelist /optimization_options/ search_type, global_search, local_search,    &
             seed_airfoil, airfoil_file, shape_functions, nfunctions_top,       &
             nfunctions_bot, initial_perturb, min_bump_width, restart,          &
             restart_write_freq, write_designs
   namelist /operating_conditions/ noppoint, op_mode, op_point, reynolds, mach, &
             use_flap, x_flap, y_flap, y_flap_spec, flap_selection,             &
+! jx-mod Aero targets - new option: target_value
+            target_value,                                                      &
             flap_degrees, weighting, optimization_type, ncrit_pt
   namelist /constraints/ min_thickness, max_thickness, moment_constraint_type, &
                          min_moment, min_te_angle, check_curvature,            &
@@ -109,6 +117,14 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
   namelist /xfoil_paneling_options/ npan, cvpar, cterat, ctrrat, xsref1,       &
             xsref2, xpref1, xpref2
   namelist /matchfoil_options/ match_foils, matchfoil_file
+
+! jx-mod Smoothing - namelist for smoothing options
+  namelist /smoothing_options/ do_smoothing, show_smoothing, spike_threshold,  &
+            highlow_treshold, weighting_smoothing
+! jx-mod Geo targets - namelist for geometry targets  (see module vardef)
+  namelist /geometry_targets/ ngeo_targets, target_type, x_pos, target_geo,  &
+            weighting_geo 
+
 
 ! Open input file
 
@@ -161,6 +177,8 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
   flap_degrees(:) = 0.d0
   weighting(:) = 1.d0
   ncrit_pt(:) = -1.d0
+! jx-mod Aero target - new option 
+  target_value(:) = -1.d3 
 
   min_thickness = 0.06d0
   max_thickness = 1000.d0
@@ -180,6 +198,7 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
   addthick_x(:) = 0.01d0
   addthick_min(:) = -1000.d0
   addthick_max(:) = 1000.d0
+
 
 ! Read operating conditions and constraints
 
@@ -202,9 +221,67 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
     end do
   end if
 
-! Normalize weightings for operating points
 
-  weighting = weighting/sum(weighting(1:noppoint))
+! jx-mod Smoothing - start read options-----------------------------------------
+  
+  !Set defaults for smoothing and read namelist 
+
+  highlow_treshold = 0.05d0
+  spike_threshold = 0.8d0
+  do_smoothing = .false.
+  show_smoothing = .false. 
+  weighting_smoothing = 1.d0
+
+  rewind(iunit)
+  read(iunit, iostat=iostat1, nml=smoothing_options)
+  call namelist_check('smoothing_options', iostat1, 'warn')
+
+  ! ensure no weighting if set to false 
+  if (.not. do_smoothing) then
+    weighting_smoothing = 0.d0 
+  end if
+
+! jx-mod Geo targets - start read and weight options---------------------
+
+  !Set defaults for geometry targets and read namelist 
+
+  ngeo_targets = 0
+
+  target_type (:) = ''
+  x_pos(:) = 0.d0 
+  target_geo(:) = 0.d0 
+  weighting_geo(:) = 0.0 
+
+  rewind(iunit)
+  read(iunit, iostat=iostat1, nml=geometry_targets)
+  call namelist_check('geometry_targets', iostat1, 'warn')
+
+  do i = 1, ngeo_targets
+    geo_targets(i)%type         = target_type(i)
+    geo_targets(i)%target_value = target_geo(i)
+    geo_targets(i)%x            = x_pos(i)
+    geo_targets(i)%reference_value   = 0.d0
+    geo_targets(i)%weighting    = weighting_geo(i)
+  end do   
+
+! jx-mod Geo targets - end read options-----------------------------------------
+
+! jx-mod Modify normalize weightings for operating points
+!          now includis geo targets and smoothing progress
+
+  sum_weightings = sum(weighting(1:noppoint))               &
+                 + weighting_smoothing                      &
+                 + sum(weighting_geo(1:ngeo_targets))
+
+  weighting           = weighting/sum_weightings
+  weighting_geo       = weighting_geo/sum_weightings
+  weighting_smoothing = weighting_smoothing/sum_weightings
+
+  geo_targets%weighting = weighting_geo
+
+
+! jx-mod - end extension -----------------------------------------------------
+
 
 ! Ask about removing pitching moment constraints for symmetrical optimization
 
@@ -559,6 +636,8 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
     write(*,*) " flap_selection("//trim(text)//") = '"//                       &
                trim(flap_selection(i))//"'"
     write(*,*) " flap_degrees("//trim(text)//") = ", flap_degrees(i)
+! jx-mod Aero target -new parameter target value
+    write(*,*) " target_value("//trim(text)//") = ", target_value(i)
     write(*,*) " weighting("//trim(text)//") = ", weighting(i)
     if (ncrit_pt(i) /= -1.d0)                                                  &
       write(*,*) " ncrit_pt("//trim(text)//") = ", ncrit_pt(i)
@@ -597,6 +676,33 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
     write(*,*) " addthick_min("//trim(text)//") = ", addthick_min(i)
     write(*,*) " addthick_max("//trim(text)//") = ", addthick_max(i)
   end do
+  write(*,'(A)') " /"
+  write(*,*)
+
+! jx-mod Smoothing - echo namelist
+
+  write(*,'(A)') " &smoothing_options"
+  write(*,*) " do_smoothing = ", do_smoothing
+  write(*,*) " show_smoothing = ", show_smoothing
+  write(*,*) " highlow_treshold = ", highlow_treshold
+  write(*,*) " spike_threshold = ", spike_threshold
+  write(*,*) " weighting_smoothing = ", weighting_smoothing
+  write(*,'(A)') " /"
+  write(*,*)
+
+! jx-mod Geo targets - echo namelist
+
+  write(*,'(A)') " &geometry_targets"
+
+  do i = 1, ngeo_targets
+    write(text,*) i
+    text = adjustl(text)
+    write(*,*) " target_type("//trim(text)//") = ",   geo_targets(i)%type
+    write(*,*) " target_value("//trim(text)//") = ",  geo_targets(i)%target_value
+    write(*,*) " x_pos("//trim(text)//") = ",         geo_targets(i)%x
+    write(*,*) " weighting_geo("//trim(text)//") = ", geo_targets(i)%weighting
+    if (i < noppoint) write(*,*)
+  end do   
   write(*,'(A)') " /"
   write(*,*)
 
@@ -768,15 +874,34 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
       trim(optimization_type(i)) /= 'max-glide' .and.                          &
       trim(optimization_type(i)) /= 'min-sink' .and.                           &
       trim(optimization_type(i)) /= 'max-lift' .and.                           &
+! jx-mod Aero targets - additional op-point type target-moment and target-drag
+      trim(optimization_type(i)) /= 'target-moment' .and.                      &
+      trim(optimization_type(i)) /= 'target-drag' .and.                        &
       trim(optimization_type(i)) /= 'max-xtr' .and.                            &
       trim(optimization_type(i)) /= 'max-lift-slope')                          &
+! jx-mod Aero targets - additional op-point type target-moment and target-drag
       call my_stop("optimization_type must be 'min-drag', 'max-glide', "//     &
-                   "min-sink', 'max-lift', 'max-xtr', or 'max-lift-slope'.")
+                   "'min-sink', 'max-lift', 'max-xtr', 'target-moment', "//    &
+                   "'target-drag or 'max-lift-slope'.")
     if ((trim(optimization_type(i)) == 'max-lift-slope') .and. (noppoint == 1))&
       call my_stop("at least two operating points are required for to "//      &
                    "maximize lift curve slope.")
     if (ncrit_pt(i) <= 0.d0) call my_stop("ncrit_pt must be > 0 or -1.")
   end do
+
+! jx-mod Aero targets - Check for an existing moment target value 
+!              if optimization_type is target-moment or Target-drag
+  do i = 1, noppoint
+    if (((trim(optimization_type(i)) == 'target-moment') .and.                &
+        (target_value(i)) == -1.d3) )                                         &
+      call my_stop("No 'target-value' defined for "//  &
+                 "for optimization_type 'target-moment'")
+    if (((trim(optimization_type(i)) == 'target-drag') .and.                  &
+        (target_value(i)) == -1.d3) )                                         &
+      call my_stop("No 'target-value' defined for "//  &
+                     "for optimization_type 'target-drag'")
+  end do
+
 
 ! Constraints
 
@@ -820,6 +945,32 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
     if (addthick_min(i) >= addthick_max(i))                                    &
       call my_stop("addthick_min must be < addthick_max.")
   end do
+
+! jx-mod Smoothing - check options 
+
+  if (do_smoothing) then
+    if ( highlow_treshold < 0.01d0 )                                           &
+      call my_stop ("highlow_treshold must be >= 0.01")
+    if ( spike_threshold < 0.1d0 )                                             &
+      call my_stop ("spike_threshold must be >= 0.1")
+    if (weighting_smoothing < 0.d0)                                           &
+      call my_stop("weighting_smoothing must be >= 0.")
+  end if
+
+! jx-mod Geo targets - check options
+
+  do i = 1, ngeo_targets
+
+    if ((trim(geo_targets(i)%type) /= 'zBot' .and.                             &
+        trim(geo_targets(i)%type) /= 'zTop') .and.                             &
+        trim(geo_targets(i)%type) /= 'Thickness')                              &
+      call my_stop("target type must be 'zBot', 'zTop' or'Thickness'.")
+    if ((geo_targets(i)%x <= 0.d0 .or.                                         &
+        geo_targets(i)%x >= 1.d0) .and.                                        &
+        trim(geo_targets(i)%type) /= 'Thickness')                              &
+      call my_stop("x position must be > 0 and < 1.")
+ end do   
+
 
 ! Naca airfoil options
 
@@ -1064,6 +1215,9 @@ subroutine print_usage(exeprint)
   write(*,'(A)') "  -v, --version     Display Xoptfoil version and exit"
   write(*,'(A)')
   write(*,'(A)') "Refer to the PDF user guide for complete input help."
+  write(*,'(A)')
+  ! jx-mod
+  write(*,'(A)') "Refer to additional doc for ths modified version of Xoptfoil"
   write(*,'(A)')
   write(*,'(A)') "Home page: https://sourceforge.net/projects/xoptfoil/"
   write(*,'(A)') "Development page: https://github.com/montagdude/Xoptfoil"
