@@ -704,7 +704,8 @@ subroutine find_curvature_reversals(npt, i_start, highlow_treshold, curve_thresh
 
   ! get the real reversals with curve values from + to - 
   !    just the same as in the original function 
-  do i = i_first, npt
+  !    (npt-1) --> don't take last spike value as reversal 
+  do i = i_first, npt-1
     if (abs(deriv2(i)) >= curve_threshold) then
       if (deriv2(i) * curv1 < 0.d0) then 
         nreversals2 = nreversals2 + 1

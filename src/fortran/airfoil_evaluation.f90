@@ -224,7 +224,7 @@ function aero_objective_function(designvars, include_penalty)
     end if 
 
     ! Speedup - early exit if there are too many reversals 
-    if (penaltyval > epsexit) then
+    if ( (penaltyval > epsexit) .and. penalize ) then
       aero_objective_function = penaltyval*1.0D+06
       return
     end if
@@ -350,8 +350,8 @@ function aero_objective_function(designvars, include_penalty)
     increment = (ref_value + abs(tar_value - cur_value)) * geo_targets(i)%scale_factor 
     geo_objective_function = geo_objective_function + geo_targets(i)%weighting * increment
 
-    if (.false.)                                                          &
-      write (*,'(22x,A,F8.6)') "Geo targets '"//geo_targets(i)%type//"' ", increment
+    if (.true.)                                                          &
+      write (*,'(22x,A,4(F11.6))') "Geo targets '"//geo_targets(i)%type//"' ", increment, cur_value, tar_value, ref_value
 
   end do 
 
