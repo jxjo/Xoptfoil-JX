@@ -412,7 +412,7 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
     else
 
 !     For Hicks-Henne, also constrain bump locations and width
-
+ 
       allocate(constrained_dvs(2*nfunctions_top + 2*nbot_actual +              &
                                nflap_optimize))
       counter = 0
@@ -844,16 +844,17 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
       trim(seed_airfoil) /= 'naca')                                            &
     call my_stop("seed_airfoil must be 'from_file' or 'naca'.")
   if (trim(shape_functions) /= 'hicks-henne' .and.                             &
+      trim(shape_functions) /= 'camb-thick' .and.                              &
       trim(shape_functions) /= 'naca')                                         &
-    call my_stop("shape_functions must be 'hicks-henne' or 'naca'.")
-  if (nfunctions_top < 0)                                                      &
+    call my_stop("shape_functions must be 'hicks-henne', 'camb-thick' or 'naca'.")
+  if ((nfunctions_top < 0) .and. trim(shape_functions) /= 'camb-thick')                                                    &
     call my_stop("nfunctions_top must be >= 0.")
-  if (nfunctions_bot < 0)                                                      &
+  if ((nfunctions_bot < 0) .and. trim(shape_functions) /= 'camb-thick')                                                     &
     call my_stop("nfunctions_bot must be >= 0.")
   if (initial_perturb <= 0.d0)                                                 &
     call my_stop("initial_perturb must be > 0.")
   if (min_bump_width <= 0.d0)                                                  &
-    call my_stop("min_bump_width must be > 0.")
+    call my_stop("min_bump_width must be > 0.")!TODO MB bei camber thickness auch?
 
 ! Operating points
 
