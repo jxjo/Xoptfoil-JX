@@ -307,4 +307,54 @@ subroutine create_airfoil(xt_seed, zt_seed, xb_seed, zb_seed, modest, modesb,  &
 
 end subroutine create_airfoil
 
+
+
+!=============================================================================
+! jx-mod routines for the new shapeType to modify thickness and camber 
+
+
+!-----------------------------------------------------------------------------
+!
+! Modify thickness and camber and ther positions of 
+!   the seed foil defined by xt_seed, zt_seed, xb_seed, zb_seed
+!   to the new values defined in modest (compatibility to existing hicks henne and naca)
+!
+! Returns the new foil defined by zt_new, zb_new
+!-------------------------------------------------------------------------------
+subroutine apply_thick_camber_mod (xt_seed, zt_seed, xb_seed, zb_seed, modes, &
+                                  zt_new, zb_new )
+
+  use vardef,    only : airfoil_type
+  use memory_util, only : allocate_airfoil
+                                  
+                                  
+  double precision, dimension(:), intent(in) :: xt_seed, zt_seed, xb_seed, zb_seed
+  double precision, dimension(:), intent(in) :: modest
+  double precision, dimension(:), intent(inout) :: zt_new, zb_new
+  integer :: i,  nptt, nptb
+  type(airfoil_type) :: seed_foil
+
+  nptt = size(zt_seed,1)
+  nptb = size(zb_seed,1)
+
+
+  seed_foil%npoint = nptt + nptb - 1  ! ??????????????????
+  call allocate_airfoil (seed_foil) 
+
+
+  do i = 1, nptt
+    seed_foil%x(i) = xt_seed(nptt-i+1)
+    seed_foil%z(i) = zt_seed(nptt-i+1)
+  end do
+  do i = 1, nptb-1
+    seed_foil%x(i+nptt) = xb_seed(i+1)
+    seed_foil%z(i+nptt) = zb_seed(i+1)
+  end do
+
+
+end subroutine apply_thick_camber_mod
+
+
+
+
 end module parametrization
