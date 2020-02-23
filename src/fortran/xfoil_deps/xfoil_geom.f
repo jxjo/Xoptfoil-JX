@@ -2591,3 +2591,508 @@ CC
 C      CALL NEWCOLOR(ICOL0)
       RETURN
       END ! FLAP
+
+
+!------------------------------------------------------------------------------
+!
+! jx-mod XFoil additional functions which were not implemented up to now
+!              in xoptfoil
+!
+!------------------------------------------------------------------------------
+
+C===================================================
+C     Changes buffer airfoil thickness and camber
+C===================================================
+      SUBROUTINE THKCAM(TFAC,CFAC)
+
+      use xfoil_inc
+C      INCLUDE 'XFOIL.INC'
+C
+      CALL LEFIND(SBLE,XB,XBP,YB,YBP,SB,NB, SILENT_MODE)
+C
+C---This fails miserably with sharp LE foils, tsk,tsk,tsk HHY 4/24/01
+C---- set baseline vector normal to surface at LE point
+c      DXC = -DEVAL(SBLE,YB,YBP,SB,NB)
+c      DYC =  DEVAL(SBLE,XB,XBP,SB,NB)
+c      DSC = SQRT(DXC**2 + DYC**2)
+c      DXC = DXC/DSC
+c      DYC = DYC/DSC
+C
+C---Rational alternative 4/24/01 HHY
+      XLE = SEVAL(SBLE,XB,XBP,SB,NB)
+      YLE = SEVAL(SBLE,YB,YBP,SB,NB)
+      XTE = 0.5*(XB(1)+XB(NB))
+      YTE = 0.5*(YB(1)+YB(NB))
+      CHORD = SQRT((XTE-XLE)**2 + (YTE-YLE)**2)
+C---- set unit chord-line vector
+      DXC = (XTE-XLE) / CHORD
+      DYC = (YTE-YLE) / CHORD
+C
+C---- go over each point, changing the y-thickness appropriately
+      DO I=1, NB
+C------ coordinates of point on the opposite side with the same x value
+        CALL SOPPS(SBOPP, SB(I),XB,XBP,YB,YBP,SB,NB,SBLE, SILENT_MODE)
+        XBOPP = SEVAL(SBOPP,XB,XBP,SB,NB)
+        YBOPP = SEVAL(SBOPP,YB,YBP,SB,NB)
+C
+C------ set new y coordinate by changing camber & thickness appropriately
+        XCAVG =        ( 0.5*(XB(I)+XBOPP)*DXC + 0.5*(YB(I)+YBOPP)*DYC )
+        YCAVG = CFAC * ( 0.5*(YB(I)+YBOPP)*DXC - 0.5*(XB(I)+XBOPP)*DYC )
+
+        XCDEL =        ( 0.5*(XB(I)-XBOPP)*DXC + 0.5*(YB(I)-YBOPP)*DYC )
+        YCDEL = TFAC * ( 0.5*(YB(I)-YBOPP)*DXC - 0.5*(XB(I)-XBOPP)*DYC )
+C
+        W1(I) = (XCAVG+XCDEL)*DXC - (YCAVG+YCDEL)*DYC
+        W2(I) = (YCAVG+YCDEL)*DXC + (XCAVG+XCDEL)*DYC
+      ENDDO
+C
+      DO I=1, NB
+        XB(I) = W1(I)
+        YB(I) = W2(I)
+      ENDDO
+C      jx mod: not needed
+C      LGSAME = .FALSE.
+C
+      CALL SCALC(XB,YB,SB,NB)
+      CALL SEGSPL(XB,XBP,SB,NB)
+      CALL SEGSPL(YB,YBP,SB,NB)
+C
+! jx-mod todo needed?
+!      CALL GEOPAR(XB,XBP,YB,YBP,SB,NB,W1,
+!     &            SBLE,CHORDB,AREAB,RADBLE,ANGBTE,
+!     &            EI11BA,EI22BA,APX1BA,APX2BA,
+!     &            EI11BT,EI22BT,APX1BT,APX2BT,
+!     &            THICKB,CAMBRB )
+C
+      RETURN
+      END ! THKCAM
+
+
+C======================================================
+C     Changes buffer airfoil 
+C     thickness and/or camber highpoint
+C======================================================
+
+C     SUBROUTINE HIPNT(RINPUT,NINPUT)
+      SUBROUTINE HIPNT(CHPNT, THPNT)
+
+      use xfoil_inc
+C      INCLUDE 'XFOIL.INC'
+
+C     DIMENSION RINPUT(*)
+
+      REAL*8 XFN(5), YFN(5), YFNP(5), SFN(5)
+
+C---  jx-mod debug
+      REAL*8 YBSAVE(NB)
+      YBSAVE  = YB (1:NB)
+C
+C---  jx-mod init global 
+      PI = 4.0*ATAN(1.0)
+      HOPI = 0.50/PI
+      QOPI = 0.25/PI
+      DTOR = PI/180.0
+C
+C--- Check chordline direction (should be unrotated for camber routines)
+C    to function correctly
+      XLE = SEVAL(SBLE,XB,XBP,SB,NB)
+      YLE = SEVAL(SBLE,YB,YBP,SB,NB)
+      XTE = 0.5*(XB(1)+XB(NB))
+      YTE = 0.5*(YB(1)+YB(NB))
+      AROT = ATAN2(YLE-YTE,XTE-XLE) / DTOR
+      IF(ABS(AROT).GT.1.0) THEN
+        WRITE(*,*) ' '
+        WRITE(*,*) 'Warning: HIGH does not work well on rotated foils'
+        WRITE(*,*) 'Current chordline angle: ',AROT
+        WRITE(*,*) 'Proceeding anyway...'
+      ENDIF
+C
+C
+C---- find leftmost point location 
+      CALL XLFIND(SBL,XB,XBP,YB,YBP,SB,NB)
+      XBL = SEVAL(SBL,XB,XBP,SB,NB)
+      YBL = SEVAL(SBL,YB,YBP,SB,NB)
+C
+ 10   CONTINUE
+C
+C---- find the current buffer airfoil camber and thickness
+      CALL GETCAM(XCM,YCM,NCM,XTK,YTK,NTK,
+     &            XB,XBP,YB,YBP,SB,NB )
+C
+C---- find the max thickness and camber
+      CALL GETMAX(XCM,YCM,YCMP,NCM,CXMAX,CYMAX)
+      CALL GETMAX(XTK,YTK,YTKP,NTK,TXMAX,TYMAX)
+C
+C
+C---- make a picture and get some input specs for mods
+cc      IPLT = 0
+cc      CALL PLOTC
+C      WRITE(*,1010) 2.0*TYMAX,TXMAX, CYMAX,CXMAX
+C 1010 FORMAT(/' Max thickness = ',F8.4,'  at x = ',F7.3,
+C     &       /' Max camber    = ',F8.4,'  at x = ',F7.3/)
+C
+C      IF    (NINPUT .GE. 2) THEN
+C        THPNT = RINPUT(1)
+C        CHPNT = RINPUT(2)
+C      ELSEIF(NINPUT .GE. 1) THEN
+C        THPNT = RINPUT(1)
+C        IF(LGSYM) THEN
+C         WRITE(*,*) 'Symmetry enforced:  Maintaining zero camber.'
+C        ELSE
+C         CHPNT = 0.0
+C         CALL ASKR('Enter new camber    highpoint x: ^',CHPNT)
+C        ENDIF
+C      ELSE
+C        THPNT = 0.0
+C        CALL ASKR('Enter new thickness highpoint x: ^',THPNT)
+C        IF(LGSYM) THEN
+C         WRITE(*,*) 'Symmetry enforced:  Maintaining zero camber.'
+C        ELSE
+C         CHPNT = 0.0
+C         CALL ASKR('Enter new camber    highpoint x: ^',CHPNT)
+C        ENDIF
+C      ENDIF
+C
+C      IF (THPNT.LE.0.0) THPNT = TXMAX
+C      IF (CHPNT.LE.0.0) CHPNT = CXMAX
+C
+C--- a simple cubic mapping function is used to map x/c to move highpoints
+C
+C    the assumption is that a smooth function (cubic, given by the old and 
+C    new highpoint locations) maps the range 0-1 for x/c
+C    into the range 0-1 for altered x/c distribution for the same y/c
+C    thickness or camber (ie. slide the points smoothly along the x axis)
+C
+C--- shift thickness highpoint
+      IF (THPNT .GT. 0.0) THEN
+       XFN(1) = XTK(1)
+       XFN(2) = TXMAX
+       XFN(3) = XTK(NTK)
+       YFN(1) = XTK(1)
+       YFN(2) = THPNT
+       YFN(3) = XTK(NTK)
+       CALL SPLINA(YFN,YFNP,XFN,3)
+       DO I = 1, NTK
+         XTK(I) = SEVAL(XTK(I),YFN,YFNP,XFN,3)
+       ENDDO
+      ENDIF
+C
+C--- shift camber highpoint
+      IF (CHPNT .GT. 0.0) THEN
+       XFN(1) = XCM(1)
+       XFN(2) = CXMAX
+       XFN(3) = XCM(NCM)
+       YFN(1) = XCM(1)
+       YFN(2) = CHPNT
+       YFN(3) = XCM(NCM)
+       CALL SPLINA(YFN,YFNP,XFN,3)
+       DO I = 1, NCM
+         XCM(I) = SEVAL(XCM(I),YFN,YFNP,XFN,3)
+       ENDDO
+      ENDIF
+C
+cc      IPLT = 1
+cc      CALL PLOTC
+C
+C      CALL ASKL('Is this acceptable? ^',OK)
+C      IF(.NOT.OK) GO TO 10
+C
+C---- Make new airfoil from thickness and camber
+C     new airfoil points are spaced to match the original
+C--- HHY 4/24/01 got rid of splining vs X,Y vs S (buggy), now spline Y(X)
+      CALL SEGSPL(YTK,YTKP,XTK,NTK)
+      CALL SEGSPL(YCM,YCMP,XCM,NCM)
+C
+C
+C---- for each orig. airfoil point setup new YB from camber and thickness
+      DO 40 I=1, NB
+C
+C------ spline camber and thickness at original xb points
+        YCC = SEVAL(XB(I),YCM,YCMP,XCM,NCM)
+        YTT = SEVAL(XB(I),YTK,YTKP,XTK,NTK)
+C
+C------ set new y coordinate from new camber & thickness
+        IF (SB(I) .LE. SBL) THEN
+          YB(I) = YCC + YTT
+         ELSE
+          YB(I) = YCC - YTT
+        ENDIF
+C---- Add Y-offset for original leftmost (LE) point to camber
+        YB(I) = YB(I) + YBL
+   40 CONTINUE
+C      
+      LGSAME = .FALSE.
+C
+      CALL SCALC(XB,YB,SB,NB)
+      CALL SEGSPL(XB,XBP,SB,NB)
+      CALL SEGSPL(YB,YBP,SB,NB)
+C
+! jx-mod todo needed?
+!      CALL GEOPAR(XB,XBP,YB,YBP,SB,NB,W1,
+!     &            SBLE,CHORDB,AREAB,RADBLE,ANGBTE,
+!     &            EI11BA,EI22BA,APX1BA,APX2BA,
+!     &            EI11BT,EI22BT,APX1BT,APX2BT,
+!     &            THICKB,CAMBRB )
+C
+      RETURN
+      END ! HIPNT
+
+
+
+
+C======================================================
+C     Finds camber and thickness 
+C     distribution for input airfoil 
+C======================================================
+      SUBROUTINE GETCAM (XCM,YCM,NCM,XTK,YTK,NTK,
+     &                   X,XP,Y,YP,S,N )
+
+      REAL*8 XCM(*), YCM(*)
+      REAL*8 XTK(*), YTK(*)
+      REAL*8 X(*),XP(*),Y(*),YP(*),S(*)
+C
+      CALL XLFIND(SL,X,XP,Y,YP,S,N)
+      XL = SEVAL(SL,X,XP,S,N)
+      YL = SEVAL(SL,Y,YP,S,N)
+C
+C---- go over each point, finding opposite points, getting camber and thickness
+      DO 10 I=1, N
+C------ coordinates of point on the opposite side with the same x value
+        CALL SOPPS(SOPP, S(I), X,XP,Y,YP,S,N,SL, .true.)
+        XOPP = SEVAL(SOPP,X,XP,S,N)
+        YOPP = SEVAL(SOPP,Y,YP,S,N)
+C
+C------ get camber and thickness
+        XCM(I) = 0.5*(X(I)+XOPP)
+        YCM(I) = 0.5*(Y(I)+YOPP)
+        XTK(I) = 0.5*(X(I)+XOPP)
+        YTK(I) = 0.5*(Y(I)-YOPP)
+        YTK(I) = ABS(YTK(I))
+c        if (XOPP.gt.0.9) then
+c         write(*,*) 'cm i,x,y ',i,xcm(i),ycm(i)
+c         write(*,*) 'tk i,x,y ',i,xtk(i),ytk(i)
+c        endif
+   10 CONTINUE
+C
+C---- Tolerance for nominally identical points
+      TOL = 1.0E-5 * (S(N)-S(1))
+ccc      TOL = 1.0E-3 * (S(N)-S(1))    ! Bad bug -- was losing x=1.0 point
+C
+C---- Sort the camber points
+      NCM = N+1
+      XCM(N+1) = XL
+      YCM(N+1) = YL
+      CALL SORTOL(TOL,NCM,XCM,YCM)
+C
+C--- Reorigin camber from LE so camberlines start at Y=0  4/24/01 HHY 
+C    policy now to generate camber independent of Y-offsets 
+      YOF = YCM(1)
+      DO I = 1, NCM
+        YCM(I) = YCM(I) - YOF
+      END DO
+C
+C---- Sort the thickness points
+      NTK = N+1
+      XTK(N+1) = XL
+      YTK(N+1) = 0.0
+      CALL SORTOL(TOL,NTK,XTK,YTK)
+C
+      RETURN
+      END ! GETCAM
+
+
+
+
+
+C ------ Low Level ---------------------------------------------------------
+
+      SUBROUTINE XLFIND(SLE,X,XP,Y,YP,S,N)
+      DIMENSION X(*),XP(*),Y(*),YP(*),S(*)
+C------------------------------------------------------
+C     Locates leftmost (minimum x) point location SLE
+C
+C     The defining condition is
+C         
+C      X' = 0     at  S = SLE
+C
+C     i.e. the surface tangent is vertical
+C------------------------------------------------------
+C
+      DSLEN = S(N) - S(1)
+C
+C---- convergence tolerance
+      DSEPS = (S(N)-S(1)) * 1.0E-5
+C
+C---- get first guess for SLE
+      DO 10 I=3, N-2
+        DX = X(I+1) - X(I)
+        IF(DX .GT. 0.0) GO TO 11
+   10 CONTINUE
+C
+   11 SLE = S(I)
+C
+C---- check for sharp LE case
+      IF(S(I) .EQ. S(I-1)) THEN
+ccc        WRITE(*,*) 'Sharp LE found at ',I,SLE
+        RETURN
+      ENDIF
+C
+C---- Newton iteration to get exact SLE value
+      DO 20 ITER=1, 50
+        DXDS = DEVAL(SLE,X,XP,S,N)
+        DXDD = D2VAL(SLE,X,XP,S,N)
+C
+C------ drive DXDS to zero
+        RES  = DXDS
+        RESS = DXDD
+C
+C------ Newton delta for SLE 
+        DSLE = -RES/RESS
+C
+        DSLE = MAX( DSLE , -0.01*ABS(DSLEN) )
+        DSLE = MIN( DSLE ,  0.01*ABS(DSLEN) )
+        SLE = SLE + DSLE
+        IF(ABS(DSLE) .LT. DSEPS) RETURN
+   20 CONTINUE
+      WRITE(*,*) 'XLFIND:  Left point not found.  Continuing...'
+      SLE = S(I)
+      RETURN
+      END ! XLFIND
+
+
+      SUBROUTINE SORTOL(TOL,KK,S,W)
+      DIMENSION S(KK), W(KK)
+      LOGICAL DONE
+C
+C---- sort arrays
+      DO IPASS=1, 1234
+        DONE = .TRUE.
+        DO N=1, KK-1
+          NP = N+1
+          IF(S(NP).LT.S(N)) THEN
+           TEMP = S(NP)
+           S(NP) = S(N)
+           S(N) = TEMP
+           TEMP = W(NP)
+           W(NP) = W(N)
+           W(N) = TEMP
+           DONE = .FALSE.
+          ENDIF
+        END DO
+        IF(DONE) GO TO 10
+      END DO
+      WRITE(*,*) 'Sort failed'
+C
+C---- search for near-duplicate pairs and eliminate extra points
+C---- Modified 4/24/01 HHY to check list until ALL duplicates removed
+C     This cures a bug for sharp LE foils where there were 3 LE points in
+C     camber, thickness lists from GETCAM.
+C
+ 10   KKS = KK
+      DONE = .TRUE.
+      DO 20 K=1, KKS
+        IF(K.GE.KK) GO TO 20
+        DSQ = (S(K)-S(K+1))**2 + (W(K)-W(K+1))**2
+        IF(DSQ.GE.TOL*TOL) GO TO 20
+C------- eliminate extra point pairs
+ccc         write(*,*) 'extra on point ',k,kks
+         KK = KK-1
+         DO KT=K+1, KK
+           S(KT) = S(KT+1)
+           W(KT) = W(KT+1)
+         END DO
+         DONE = .FALSE.
+   20 CONTINUE
+      IF(.NOT.DONE) GO TO 10
+C
+      RETURN
+      END
+
+
+C------------------------------------------------
+C     Calculates camber or thickness highpoint 
+C     and x position
+C------------------------------------------------
+      SUBROUTINE GETMAX(X,Y,YP,N,XMAX,YMAX)
+
+      REAL*8 X(*), Y(*), YP(*)
+C
+      XLEN = X(N) - X(1)
+      XTOL = XLEN * 1.0E-5
+C
+      CALL SEGSPL(Y,YP,X,N)
+C
+C---- get approx max point and rough interval size
+      YMAX0 = Y(1)
+      XMAX0 = X(1)
+      DO 5 I = 2, N
+        IF (ABS(Y(I)).GT.ABS(YMAX0)) THEN
+          YMAX0 = Y(I)
+          XMAX0 = 0.5*(X(I-1) + X(I))
+          DDX = 0.5*ABS(X(I+1) - X(I-1))
+        ENDIF
+ 5    CONTINUE
+      XMAX = XMAX0
+C
+C---- do a Newton loop to refine estimate
+      DO 10 ITER=1, 10
+        YMAX  = SEVAL(XMAX,Y,YP,X,N)
+        RES   = DEVAL(XMAX,Y,YP,X,N)
+        RESP  = D2VAL(XMAX,Y,YP,X,N)
+        IF (ABS(XLEN*RESP) .LT. 1.0E-6) GO TO 20
+          DX = -RES/RESP
+          DX = SIGN( MIN(0.5*DDX,ABS(DX)) , DX)
+          XMAX = XMAX + DX
+          IF(ABS(DX) .LT. XTOL) GO TO 20
+   10 CONTINUE
+      WRITE(*,*)
+     &  'GETMAX: Newton iteration for max camber/thickness failed.'
+      YMAX = YMAX0
+      XMAX = XMAX0
+C
+ 20   RETURN
+      END ! GETMAX
+
+
+      SUBROUTINE SPLINA(X,XS,S,N)
+      IMPLICIT REAL (A-H,O-Z)
+      DIMENSION X(N),XS(N),S(N)
+      LOGICAL LEND
+C-------------------------------------------------------
+C     Calculates spline coefficients for X(S).          |
+C     A simple averaging of adjacent segment slopes     |
+C     is used to achieve non-oscillatory curve          |
+C     End conditions are set by end segment slope       |
+C     To evaluate the spline at some value of S,        |
+C     use SEVAL and/or DEVAL.                           |
+C                                                       |
+C     S        independent variable array (input)       |
+C     X        dependent variable array   (input)       |
+C     XS       dX/dS array                (calculated)  |
+C     N        number of points           (input)       |
+C                                                       |
+C-------------------------------------------------------
+C     
+      LEND = .TRUE.
+      DO 1 I=1, N-1
+        DS = S(I+1)-S(I)
+        IF (DS.EQ.0.) THEN
+          XS(I) = XS1
+          LEND = .TRUE.
+         ELSE
+          DX = X(I+1)-X(I)
+          XS2 = DX / DS
+          IF (LEND) THEN
+            XS(I) = XS2
+            LEND = .FALSE.
+           ELSE
+            XS(I) = 0.5*(XS1 + XS2)
+          ENDIF
+        ENDIF
+        XS1 = XS2
+    1 CONTINUE
+      XS(N) = XS1
+C
+      RETURN
+      END ! SPLINA
+

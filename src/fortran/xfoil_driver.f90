@@ -686,4 +686,142 @@ subroutine xfoil_geometry_info(maxt, xmaxt, maxc, xmaxc)
 
 end subroutine xfoil_geometry_info
 
+
+!------------------------------------------------------------------------------
+!
+! jx-mod xfoil extensions
+!
+!------------------------------------------------------------------------------
+
+!------------------------------------------------------------------------------
+! Modify max thickness and camber and their positions of foil 
+!        using xfoil THKCAM and HIPNT
+!
+!   maxt  - new thickness
+!   xmaxt - new max thickness x-position
+!   maxc  - new camber
+!   xmaxc - new max camber position
+!
+! 
+! ** Note ** 
+!
+! Before calling this subroutine, "smooth_paneling()" (which uses xfoil PANGEN)
+! should be done on foil to avoid strange artefacts at the leading edge.
+! XFOIL>HIPNT (moving thickness highpoint) is very sensible and behaves badly
+! if the LE curvature does not fit to the spline algorithm
+!------------------------------------------------------------------------------
+subroutine xfoil_set_thickness_camber (infoil, maxt, xmaxt, maxc, xmaxc, outfoil)
+
+  use xfoil_inc, only : AIJ
+  use vardef,    only : airfoil_type
+
+  type(airfoil_type), intent(in)  :: infoil
+  type(airfoil_type), intent(out) :: outfoil
+  double precision, intent(in) :: maxt, xmaxt, maxc, xmaxc
+  double precision :: CFAC,TFAC, thick, xthick, camb, xcamb
+
+! Check to make sure xfoil is initialized
+  if (.not. allocated(AIJ)) then
+    write(*,*) "Error: xfoil is not initialized!  Call xfoil_init() first."
+    stop
+  end if
+
+! Set xfoil airfoil and prepare globals, get current thickness
+  call xfoil_set_airfoil_geometry (infoil)
+  call xfoil_geometry_info_buffer (thick, xthick, camb, xcamb) 
+
+! Run xfoil to change thickness and camber - xfoil likes factors
+  CFAC = 1.0
+  TFAC = 1.0
+  IF(camb .NE.0.0 .AND. maxc.NE.999.0) CFAC = maxc / camb
+  IF(thick.NE.0.0 .AND. maxt.NE.999.0) TFAC = maxt / thick
+
+  call THKCAM ( TFAC, CFAC)
+
+! Run xfoil to change highpoint of thickness and camber 
+
+  call HIPNT (xmaxc, xmaxt)
+
+! Recalc values ...
+  call xfoil_geometry_info_buffer (thick, xthick, camb, xcamb) 
+  
+!  WRITE(*,1000) maxt, xmaxt, maxc, xmaxc
+! 1000 FORMAT(/' Max thickness = ',F8.4,'  at x = ',F7.3, &
+!              ' Max camber    = ',F8.4,'  at x = ',F7.3/)
+
+
+! retrieve outfoil from xfoil buffer
+
+  call xfoil_reload_airfoil(outfoil)
+
+end subroutine xfoil_set_thickness_camber
+
+
+
+!-------------------------------------------------------------------------
+! Sets buffer airfoil for xfoil - initalize segments etc...
+!-------------------------------------------------------------------------
+subroutine xfoil_set_airfoil_geometry (foil)
+
+  use xfoil_inc, only : XB, YB, NB, SB, XBP, YBP 
+  use vardef,    only : airfoil_type
+  type(airfoil_type), intent(in) :: foil
+
+  NB = foil%npoint
+  XB(1:NB) = foil%x
+  YB(1:NB) = foil%z
+
+  CALL SCALC(XB,YB,SB,NB)
+  CALL SEGSPL(XB,XBP,SB,NB)
+  CALL SEGSPL(YB,YBP,SB,NB)
+
+end subroutine xfoil_set_airfoil_geometry
+
+
+
+!-------------------------------------------------------------------------
+! gets buffer airfoil thickness, camber .. positions
+!-------------------------------------------------------------------------
+subroutine xfoil_geometry_info_buffer (maxt, xmaxt, maxc, xmaxc) 
+ 
+  use xfoil_inc
+  Real*8, intent(out) :: maxt, xmaxt, maxc, xmaxc
+  Real*8 :: TYMAX
+  
+!--- find the current buffer airfoil camber and thickness
+  CALL GETCAM(XCM,YCM,NCM,XTK,YTK,NTK,                  &
+              XB,XBP,YB,YBP,SB,NB )
+  CALL GETMAX(XCM,YCM,YCMP,NCM,xmaxc,maxc)
+  CALL GETMAX(XTK,YTK,YTKP,NTK,xmaxt,TYMAX)
+
+  maxt = 2.0 * TYMAX
+
+end subroutine xfoil_geometry_info_buffer
+
+
+
+!-------------------------------------------------------------------------
+! Reloads airfoil from xfoil buffer foil
+!-------------------------------------------------------------------------
+subroutine xfoil_reload_airfoil(foil)
+
+  use xfoil_inc, only : XB, YB, NB
+  use vardef,    only : airfoil_type
+  use memory_util, only : allocate_airfoil
+
+  type(airfoil_type), intent(inout) :: foil
+
+  foil%npoint = NB
+  call allocate_airfoil (foil) 
+  foil%x = XB(1:NB)
+  foil%z = YB(1:NB)
+  
+end subroutine xfoil_reload_airfoil
+
+
+
+!------------------------------------------------------------------------------
 end module xfoil_driver
+
+
+

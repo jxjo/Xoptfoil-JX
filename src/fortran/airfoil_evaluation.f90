@@ -342,39 +342,6 @@ function aero_objective_function(designvars, include_penalty)
 
   end do
 
-
-! jx-mod Geo targets - Start --------------------------------------------
-
-! Evaluate current value of geomtry targets - calculate geo_objective 
-  do i = 1, ngeo_targets
-
-    select case (trim(geo_targets(i)%type))
-      case ('zTop')           ! get z_value top side 
-        cur_value = interp_point(x_interp, zt_interp, geo_targets(i)%x)
-      case ('zBot')           ! get z_value bot side
-        cur_value = interp_point(x_interp, zb_interp, geo_targets(i)%x)
-      case ('Thickness')      ! take foil thickness calculated above
-        cur_value = maxthick
-      case default
-        call my_stop("Unknown target_type '"//trim(geo_targets(i)%type))
-    end select
-
-    ref_value = geo_targets(i)%reference_value
-    tar_value = geo_targets(i)%target_value
-
-    ! scale objective to 1 ( = no improvement) 
-    increment = (ref_value + abs(tar_value - cur_value)) * geo_targets(i)%scale_factor 
-    geo_objective_function = geo_objective_function + geo_targets(i)%weighting * increment
-
-    if (.true.)                                                          &
-      write (*,'(22x,A,4(F11.6))') "Geo targets '"//geo_targets(i)%type//"' ", increment, cur_value, tar_value, ref_value
-
-  end do 
-
-! jx-mod Geo targets - end ------------------------------------------------
-
-
-
   if (naddthickconst > 0) then
     call interp_vector(x_interp, thickness,                                    &
                        addthick_x(1:naddthickconst), add_thickvec)
@@ -477,10 +444,22 @@ function aero_objective_function(designvars, include_penalty)
                  actual_flap_degrees(1:noppoint), xfoil_options, lift, drag,   &
                  moment, viscrms, alpha, xtrt, xtrb, ncrit_pt)
 
-  penaltyval = penaltyval + max(0.0d0,AMAX-25.d0)/5.d0
 
-  ! jx-mod Build user info string
-  if (max(0.0d0,AMAX-25.d0)/5.d0 > 0.d0) penalty_info = trim(penalty_info) // ' AMAX'
+! Add penalty for too large panel angle
+! jx-mod Due to numerical issues (?) it happens, that the final AMAX ist greater 25.
+
+  if (max(0.0d0,AMAX-25.d0) > 0.d0) then
+    ! strong penality - will abort 
+    penaltyval = penaltyval + max(0.0d0,AMAX-25.d0)/5.d0
+  else
+    if (max(0.0d0,AMAX-24.5d0) > 0.d0) then
+      ! weak penalty to avoid getting too close to cut off at 25.0 
+      penaltyval = penaltyval + max(0.0d0,AMAX-24.5d0) * 2.d0  *  epsupdate  ! max 1%
+      penalty_info = trim(penalty_info) // ' AMAX'
+    end if 
+  end if
+
+  ! jx-mod end 
 
 
 ! Add penalty for camber outside of constraints
@@ -810,19 +789,50 @@ function aero_objective_function(designvars, include_penalty)
     end if
 
   end do
+
+! jx-mod Geo targets - Start --------------------------------------------
+
+  if (show_smoothing)   write (*,*) 
+
+! Evaluate current value of geomtry targets - calculate geo_objective 
+  do i = 1, ngeo_targets
+
+    select case (trim(geo_targets(i)%type))
+      case ('zTop')           ! get z_value top side 
+        cur_value = interp_point(x_interp, zt_interp, geo_targets(i)%x)
+      case ('zBot')           ! get z_value bot side
+        cur_value = interp_point(x_interp, zb_interp, geo_targets(i)%x)
+      case ('Thickness')      ! take foil thickness calculated above
+        cur_value = maxthick
+      case default
+        call my_stop("Unknown target_type '"//trim(geo_targets(i)%type))
+    end select
+
+    ref_value = geo_targets(i)%reference_value
+    tar_value = geo_targets(i)%target_value
+
+    ! scale objective to 1 ( = no improvement) 
+    increment = (ref_value + abs(tar_value - cur_value)) * geo_targets(i)%scale_factor 
+    geo_objective_function = geo_objective_function + geo_targets(i)%weighting * increment
+
+    if (show_smoothing)                                                          &
+      write (*,'(14x,A,2(F11.6),A,F7.5)') "Geo target '"//geo_targets(i)%type//"'", tar_value, cur_value,  &
+                          "     Obj: ", (geo_targets(i)%weighting * increment)
+  end do 
+
+! jx-mod Geo targets - end ------------------------------------------------
+
   
 ! jx-mod Show surface quality for entertainment and info
 !          about objectives at the end of iteration 
-  if (show_smoothing .and. do_smoothing) then
+  if (show_smoothing) then
 
-    write (*,*) 
+    call assess_surface ('Top   ', show_smoothing, max_curv_reverse_top, xseedt, zt_new, nreversalst, perturbation_top)
+    call assess_surface ('Bottom', show_smoothing, max_curv_reverse_bot, xseedb, zb_new, nreversalsb, perturbation_bot)
 
-    call assess_surface ('Top    ', show_smoothing, max_curv_reverse_top, xseedt, zt_new, nreversalst, perturbation_top)
-    call assess_surface ('Bottom ', show_smoothing, max_curv_reverse_bot, xseedb, zb_new, nreversalsb, perturbation_bot)
+    if (penaltyval > 0.d0) write (*,'(52x,A)') 'Pen: ' // penalty_info 
 
-    if (penaltyval > 0.d0) write (*,'(53x,A)') 'Pen: ' // penalty_info 
-
-    write(*,'(3x,4(A11,G11.4),1(A13,F8.4),A1)')                                 &
+    write(*,'(2x,4(A11,G11.4),1(A13,F8.4),A1)')                                 &
         "    Obj: ", aero_objective_function,                                    &
         "  + Geo: ", geo_objective_function,                                     &
         "  + Pen: ", (penaltyval * 1.0D+06),                                     &
@@ -1177,6 +1187,10 @@ function write_airfoil_optimization_progress(designvars, designcounter)
   deriv3 = derivation3 ((nptt + nptb - 1), curr_foil%x, curr_foil%z)
 
   do i = 1, nptt + nptb - 1
+    ! jx-mod numerical issues
+    if (abs(deriv2(i)) < 1.d-10) deriv2(i) = 0.d0
+    if (abs(deriv3(i)) < 1.d-10) deriv3(i) = 0.d0
+
     write(foilunit,'(2F12.6,2G18.8)') curr_foil%x(i), curr_foil%z(i), deriv2(i), deriv3(i)
   end do
 
@@ -1355,6 +1369,9 @@ function write_function_restart_cleanup(restart_status, global_search,         &
   character(11) :: stepchar
   character(20) :: fminchar, radchar
   character(25) :: relfminchar
+  ! jx-mod Smoothing read/write 2nd and 3rd derivative 
+  double precision, dimension(:,:), allocatable :: deriv2, deriv3
+
 
 ! Print status
 
@@ -1404,6 +1421,10 @@ function write_function_restart_cleanup(restart_status, global_search,         &
   allocate(fmin(step))
   allocate(relfmin(step))
   allocate(rad(step))
+  ! jx-mod Smoothing read/write 2nd and 3rd derivative 
+  allocate(deriv2(ncoord,designcounter+1))
+  allocate(deriv3(ncoord,designcounter+1))
+
 
 ! Open coordinates file
 
@@ -1428,9 +1449,10 @@ function write_function_restart_cleanup(restart_status, global_search,         &
     read(foilunit,'(A)') zoneinfo(i)
 
 !   Read coordinates
-
     do j = 1, ncoord
-      read(foilunit,'(2F14.6)') x(j,i), z(j,i)
+      ! jx-mod Smoothing 2nd and 3rd derivative when reading the file
+      !read(foilunit,'(2F14.6)') x(j,i), z(j,i)
+      read(foilunit,'(2F12.6,2G18.8)') x(j,i), z(j,i), deriv2(j,i), deriv3(j,i)
     end do
 
   end do
@@ -1452,7 +1474,12 @@ function write_function_restart_cleanup(restart_status, global_search,         &
 !   Write coordinates
 
     do j = 1, ncoord
-      write(foilunit,'(2F12.6)') x(j,i+1), z(j,i+1)
+      ! jx-mod Smoothing Additional 2nd and 3rd derivative when writing the file
+      ! jx-mod rounding issues...
+      if (abs(deriv2(j,i+1)) < 1.d-10) deriv2(j,i+1) = 0.d0
+      if (abs(deriv3(j,i+1)) < 1.d-10) deriv3(j,i+1) = 0.d0
+
+      write(foilunit,'(2F12.6,2G18.8)') x(j,i+1), z(j,i+1), deriv2(j,i+1), deriv3(j,i+1)
     end do
   end do
 
@@ -1596,6 +1623,10 @@ function write_function_restart_cleanup(restart_status, global_search,         &
   deallocate(fmin)
   deallocate(relfmin)
   deallocate(rad)
+  ! jx-mod Smoothing read/write 2nd and 3rd derivative 
+  deallocate(deriv2)
+  deallocate(deriv3)
+
 
 ! Print status
 

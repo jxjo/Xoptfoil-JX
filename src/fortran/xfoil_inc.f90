@@ -86,6 +86,15 @@ module xfoil_inc
   !$omp threadprivate(CL_ALF, CL_MSQ, SBLE)
   REAL*8 :: XB(IBX), YB(IBX), SB(IBX), XBP(IBX), YBP(IBX), SNEW(5*IBX)
   !$omp threadprivate(XB, YB, SB, XBP, YBP, SNEW)
+
+  !jx-mod additional for geo operations
+  REAL*8 :: XCM(2*IBX),YCM(2*IBX),SCM(2*IBX),XCMP(2*IBX),YCMP(2*IBX)
+  REAL*8 :: XTK(2*IBX),YTK(2*IBX),STK(2*IBX),XTKP(2*IBX),YTKP(2*IBX)
+  !$omp threadprivate(XCM, YCM, SCM, XCMP, YCMP)
+  !$omp threadprivate(XTK, YTK, STK, XTKP, YTKP)
+  INTEGER :: NCM,NTK
+  !$omp threadprivate(NCM, NTK)
+
   REAL*8, DIMENSION(:), ALLOCATABLE :: W1, W2, W3, W4, W5, W6
   !$omp threadprivate(W1, W2, W3, W4, W5, W6)
   REAL*8 :: XLE, YLE, XTE, YTE, CHORD, SLE
