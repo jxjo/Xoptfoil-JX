@@ -181,6 +181,7 @@ subroutine optimize(search_type, global_search, local_search, constrained_dvs, &
 ! Set initial design
 
   if (trim(shape_functions) == 'naca') then     
+  !----------naca----------
 
     nfuncs = ndv - nflap_optimize
 
@@ -195,8 +196,25 @@ subroutine optimize(search_type, global_search, local_search, constrained_dvs, &
       x0(i) = flap_degrees(oppoint)*ffact
     end do
 
-  else
+  else if (trim(shape_functions) == 'camb-thick') then
+    !----------camber and thickness---------
+    !TODO MB prüfen
+    write(*,*) 'New shape-function: camber and thickness'
+    nfuncs = ndv/4 - nflap_optimize
 
+    !   Mode strength = 0 (aka seed airfoil)
+    
+        x0(1:nfuncs) = 0.d0
+    
+    !   Seed flap deflection as specified in input file
+    
+    !    do i = nfuncs + 1, ndv
+    !      oppoint = flap_optimize_points(i-nfuncs)
+    !      x0(i) = flap_degrees(oppoint)*ffact
+    !    end do    
+  else
+  !------------hicks-henne-------------
+    
     nfuncs = (ndv - nflap_optimize)/3
 
 !   Bump strength = 0 (aka seed airfoil)
@@ -413,7 +431,7 @@ subroutine write_final_design(optdesign, f0, fmin, shapetype)
   use airfoil_operations, only : assess_surface, smooth_it
     
   use parametrization,    only : top_shape_function, bot_shape_function,       &
-                                 create_airfoil
+                                 create_airfoil, create_airfoil_camb_thick
   use airfoil_evaluation, only : xfoil_geom_options, xfoil_options
   use xfoil_driver,       only : run_xfoil
 
@@ -446,15 +464,23 @@ subroutine write_final_design(optdesign, f0, fmin, shapetype)
 
 ! Set modes for top and bottom surfaces
 
-  dvtbnd1 = 1
-  if (trim(shapetype) == 'naca') then
+!TODO MB: ACHTUNG, Klon
+  if (trim(shape_functions) == 'naca') then
+    dvtbnd1 = 1
     dvtbnd2 = nmodest
     dvbbnd2 = nmodest + nmodesb
+    dvbbnd1 = dvtbnd2 + 1
+  else if (trim(shape_functions) == 'camb-thick') then
+    dvtbnd1 = 1
+    dvtbnd2 = 4
+    dvbbnd2 = 4
+    dvbbnd1 = 1
   else
+    dvtbnd1 = 1
     dvtbnd2 = nmodest*3
     dvbbnd2 = nmodest*3 + nmodesb*3
+    dvbbnd1 = dvtbnd2 + 1
   end if
-  dvbbnd1 = dvtbnd2 + 1
 
 ! Overwrite lower DVs for symmetrical airfoils (they are not used)
 
@@ -466,10 +492,17 @@ subroutine write_final_design(optdesign, f0, fmin, shapetype)
 ! Format coordinates in a single loop in derived type. Also remove translation
 ! and scaling to ensure Cm_x=0.25 doesn't change.
 
-  call create_airfoil(xseedt, zseedt, xseedb, zseedb,                          &
+  if (trim(shape_functions) == 'camb-thick') then
+    ! Create new airfoil by changing camber and thickness of seed airfoil,
+    ! use fixed set of 4 DVs
+    call create_airfoil_camb_thick(xseedt, zseedt, xseedb, zseedb,             &
+                                   optdesign(1:4), zt_new, zb_new)
+  else 
+    call create_airfoil(xseedt, zseedt, xseedb, zseedb,                        &
                       optdesign(dvtbnd1:dvtbnd2), optdesign(dvbbnd1:dvbbnd2),  &
                       zt_new, zb_new, shapetype, symmetrical)
-
+  end if
+  
 ! jx-mod Smoothing - begin ---------------------------------------------------------
 
   if (do_smoothing) then 

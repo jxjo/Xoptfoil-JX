@@ -97,7 +97,7 @@ function aero_objective_function(designvars, include_penalty)
   use math_deps,          only : interp_point
 
   use parametrization, only : top_shape_function, bot_shape_function,          &
-                              create_airfoil
+                              create_airfoil, create_airfoil_camb_thick
   use xfoil_driver,    only : run_xfoil
   use xfoil_inc,       only : AMAX, CAMBR
 
@@ -160,28 +160,44 @@ function aero_objective_function(designvars, include_penalty)
 
 ! Set modes for top and bottom surfaces
 
-  dvtbnd1 = 1
+!TODO MB: ACHTUNG, Klon
   if (trim(shape_functions) == 'naca') then
+    dvtbnd1 = 1
     dvtbnd2 = nmodest
     dvbbnd2 = nmodest + nmodesb
+    dvbbnd1 = dvtbnd2 + 1
+  else if (trim(shape_functions) == 'camb-thick') then
+    dvtbnd1 = 1
+    dvtbnd2 = 4
+    dvbbnd2 = 4
+    dvbbnd1 = 1
   else
+    dvtbnd1 = 1
     dvtbnd2 = nmodest*3
     dvbbnd2 = nmodest*3 + nmodesb*3
+    dvbbnd1 = dvtbnd2 + 1
   end if
-  dvbbnd1 = dvtbnd2 + 1
-
-! Overwrite lower DVs for symmetrical airfoils (they are not used)
+  
+! Overwrite lower DVs for symmetrical airfoils or camb-thickness-shaping
+! (they are not used)
 
   if (symmetrical) then
     dvbbnd1 = 1
     dvbbnd2 = dvtbnd2
   end if
 
-! Create top and bottom surfaces by perturbation of seed airfoil
 
-  call create_airfoil(xseedt, zseedt, xseedb, zseedb,                          &
+  if (trim(shape_functions) == 'camb-thick') then
+    ! Create new airfoil by changing camber and thickness of seed airfoil,
+    ! use fixed set of 4 DVs
+    call create_airfoil_camb_thick(xseedt, zseedt, xseedb, zseedb,             &
+                      designvars(1:4), zt_new, zb_new)
+  else 
+    ! Create top and bottom surfaces by perturbation of seed airfoil 
+    call create_airfoil(xseedt, zseedt, xseedb, zseedb,                        &
                       designvars(dvtbnd1:dvtbnd2), designvars(dvbbnd1:dvbbnd2),&
                       zt_new, zb_new, shape_functions, symmetrical)
+  end if
 
 
 ! jx-mod Smoothing ---- Start  -----------------------------------------------------------
@@ -865,7 +881,7 @@ end function aero_objective_function
 function matchfoil_objective_function(designvars)
 
   use parametrization, only : top_shape_function, bot_shape_function,          &
-                              create_airfoil
+                              create_airfoil, create_airfoil_camb_thick
   use math_deps,       only : norm_2
 
   double precision, dimension(:), intent(in) :: designvars
@@ -890,11 +906,19 @@ function matchfoil_objective_function(designvars)
     dvbbnd = nmodest*3 + nmodesb*3
   end if
 
-! Create top and bottom surfaces by perturbation of seed airfoil
 
-  call create_airfoil(xseedt, zseedt, xseedb, zseedb, designvars(1:dvtbnd),    &
-                      designvars(dvtbnd+1:dvbbnd), zt_new, zb_new,             &
-                      shape_functions, .false.)
+
+  if (trim(shape_functions) == 'camb-thick') then
+    ! Create new airfoil by changing camber and thickness of seed airfoil,
+    ! use fixed set of 4 DVs
+    call create_airfoil_camb_thick(xseedt, zseedt, xseedb, zseedb,             &
+                      designvars(1:4), zt_new, zb_new)
+  else 
+    ! Create top and bottom surfaces by perturbation of seed airfoil 
+    call create_airfoil(xseedt, zseedt, xseedb, zseedb, designvars(1:dvtbnd),  &
+                        designvars(dvtbnd+1:dvbbnd), zt_new, zb_new,           &
+                        shape_functions, .false.)
+  end if
 
 ! Evaluate the new airfoil, not counting fixed LE and TE points
 
@@ -940,7 +964,7 @@ function write_airfoil_optimization_progress(designvars, designcounter)
   use math_deps,       only : derivation2, derivation3 
 
   use parametrization, only : top_shape_function, bot_shape_function,          &
-                              create_airfoil
+                              create_airfoil, create_airfoil_camb_thick
   use xfoil_driver,    only : run_xfoil, xfoil_geometry_info
 
   double precision, dimension(:), intent(in) :: designvars
@@ -969,17 +993,25 @@ function write_airfoil_optimization_progress(designvars, designcounter)
   nptt = size(xseedt,1)
   nptb = size(xseedb,1)
 
-! Set modes for top and bottom surfaces
+! Set modes for top and bottom surface
 
-  dvtbnd1 = 1
+!TODO MB: ACHTUNG, Klon
   if (trim(shape_functions) == 'naca') then
+    dvtbnd1 = 1
     dvtbnd2 = nmodest
     dvbbnd2 = nmodest + nmodesb
+    dvbbnd1 = dvtbnd2 + 1
+  else if (trim(shape_functions) == 'camb-thick') then
+    dvtbnd1 = 1
+    dvtbnd2 = 4
+    dvbbnd2 = 4
+    dvbbnd1 = 1
   else
+    dvtbnd1 = 1
     dvtbnd2 = nmodest*3
     dvbbnd2 = nmodest*3 + nmodesb*3
+    dvbbnd1 = dvtbnd2 + 1
   end if
-  dvbbnd1 = dvtbnd2 + 1
 
 ! Overwrite lower DVs for symmetrical airfoils (they are not used)
 
@@ -991,10 +1023,17 @@ function write_airfoil_optimization_progress(designvars, designcounter)
 ! Format coordinates in a single loop in derived type. Also remove translation
 ! and scaling to ensure Cm_x=0.25 doesn't change.
 
-  call create_airfoil(xseedt, zseedt, xseedb, zseedb,                          &
-                      designvars(dvtbnd1:dvtbnd2), designvars(dvbbnd1:dvbbnd2),&
-                      zt_new, zb_new, shape_functions, symmetrical)
-
+  if (trim(shape_functions) == 'camb-thick') then
+    ! Create new airfoil by changing camber and thickness of seed airfoil,
+    ! use fixed set of 4 DVs
+    call create_airfoil_camb_thick(xseedt, zseedt, xseedb, zseedb,             &
+                      designvars(1:4), zt_new, zb_new)
+  else 
+    call create_airfoil(xseedt, zseedt, xseedb, zseedb,                          &
+                        designvars(dvtbnd1:dvtbnd2), designvars(dvbbnd1:dvbbnd2),&
+                        zt_new, zb_new, shape_functions, symmetrical)
+  end if
+  
 ! Format coordinates in a single loop in derived type
 
   do i = 1, nptt
@@ -1183,7 +1222,7 @@ end function write_airfoil_optimization_progress
 function write_matchfoil_optimization_progress(designvars, designcounter)
 
   use parametrization, only : top_shape_function, bot_shape_function,          &
-                              create_airfoil
+                              create_airfoil, create_airfoil_camb_thick
 
   double precision, dimension(:), intent(in) :: designvars
   integer, intent(in) :: designcounter
@@ -1214,11 +1253,18 @@ function write_matchfoil_optimization_progress(designvars, designcounter)
 ! Format coordinates in a single loop in derived type. Also remove translation
 ! and scaling to ensure Cm_x=0.25 doesn't change.
 
-  call create_airfoil(xseedt, zseedt, xseedb, zseedb, designvars(1:dvtbnd),    &
+  if (trim(shape_functions) == 'camb-thick') then
+    ! Create new airfoil by changing camber and thickness of seed airfoil,
+    ! use fixed set of 4 DVs
+    call create_airfoil_camb_thick(xseedt, zseedt, xseedb, zseedb,             &
+                      designvars(1:4), zt_new, zb_new)
+  else 
+    call create_airfoil(xseedt, zseedt, xseedb, zseedb, designvars(1:dvtbnd),  &
                       designvars(dvtbnd+1:dvbbnd), zt_new, zb_new,             &
                       shape_functions, .false.)
+  end if
 
-! Format coordinates in a single loop in derived type
+  ! Format coordinates in a single loop in derived type
 
   do i = 1, nptt
     curr_foil%x(i) = xseedt(nptt-i+1)/foilscale - xoffset

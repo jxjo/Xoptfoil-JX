@@ -60,10 +60,11 @@ end subroutine deallocate_shape_functions
 !=============================================================================80
 !
 ! Creates shape functions for top and bottom surfaces
-! shapetype may be 'naca' or 'hicks-henne'
-! For Hicks-Hene shape functions, number of elements in modes must be a 
+! shapetype may be 'naca', 'camb-thick' or 'hicks-henne'
+! For Hicks-Henne shape functions, number of elements in modes must be a 
 ! multiple of 3.
-!
+! For camber-thickness shape functions, number of elements in modes must be a 
+! multiple of 4.
 !=============================================================================80
 subroutine create_shape_functions(xtop, xbot, modestop, modesbot, shapetype,   &
                                   first_time)
@@ -117,6 +118,8 @@ end subroutine create_shape_functions
 ! Populates shape function arrays
 ! For Hicks-Hene shape functions, number of elements in modes must be a 
 ! multiple of 3.
+! For camber-thickness shape functions, number of elements in modes must be a 
+! multiple of 4, there is only 1 shape-function with 4 parameters.
 !
 !=============================================================================80
 subroutine create_shape(x, modes, shapetype, shape_function)
@@ -186,7 +189,7 @@ subroutine create_shape(x, modes, shapetype, shape_function)
       shape_function(i,:) = shape_function(i,:)*dvscale
     end do
 
-  elseif (trim(shapetype) == 'hicks-henne') then
+    elseif (trim(shapetype) == 'hicks-henne') then
       
     nmodes = size(modes,1)/3
     t1fact = initial_perturb/(1.d0 - 0.001d0)
@@ -306,5 +309,39 @@ subroutine create_airfoil(xt_seed, zt_seed, xb_seed, zb_seed, modest, modesb,  &
   end if
 
 end subroutine create_airfoil
+
+
+!=============================================================================80
+!
+! Creates an airfoil by changing camber and thickness of an input "seed" airfoil
+!
+!=============================================================================80
+subroutine create_airfoil_camb_thick(xt_seed, zt_seed, xb_seed, zb_seed,     &
+  modes, zt_new, zb_new)
+
+double precision, dimension(:), intent(in) :: xt_seed, zt_seed, xb_seed,     &
+                        zb_seed
+double precision, dimension(:), intent(in) :: modes
+double precision, dimension(:), intent(inout) :: zt_new, zb_new
+double precision :: camb, thick, cambloc, thickloc
+
+camb = modes(1)
+thick = modes(2)
+cambloc = modes(3)
+thickloc = modes(4)
+     
+
+write(*,*) 'Creating new airfoil by camber and thickness '
+write(*,*) 'camber: ',camb, 'thickness: ', thick, 'camber-location: ',        &
+            cambloc, 'thickness-location: ', thickloc
+
+! TODO MB hier wird die neue Profilerzeugung mittels camber/thickness angebunden
+! Jochen, dein part :-)
+
+! Copy seedfoil-data to new airfoil-data (stub-function)
+zt_new = zt_seed
+zb_new = zb_seed
+
+end subroutine create_airfoil_camb_thick
 
 end module parametrization
