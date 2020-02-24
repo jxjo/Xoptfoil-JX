@@ -365,7 +365,7 @@ subroutine create_airfoil_camb_thick (xt_seed, zt_seed, xb_seed, zb_seed, modes,
 
 
   ! Sanity check - new_foil may not have different number of points
-  if (seed_foil%npoint /= seed_foil%npoint) then
+  if (seed_foil%npoint /= new_foil%npoint) then
     write(*,(/'A'/)) 'Error: Number of points changed during thickness/camber modification'
     stop 1
   end if
