@@ -745,9 +745,9 @@ subroutine xfoil_set_thickness_camber (infoil, maxt, xmaxt, maxc, xmaxc, outfoil
 ! Recalc values ...
   call xfoil_geometry_info_buffer (thick, xthick, camb, xcamb) 
   
-!  WRITE(*,1000) maxt, xmaxt, maxc, xmaxc
-! 1000 FORMAT(/' Max thickness = ',F8.4,'  at x = ',F7.3, &
-!              ' Max camber    = ',F8.4,'  at x = ',F7.3/)
+  WRITE(*,1000) maxt, xmaxt, maxc, xmaxc
+1000 FORMAT(/' New thickness = ',F8.4,'  at x = ',F7.3/ &
+             ' New camber    = ',F8.4,'  at x = ',F7.3/)
 
 
 ! retrieve outfoil from xfoil buffer

@@ -318,32 +318,33 @@ end subroutine create_airfoil
 
 !-----------------------------------------------------------------------------
 !
-! Modify thickness and camber and ther positions of 
+! Modify thickness and camber and their positions of 
 !   the seed foil defined by xt_seed, zt_seed, xb_seed, zb_seed
-!   to the new values defined in modest (compatibility to existing hicks henne and naca)
+!   to the new values defined in modes 
 !
 ! Returns the new foil defined by zt_new, zb_new
 !-------------------------------------------------------------------------------
-subroutine apply_thick_camber_mod (xt_seed, zt_seed, xb_seed, zb_seed, modes, &
-                                  zt_new, zb_new )
+subroutine create_airfoil_camb_thick (xt_seed, zt_seed, xb_seed, zb_seed, modes, &
+                                      zt_new, zb_new )
 
   use vardef,    only : airfoil_type
-  use memory_util, only : allocate_airfoil
-                                  
+  use memory_util, only : allocate_airfoil, deallocate_airfoil
+  use xfoil_driver, only: xfoil_set_thickness_camber
                                   
   double precision, dimension(:), intent(in) :: xt_seed, zt_seed, xb_seed, zb_seed
-  double precision, dimension(:), intent(in) :: modest
+  double precision, dimension(:), intent(in) :: modes
   double precision, dimension(:), intent(inout) :: zt_new, zb_new
-  integer :: i,  nptt, nptb
-  type(airfoil_type) :: seed_foil
 
+  integer :: i,  nptt, nptb
+  type(airfoil_type) :: seed_foil, new_foil
+  double precision :: maxt, xmaxt, maxc, xmaxc
+
+! Rebuild seed airfoil out of top and bottom coordinates
   nptt = size(zt_seed,1)
   nptb = size(zb_seed,1)
 
-
-  seed_foil%npoint = nptt + nptb - 1  ! ??????????????????
+  seed_foil%npoint = nptt + nptb - 1  
   call allocate_airfoil (seed_foil) 
-
 
   do i = 1, nptt
     seed_foil%x(i) = xt_seed(nptt-i+1)
@@ -354,42 +355,34 @@ subroutine apply_thick_camber_mod (xt_seed, zt_seed, xb_seed, zb_seed, modes, &
     seed_foil%z(i+nptt) = zb_seed(i+1)
   end do
 
+! Change thickness, cmaber ... according to new values hidden in modes
+  maxc  = modes(1)
+  maxt  = modes(2)
+  xmaxc = modes(3)
+  xmaxt = modes(4)
 
-end subroutine apply_thick_camber_mod
+  call xfoil_set_thickness_camber (seed_foil, maxt, xmaxt, maxc, xmaxc, new_foil)
 
 
+  ! Sanity check - new_foil may not have different number of points
+  if (seed_foil%npoint /= seed_foil%npoint) then
+    write(*,(/'A'/)) 'Error: Number of points changed during thickness/camber modification'
+    stop 1
+  end if
 
-!=============================================================================80
-!
-! Creates an airfoil by changing camber and thickness of an input "seed" airfoil
-!
-!=============================================================================80
-subroutine create_airfoil_camb_thick(xt_seed, zt_seed, xb_seed, zb_seed,     &
-  modes, zt_new, zb_new)
+! get new upper and lower z-coordinates from modified airfoil 
+  do i = 1, nptt
+    zt_new(i) = new_foil%z(nptt-i+1)      ! start from LE - top reverse - to LE
+  end do
+  do i = 1, nptb 
+    zb_new(i) = new_foil%z(nptt+i-1)      ! start from LE - bottom - to TE
+  end do
 
-double precision, dimension(:), intent(in) :: xt_seed, zt_seed, xb_seed,     &
-                        zb_seed
-double precision, dimension(:), intent(in) :: modes
-double precision, dimension(:), intent(inout) :: zt_new, zb_new
-double precision :: camb, thick, cambloc, thickloc
-
-camb = modes(1)
-thick = modes(2)
-cambloc = modes(3)
-thickloc = modes(4)
-     
-
-write(*,*) 'Creating new airfoil by camber and thickness '
-write(*,*) 'camber: ',camb, 'thickness: ', thick, 'camber-location: ',        &
-            cambloc, 'thickness-location: ', thickloc
-
-! TODO MB hier wird die neue Profilerzeugung mittels camber/thickness angebunden
-! Jochen, dein part :-)
-
-! Copy seedfoil-data to new airfoil-data (stub-function)
-zt_new = zt_seed
-zb_new = zb_seed
-
+! Clean up
+  call deallocate_airfoil(seed_foil)
+  call deallocate_airfoil(new_foil)
+  
 end subroutine create_airfoil_camb_thick
+
 
 end module parametrization

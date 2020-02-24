@@ -111,44 +111,8 @@ program xfoil_worker
 !                 flap_degrees(1:noppoint), xfoil_options, lift, drag, moment,  &
 !                 viscrms, alpha, xtrt, xtrb, ncrit_pt(1:noppoint))
 
-! Get geometry info from xfoil
 
-  call xfoil_geometry_info(maxt, xmaxt, maxc, xmaxc)
-
-! Display a summary of geometry results
-
-  write(*,*)
-  write(*,*) 'Airfoil geometry information from Xfoil: '
-  write(*,*)
-  write(*,*) 'Max thickness: ', maxt
-  write(*,*) 'Location of max thickness: ', xmaxt
-  write(*,*) 'Max camber: ', maxc
-  write(*,*) 'Location of max camber: ', xmaxc
-
-! Display a summary of aero results
-
-  stop 
-
-  write(*,*) 
-  write(*,*) 'Aerodynamic information from Xfoil: '
-
-  do i = 1, noppoint
-
-    write(text,*) i
-    text = adjustl(text)
-
-    write(*,*)
-    if (viscrms(i) > 1.D-04) write(*,'(A)')                                    &
-      ' Warning: operating point '//trim(text)//' did not converge.'
-    write(*,'(A8,F8.4)') ' alpha: ', alpha(i)
-    write(*,'(A5,F8.4)') ' Cl: ', lift(i)
-    write(*,'(A5,F8.4)') ' Cd: ', drag(i)
-    write(*,'(A5,F8.4)') ' Cm: ', moment(i)
-    write(*,'(A21,F8.4)') ' Top transition x/c: ', xtrt(i)
-    write(*,'(A24,F8.4)') ' Bottom transition x/c: ', xtrb(i)
-
-  end do
-
+  
 ! Deallocate xfoil variables
 
   call xfoil_cleanup()
@@ -170,7 +134,7 @@ end program xfoil_worker
 ! jx-mod Testing purposes 
 
 
-subroutine test_set_thickness_camber (foil, geom_options)
+subroutine test_set_thickness_camber (foil)
 
   use vardef,    only : airfoil_type, output_prefix
   use xfoil_driver,       only : xfoil_set_thickness_camber, smooth_paneling
@@ -195,7 +159,7 @@ subroutine test_set_thickness_camber (foil, geom_options)
 
     call xfoil_set_thickness_camber (foilsmoothed, maxt, xmaxt, maxc, xmaxc, outfoil)
 
-    write(charI,"(I0)"), i
+    write(charI,"(I0)") i
     output_file = trim(output_prefix)//trim(charI) //'.dat'
     call airfoil_write(output_file, trim(output_prefix)//trim(charI), outfoil)
 
