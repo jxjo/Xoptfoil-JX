@@ -334,10 +334,11 @@ subroutine create_airfoil_camb_thick (xt_seed, zt_seed, xb_seed, zb_seed, modes,
   double precision, dimension(:), intent(in) :: xt_seed, zt_seed, xb_seed, zb_seed
   double precision, dimension(:), intent(in) :: modes
   double precision, dimension(:), intent(inout) :: zt_new, zb_new
-
+  
   integer :: i,  nptt, nptb
   type(airfoil_type) :: seed_foil, new_foil
   double precision :: maxt, xmaxt, maxc, xmaxc
+  double precision :: seed_maxc, seed_maxt, seed_xmaxc, seed_xmaxt
 
 ! Rebuild seed airfoil out of top and bottom coordinates
   nptt = size(zt_seed,1)
@@ -354,12 +355,18 @@ subroutine create_airfoil_camb_thick (xt_seed, zt_seed, xb_seed, zb_seed, modes,
     seed_foil%x(i+nptt) = xb_seed(i+1)
     seed_foil%z(i+nptt) = zb_seed(i+1)
   end do
+  
+!TODO: calculate camber, thickness... of seed-airfoil
+  seed_maxc = 1.6/100
+  seed_maxt = 8.0/100
+  seed_xmaxc = 29.0/100
+  seed_xmaxt = 29.0/100
 
 ! Change thickness, cmaber ... according to new values hidden in modes
-  maxc  = modes(1)
-  maxt  = modes(2)
-  xmaxc = modes(3)
-  xmaxt = modes(4)
+  maxc  = seed_maxc + modes(1)
+  maxt  = seed_maxt + modes(2)
+  xmaxc = seed_xmaxc + modes(3)
+  xmaxt = seed_xmaxt + modes(4)
 
   call xfoil_set_thickness_camber (seed_foil, maxt, xmaxt, maxc, xmaxc, new_foil)
 

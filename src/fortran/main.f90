@@ -104,7 +104,7 @@ program main
     nshapedvtop = nparams_top*3
     nshapedvbot = nparams_bot*3
   end if
-  if (.not. symmetrical) then
+  if ((.not. symmetrical) .and.  (trim(shape_functions) /= 'camb-thick')) then
     allocate(optdesign(nshapedvtop+nshapedvbot+nflap_optimize))
   else
     allocate(optdesign(nshapedvtop+nflap_optimize))

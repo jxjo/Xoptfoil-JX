@@ -198,9 +198,8 @@ subroutine optimize(search_type, global_search, local_search, constrained_dvs, &
 
   else if (trim(shape_functions) == 'camb-thick') then
     !----------camber and thickness---------
-    !TODO MB prüfen
     write(*,*) 'New shape-function: camber and thickness'
-    nfuncs = ndv/4 - nflap_optimize
+    nfuncs = ndv - nflap_optimize
 
     !   Mode strength = 0 (aka seed airfoil)
     
@@ -208,10 +207,10 @@ subroutine optimize(search_type, global_search, local_search, constrained_dvs, &
     
     !   Seed flap deflection as specified in input file
     
-    !    do i = nfuncs + 1, ndv
-    !      oppoint = flap_optimize_points(i-nfuncs)
-    !      x0(i) = flap_degrees(oppoint)*ffact
-    !    end do    
+       do i = nfuncs + 1, ndv
+        oppoint = flap_optimize_points(i-nfuncs)
+        x0(i) = flap_degrees(oppoint)*ffact
+      end do    
   else
   !------------hicks-henne-------------
     
