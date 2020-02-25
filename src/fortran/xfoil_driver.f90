@@ -694,7 +694,62 @@ end subroutine xfoil_geometry_info
 !------------------------------------------------------------------------------
 
 !------------------------------------------------------------------------------
-! Modify max thickness and camber and their positions of foil 
+! Scale max thickness and camber and their positions of foil 
+!        using xfoil THKCAM and HIPNT
+!
+!   f_thick  - scaling factor for thickness
+!   d xthick - delta x for max thickness x-position
+!   f_camb   - scaling factor for camber
+!   d_xcamb  - delta x for max camber position
+!
+! 
+! ** Note ** 
+!
+! Before calling this subroutine, "smooth_paneling()" (which uses xfoil PANGEN)
+! should be done on foil to avoid strange artefacts at the leading edge.
+! XFOIL>HIPNT (moving thickness highpoint) is very sensible and behaves badly
+! if the LE curvature does not fit to the spline algorithm
+!------------------------------------------------------------------------------
+subroutine xfoil_scale_thickness_camber (infoil, f_thick, d_xthick, f_camb, d_xcamb, outfoil)
+
+  use xfoil_inc, only : AIJ
+  use vardef,    only : airfoil_type
+
+  type(airfoil_type), intent(in)  :: infoil
+  type(airfoil_type), intent(out) :: outfoil
+  double precision, intent(in) :: f_thick, d_xthick, f_camb, d_xcamb
+  double precision :: thick, xthick, camb, xcamb
+
+! Check to make sure xfoil is initialized
+  if (.not. allocated(AIJ)) then
+    write(*,*) "Error: xfoil is not initialized!  Call xfoil_init() first."
+    stop
+  end if
+
+! Set xfoil airfoil and prepare globals, get current thickness
+  call xfoil_set_buffer_airfoil (infoil)
+  call xfoil_get_geometry_info  (thick, xthick, camb, xcamb) 
+
+! Run xfoil to change thickness and camber and positions
+
+  call THKCAM (f_thick, f_camb)
+  call HIPNT  (xcamb + d_xcamb, xthick + d_xthick)
+
+! Recalc values ...
+  call xfoil_get_geometry_info  (thick, xthick, camb, xcamb) 
+  
+  WRITE(*,1000) thick, xthick, camb, xcamb
+1000 FORMAT(/' -scaled- New thickness = ',F7.4,'  at x = ',F6.3, &
+                   '    New camber    = ',F7.4,'  at x = ',F6.3)
+
+! retrieve outfoil from xfoil buffer
+
+  call xfoil_reload_airfoil(outfoil)
+
+end subroutine xfoil_scale_thickness_camber
+
+!------------------------------------------------------------------------------
+! Set max thickness and camber and their positions of foil 
 !        using xfoil THKCAM and HIPNT
 !
 !   maxt  - new thickness
@@ -717,6 +772,7 @@ subroutine xfoil_set_thickness_camber (infoil, maxt, xmaxt, maxc, xmaxc, outfoil
 
   type(airfoil_type), intent(in)  :: infoil
   type(airfoil_type), intent(out) :: outfoil
+
   double precision, intent(in) :: maxt, xmaxt, maxc, xmaxc
   double precision :: CFAC,TFAC, thick, xthick, camb, xcamb
 
@@ -727,41 +783,36 @@ subroutine xfoil_set_thickness_camber (infoil, maxt, xmaxt, maxc, xmaxc, outfoil
   end if
 
 ! Set xfoil airfoil and prepare globals, get current thickness
-  call xfoil_set_airfoil_geometry (infoil)
-  call xfoil_geometry_info_buffer (thick, xthick, camb, xcamb) 
+  call xfoil_set_buffer_airfoil (infoil)
+  call xfoil_get_geometry_info  (thick, xthick, camb, xcamb) 
 
-! Run xfoil to change thickness and camber - xfoil likes factors
+! Run xfoil to change thickness and camber 
   CFAC = 1.0
   TFAC = 1.0
   IF(camb .NE.0.0 .AND. maxc.NE.999.0) CFAC = maxc / camb
   IF(thick.NE.0.0 .AND. maxt.NE.999.0) TFAC = maxt / thick
-
   call THKCAM ( TFAC, CFAC)
 
 ! Run xfoil to change highpoint of thickness and camber 
-
   call HIPNT (xmaxc, xmaxt)
 
 ! Recalc values ...
-  call xfoil_geometry_info_buffer (thick, xthick, camb, xcamb) 
-  
-  WRITE(*,1000) maxt, xmaxt, maxc, xmaxc
-1000 FORMAT(/' New thickness = ',F8.4,'  at x = ',F7.3/ &
-             ' New camber    = ',F8.4,'  at x = ',F7.3/)
+  call xfoil_get_geometry_info (thick, xthick, camb, xcamb) 
 
+  WRITE(*,1000) thick, xthick, camb, xcamb
+1000 FORMAT(/' --set--  New thickness = ',F7.4,'  at x = ',F6.3, &
+                   '    New camber    = ',F7.4,'  at x = ',F6.3)
 
 ! retrieve outfoil from xfoil buffer
-
   call xfoil_reload_airfoil(outfoil)
 
 end subroutine xfoil_set_thickness_camber
 
 
-
 !-------------------------------------------------------------------------
 ! Sets buffer airfoil for xfoil - initalize segments etc...
 !-------------------------------------------------------------------------
-subroutine xfoil_set_airfoil_geometry (foil)
+subroutine xfoil_set_buffer_airfoil (foil)
 
   use xfoil_inc, only : XB, YB, NB, SB, XBP, YBP 
   use vardef,    only : airfoil_type
@@ -775,14 +826,14 @@ subroutine xfoil_set_airfoil_geometry (foil)
   CALL SEGSPL(XB,XBP,SB,NB)
   CALL SEGSPL(YB,YBP,SB,NB)
 
-end subroutine xfoil_set_airfoil_geometry
+end subroutine xfoil_set_buffer_airfoil
 
 
 
 !-------------------------------------------------------------------------
 ! gets buffer airfoil thickness, camber .. positions
 !-------------------------------------------------------------------------
-subroutine xfoil_geometry_info_buffer (maxt, xmaxt, maxc, xmaxc) 
+subroutine xfoil_get_geometry_info (maxt, xmaxt, maxc, xmaxc) 
  
   use xfoil_inc
   Real*8, intent(out) :: maxt, xmaxt, maxc, xmaxc
@@ -796,7 +847,7 @@ subroutine xfoil_geometry_info_buffer (maxt, xmaxt, maxc, xmaxc)
 
   maxt = 2.0 * TYMAX
 
-end subroutine xfoil_geometry_info_buffer
+end subroutine xfoil_get_geometry_info
 
 
 

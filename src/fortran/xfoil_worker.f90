@@ -138,10 +138,12 @@ subroutine test_set_thickness_camber (foil)
 
   use vardef,    only : airfoil_type, output_prefix
   use xfoil_driver,       only : xfoil_set_thickness_camber, smooth_paneling
+  use xfoil_driver,       only : xfoil_scale_thickness_camber
   use airfoil_operations, only : airfoil_write
 
   type(airfoil_type), intent(in) :: foil
   double precision :: maxt, xmaxt, maxc, xmaxc
+  double precision :: f_thick, d_xthick, f_camb, d_xcamb
   character(80) :: output_file
   type(airfoil_type) ::foilsmoothed, outfoil
   integer :: i
@@ -152,23 +154,31 @@ subroutine test_set_thickness_camber (foil)
   maxc = 2.5d-2
   xmaxc = 45.d-2
 
+  f_thick  =  0.95d0
+  d_xthick = -0.02d0
+  f_camb   =  0.95d0
+  d_xcamb  = -0.05d0
+
   ! Use Xfoil to smooth airfoil paneling
   call smooth_paneling(foil, 200, foilsmoothed)
 
-  do i = 1, 6
+  call xfoil_set_thickness_camber (foilsmoothed, maxt, xmaxt, maxc, xmaxc, outfoil)
 
-    call xfoil_set_thickness_camber (foilsmoothed, maxt, xmaxt, maxc, xmaxc, outfoil)
+  foilsmoothed = outfoil
+  
+  do i = 1, 6
 
     write(charI,"(I0)") i
     output_file = trim(output_prefix)//trim(charI) //'.dat'
     call airfoil_write(output_file, trim(output_prefix)//trim(charI), outfoil)
 
-    maxt = maxt - 0.5d-2
-    xmaxt = xmaxt - 2.d-2
-    maxc = maxc - 0.2d-2
-    xmaxc = xmaxc - 5.d-2
+    call xfoil_scale_thickness_camber (foilsmoothed, f_thick, d_xthick, f_camb, d_xcamb, outfoil)
 
-
+    f_thick  =  f_thick - 0.05d0
+    d_xthick = d_xthick - 0.02d0
+    f_camb   =   f_camb - 0.05d0
+    d_xcamb  =  d_xcamb - 0.04d0
+  
   end do 
 
 end subroutine test_set_thickness_camber 
