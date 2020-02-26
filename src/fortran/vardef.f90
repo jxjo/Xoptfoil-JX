@@ -94,10 +94,13 @@ module vardef
   integer :: ngeo_targets
   integer, parameter :: max_geo_targets = 10
   type(geo_target_type), dimension(max_geo_targets) :: geo_targets
-                                                  
+                        
+! jx-mod Show more infos during optimization
+  logical :: show_details
+
 ! jx-mod Smoothing - parameters for smoothing 
   double precision :: spike_threshold, highlow_treshold
-  logical :: do_smoothing, show_smoothing
+  logical :: do_smoothing
   double precision :: scale_pertubation, weighting_smoothing
   double precision, dimension(:), allocatable :: zseedt_not_smoothed, zseedb_not_smoothed
   

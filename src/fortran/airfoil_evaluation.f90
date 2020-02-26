@@ -91,7 +91,8 @@ function aero_objective_function(designvars, include_penalty)
   use math_deps,       only : interp_vector, curvature, derv1f1, derv1b1
 
   ! jx-mod Smoothing
-  use airfoil_operations, only : assess_surface, smooth_it
+  use airfoil_operations, only : assess_surface, smooth_it,        &
+                                 show_camb_thick_of_current
   ! jx-mod Geo targets
   use airfoil_operations, only : my_stop
   use math_deps,          only : interp_point
@@ -792,7 +793,7 @@ function aero_objective_function(designvars, include_penalty)
 
 ! jx-mod Geo targets - Start --------------------------------------------
 
-  if (show_smoothing)   write (*,*) 
+  if (show_details)   write (*,*) 
 
 ! Evaluate current value of geomtry targets - calculate geo_objective 
   do i = 1, ngeo_targets
@@ -815,7 +816,7 @@ function aero_objective_function(designvars, include_penalty)
     increment = (ref_value + abs(tar_value - cur_value)) * geo_targets(i)%scale_factor 
     geo_objective_function = geo_objective_function + geo_targets(i)%weighting * increment
 
-    if (show_smoothing)                                                          &
+    if (show_details)                                                          &
       write (*,'(14x,A,2(F11.6),A,F7.5)') "Geo target '"//geo_targets(i)%type//"'", tar_value, cur_value,  &
                           "     Obj: ", (geo_targets(i)%weighting * increment)
   end do 
@@ -825,10 +826,16 @@ function aero_objective_function(designvars, include_penalty)
   
 ! jx-mod Show surface quality for entertainment and info
 !          about objectives at the end of iteration 
-  if (show_smoothing) then
+  if (show_details) then
 
-    call assess_surface ('Top   ', show_smoothing, max_curv_reverse_top, xseedt, zt_new, nreversalst, perturbation_top)
-    call assess_surface ('Bottom', show_smoothing, max_curv_reverse_bot, xseedb, zb_new, nreversalsb, perturbation_bot)
+    if (do_smoothing) then
+      call assess_surface ('Top   ', .true., max_curv_reverse_top, xseedt, zt_new, nreversalst, perturbation_top)
+      call assess_surface ('Bottom', .true., max_curv_reverse_bot, xseedb, zb_new, nreversalsb, perturbation_bot)
+    end if
+
+    if (trim(shape_functions) == 'camb-thick') then
+      call show_camb_thick_of_current
+    end if
 
     if (penaltyval > 0.d0) write (*,'(52x,A)') 'Pen: ' // penalty_info 
 

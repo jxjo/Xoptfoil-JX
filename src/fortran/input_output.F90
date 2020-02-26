@@ -91,7 +91,10 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
   namelist /optimization_options/ search_type, global_search, local_search,    &
             seed_airfoil, airfoil_file, shape_functions, nfunctions_top,       &
             nfunctions_bot, initial_perturb, min_bump_width, restart,          &
-            restart_write_freq, write_designs
+            restart_write_freq, write_designs,                                 &
+! jx-mod Show more infos during optimization
+            show_details                                                      
+
   namelist /operating_conditions/ noppoint, op_mode, op_point, reynolds, mach, &
             use_flap, x_flap, y_flap, y_flap_spec, flap_selection,             &
 ! jx-mod Aero targets - new option: target_value
@@ -124,7 +127,7 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
   namelist /matchfoil_options/ match_foils, matchfoil_file
 
 ! jx-mod Smoothing - namelist for smoothing options
-  namelist /smoothing_options/ do_smoothing, show_smoothing, spike_threshold,  &
+  namelist /smoothing_options/ do_smoothing, spike_threshold,  &
             highlow_treshold, weighting_smoothing
 ! jx-mod Geo targets - namelist for geometry targets  (see module vardef)
   namelist /geometry_targets/ ngeo_targets, target_type, x_pos, target_geo,  &
@@ -152,6 +155,9 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
   restart = .false.
   restart_write_freq = 20
   write_designs = .true.
+
+! jx-mod Show more infos during optimization
+  show_details = .true. 
 
 ! Read main namelist options
 
@@ -236,7 +242,6 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
   highlow_treshold = 0.05d0
   spike_threshold = 0.8d0
   do_smoothing = .false.
-  show_smoothing = .false. 
   weighting_smoothing = 1.d0
 
   rewind(iunit)
@@ -619,6 +624,9 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
   write(*,*) " restart = ", restart
   write(*,*) " restart_write_freq = ", restart_write_freq
   write(*,*) " write_designs = ", write_designs
+! jx-mod Show more infos during optimization
+  write(*,*) " show_details = ", show_details
+
   write(*,'(A)') " /"
   write(*,*)
 
@@ -692,7 +700,6 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
 
   write(*,'(A)') " &smoothing_options"
   write(*,*) " do_smoothing = ", do_smoothing
-  write(*,*) " show_smoothing = ", show_smoothing
   write(*,*) " highlow_treshold = ", highlow_treshold
   write(*,*) " spike_threshold = ", spike_threshold
   write(*,*) " weighting_smoothing = ", weighting_smoothing

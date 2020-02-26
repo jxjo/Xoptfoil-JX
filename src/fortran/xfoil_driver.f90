@@ -739,7 +739,7 @@ subroutine xfoil_scale_thickness_camber (infoil, f_thick, d_xthick, f_camb, d_xc
   call xfoil_get_geometry_info  (thick, xthick, camb, xcamb) 
   
   WRITE(*,1000) thick, xthick, camb, xcamb
-1000 FORMAT(/' -scaled- New thickness = ',F7.4,'  at x = ',F6.3, &
+1000 FORMAT(/' -tmp print- New thickness = ',F7.4,'  at x = ',F6.3, &
                    '    New camber    = ',F7.4,'  at x = ',F6.3)
 
 ! retrieve outfoil from xfoil buffer
@@ -800,7 +800,7 @@ subroutine xfoil_set_thickness_camber (infoil, maxt, xmaxt, maxc, xmaxc, outfoil
   call xfoil_get_geometry_info (thick, xthick, camb, xcamb) 
 
   WRITE(*,1000) thick, xthick, camb, xcamb
-1000 FORMAT(/' --set--  New thickness = ',F7.4,'  at x = ',F6.3, &
+1000 FORMAT(/' --tmp print --  New thickness = ',F7.4,'  at x = ',F6.3, &
                    '    New camber    = ',F7.4,'  at x = ',F6.3)
 
 ! retrieve outfoil from xfoil buffer

@@ -597,9 +597,26 @@ end subroutine my_stop
 
 !------------------------------------------------------------------------------
 !
-! jx-mod Smoothing - High level functions
+! jx-mod - New high level functions
 !
 !------------------------------------------------------------------------------
+
+!------------------------------------------------------------------------------
+! Show thickness & camber of xfoils current foil for entertainment
+!    (xfoil current foil is typically set in run_xfoil)
+!------------------------------------------------------------------------------
+
+subroutine show_camb_thick_of_current
+
+  use xfoil_driver, only : xfoil_geometry_info
+  double precision :: maxt, xmaxt, maxc, xmaxc
+
+  call xfoil_geometry_info(maxt, xmaxt, maxc, xmaxc)
+
+  write (*,'(14x,4(A,F6.4))') 'Thickness = ', maxt, '  at x = ', xmaxt, &
+                             'Camber = '   , maxc, '  at x = ', xmaxc
+
+end subroutine show_camb_thick_of_current
 
 !------------------------------------------------------------------------------
 ! Assess polyline (x,y) on surface quality (curves of2nd and 3rd derivation)

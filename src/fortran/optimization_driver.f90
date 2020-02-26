@@ -506,9 +506,9 @@ subroutine write_final_design(optdesign, f0, fmin, shapetype)
 
   if (do_smoothing) then 
     call smooth_it (xseedt, zt_new)
-    call assess_surface ('Top    final', show_smoothing, max_curv_reverse_top, xseedt, zt_new, dummyint,pertubation_top) 
+    call assess_surface ('Top    final', show_details, max_curv_reverse_top, xseedt, zt_new, dummyint,pertubation_top) 
     call smooth_it (xseedb, zb_new)
-    call assess_surface ('Bottom final', show_smoothing, max_curv_reverse_bot, xseedb, zb_new, dummyint,pertubation_bot)  
+    call assess_surface ('Bottom final', show_details, max_curv_reverse_bot, xseedb, zb_new, dummyint,pertubation_bot)  
 
   end if 
 
