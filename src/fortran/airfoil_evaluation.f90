@@ -1056,10 +1056,10 @@ function write_airfoil_optimization_progress(designvars, designcounter)
   end do
 
 ! jx-mod Smoothing
-!        Write the original, not smoothed seed airfoil to
+!        Restore the original, not smoothed seed airfoil to
 !        ...design_coordinates.dat to show it in visualizer
 
-  if (do_smoothing .and. designcounter == 0) then
+  if (designcounter == 0) then
     do i = 1, nptt
       curr_foil%z(i)      = zseedt_not_smoothed(nptt-i+1)/foilscale - zoffset
     end do

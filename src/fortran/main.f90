@@ -124,17 +124,15 @@ program main
   end if
 
 ! jx-mod Smoothing ---- save original seed surface before smoothing
+!                        ... to show original data later in visualizer 
 
-  if (do_smoothing) then
-    allocate(zseedt_not_smoothed(size(zseedt)))
-    allocate(zseedb_not_smoothed(size(zseedb)))
-    zseedt_not_smoothed = zseedt
-    zseedb_not_smoothed = zseedb
-  end if
-
+  allocate(zseedt_not_smoothed(size(zseedt)))
+  allocate(zseedb_not_smoothed(size(zseedb)))
+  zseedt_not_smoothed = zseedt
+  zseedb_not_smoothed = zseedb
 ! jx-mod Smoothing ---- end 
 
-
+  
 ! Make sure seed airfoil passes constraints, and get scaling factors for
 ! operating points
 
@@ -167,7 +165,7 @@ program main
   if (allocated(constrained_dvs)) deallocate(constrained_dvs)
 
 ! jx-mod Smoothing ---- Deallocate save arrays
-  if (allocated(zseedt_not_smoothed)) deallocate(zseedt_not_smoothed)
-  if (allocated(zseedb_not_smoothed)) deallocate(zseedb_not_smoothed)
+  deallocate(zseedt_not_smoothed)
+  deallocate(zseedb_not_smoothed)
 
 end program main

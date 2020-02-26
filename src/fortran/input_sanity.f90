@@ -71,7 +71,7 @@ subroutine check_seed()
   write(*,*) 'Checking to make sure seed airfoil passes all constraints ...'
   write(*,*)
 
-! jx-mod Smoothing ---- Ask user for Smoothing -----------------
+! jx-mod Smoothing ---- Ask user for Smoothing - switch off if 'camb_thick'---------
 
   ! smooth surfaces of airfoil *before* other checks are made
 
@@ -83,10 +83,19 @@ subroutine check_seed()
     call assess_surface ('Top    ', .false., max_curv_reverse_top, xseedt, zseedt, nreversalst, perturbation_top)
     call assess_surface ('Bot    ', .false., max_curv_reverse_bot, xseedb, zseedb, nreversalsb, perturbation_bot)
 
+
+    if (trim(shape_functions) == 'camb-thick') then
+      write (*,*)
+      write (*,*) "Info: Because of shape_functions ='camb-thick' smoothing will be switched off during optimization!"
+      write (*,*)
+      do_smoothing = .false.
+    end if
+  end if
+
+  if (do_smoothing) then
     ! set scaling for pertubation of surface for smoothing being part of geo targets
     ! add a base value because pertubation is quite volatile
     scale_pertubation = 1.d0/(10.d0 + perturbation_top + perturbation_bot)
-
   else
     scale_pertubation = 0.d0
   end if
