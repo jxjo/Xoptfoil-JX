@@ -172,6 +172,12 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
     call my_stop("search_type must be 'global_and_local', 'global', "//   &
                  "or 'local'.")
 
+! In case of 'camb-thick' set number of top functions to a fixed number of 4
+  if (trim(shape_functions) == 'camb-thick' ) then
+    nfunctions_top = 4
+    nfunctions_bot = 0
+  end if
+
 ! Set defaults for operating conditions and constraints
 
   noppoint = 1
@@ -402,9 +408,10 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
   
 !   Set design variables with side constraints
 
-    if (trim(shape_functions) == 'naca') then
+    if ((trim(shape_functions) == 'naca')  .or. &
+        (trim(shape_functions) == 'camb-thick')) then
 
-!     For NACA, we will only constrain the flap deflection
+!     For NACA / camb-thick, we will only constrain the flap deflection
 
       allocate(constrained_dvs(nflap_optimize))
       counter = 0

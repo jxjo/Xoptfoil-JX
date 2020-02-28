@@ -180,8 +180,9 @@ subroutine optimize(search_type, global_search, local_search, constrained_dvs, &
 
 ! Set initial design
 
-  if (trim(shape_functions) == 'naca') then     
-  !----------naca----------
+  if ((trim(shape_functions) == 'naca') .or. &
+      (trim(shape_functions) == 'camb-thick')) then     
+  !----------naca / camb-thick ----------
 
     nfuncs = ndv - nflap_optimize
 
@@ -195,22 +196,6 @@ subroutine optimize(search_type, global_search, local_search, constrained_dvs, &
       oppoint = flap_optimize_points(i-nfuncs)
       x0(i) = flap_degrees(oppoint)*ffact
     end do
-
-  else if (trim(shape_functions) == 'camb-thick') then
-    !----------camber and thickness---------
-    write(*,*) 'New shape-function: camber and thickness'
-    nfuncs = ndv - nflap_optimize
-
-    !   Mode strength = 0 (aka seed airfoil)
-    
-        x0(1:nfuncs) = 0.d0
-    
-    !   Seed flap deflection as specified in input file
-    
-       do i = nfuncs + 1, ndv
-        oppoint = flap_optimize_points(i-nfuncs)
-        x0(i) = flap_degrees(oppoint)*ffact
-      end do    
   else
   !------------hicks-henne-------------
     
@@ -307,7 +292,8 @@ subroutine optimize(search_type, global_search, local_search, constrained_dvs, &
 
 !   Set up mins and maxes
     
-    if (trim(shape_functions) == 'naca') then
+    if ((trim(shape_functions) == 'naca') .or. &
+        (trim(shape_functions) == 'camb-thick')) then
 
       nfuncs = ndv - nflap_optimize
 

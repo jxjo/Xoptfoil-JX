@@ -73,16 +73,18 @@ subroutine allocate_airfoil_data()
   double precision, dimension(:), allocatable :: modest, modesb
 
 ! Allocate shape function setup arrays
-if (trim(shape_functions) /= 'camb-thick') then
-
-  ! only allocate shape-functions for naca and hicks-henne
-  if (trim(shape_functions) == 'naca') then
-    allocate(modest(nparams_top))
-    allocate(modesb(nparams_bot))
-  else
-    allocate(modest(nparams_top*3))
-    allocate(modesb(nparams_bot*3))
-  end if
+if (trim(shape_functions) == 'naca') then
+  allocate(modest(nparams_top))
+  allocate(modesb(nparams_bot))
+  modest(:) = 0.d0
+  modesb(:) = 0.d0
+else if (trim(shape_functions) == 'camb-thick') then
+  ! Allocate a fixed set of 4 functions
+  allocate(modest(nparams_top))
+  modest(:) = 0.d0
+else
+  allocate(modest(nparams_top*3))
+  allocate(modesb(nparams_bot*3))
   modest(:) = 0.d0
   modesb(:) = 0.d0
 end if
@@ -91,13 +93,12 @@ end if
 
 !$omp parallel default(shared)
 
-if (trim(shape_functions) /= 'camb-thick') then
 ! For NACA, this will create the shape functions.  For Hicks-Henne,
 ! it will just allocate them.
 
-  call create_shape_functions(xseedt, xseedb, modest, modesb,                  &
+call create_shape_functions(xseedt, xseedb, modest, modesb,                  &
                               shape_functions, first_time=.true.)
-end if
+
 
 ! Allocate memory for working airfoil on each thread
 

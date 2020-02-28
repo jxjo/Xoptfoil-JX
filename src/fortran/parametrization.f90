@@ -63,8 +63,6 @@ end subroutine deallocate_shape_functions
 ! shapetype may be 'naca', 'camb-thick' or 'hicks-henne'
 ! For Hicks-Henne shape functions, number of elements in modes must be a 
 ! multiple of 3.
-! For camber-thickness shape functions, number of elements in modes must be a 
-! multiple of 4.
 !=============================================================================80
 subroutine create_shape_functions(xtop, xbot, modestop, modesbot, shapetype,   &
                                   first_time)
@@ -81,6 +79,9 @@ subroutine create_shape_functions(xtop, xbot, modestop, modesbot, shapetype,   &
   if (trim(shapetype) == 'naca') then
     nmodestop = size(modestop,1)
     nmodesbot = size(modesbot,1)
+  else if (trim(shapetype) == 'camb-thick') then
+    nmodestop = size(modestop,1)
+    nmodesbot = 0
   else
     nmodestop = size(modestop,1)/3
     nmodesbot = size(modesbot,1)/3
@@ -261,6 +262,9 @@ subroutine create_airfoil(xt_seed, zt_seed, xb_seed, zb_seed, modest, modesb,  &
   if (trim(shapetype) == 'naca') then
     nmodest = size(modest,1)
     nmodesb = size(modesb,1)
+  else if (trim(shapetype) == 'camb-thick') then
+    nmodest = size(modest,1)
+    nmodesb = 0
   else
     nmodest = size(modest,1)/3
     nmodesb = size(modesb,1)/3
@@ -279,7 +283,7 @@ subroutine create_airfoil(xt_seed, zt_seed, xb_seed, zb_seed, modest, modesb,  &
 
   zt_new = zt_seed
   do i = 1, nmodest
-    if (trim(shapetype) == 'naca') then
+    if ((trim(shapetype) == 'naca') .or. (trim(shapetype) == 'camb-thick')) then
       strength = modest(i)
     else
       strength = 1.d0
@@ -291,7 +295,7 @@ subroutine create_airfoil(xt_seed, zt_seed, xb_seed, zb_seed, modest, modesb,  &
 
   if (.not. symmetrical) then
     zb_new = zb_seed
-    do i = 1, nmodesb
+    do i = 1, nmodesb !TODO MB prüfen, bei camb-thick gibt es keine bottom-functions
       if (trim(shapetype) == 'naca') then
         strength = modesb(i)
       else
@@ -355,9 +359,9 @@ subroutine create_airfoil_camb_thick (xt_seed, zt_seed, xb_seed, zb_seed, modes,
     seed_foil%z(i+nptt) = zb_seed(i+1)
   end do
   
-! Change thickness, cmaber ... according to new values hidden in modes
-  f_camb   = modes(1)
-  f_thick  = modes(2)
+! Change thickness, camber ... according to new values hidden in modes
+  f_camb   = 1 + modes(1)
+  f_thick  = 1 + modes(2)
   d_xcamb  = modes(3)
   d_xthick = modes(4)
 

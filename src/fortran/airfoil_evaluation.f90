@@ -167,7 +167,7 @@ function aero_objective_function(designvars, include_penalty)
     dvtbnd2 = nmodest
     dvbbnd2 = nmodest + nmodesb
     dvbbnd1 = dvtbnd2 + 1
-  else if (trim(shape_functions) == 'camb-thick') then
+  else if (trim(shape_functions) == 'camb-thick') then!TODO MB kann entfallen
     dvtbnd1 = 1
     dvtbnd2 = 4
     dvbbnd2 = 4
@@ -915,7 +915,8 @@ function matchfoil_objective_function(designvars)
 
 ! Set modes for top and bottom surfaces
 
-  if (trim(shape_functions) == 'naca') then
+  if ((trim(shape_functions) == 'naca')  .or. &
+      (trim(shape_functions) == 'camb-thick')) then
     dvtbnd = nmodest
     dvbbnd = nmodest + nmodesb
   else
@@ -1263,7 +1264,8 @@ function write_matchfoil_optimization_progress(designvars, designcounter)
 
 ! Set modes for top and bottom surfaces
 
-  if (trim(shape_functions) == 'naca') then
+  if ((trim(shape_functions) == 'naca')  .or. &
+      (trim(shape_functions) == 'camb-thick')) then
     dvtbnd = nmodest
     dvbbnd = nmodest + nmodesb
   else
