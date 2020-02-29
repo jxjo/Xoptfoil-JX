@@ -83,6 +83,11 @@ install(FILES src/python/xoptfoil_visualizer.py
                     GROUP_READ             GROUP_EXECUTE
                     WORLD_READ             WORLD_EXECUTE
         DESTINATION bin)
+install(FILES src/python/xoptfoil_visualizer-jx.py
+        PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE
+                    GROUP_READ             GROUP_EXECUTE
+                    WORLD_READ             WORLD_EXECUTE
+        DESTINATION bin)
 install(FILES "doc/User_Guide.pdf" DESTINATION ${DATADIR})
 install(FILES "doc/example_case/example_case.pdf"
               "doc/example_case/inputs.txt" 
