@@ -730,18 +730,25 @@ subroutine xfoil_scale_thickness_camber (infoil, f_thick, d_xthick, f_camb, d_xc
   call xfoil_set_buffer_airfoil (infoil)
   call xfoil_get_geometry_info  (thick, xthick, camb, xcamb) 
 
+
 ! Run xfoil to change thickness and camber and positions
 
-  call THKCAM (f_thick, f_camb)
-  call HIPNT  (xcamb + d_xcamb, xthick + d_xthick)
+  IF ((f_thick /= 1.d0) .or. (f_camb /= 1.d0))  &
+    call THKCAM (f_thick, f_camb)
+  IF ((d_xcamb /= 0.d0) .or. (d_xthick /= 0.d0))  &
+    call HIPNT  (xcamb + d_xcamb, xthick + d_xthick)
 
 ! Recalc values ...
   call xfoil_get_geometry_info  (thick, xthick, camb, xcamb) 
   
-  WRITE(*,1000) thick, xthick, camb, xcamb
-1000 FORMAT(/' -tmp print- New thickness = ',F7.4,'  at x = ',F6.3, &
-                   '    New camber    = ',F7.4,'  at x = ',F6.3)
+!  WRITE(*,1010) f_thick, d_xthick, f_camb, d_xcamb
+!1010 FORMAT(/' -tmp print- Fac thickness = ',F7.4,'  dx   = ',F6.3, &
+!                      '    Fac camber    = ',F7.4,'  dx   = ',F6.3)
 
+!  WRITE(*,1000) thick, xthick, camb, xcamb
+!1000 FORMAT( ' -tmp print- New thickness = ',F7.4,'  at x = ',F6.3, &
+!                      '    New camber    = ',F7.4,'  at x = ',F6.3)
+                   
 ! retrieve outfoil from xfoil buffer
 
   call xfoil_reload_airfoil(outfoil)

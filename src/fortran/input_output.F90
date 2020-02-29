@@ -255,7 +255,8 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
   call namelist_check('smoothing_options', iostat1, 'warn')
 
   ! ensure no weighting if set to false 
-  if (.not. do_smoothing) then
+  !     for "camb-thick" smoothing will be switched off during optimization
+  if ((.not. do_smoothing) .or. (trim(shape_functions) == 'camb-thick' )) then
     weighting_smoothing = 0.d0 
   end if
 

@@ -83,13 +83,13 @@ subroutine check_seed()
     call assess_surface ('Top    ', .false., max_curv_reverse_top, xseedt, zseedt, nreversalst, perturbation_top)
     call assess_surface ('Bot    ', .false., max_curv_reverse_bot, xseedb, zseedb, nreversalsb, perturbation_bot)
 
-
     if (trim(shape_functions) == 'camb-thick') then
       write (*,*)
       write (*,*) "Info: Because of shape_functions ='camb-thick' smoothing will be switched off during optimization!"
       write (*,*)
       do_smoothing = .false.
     end if
+
   end if
 
   if (do_smoothing) then

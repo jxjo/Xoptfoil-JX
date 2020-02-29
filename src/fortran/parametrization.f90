@@ -360,8 +360,8 @@ subroutine create_airfoil_camb_thick (xt_seed, zt_seed, xb_seed, zb_seed, modes,
   end do
   
 ! Change thickness, camber ... according to new values hidden in modes
-  f_camb   = 1 + modes(1)
-  f_thick  = 1 + modes(2)
+  f_camb   = 1.d0 + modes(1)
+  f_thick  = 1.d0 + modes(2)
   d_xcamb  = modes(3)
   d_xthick = modes(4)
 
