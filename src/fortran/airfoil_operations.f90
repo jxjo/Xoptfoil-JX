@@ -613,8 +613,8 @@ subroutine show_camb_thick_of_current
 
   call xfoil_geometry_info(maxt, xmaxt, maxc, xmaxc)
 
-  write (*,'(14x,2(A,F6.4))') 'Thickness = ', maxt, '  at x = ', xmaxt
-  write (*,'(14x,2(A,F6.4))') 'Camber    = ', maxc, '  at x = ', xmaxc
+  write (*,'(25x,4(A,F6.4))') 'Thickness: ', maxt, '  at x: ', xmaxt, &
+                              '   Camber: ', maxc, '  at x: ', xmaxc
   
 end subroutine show_camb_thick_of_current
 

@@ -793,7 +793,12 @@ function aero_objective_function(designvars, include_penalty)
 
 ! jx-mod Geo targets - Start --------------------------------------------
 
-  if (show_details)   write (*,*) 
+  if (show_details) then 
+    write (*,*) 
+    if (trim(shape_functions) == 'camb-thick') then
+      call show_camb_thick_of_current
+    end if
+  end if
 
 ! Evaluate current value of geomtry targets - calculate geo_objective 
   do i = 1, ngeo_targets
@@ -817,7 +822,7 @@ function aero_objective_function(designvars, include_penalty)
     geo_objective_function = geo_objective_function + geo_targets(i)%weighting * increment
 
     if (show_details)                                                          &
-      write (*,'(14x,A,2(F11.6),A,F7.5)') "Geo target '"//geo_targets(i)%type//"'", tar_value, cur_value,  &
+      write (*,'(14x,A,1(F9.6),A,F7.5)') "Geo target "//trim(geo_targets(i)%type)//":", cur_value,  &
                           "     Obj: ", (geo_targets(i)%weighting * increment)
   end do 
 
@@ -831,10 +836,6 @@ function aero_objective_function(designvars, include_penalty)
     if (do_smoothing) then
       call assess_surface ('Top   ', .true., max_curv_reverse_top, xseedt, zt_new, nreversalst, perturbation_top)
       call assess_surface ('Bottom', .true., max_curv_reverse_bot, xseedb, zb_new, nreversalsb, perturbation_bot)
-    end if
-
-    if (trim(shape_functions) == 'camb-thick') then
-      call show_camb_thick_of_current
     end if
 
     if (penaltyval > 0.d0) write (*,'(52x,A)') 'Pen: ' // penalty_info 
