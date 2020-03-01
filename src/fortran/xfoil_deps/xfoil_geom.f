@@ -2821,7 +2821,8 @@ C---- Add Y-offset for original leftmost (LE) point to camber
         YB(I) = YB(I) + YBL
    40 CONTINUE
 C      
-      LGSAME = .FALSE.
+C     jx mod: not needed
+C     LGSAME = .FALSE.
 C
       CALL SCALC(XB,YB,SB,NB)
       CALL SEGSPL(XB,XBP,SB,NB)

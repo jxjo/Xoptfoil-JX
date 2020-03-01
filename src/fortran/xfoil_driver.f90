@@ -865,12 +865,12 @@ subroutine xfoil_reload_airfoil(foil)
 
   use xfoil_inc, only : XB, YB, NB
   use vardef,    only : airfoil_type
-  use memory_util, only : allocate_airfoil
 
   type(airfoil_type), intent(inout) :: foil
 
+  allocate(foil%x(NB))
+  allocate(foil%z(NB))
   foil%npoint = NB
-  call allocate_airfoil (foil) 
   foil%x = XB(1:NB)
   foil%z = YB(1:NB)
   

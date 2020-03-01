@@ -332,7 +332,6 @@ subroutine create_airfoil_camb_thick (xt_seed, zt_seed, xb_seed, zb_seed, modes,
                                       zt_new, zb_new )
 
   use vardef,       only : airfoil_type
-  use memory_util,  only : allocate_airfoil, deallocate_airfoil
   use xfoil_driver, only : xfoil_scale_thickness_camber
                                   
   double precision, dimension(:), intent(in) :: xt_seed, zt_seed, xb_seed, zb_seed
@@ -348,7 +347,8 @@ subroutine create_airfoil_camb_thick (xt_seed, zt_seed, xb_seed, zb_seed, modes,
   nptb = size(zb_seed,1)
 
   seed_foil%npoint = nptt + nptb - 1  
-  call allocate_airfoil (seed_foil) 
+  allocate(seed_foil%x(seed_foil%npoint))
+  allocate(seed_foil%z(seed_foil%npoint))
 
   do i = 1, nptt
     seed_foil%x(i) = xt_seed(nptt-i+1)
@@ -382,8 +382,10 @@ subroutine create_airfoil_camb_thick (xt_seed, zt_seed, xb_seed, zb_seed, modes,
   end do
 
 ! Clean up
-  call deallocate_airfoil(seed_foil)
-  call deallocate_airfoil(new_foil)
+  deallocate(seed_foil%x)
+  deallocate(seed_foil%z)
+  deallocate(new_foil%x)
+  deallocate(new_foil%z)
   
 end subroutine create_airfoil_camb_thick
 
