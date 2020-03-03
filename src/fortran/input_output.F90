@@ -87,13 +87,15 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
 
   ! jx-mod re_as_resqrtcl - to ease Type2 polar op points
   logical :: re_as_resqrtcl
+  ! jx-mod show/suppress extensive echo of input parms
+  logical :: echo_input_parms
   
   namelist /optimization_options/ search_type, global_search, local_search,    &
             seed_airfoil, airfoil_file, shape_functions, nfunctions_top,       &
             nfunctions_bot, initial_perturb, min_bump_width, restart,          &
             restart_write_freq, write_designs,                                 &
-! jx-mod Show more infos during optimization
-            show_details                                                      
+! jx-mod Show  
+            show_details, echo_input_parms                                                      
 
   namelist /operating_conditions/ noppoint, op_mode, op_point, reynolds, mach, &
             use_flap, x_flap, y_flap, y_flap_spec, flap_selection,             &
@@ -156,8 +158,9 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
   restart_write_freq = 20
   write_designs = .true.
 
-! jx-mod Show more infos during optimization
+! jx-mod Show more infos  / supress echo
   show_details = .true. 
+  echo_input_parms = .true.
 
 ! Read main namelist options
 
@@ -612,6 +615,9 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
 
 ! Echo namelist options for checking purposes
 
+! jx-mod  (I did it ... ;-) )
+  if (.not. echo_input_parms) goto 10000
+
   write(*,*)
   write(*,*) 'Echoing program options:'
   write(*,*)
@@ -634,6 +640,8 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
   write(*,*) " write_designs = ", write_designs
 ! jx-mod Show more infos during optimization
   write(*,*) " show_details = ", show_details
+! jx-mod     
+  write(*,*) " echo_input_parms = ", echo_input_parms 
 
   write(*,'(A)') " /"
   write(*,*)
@@ -850,6 +858,11 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
   write(*,*) " matchfoil_file = '"//trim(matchfoil_file)//"'"
   write(*,'(A)') " /"
   write(*,*)
+
+
+! jx-mod  (I did it ... ;-)
+  10000 continue
+
 
 ! Check that inputs are reasonable
 
@@ -1220,7 +1233,7 @@ end subroutine read_clo
 !=============================================================================80
 subroutine print_version()
 
-  write(*,'(A)') "Xoptfoil "//trim(PACKAGE_VERSION)
+  write(*,'(A)') "Xoptfoil-JX "//trim(PACKAGE_VERSION)
   write(*,'(A)') "Copyright (C) 2017-2019 Daniel Prosser"
   write(*,'(A)') "License GPLv3+: GNU GPL version 3 or later "//               &
                  "<http://gnu.org/licenses/gpl.html>"
@@ -1250,10 +1263,10 @@ subroutine print_usage(exeprint)
   write(*,'(A)') "Refer to the PDF user guide for complete input help."
   write(*,'(A)')
   ! jx-mod
-  write(*,'(A)') "Refer to additional doc for ths modified version of Xoptfoil"
+  write(*,'(A)') "Modified version! Refer to additional doc at development page"
   write(*,'(A)')
   write(*,'(A)') "Home page: https://sourceforge.net/projects/xoptfoil/"
-  write(*,'(A)') "Development page: https://github.com/montagdude/Xoptfoil"
+  write(*,'(A)') "Development page: https://github.com/jxjo/Xoptfoil"
   write(*,'(A)') "Report bugs using the issue reporting system at either "//   &
                  "of the above sites."
 

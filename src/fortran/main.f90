@@ -60,9 +60,11 @@ program main
   write(*,*) 'This is Xoptfoil: airfoil optimization with Xfoil'
   write(*,*) 'Copyright 2017-2019 Daniel Prosser'
   write(*,*) 
-  write(*,*) '*** JX - patched version to define optimization targets'
-  write(*,*) '         and to implement basic smoothing capabilities'
-  write(*,*) '    by Jochen Guenzel 2019-11'
+  write(*,*) 'This is Xoptfoil-JX: a patched version of the original Xoptfoil'
+  write(*,*) '    - Optimization targets and Smoothing'
+  write(*,*) '      by Jochen Guenzel 2019-11'
+  write(*,*) '    - Shape_type "camb_thick"'
+  write(*,*) '      by Matthias Boese, Jochen Guenzel 2020-03'
   
 
 ! Read inputs from namelist file
