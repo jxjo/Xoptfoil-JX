@@ -131,6 +131,14 @@ subroutine particleswarm(xopt, fmin, step, fevals, objfunc, x0, xmin, xmax,    &
     wlow = 0.8d0       ! ending inertial parameter
     convrate = 0.02d0  ! inertial parameter reduction rate
 
+  else if (trim(pso_options%convergence_profile) == "fastest") then
+
+    c1 = 1.4d0         ! particle-best trust factor
+    c2 = 1.0d0         ! swarm-best trust factor
+    whigh = 1.8d0      ! starting inertial parameter
+    wlow = 0.8d0       ! ending inertial parameter
+    convrate = 0.2d0!0.1d0   ! inertial parameter reduction rate
+
   else
     write(*,*) "Error in particleswarm: convergence mode should be"//          &
                "'exhaustive' or 'quick'."

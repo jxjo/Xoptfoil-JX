@@ -378,7 +378,12 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
   pso_pop = 40
   pso_tol = 1.D-04
   pso_maxit = 700
-  pso_convergence_profile = 'exhaustive'
+  
+  if (trim(shape_functions) == 'camb-thick' ) then
+    pso_convergence_profile = 'fastest'
+  else
+    pso_convergence_profile = 'exhaustive'
+  end if
 
 ! Set default genetic algorithm options
 
@@ -1055,9 +1060,10 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
       if (pso_tol <= 0.d0) call my_stop("pso_tol must be > 0.")
       if (pso_maxit < 1) call my_stop("pso_maxit must be > 0.")  
       if ( (trim(pso_convergence_profile) /= "quick") .and.                    &
-           (trim(pso_convergence_profile) /= "exhaustive") )                   &
+           (trim(pso_convergence_profile) /= "exhaustive") .and.               &
+           (trim(pso_convergence_profile) /= "fastest"))                       &
         call my_stop("pso_convergence_profile must be 'exhaustive' "//&
-                     "or 'quick'.")
+                     "or 'quick' or 'fastest'.")
 
     else if (trim(global_search) == 'genetic_algorithm') then
 
