@@ -738,17 +738,7 @@ subroutine xfoil_scale_thickness_camber (infoil, f_thick, d_xthick, f_camb, d_xc
   IF ((d_xcamb /= 0.d0) .or. (d_xthick /= 0.d0))  &
     call HIPNT  (xcamb + d_xcamb, xthick + d_xthick)
 
-! Recalc values ...
-  call xfoil_get_geometry_info  (thick, xthick, camb, xcamb) 
-  
-!  WRITE(*,1010) f_thick, d_xthick, f_camb, d_xcamb
-!1010 FORMAT(/' -tmp print- Fac thickness = ',F7.4,'  dx   = ',F6.3, &
-!                      '    Fac camber    = ',F7.4,'  dx   = ',F6.3)
-
-!  WRITE(*,1000) thick, xthick, camb, xcamb
-!1000 FORMAT( ' -tmp print- New thickness = ',F7.4,'  at x = ',F6.3, &
-!                      '    New camber    = ',F7.4,'  at x = ',F6.3)
-                   
+                
 ! retrieve outfoil from xfoil buffer
 
   call xfoil_reload_airfoil(outfoil)
@@ -806,14 +796,55 @@ subroutine xfoil_set_thickness_camber (infoil, maxt, xmaxt, maxc, xmaxc, outfoil
 ! Recalc values ...
   call xfoil_get_geometry_info (thick, xthick, camb, xcamb) 
 
-  WRITE(*,1000) thick, xthick, camb, xcamb
-1000 FORMAT(/' --tmp print --  New thickness = ',F7.4,'  at x = ',F6.3, &
-                   '    New camber    = ',F7.4,'  at x = ',F6.3)
-
 ! retrieve outfoil from xfoil buffer
   call xfoil_reload_airfoil(outfoil)
 
 end subroutine xfoil_set_thickness_camber
+
+
+
+!------------------------------------------------------------------------------
+! Scale LE radius 
+!        using xfoil LERAD
+! In:
+!   infoil      - foil to scale LE
+!   f_radius    - scaling factor for LE radius
+!   x_blend     - blending distance/c from LE
+! Out:
+!   new_radius  - new LE radius
+!   outfoil     = modified foil
+! 
+! ** Note ** 
+!
+! Before calling this subroutine, "smooth_paneling()" (which uses xfoil PANGEN)
+! should be done on foil to avoid strange artefacts at the leading edge.
+!------------------------------------------------------------------------------
+subroutine xfoil_scale_LE_radius (infoil, f_radius, x_blend, new_radius, outfoil)
+
+  use xfoil_inc, only : AIJ
+  use vardef,    only : airfoil_type
+
+  type(airfoil_type), intent(in)  :: infoil
+  type(airfoil_type), intent(out) :: outfoil
+  double precision, intent(in) :: f_radius, x_blend
+  double precision, intent(out) :: new_radius
+
+! Check to make sure xfoil is initialized
+  if (.not. allocated(AIJ)) then
+    write(*,*) "Error: xfoil is not initialized!  Call xfoil_init() first."
+    stop
+  end if
+
+! Set xfoil airfoil and prepare globals, get current thickness
+  call xfoil_set_buffer_airfoil (infoil)
+
+! Run xfoil to change thickness and camber and positions
+  IF ((f_radius /= 1.d0))  call LERAD (f_radius,x_blend, new_radius) 
+
+  call xfoil_reload_airfoil(outfoil)
+
+end subroutine xfoil_scale_LE_radius
+
 
 
 !-------------------------------------------------------------------------

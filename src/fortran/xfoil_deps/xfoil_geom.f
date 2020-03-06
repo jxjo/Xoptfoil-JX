@@ -2657,12 +2657,12 @@ C
       CALL SEGSPL(XB,XBP,SB,NB)
       CALL SEGSPL(YB,YBP,SB,NB)
 C
-! jx-mod todo needed?
-!      CALL GEOPAR(XB,XBP,YB,YBP,SB,NB,W1,
-!     &            SBLE,CHORDB,AREAB,RADBLE,ANGBTE,
-!     &            EI11BA,EI22BA,APX1BA,APX2BA,
-!     &            EI11BT,EI22BT,APX1BT,APX2BT,
-!     &            THICKB,CAMBRB )
+C jx-mod todo needed?
+C      CALL GEOPAR(XB,XBP,YB,YBP,SB,NB,W1,
+C     &            SBLE,CHORDB,AREAB,RADBLE,ANGBTE,
+C     &            EI11BA,EI22BA,APX1BA,APX2BA,
+C     &            EI11BT,EI22BT,APX1BT,APX2BT,
+C     &            THICKB,CAMBRB )
 C
       RETURN
       END ! THKCAM
@@ -2828,12 +2828,12 @@ C
       CALL SEGSPL(XB,XBP,SB,NB)
       CALL SEGSPL(YB,YBP,SB,NB)
 C
-! jx-mod todo needed?
-!      CALL GEOPAR(XB,XBP,YB,YBP,SB,NB,W1,
-!     &            SBLE,CHORDB,AREAB,RADBLE,ANGBTE,
-!     &            EI11BA,EI22BA,APX1BA,APX2BA,
-!     &            EI11BT,EI22BT,APX1BT,APX2BT,
-!     &            THICKB,CAMBRB )
+C jx-mod todo needed?
+C      CALL GEOPAR(XB,XBP,YB,YBP,SB,NB,W1,
+C     &            SBLE,CHORDB,AREAB,RADBLE,ANGBTE,
+C     &            EI11BA,EI22BA,APX1BA,APX2BA,
+C     &            EI11BT,EI22BT,APX1BT,APX2BT,
+C     &            THICKB,CAMBRB )
 C
       RETURN
       END ! HIPNT
@@ -2902,6 +2902,82 @@ C
       END ! GETCAM
 
 
+
+C======================================================
+C     Changes buffer airfoil 
+C     leading edge radius.
+C     In: 
+C           RFAC - LE scaling factor
+C           DOC  - blending distance/c from LE
+C     Out: 
+C           RADIUS - new LE radius 
+C
+C======================================================
+C     SUBROUTINE LERAD(RINPUT,NINPUT)
+      SUBROUTINE LERAD(RFAC,DOC, RADIUS)
+
+      use xfoil_inc
+      REAL*8 RADIUS
+      LOGICAL LGSAME
+
+C      INCLUDE 'XFOIL.INC'
+C      DIMENSION RINPUT(*)
+C
+C      IF    (NINPUT .GE. 2) THEN
+C       RFAC = RINPUT(1)
+C       DOC  = RINPUT(2)
+C      ELSEIF(NINPUT .GE. 1) THEN
+C       RFAC = RINPUT(1)
+C       DOC = 1.0
+C       CALL ASKR('Enter blending distance/c from LE^',DOC)
+C      ELSE
+C       RFAC = 1.0
+C       CALL ASKR('Enter approx. new/old LE radius scaling ratio^',RFAC)
+C       DOC = 1.0
+C       CALL ASKR('Enter blending distance/c from LE^',DOC)
+C      ENDIF
+C
+      DOC = MAX( DOC , 0.001 )
+C
+      CALL LERSCL(XB,XBP,YB,YBP,SB,NB, DOC,RFAC, W1,W2)
+C
+      DO 40 I=1, NB
+        XB(I) = W1(I)
+        YB(I) = W2(I)
+   40 CONTINUE
+      LGSAME = .FALSE.
+C
+C---- spline new coordinates
+      CALL SCALC(XB,YB,SB,NB)
+      CALL SEGSPL(XB,XBP,SB,NB)
+      CALL SEGSPL(YB,YBP,SB,NB)
+C
+C jx-mod todo needed?
+C     CALL GEOPAR(XB,XBP,YB,YBP,SB,NB,W1,
+C     &            SBLE,CHORDB,AREAB,RADBLE,ANGBTE,
+C     &            EI11BA,EI22BA,APX1BA,APX2BA,
+C     &            EI11BT,EI22BT,APX1BT,APX2BT,
+C     &            THICKB,CAMBRB )
+C
+C---- find max curvature
+      CVMAX = 0.
+      DO 6 I=NB/4, (3*NB)/4
+        CV = CURV(SB(I),XB,XBP,YB,YBP,SB,NB)
+        CVMAX = MAX( ABS(CV) , CVMAX )
+    6 CONTINUE
+C
+      RADIUS = 1.0/CVMAX
+C
+C     WRITE(*,1000) RADIUS
+C 1000 FORMAT(/' New LE radius = ',F7.5)
+C
+C      CALL PLTAIR(XB,XBP,YB,YBP,SB,NB, XOFF,XSF,YOFF,YSF,'magenta')
+C      CALL PLNEWP('magenta')
+C
+C      LGEOPL = .FALSE.
+C
+      RETURN
+      END ! LERAD
 
 
 
@@ -3097,3 +3173,53 @@ C
       RETURN
       END ! SPLINA
 
+
+
+      SUBROUTINE LERSCL(X,XP,Y,YP,S,N, DOC,RFAC, XNEW,YNEW)
+C---------------------------------------------------------
+C     Adjusts airfoil to scale LE radius by factor RFAC.
+C     Blending of new shape is done with decay length DOC.
+C---------------------------------------------------------
+      DIMENSION X(*),XP(*),Y(*),YP(*),S(*)
+      DIMENSION XNEW(*), YNEW(*)
+      LOGICAL :: SILENT_MODE
+C
+      CALL LEFIND(SLE,X,XP,Y,YP,S,N, SILENT_MODE)
+      XLE = SEVAL(SLE,X,XP,S,N)
+      YLE = SEVAL(SLE,Y,YP,S,N)
+      XTE = 0.5*(X(1)+X(N))
+      YTE = 0.5*(Y(1)+Y(N))
+      CHORD = SQRT((XTE-XLE)**2 + (YTE-YLE)**2)
+C
+C---- set unit chord-line vector
+      DXC = (XTE-XLE) / CHORD
+      DYC = (YTE-YLE) / CHORD
+C
+      SRFAC = SQRT(ABS(RFAC))
+C
+C---- go over each point, changing the y-thickness appropriately
+      DO 30 I=1, N
+        XBAR = (X(I)-XLE)*DXC + (Y(I)-YLE)*DYC
+        YBAR = (Y(I)-YLE)*DXC - (X(I)-XLE)*DYC
+C
+C------ set point on the opposite side with the same chord x value
+        CALL SOPPS(SOPP, S(I), X,XP,Y,YP,S,N, SLE, SILENT_MODE)
+        XOPP = SEVAL(SOPP,X,XP,S,N)
+        YOPP = SEVAL(SOPP,Y,YP,S,N)
+C
+        YBAROP = (YOPP-YLE)*DXC - (XOPP-XLE)*DYC
+C
+C------ thickness factor tails off exponentially towards trailing edge
+        XOC = XBAR/CHORD
+        ARG = MIN( XOC/DOC , 15.0 )
+        TFAC = 1.0 - (1.0-SRFAC)*EXP(-ARG)
+C
+C------ set new chord x,y coordinates by changing thickness locally
+        YBARCT = 0.5*(YBAR+YBAROP) + TFAC*0.5*(YBAR-YBAROP)
+C
+        XNEW(I) = XLE + XBAR  *DXC - YBARCT*DYC
+        YNEW(I) = YLE + YBARCT*DXC + XBAR  *DYC
+   30 CONTINUE
+C
+      RETURN
+      END

@@ -101,7 +101,8 @@ program xfoil_worker
 
 ! jx-mod Testfunction for thickness
 
-  call test_set_thickness_camber (foil)
+!  call test_set_thickness_camber (foil)
+  call test_set_LE_radius (foil)
 
 ! Run xfoil
 
@@ -130,9 +131,11 @@ program xfoil_worker
 
 end program xfoil_worker
 
-
+!===========================================================================
+!
 ! jx-mod Testing purposes 
-
+!
+!===========================================================================
 
 subroutine test_set_thickness_camber (foil)
 
@@ -182,3 +185,41 @@ subroutine test_set_thickness_camber (foil)
   end do 
 
 end subroutine test_set_thickness_camber 
+
+subroutine test_set_LE_radius (foil)
+
+  use vardef,    only : airfoil_type, output_prefix
+  use xfoil_driver,       only : smooth_paneling
+  use xfoil_driver,       only : xfoil_scale_LE_radius
+  use airfoil_operations, only : airfoil_write
+
+  type(airfoil_type), intent(in) :: foil
+  double precision :: f_radius, x_blend, new_radius
+  character(80) :: output_file
+  type(airfoil_type) ::foilsmoothed, outfoil
+  integer :: i
+  character(len=5) :: charI
+
+  f_radius  =  1.0d0
+  x_blend  =  0.1d0
+
+  ! Use Xfoil to smooth airfoil paneling
+  call smooth_paneling(foil, 200, foilsmoothed)
+
+ 
+  do i = 1, 6
+
+    call xfoil_scale_LE_radius (foilsmoothed, f_radius, x_blend, new_radius, outfoil)
+
+    write (*,*) i, 'LE scaled by ', f_radius, '    x-blending  ', x_blend, '  New radius ', new_radius
+  
+    write(charI,"(I0)") i
+    output_file = trim(output_prefix)//trim(charI) //'.dat'
+    call airfoil_write(output_file, trim(output_prefix)//trim(charI), outfoil)
+
+    f_radius  =  f_radius + 0.05d0
+    x_blend = x_blend + 0.0d0
+  
+  end do 
+
+end subroutine test_set_LE_radius
