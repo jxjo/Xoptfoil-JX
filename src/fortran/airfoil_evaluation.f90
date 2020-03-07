@@ -161,13 +161,12 @@ function aero_objective_function(designvars, include_penalty)
 
 ! Set modes for top and bottom surfaces
 
-!TODO MB: ACHTUNG, Klon
   if (trim(shape_functions) == 'naca') then
     dvtbnd1 = 1
     dvtbnd2 = nmodest
     dvbbnd2 = nmodest + nmodesb
     dvbbnd1 = dvtbnd2 + 1
-  else if (trim(shape_functions) == 'camb-thick') then!TODO MB kann entfallen
+  else if (trim(shape_functions) == 'camb-thick') then
     dvtbnd1 = 1
     dvtbnd2 = nmodest
     dvbbnd1 = 1
