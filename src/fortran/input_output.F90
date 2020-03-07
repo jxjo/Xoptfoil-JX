@@ -175,9 +175,9 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
     call my_stop("search_type must be 'global_and_local', 'global', "//   &
                  "or 'local'.")
 
-! In case of 'camb-thick' set number of top functions to a fixed number of 4
+! In case of 'camb-thick' set number of top functions to a fixed number of 6
   if (trim(shape_functions) == 'camb-thick' ) then
-    nfunctions_top = 4
+    nfunctions_top = 6
     nfunctions_bot = 0
   end if
 

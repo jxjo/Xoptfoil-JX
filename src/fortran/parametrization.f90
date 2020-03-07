@@ -295,7 +295,7 @@ subroutine create_airfoil(xt_seed, zt_seed, xb_seed, zb_seed, modest, modesb,  &
 
   if (.not. symmetrical) then
     zb_new = zb_seed
-    do i = 1, nmodesb !TODO MB prüfen, bei camb-thick gibt es keine bottom-functions
+    do i = 1, nmodesb
       if (trim(shapetype) == 'naca') then
         strength = modesb(i)
       else
@@ -332,7 +332,7 @@ subroutine create_airfoil_camb_thick (xt_seed, zt_seed, xb_seed, zb_seed, modes,
                                       zt_new, zb_new )
 
   use vardef,       only : airfoil_type
-  use xfoil_driver, only : xfoil_scale_thickness_camber
+  use xfoil_driver, only : xfoil_scale_thickness_camber, xfoil_scale_LE_radius
                                   
   double precision, dimension(:), intent(in) :: xt_seed, zt_seed, xb_seed, zb_seed
   double precision, dimension(:), intent(in) :: modes
@@ -369,10 +369,11 @@ subroutine create_airfoil_camb_thick (xt_seed, zt_seed, xb_seed, zb_seed, modes,
   call xfoil_scale_thickness_camber (seed_foil, f_thick,d_xthick,f_camb,d_xcamb, new_foil)
 
   ! Change LE radius ... according to new values hidden in modes
-  f_radius = 1.d0      ! ready for Matthias: 1.d0 + modes(5)
-  x_blend  = 0.1d0     ! ready for Matthias: max (0.05d0, modes(6))
-
-  call xfoil_scale_LE_radius (new_foil, f_radius, x_blend, new_radius, new_foil)
+  f_radius = 1.d0 + modes(5)
+  x_blend  = max (0.05d0, modes(6))
+  
+  ! @Jochen: please check function-call, leads to seg-fault
+  !call xfoil_scale_LE_radius (new_foil, f_radius, x_blend, new_radius, new_foil)
 
 
   ! Sanity check - new_foil may not have different number of points

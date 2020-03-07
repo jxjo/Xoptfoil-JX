@@ -169,9 +169,9 @@ function aero_objective_function(designvars, include_penalty)
     dvbbnd1 = dvtbnd2 + 1
   else if (trim(shape_functions) == 'camb-thick') then!TODO MB kann entfallen
     dvtbnd1 = 1
-    dvtbnd2 = 4
-    dvbbnd2 = 4
+    dvtbnd2 = nmodest
     dvbbnd1 = 1
+    dvbbnd2 = dvtbnd2
   else
     dvtbnd1 = 1
     dvtbnd2 = nmodest*3
@@ -189,10 +189,9 @@ function aero_objective_function(designvars, include_penalty)
 
 
   if (trim(shape_functions) == 'camb-thick') then
-    ! Create new airfoil by changing camber and thickness of seed airfoil,
-    ! use fixed set of 4 DVs
+    ! Create new airfoil by changing camber and thickness of seed airfoil.
     call create_airfoil_camb_thick(xseedt, zseedt, xseedb, zseedb,             &
-                      designvars(1:4), zt_new, zb_new)
+                      designvars(dvtbnd1:dvtbnd2), zt_new, zb_new)
   else 
     ! Create top and bottom surfaces by perturbation of seed airfoil 
     call create_airfoil(xseedt, zseedt, xseedb, zseedb,                        &
@@ -928,10 +927,9 @@ function matchfoil_objective_function(designvars)
 
 
   if (trim(shape_functions) == 'camb-thick') then
-    ! Create new airfoil by changing camber and thickness of seed airfoil,
-    ! use fixed set of 4 DVs
+    ! Create new airfoil by changing camber and thickness of seed airfoil
     call create_airfoil_camb_thick(xseedt, zseedt, xseedb, zseedb,             &
-                      designvars(1:4), zt_new, zb_new)
+                      designvars(1:dvtbnd), zt_new, zb_new)
   else 
     ! Create top and bottom surfaces by perturbation of seed airfoil 
     call create_airfoil(xseedt, zseedt, xseedb, zseedb, designvars(1:dvtbnd),  &
@@ -1014,7 +1012,6 @@ function write_airfoil_optimization_progress(designvars, designcounter)
 
 ! Set modes for top and bottom surface
 
-!TODO MB: ACHTUNG, Klon
   if (trim(shape_functions) == 'naca') then
     dvtbnd1 = 1
     dvtbnd2 = nmodest
@@ -1022,9 +1019,9 @@ function write_airfoil_optimization_progress(designvars, designcounter)
     dvbbnd1 = dvtbnd2 + 1
   else if (trim(shape_functions) == 'camb-thick') then
     dvtbnd1 = 1
-    dvtbnd2 = 4
-    dvbbnd2 = 4
+    dvtbnd2 = nmodest
     dvbbnd1 = 1
+    dvbbnd2 = dvtbnd2
   else
     dvtbnd1 = 1
     dvtbnd2 = nmodest*3
@@ -1043,10 +1040,9 @@ function write_airfoil_optimization_progress(designvars, designcounter)
 ! and scaling to ensure Cm_x=0.25 doesn't change.
 
   if (trim(shape_functions) == 'camb-thick') then
-    ! Create new airfoil by changing camber and thickness of seed airfoil,
-    ! use fixed set of 4 DVs
+    ! Create new airfoil by changing camber and thickness of seed airfoil
     call create_airfoil_camb_thick(xseedt, zseedt, xseedb, zseedb,             &
-                      designvars(1:4), zt_new, zb_new)
+                         designvars(dvtbnd1:dvtbnd2), zt_new, zb_new)
   else 
     call create_airfoil(xseedt, zseedt, xseedb, zseedb,                          &
                         designvars(dvtbnd1:dvtbnd2), designvars(dvbbnd1:dvbbnd2),&
@@ -1281,7 +1277,7 @@ function write_matchfoil_optimization_progress(designvars, designcounter)
     ! Create new airfoil by changing camber and thickness of seed airfoil,
     ! use fixed set of 4 DVs
     call create_airfoil_camb_thick(xseedt, zseedt, xseedb, zseedb,             &
-                      designvars(1:4), zt_new, zb_new)
+                      designvars(1:dvtbnd), zt_new, zb_new)
   else 
     call create_airfoil(xseedt, zseedt, xseedb, zseedb, designvars(1:dvtbnd),  &
                       designvars(dvtbnd+1:dvbbnd), zt_new, zb_new,             &

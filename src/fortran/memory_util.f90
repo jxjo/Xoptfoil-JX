@@ -79,7 +79,6 @@ if (trim(shape_functions) == 'naca') then
   modest(:) = 0.d0
   modesb(:) = 0.d0
 else if (trim(shape_functions) == 'camb-thick') then
-  ! Allocate a fixed set of 4 functions
   allocate(modest(nparams_top))
   modest(:) = 0.d0
 else

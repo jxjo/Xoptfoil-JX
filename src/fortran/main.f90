@@ -98,9 +98,10 @@ program main
     nshapedvtop = nparams_top
     nshapedvbot = nparams_bot
   else if (trim(shape_functions) == 'camb-thick') then
-    !Use a fixed number of 4 designvariables for airfoil-generation.
-    !These are camber, thickness, camber-location and thickness-location  
-    nshapedvtop = 4
+    !Use a fixed number of 6 designvariables for airfoil-generation.
+    !These are camber, thickness, camber-location, thickness-location,
+    !LE radius and blending-range
+    nshapedvtop = 6
     nshapedvbot = 0
   else
     nshapedvtop = nparams_top*3

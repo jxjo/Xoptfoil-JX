@@ -449,7 +449,6 @@ subroutine write_final_design(optdesign, f0, fmin, shapetype)
 
 ! Set modes for top and bottom surfaces
 
-!TODO MB: ACHTUNG, Klon
   if (trim(shape_functions) == 'naca') then
     dvtbnd1 = 1
     dvtbnd2 = nmodest
@@ -457,9 +456,9 @@ subroutine write_final_design(optdesign, f0, fmin, shapetype)
     dvbbnd1 = dvtbnd2 + 1
   else if (trim(shape_functions) == 'camb-thick') then
     dvtbnd1 = 1
-    dvtbnd2 = 4
-    dvbbnd2 = 4
+    dvtbnd2 = nmodest
     dvbbnd1 = 1
+    dvbbnd2 = dvtbnd2
   else
     dvtbnd1 = 1
     dvtbnd2 = nmodest*3
@@ -478,10 +477,9 @@ subroutine write_final_design(optdesign, f0, fmin, shapetype)
 ! and scaling to ensure Cm_x=0.25 doesn't change.
 
   if (trim(shape_functions) == 'camb-thick') then
-    ! Create new airfoil by changing camber and thickness of seed airfoil,
-    ! use fixed set of 4 DVs
+    ! Create new airfoil by changing camber and thickness of seed airfoil
     call create_airfoil_camb_thick(xseedt, zseedt, xseedb, zseedb,             &
-                                   optdesign(1:4), zt_new, zb_new)
+                                   optdesign(dvtbnd1:dvtbnd2), zt_new, zb_new)
   else 
     call create_airfoil(xseedt, zseedt, xseedb, zseedb,                        &
                       optdesign(dvtbnd1:dvtbnd2), optdesign(dvbbnd1:dvbbnd2),  &
