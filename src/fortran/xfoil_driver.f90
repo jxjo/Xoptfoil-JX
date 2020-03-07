@@ -825,9 +825,9 @@ subroutine xfoil_scale_LE_radius (infoil, f_radius, x_blend, new_radius, outfoil
   use vardef,    only : airfoil_type
 
   type(airfoil_type), intent(in)  :: infoil
-  type(airfoil_type), intent(out) :: outfoil
   double precision, intent(in) :: f_radius, x_blend
   double precision, intent(out) :: new_radius
+  type(airfoil_type), intent(out) :: outfoil
 
 ! Check to make sure xfoil is initialized
   if (.not. allocated(AIJ)) then

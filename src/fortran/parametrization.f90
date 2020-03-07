@@ -339,7 +339,7 @@ subroutine create_airfoil_camb_thick (xt_seed, zt_seed, xb_seed, zb_seed, modes,
   double precision, dimension(:), intent(inout) :: zt_new, zb_new
   
   integer :: i,  nptt, nptb
-  type(airfoil_type) :: seed_foil, new_foil
+  type(airfoil_type) :: seed_foil, new_foil_1, new_foil_2
   double precision :: f_thick,d_xthick,f_camb,d_xcamb
   double precision :: f_radius, x_blend, new_radius
 
@@ -366,35 +366,36 @@ subroutine create_airfoil_camb_thick (xt_seed, zt_seed, xb_seed, zb_seed, modes,
   d_xcamb  = 2.d0 * modes(3)
   d_xthick = 2.d0 * modes(4)
 
-  call xfoil_scale_thickness_camber (seed_foil, f_thick,d_xthick,f_camb,d_xcamb, new_foil)
+  call xfoil_scale_thickness_camber (seed_foil, f_thick,d_xthick,f_camb,d_xcamb, new_foil_1)
 
   ! Change LE radius ... according to new values hidden in modes
   f_radius = 1.d0 + modes(5)
   x_blend  = max (0.05d0, modes(6))
-  
-  ! @Jochen: please check function-call, leads to seg-fault
-  !call xfoil_scale_LE_radius (new_foil, f_radius, x_blend, new_radius, new_foil)
+ 
+  call xfoil_scale_LE_radius (new_foil_1, f_radius, x_blend, new_radius, new_foil_2)
 
 
   ! Sanity check - new_foil may not have different number of points
-  if (seed_foil%npoint /= new_foil%npoint) then
+  if (seed_foil%npoint /= new_foil_2%npoint) then
     write(*,(/'A'/)) 'Error: Number of points changed during thickness/camber modification'
     stop 1
   end if
 
 ! get new upper and lower z-coordinates from modified airfoil 
   do i = 1, nptt
-    zt_new(i) = new_foil%z(nptt-i+1)      ! start from LE - top reverse - to LE
+    zt_new(i) = new_foil_2%z(nptt-i+1)      ! start from LE - top reverse - to LE
   end do
   do i = 1, nptb 
-    zb_new(i) = new_foil%z(nptt+i-1)      ! start from LE - bottom - to TE
+    zb_new(i) = new_foil_2%z(nptt+i-1)      ! start from LE - bottom - to TE
   end do
 
 ! Clean up
   deallocate(seed_foil%x)
   deallocate(seed_foil%z)
-  deallocate(new_foil%x)
-  deallocate(new_foil%z)
+  deallocate(new_foil_1%x)
+  deallocate(new_foil_1%z)
+  deallocate(new_foil_2%x)
+  deallocate(new_foil_2%z)
   
 end subroutine create_airfoil_camb_thick
 
