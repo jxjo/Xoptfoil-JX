@@ -86,8 +86,9 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
   double precision, dimension(max_geo_targets) :: weighting_geo
   character(10), dimension(max_geo_targets) :: target_type
 
-  ! jx-mod re_as_resqrtcl - to ease Type2 polar op points
-  logical :: re_as_resqrtcl
+  ! jx-mod re_default - to ease Type1 and Type2 polar op points
+  double precision :: re_default
+  logical :: re_default_as_resqrtcl
   ! jx-mod show/suppress extensive echo of input parms
   logical :: echo_input_parms
   
@@ -102,8 +103,8 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
             use_flap, x_flap, y_flap, y_flap_spec, flap_selection,             &
 ! jx-mod Aero targets - new option: target_value
             target_value,                                                      &
-! jx-mod re_as_resqrtcl - to ease Type2 polar op points
-            re_as_resqrtcl,                                                    &
+! jx-mod re_default - to ease Type1 and Type2 polar op points
+            re_default_as_resqrtcl, re_default,                                 &
             flap_degrees, weighting, optimization_type, ncrit_pt
   namelist /constraints/ min_thickness, max_thickness, moment_constraint_type, &
                          min_moment, min_te_angle, check_curvature,            &
@@ -193,9 +194,12 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
   op_mode(:) = 'spec-cl'
   op_point(:) = 0.d0
   optimization_type(:) = 'min-drag'
-  reynolds(:) = 1.0D+05
-! jx-mod re_as_resqrtcl - to ease Type2 polar op points
-  re_as_resqrtcl = .false.                                                   
+
+  ! jx-mod re_default - to ease Type1 and Type2 polar op points
+  re_default_as_resqrtcl = .false.
+  re_default =  read_cl_re_default (1.0D+05)                                              
+  reynolds(:) = -1.d0
+
   mach(:) = 0.d0
   flap_selection(:) = 'specify'
   flap_degrees(:) = 0.d0
@@ -245,6 +249,18 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
     end do
   end if
 
+! jx-mod Set per-point (default) Reynolds if not specified in namelist
+
+  do i = 1, noppoint
+    if (reynolds(i) == -1.d0) then
+      if (re_default_as_resqrtcl) then
+        if ((trim(op_mode(i)) == 'spec-cl' ) .and. (abs(op_point(i)) /= 0d0))    &             
+          reynolds(i) = re_default / (abs(op_point(i)) ** 0.5d0)  
+      else 
+        reynolds(i)  = re_default
+      end if
+    end if
+  end do
 
 ! jx-mod Smoothing - start read options-----------------------------------------
   
@@ -663,8 +679,9 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
   write(*,*) " x_flap = ", x_flap
   write(*,*) " y_flap = ", y_flap
   write(*,*) " y_flap_spec = "//trim(y_flap_spec)
-! jx-mod re_as_resqrtcl - to ease Type2 polar op points
-  write(*,*) " re_as_resqrtcl = ", re_as_resqrtcl
+! jx-mod re_default- to ease Type1 and Type2 polar op points
+  write(*,*) " re_default = ", re_default
+  write(*,*) " re_default_as_resqrtcl = ", re_default_as_resqrtcl
   write(*,*)
   do i = 1, noppoint
     write(text,*) i
@@ -909,15 +926,8 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
   do i = 1, noppoint
     if (trim(op_mode(i)) /= 'spec-cl' .and. trim(op_mode(i)) /= 'spec-al')     &
       call my_stop("op_mode must be 'spec-al' or 'spec-cl'.")
-    ! jx-mod re_as_resqrtcl - to ease Type2 polar op points
-    if (re_as_resqrtcl) then                                                   
-      if (trim(op_mode(i)) /= 'spec-cl' )                                      &
-        call my_stop("op_mode must be 'spec-cl' if re_as_resqrtcl = .true.")
-      ! transform Reynolds * Sqrt(cl) to Reynolds (not too nice at this place...)
-      !    allowing inverted flight ...
-      reynolds(i) = reynolds(i) / (abs(op_point(i)) ** 0.5d0)  
-    end if
-    if (reynolds(i) <= 0.d0) call my_stop("reynolds must be > 0.")
+    if (reynolds(i) <= 0.d0) call my_stop("reynolds must be > 0." //           &
+                             " Default value (re_default) could not be set")
     if (mach(i) < 0.d0) call my_stop("mach must be >= 0.")
     if (trim(flap_selection(i)) /= 'specify' .and.                             &
         trim(flap_selection(i)) /= 'optimize')                                 &
@@ -1219,6 +1229,14 @@ subroutine read_clo(input_file, output_prefix, exename)
         call getarg(i+1, output_prefix)
         i = i+2
       end if
+! jx-mod new default re number
+    else if (trim(arg) == "-r") then
+      if (i == nargs) then
+        call my_stop("Must specify a re value for -r option.")
+      else
+        call getarg(i+1, arg)
+        i = i+2
+      end if
     else if ( (trim(arg) == "-v") .or. (trim(arg) == "--version") ) then
       call print_version()
       stop
@@ -1267,6 +1285,8 @@ subroutine print_usage(exeprint)
   write(*,'(A)') "Options:"
   write(*,'(A)') "  -i input_file     Specify a non-default input file"
   write(*,'(A)') "  -o output_prefix  Specify a non-default output prefix"
+! jx-mod new default reynolds number
+  write(*,'(A)') "  -r xxxxxx         Specify a default reynolds number (re_default)"
   write(*,'(A)') "  -h, --help        Display usage information and exit"
   write(*,'(A)') "  -v, --version     Display Xoptfoil version and exit"
   write(*,'(A)')
@@ -1360,5 +1380,51 @@ function ask_forced_transition()
   end do
 
 end function ask_forced_transition
+
+! jx-mod -----------------------------------------------------------------
+! Reads command line argument -r for default reynolds number
+! ------------------------------------------------------------------------
+
+function read_cl_re_default (re_default)
+
+  use airfoil_operations, only : my_stop
+
+  double precision, intent(in) :: re_default
+  double precision :: read_cl_re_default
+
+  character(80) :: arg, re_as_char
+  integer i, nargs
+  logical getting_args
+
+  read_cl_re_default = re_default
+
+  nargs = iargc()
+  if (nargs > 0) then
+    getting_args = .true.
+  else
+    getting_args = .false.
+  end if
+
+  i = 1
+  do while (getting_args)
+    call getarg(i, arg) 
+
+    if (trim(arg) == "-r") then
+      if (i == nargs) then
+        call my_stop("Must specify a reynolds number with -r option.")
+      else
+        call getarg(i+1, re_as_char)
+        read (re_as_char,*) read_cl_re_default
+        if (read_cl_re_default == 0d0)     &
+           call my_stop("-r option has no valid reynolds numer")
+        exit 
+      end if
+    end if
+    i = i + 1
+    if (i > nargs) getting_args = .false.
+  end do
+
+end function read_cl_re_default
+
 
 end module input_output
