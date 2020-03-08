@@ -46,6 +46,9 @@ module particle_swarm
     character(10) :: convergence_profile
                                   ! 'exhaustive' or 'quick'; exhaustive takes
                                   !   longer but finds better solutions 
+    logical :: write_particlefile ! Whether to write particle-values for each
+                                  ! iteration to file
+
   end type pso_options_type
 
   contains
@@ -94,7 +97,7 @@ subroutine particleswarm(xopt, fmin, step, fevals, objfunc, x0, xmin, xmax,    &
   end interface
 
   integer :: nconstrained, i, j, fminloc, var, stat, restartcounter, iunit,    &
-             ioerr, k, ncommands
+             ioerr, k, ncommands, particleunit
   double precision :: c1, c2, whigh, wlow, convrate, maxspeed, wcurr, mincurr, &
                       f0, radius
   double precision, dimension(pso_options%pop) :: objval, minvals, speed
@@ -106,7 +109,7 @@ subroutine particleswarm(xopt, fmin, step, fevals, objfunc, x0, xmin, xmax,    &
   character(20) :: fminchar, radchar
   character(25) :: relfminchar
   character(80), dimension(20) :: commands
-
+  
 ! jx-mod Smoothing - save do_smoothing status
   logical :: save_do_smoothing
 
@@ -167,6 +170,9 @@ subroutine particleswarm(xopt, fmin, step, fevals, objfunc, x0, xmin, xmax,    &
   save_do_smoothing = do_smoothing
   do_smoothing = .false.
 
+  ! Open particle file
+  call pso_open_particlefile(pso_options%write_particlefile, particleunit)
+    
 !$omp parallel default(shared) private(i, j, var)
 
 ! Initialize a random seed
@@ -183,8 +189,10 @@ subroutine particleswarm(xopt, fmin, step, fevals, objfunc, x0, xmin, xmax,    &
   end if
 
 !$omp master
-
-! Set up or read other initialization data
+  ! Write initial design-values to file
+  call pso_write_particlefile(particleunit, dv)
+ 
+ ! Set up or read other initialization data
 
   if (.not. restart) then
 
@@ -420,6 +428,9 @@ subroutine particleswarm(xopt, fmin, step, fevals, objfunc, x0, xmin, xmax,    &
       restartcounter = restartcounter + 1
     end if
 
+! Write particle-values to file
+    call pso_write_particlefile(particleunit, dv)
+
 !   Check for commands in run_control file
 
     call read_run_control(commands, ncommands)
@@ -445,6 +456,9 @@ subroutine particleswarm(xopt, fmin, step, fevals, objfunc, x0, xmin, xmax,    &
 ! Close iteration history file
 
   close(iunit)
+
+ ! Close particle file
+  call pso_close_particlefile(particleunit)
 
 ! Write restart at end of optimization
 
@@ -507,7 +521,7 @@ end subroutine pso_write_restart
 !=============================================================================80
 !
 ! Particle swarm restart read routine
-!
+! 
 !=============================================================================80
 subroutine pso_read_restart(step, designcounter, dv, objval, vel, speed,       &
                             bestdesigns, minvals, wcurr)
@@ -561,4 +575,79 @@ subroutine pso_read_restart(step, designcounter, dv, objval, vel, speed,       &
 
 end subroutine pso_read_restart
  
+
+!=============================================================================80
+!
+! Opens a particle file
+! WORK IN PROGRESS
+!=============================================================================80
+subroutine pso_open_particlefile(write_particlefile, particleunit)
+  
+  logical, intent(in) ::write_particlefile
+  integer, intent(inout) :: particleunit
+  character(100) :: particlefile
+  integer :: ioerr
+
+  if (write_particlefile) then
+
+    ! Set particle file name and identifiers
+    particleunit = 20
+    particlefile = 'particles.csv'
+    write(*,*) "particleswarm: writing particle-values to file "//               &
+               trim(particlefile)//" ..."
+    open(unit=particleunit, file=particlefile, status='replace', iostat=ioerr)
+    if (ioerr /= 0) then
+      write(*,*) "Error, file-open particles.csv failed !"
+      particleunit = 0
+      return
+    end if
+    write(particleunit,'(A)') 'title="Particle values"'
+  else
+    particleunit = 0
+  end if
+
+  end subroutine pso_open_particlefile
+
+!=============================================================================80
+!
+! Writes particle values to file
+! WORK IN PROGRESS
+!=============================================================================80
+subroutine pso_write_particlefile(particleunit, dv)
+
+  double precision, dimension(:,:), intent(inout) :: dv
+  integer, intent(inout) :: particleunit
+  integer:: nvars, pop, count1, count2
+
+if (particleunit == 20) then
+!TODO MB particle
+  nvars = size(dv,1)
+  pop = size(dv,2)
+  do count1 = 1, pop
+    do count2 = 1, nvars
+      write(particleunit,'(2F12.6)') dv(count2,count1)
+    end do
+  end do
+end if
+
+end subroutine pso_write_particlefile
+
+!=============================================================================80
+! 
+! Closes a particle file
+! WORK IN PROGRESS
+!=============================================================================80
+subroutine pso_close_particlefile(particleunit)
+
+  integer, intent(inout) :: particleunit
+     
+  ! Close file
+  if (particleunit == 20) then
+    flush(particleunit)
+    close(particleunit)
+    particleunit = 0
+  end if
+    
+  end subroutine pso_close_particlefile
+
 end module particle_swarm
