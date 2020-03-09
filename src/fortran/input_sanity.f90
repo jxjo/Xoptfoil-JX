@@ -553,13 +553,10 @@ subroutine check_seed()
     elseif (trim(optimization_type(i)) == 'min-lift-slope') then
 
 ! jx-mod  New: Minimize dCl/dalpha e.g. to reach clmax at alpha(i) 
-!      slope = derivation1(noppoint, (alpha * pi/180.d0), lift)
-      slope = derivation1(noppoint, alpha, lift)
-      checkval = abs(slope(i)) + 4.d0*pi
-      write (*,*) alpha
-      write (*,*) lift
-      write (*,*) slope
-      write (*,*) " *** current check slope ", slope(i)
+!         convert alpha in rad to get more realistic slope values
+!         convert slope in rad to get a linear target 
+      slope = derivation1(noppoint, (alpha * pi/180.d0) , lift)
+      checkval = atan(abs(slope(i))) + 4.d0*pi
      
     else
       write(*,*)

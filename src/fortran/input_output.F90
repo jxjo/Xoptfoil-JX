@@ -222,6 +222,12 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
   addthick_min(:) = -1000.d0
   addthick_max(:) = 1000.d0
 
+  ! jx-mod re_default - to ease Type1 and Type2 polar op points
+  re_default_as_resqrtcl = .false.
+  re_default =  1.0D+05                                              
+  reynolds(:) = -1.d0
+
+
 
 ! Read operating conditions and constraints
 
@@ -244,19 +250,19 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
     end do
   end if
 
-! jx-mod re_default - to ease Type1 and Type2 polar op points
-! jx-todo set default for re_default...
-  re_default_as_resqrtcl = .false.
-  re_default =  read_cl_re_default (1.0D+05)                                              
-  reynolds(:) = -1.d0
+! jx-mod re_default - overwrite from command line 
+  re_default =  read_cl_re_default (re_default)                                              
 
 ! jx-mod Set per-point (default) Reynolds if not specified in namelist
 
   do i = 1, noppoint
     if (reynolds(i) == -1.d0) then
       if (re_default_as_resqrtcl) then
-        if ((trim(op_mode(i)) == 'spec-cl' ) .and. (abs(op_point(i)) /= 0d0))    &             
-          reynolds(i) = re_default / (abs(op_point(i)) ** 0.5d0)  
+        if ((trim(op_mode(i)) == 'spec-cl' ) .and. (abs(op_point(i)) /= 0d0))  then             
+          reynolds(i) = re_default / (abs(op_point(i)) ** 0.5d0) 
+        else
+          reynolds(i)  = re_default
+        end if  
       else 
         reynolds(i)  = re_default
       end if

@@ -708,10 +708,13 @@ function aero_objective_function(designvars, include_penalty)
 
     elseif (trim(optimization_type(i)) == 'min-lift-slope') then
 
- ! jx-mod  New: Minimize dCl/dalpha e.g. to reach clmax at alpha(i) 
-      slope = derivation1(noppoint, (alpha * pi/180.d0), lift)
-      increment = scale_factor(i) * (abs(slope(i)) + 4.d0*pi)
-      write (*,*) " *** current slope ", slope(i), " obj ", increment
+! jx-mod  New: Minimize dCl/dalpha e.g. to reach clmax at alpha(i) 
+!         convert alpha in rad to get more realistic slope values
+!         convert slope in rad to get a linear target 
+!         factor 4.d0*pi to adjust range of objective function
+      slope = derivation1(noppoint, (alpha * pi/180.d0) , lift)
+      increment = scale_factor(i) * (atan(abs(slope(i))) + + 4.d0*pi)
+!      write (*,*) " *** current slope ", slope(i), atan(abs(slope(i))) , " obj ", increment
         
     else
 
