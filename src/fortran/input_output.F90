@@ -60,7 +60,8 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
   type(ds_options_type), intent(out) :: ds_options
 
   logical :: viscous_mode, silent_mode, fix_unconverged, feasible_init,        &
-             reinitialize, restart, write_designs, reflexed
+             reinitialize, restart, write_designs, reflexed,                   &
+             pso_write_particlefile
   integer :: restart_write_freq, pso_pop, pso_maxit, simplex_maxit, bl_maxit,  &
              npan, feasible_init_attempts
   integer :: ga_pop, ga_maxit
@@ -116,7 +117,8 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
   namelist /initialization/ feasible_init, feasible_limit,                     &
                             feasible_init_attempts
   namelist /particle_swarm_options/ pso_pop, pso_tol, pso_maxit,               &
-                                    pso_convergence_profile
+                                    pso_convergence_profile,                   &
+                                    pso_write_particlefile
   namelist /genetic_algorithm_options/ ga_pop, ga_tol, ga_maxit,               &
             parents_selection_method, parent_fraction,                         &
             roulette_selection_pressure, tournament_fraction,                  &
@@ -394,7 +396,8 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
   pso_pop = 40
   pso_tol = 1.D-04
   pso_maxit = 700
-  
+  pso_write_particlefile = .false.
+
   if (trim(shape_functions) == 'camb-thick' ) then
     pso_convergence_profile = 'fastest'
   else
@@ -480,6 +483,7 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
       pso_options%tol = pso_tol
       pso_options%maxspeed = initial_perturb
       pso_options%maxit = pso_maxit
+      pso_options%write_particlefile= pso_write_particlefile
       pso_options%convergence_profile = pso_convergence_profile
       pso_options%feasible_init = feasible_init
       pso_options%feasible_limit = feasible_limit
