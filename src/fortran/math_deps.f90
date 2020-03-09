@@ -587,9 +587,9 @@ Subroutine getSmootherChaikin(x, y, cuttingDist, x_smooth, y_smooth)
   ! The original Chaikin is modifiied to have a much smaller cutting distance
   ! at the first points of the smoothed range to achieve a continuos transition
   ! from non smoothed to smoothed. Especially critical in LE with high curvature!
-                                          ! will grow up to 'cuttingDist'
-  delta_cutdist     = (cuttingDist - local_cuttingDist) / 25
+  delta_cutdist     = cuttingDist / 25
   local_cuttingDist = delta_cutdist       ! start value for cutting distance
+                                          ! will grow up to 'cuttingDist'
 
   ! always add the first point - this won't be changed
   x_smooth(1) = x(1)
@@ -795,19 +795,24 @@ function derivation1(npt, x, y)
   double precision, dimension(npt), intent(in) :: x, y
   double precision, dimension(npt) :: derivation1
   integer :: i
-  double precision :: h_2minus, h_minus, h, h_plus, hr
+  double precision :: h_minus, h, hr
+!  double precision :: h_2minus, h_plus
  
   do i = 1, npt
     if (i == 1) then                                                 ! forward
-      h      = x(i+1) - x(i)
-      h_plus = x(i+2) - x(i+1)
-      hr      = h_plus / h 
-      derivation1(i) = (-y(i+2) - 3.d0*hr*hr*y(i) + 4.d0*(1-hr*hr)*y(i+1))/ (h_plus * (1.d0 +hr)) 
+! jx-mod formula for forward is wrong! - take simple form
+!      h      = x(i+1) - x(i)
+!      h_plus = x(i+2) - x(i+1)
+!      hr      = h_plus / h 
+!      derivation1(i) = (-y(i+2) - 3.d0*hr*hr*y(i) + 4.d0*(1-hr*hr)*y(i+1))/ (h_plus * (1.d0 +hr)) 
+      derivation1(i) = (y(i+1) - y(i))/ (x(i+1) - x(i)) 
     else if (i ==npt) then                                           ! backward
-      h_minus  = x(i) - x(i-1)
-      h_2minus = x(i-1) - x(i-2)
-      hr      = h_minus / h_2minus 
-      derivation1(i) = (3.d0*y(i) + hr*hr*y(i-2) -4.d0*(1-hr*hr)*y(i-1))/ (h_minus * (1.d0 +hr)) 
+! jx-mod formula for backward is wrong! - take simple form
+!      h_minus  = x(i) - x(i-1)
+!      h_2minus = x(i-1) - x(i-2)
+!      hr      = h_minus / h_2minus 
+!      derivation1(i) = (3.d0*y(i) + hr*hr*y(i-2) -4.d0*(1-hr*hr)*y(i-1))/ (h_minus * (1.d0 +hr)) 
+      derivation1(i) = (y(i) - y(i-1))/ (x(i) - x(i-1))
     else                                                             ! center
       h       = x(i+1) - x(i)
       h_minus = x(i) - x(i-1)

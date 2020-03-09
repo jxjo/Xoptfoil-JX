@@ -138,8 +138,9 @@ module xfoil_inc
   !$omp threadprivate(QNEW, Q_AC)
   CHARACTER(1) :: VMXBL
   !$omp threadprivate(VMXBL)
-  REAL*8 :: THICKB, XTHICKB, THICKM, XTHICKM, CAMBR, XCAMBR 
-  !$omp threadprivate(THICKB, XTHICKB, THICKM, XTHICKM, CAMBR, XCAMBR) 
+! jx-mod additional LE radius (RADBLE)
+  REAL*8 :: THICKB, XTHICKB, THICKM, XTHICKM, CAMBR, XCAMBR, RADBLE
+  !$omp threadprivate(THICKB, XTHICKB, THICKM, XTHICKM, CAMBR, XCAMBR, RADBLE) 
   LOGICAL :: XFOIL_FAIL
   !$omp threadprivate(XFOIL_FAIL)
 

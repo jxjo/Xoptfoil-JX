@@ -41,6 +41,11 @@ subroutine check_seed()
 
   use math_deps,          only : interp_point
 
+! jx-mod additional op-types
+  use math_deps,          only : derivation1
+  double precision, dimension(noppoint) :: glide_ratio
+  double precision, dimension(noppoint) :: slope
+
 
   double precision, dimension(:), allocatable :: x_interp, thickness
   double precision, dimension(:), allocatable :: zt_interp, zb_interp
@@ -385,8 +390,9 @@ subroutine check_seed()
     if ((op_point(i) <= 0.d0) .and. (op_mode(i) == 'spec-cl')) then
       if ( (trim(opt_type) /= 'min-drag') .and.                                &
            (trim(opt_type) /= 'max-xtr') .and.                                 &
-            ! jx-mod Geo targets - allow target < 0 
+            ! jx-mod - allow geo target and min-lift-slope  cl < 0 
            (trim(opt_type) /= 'target-drag') .and.                             &
+           (trim(opt_type) /= 'min-lift-slope') .and.                          &
            (trim(opt_type) /= 'max-lift-slope') ) then
         write(*,*) "Error: operating point "//trim(text)//" is at Cl = 0. "//  &
                  "Cannot use '"//trim(opt_type)//"' optimization in this case."
@@ -486,8 +492,16 @@ subroutine check_seed()
     if (trim(optimization_type(i)) == 'min-sink') then
       checkval = drag(i)/lift(i)**1.5d0
     elseif (trim(optimization_type(i)) == 'max-glide') then
-      checkval = drag(i)/lift(i)
-    elseif (trim(optimization_type(i)) == 'min-drag') then
+! jx-test hack =====================================================
+! jx-test hack =====================================================
+! jx-test hack =====================================================
+! jx-test hack =====================================================
+!     get slope of glide ratio i - minimize to 0 - smallest value
+      glide_ratio = derivation1(noppoint, lift, (lift/drag))
+      checkval = (abs(glide_ratio(i)) + 50.d0)
+!      checkval = drag(i)/lift(i)
+! jx-test hack =====================================================
+      elseif (trim(optimization_type(i)) == 'min-drag') then
       checkval = drag(i)
 ! jx-mod Geo targets - new op point type - minimize the difference between current drag and target value
     elseif (trim(optimization_type(i)) == 'target-drag') then
@@ -535,7 +549,18 @@ subroutine check_seed()
 !     Cl_a < -4*pi (hopefully never encountered).
 
       checkval = 1.d0/(checkval + 4.d0*pi)
-      
+
+    elseif (trim(optimization_type(i)) == 'min-lift-slope') then
+
+! jx-mod  New: Minimize dCl/dalpha e.g. to reach clmax at alpha(i) 
+!      slope = derivation1(noppoint, (alpha * pi/180.d0), lift)
+      slope = derivation1(noppoint, alpha, lift)
+      checkval = abs(slope(i)) + 4.d0*pi
+      write (*,*) alpha
+      write (*,*) lift
+      write (*,*) slope
+      write (*,*) " *** current check slope ", slope(i)
+     
     else
       write(*,*)
       write(*,*) "Error: requested optimization_type for operating point "//   &

@@ -608,14 +608,14 @@ end subroutine my_stop
 
 subroutine show_camb_thick_of_current
 
-  use xfoil_driver, only : xfoil_geometry_info
+  use xfoil_driver, only : xfoil_geometry_info, xfoil_get_LE_radius
   double precision :: maxt, xmaxt, maxc, xmaxc
 
   call xfoil_geometry_info(maxt, xmaxt, maxc, xmaxc)
 
-  write (*,'(25x,4(A,F6.4))') 'Thickness: ', maxt, '  at x: ', xmaxt, &
-                              '   Camber: ', maxc, '  at x: ', xmaxc
-  
+  write (*,'(25x,4(A,F6.4),A,F7.5)') 'Thickness: ', maxt, '  at x: ', xmaxt, &
+                                     '   Camber: ', maxc, '  at x: ', xmaxc, &
+                                     '   Radius: ', xfoil_get_LE_radius ()
 end subroutine show_camb_thick_of_current
 
 !------------------------------------------------------------------------------

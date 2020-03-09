@@ -95,7 +95,7 @@ function aero_objective_function(designvars, include_penalty)
                                  show_camb_thick_of_current
   ! jx-mod Geo targets
   use airfoil_operations, only : my_stop
-  use math_deps,          only : interp_point
+  use math_deps,          only : interp_point, derivation1
 
   use parametrization, only : top_shape_function, bot_shape_function,          &
                               create_airfoil, create_airfoil_camb_thick
@@ -138,11 +138,12 @@ function aero_objective_function(designvars, include_penalty)
   double precision :: pi
   logical :: penalize
 
-  ! jx-mod Geo targets
+  ! jx-mod  
   double precision :: penaltyi
   double precision :: geo_objective_function
   double precision :: ref_value, tar_value, cur_value
   character(100)   :: penalty_info, text
+  double precision, dimension(noppoint) :: slope
   ! jx-mod Smoothing
   double precision :: perturbation_bot, perturbation_top
 
@@ -705,6 +706,13 @@ function aero_objective_function(designvars, include_penalty)
       if ( (i < noppoint) .and. (i > 1) ) increment = increment/2.d0 
       increment = scale_factor(i) / (increment + 4.d0*pi)
 
+    elseif (trim(optimization_type(i)) == 'min-lift-slope') then
+
+ ! jx-mod  New: Minimize dCl/dalpha e.g. to reach clmax at alpha(i) 
+      slope = derivation1(noppoint, (alpha * pi/180.d0), lift)
+      increment = scale_factor(i) * (abs(slope(i)) + 4.d0*pi)
+      write (*,*) " *** current slope ", slope(i), " obj ", increment
+        
     else
 
       write(*,*)
