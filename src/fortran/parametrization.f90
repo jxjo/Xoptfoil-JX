@@ -341,7 +341,7 @@ subroutine create_airfoil_camb_thick (xt_seed, zt_seed, xb_seed, zb_seed, modes,
   integer :: i,  nptt, nptb
   type(airfoil_type) :: seed_foil, new_foil_1, new_foil_2
   double precision :: f_thick,d_xthick,f_camb,d_xcamb
-  double precision :: f_radius, x_blend, new_radius
+  double precision :: f_radius, x_blend 
 
 ! Rebuild seed airfoil out of top and bottom coordinates
   nptt = size(zt_seed,1)
@@ -370,10 +370,9 @@ subroutine create_airfoil_camb_thick (xt_seed, zt_seed, xb_seed, zb_seed, modes,
 
   ! Change LE radius ... according to new values hidden in modes
   f_radius = 1.d0 + modes(5)
-  x_blend  = max (0.05d0, modes(6))
+  x_blend  = max (0.02d0, (2.d0 * modes(6) + 0.1d0))
  
-  call xfoil_scale_LE_radius (new_foil_1, f_radius, x_blend, new_radius, new_foil_2)
-
+  call xfoil_scale_LE_radius (new_foil_1, f_radius, x_blend, new_foil_2)
 
   ! Sanity check - new_foil may not have different number of points
   if (seed_foil%npoint /= new_foil_2%npoint) then

@@ -194,7 +194,7 @@ subroutine test_set_LE_radius (foil)
   use airfoil_operations, only : airfoil_write
 
   type(airfoil_type), intent(in) :: foil
-  double precision :: f_radius, x_blend, new_radius
+  double precision :: f_radius, x_blend
   character(80) :: output_file
   type(airfoil_type) ::foilsmoothed, outfoil
   integer :: i
@@ -209,9 +209,9 @@ subroutine test_set_LE_radius (foil)
  
   do i = 1, 6
 
-    call xfoil_scale_LE_radius (foilsmoothed, f_radius, x_blend, new_radius, outfoil)
+    call xfoil_scale_LE_radius (foilsmoothed, f_radius, x_blend, outfoil)
 
-    write (*,*) i, 'LE scaled by ', f_radius, '    x-blending  ', x_blend, '  New radius ', new_radius
+    write (*,*) i, 'LE scaled by ', f_radius, '    x-blending  ', x_blend
   
     write(charI,"(I0)") i
     output_file = trim(output_prefix)//trim(charI) //'.dat'

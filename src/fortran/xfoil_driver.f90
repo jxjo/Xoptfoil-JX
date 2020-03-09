@@ -819,14 +819,14 @@ end subroutine xfoil_set_thickness_camber
 ! Before calling this subroutine, "smooth_paneling()" (which uses xfoil PANGEN)
 ! should be done on foil to avoid strange artefacts at the leading edge.
 !------------------------------------------------------------------------------
-subroutine xfoil_scale_LE_radius (infoil, f_radius, x_blend, new_radius, outfoil)
+subroutine xfoil_scale_LE_radius (infoil, f_radius, x_blend, outfoil)
 
-  use xfoil_inc, only : AIJ
+  use xfoil_inc, only : AIJ, RADBLE
   use vardef,    only : airfoil_type
 
   type(airfoil_type), intent(in)  :: infoil
   double precision, intent(in) :: f_radius, x_blend
-  double precision, intent(out) :: new_radius
+  double precision  :: new_radius
   type(airfoil_type), intent(out) :: outfoil
 
 ! Check to make sure xfoil is initialized
@@ -841,11 +841,26 @@ subroutine xfoil_scale_LE_radius (infoil, f_radius, x_blend, new_radius, outfoil
 ! Run xfoil to change thickness and camber and positions
   IF ((f_radius /= 1.d0))  call LERAD (f_radius,x_blend, new_radius) 
 
+! Update xfoil globals
+  RADBLE = new_radius
+
   call xfoil_reload_airfoil(outfoil)
 
 end subroutine xfoil_scale_LE_radius
 
+!-------------------------------------------------------------------------
+! get buffer airfoil LE Radius 
+! ! xfoil_scale_LE_radius has to be called before !
+!-------------------------------------------------------------------------
+function xfoil_get_LE_radius ()
 
+use xfoil_inc, only : RADBLE
+
+double precision :: xfoil_get_LE_radius
+
+xfoil_get_LE_radius = RADBLE
+
+end function xfoil_get_LE_radius
 
 !-------------------------------------------------------------------------
 ! Sets buffer airfoil for xfoil - initalize segments etc...
