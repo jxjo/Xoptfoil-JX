@@ -487,7 +487,7 @@ def plot_airfoil_coordinates(seedfoil, designfoils, plotnum, firsttime=True,
 
 
   # jx-mod Start - Plot of 2nd, 3rd derivative and delta y
-  plot_2nd_deriv = True
+  plot_2nd_deriv = False
   plot_3rd_deriv = False
   plot_delta_y   = True
   iLE = np.argmin(seedfoil.x)
