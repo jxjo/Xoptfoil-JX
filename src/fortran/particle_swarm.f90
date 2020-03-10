@@ -189,9 +189,7 @@ subroutine particleswarm(xopt, fmin, step, fevals, objfunc, x0, xmin, xmax,    &
   end if
 
 !$omp master
-  ! Write initial design-values to file
-  call pso_write_particlefile(particleunit, dv)
- 
+  
  ! Set up or read other initialization data
 
   if (.not. restart) then
@@ -238,6 +236,9 @@ subroutine particleswarm(xopt, fmin, step, fevals, objfunc, x0, xmin, xmax,    &
 
   end if
 
+! Write initial design-values to file
+  call pso_write_particlefile(particleunit, dv, vel)
+  
 ! Open file for writing iteration history
 
   iunit = 17
@@ -429,7 +430,7 @@ subroutine particleswarm(xopt, fmin, step, fevals, objfunc, x0, xmin, xmax,    &
     end if
 
 ! Write particle-values to file
-    call pso_write_particlefile(particleunit, dv)
+    call pso_write_particlefile(particleunit, dv, vel)
 
 !   Check for commands in run_control file
 
@@ -613,9 +614,9 @@ subroutine pso_open_particlefile(write_particlefile, particleunit)
 ! Writes particle values to file
 ! WORK IN PROGRESS
 !=============================================================================80
-subroutine pso_write_particlefile(particleunit, dv)
+subroutine pso_write_particlefile(particleunit, dv, vel)
 
-  double precision, dimension(:,:), intent(inout) :: dv
+  double precision, dimension(:,:), intent(in) :: dv, vel
   integer, intent(inout) :: particleunit
   integer:: nvars, pop, count1, count2
 
@@ -625,9 +626,18 @@ if (particleunit == 20) then
   pop = size(dv,2)
   do count1 = 1, pop
     do count2 = 1, nvars
-      write(particleunit,'(2F12.6)') dv(count2,count1)
+      ! Write all particle-values without linefeed 
+      write(particleunit,'(2F12.6)', advance='NO') dv(count2,count1)
+      write(particleunit, '(A)', advance='NO') ";"
+      write(particleunit,'(2F12.6)', advance='NO') vel(count2,count1)
+      !Separator between particle-values
+      write(particleunit, '(A)', advance='NO') ";"
     end do
+    ! Separator between particles
+    write(particleunit, '(A)', advance='NO') ";"
   end do
+  ! Write linefeed
+  write(particleunit, *) ""
 end if
 
 end subroutine pso_write_particlefile
