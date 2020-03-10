@@ -184,6 +184,10 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
     nfunctions_bot = 0
   end if
 
+! jx-mod get seed airfoil file from command file 
+
+  airfoil_file = read_cl_airfoil_file (airfoil_file)
+
 ! Set defaults for operating conditions and constraints
 
   noppoint = 1
@@ -1248,6 +1252,14 @@ subroutine read_clo(input_file, output_prefix, exename)
         call getarg(i+1, arg)
         i = i+2
       end if
+! jx-mod new seed airfoil 
+    else if (trim(arg) == "-a") then
+      if (i == nargs) then
+        call my_stop("Must specify filename of seed airfoil for -a option.")
+      else
+        call getarg(i+1, arg)
+        i = i+2
+      end if
     else if ( (trim(arg) == "-v") .or. (trim(arg) == "--version") ) then
       call print_version()
       stop
@@ -1296,8 +1308,9 @@ subroutine print_usage(exeprint)
   write(*,'(A)') "Options:"
   write(*,'(A)') "  -i input_file     Specify a non-default input file"
   write(*,'(A)') "  -o output_prefix  Specify a non-default output prefix"
-! jx-mod new default reynolds number
+! jx-mod new default reynolds number and seed airfoil filename
   write(*,'(A)') "  -r xxxxxx         Specify a default reynolds number (re_default)"
+  write(*,'(A)') "  -a airfoil_file   Specify filename of seed airfoil"
   write(*,'(A)') "  -h, --help        Display usage information and exit"
   write(*,'(A)') "  -v, --version     Display Xoptfoil version and exit"
   write(*,'(A)')
@@ -1437,5 +1450,46 @@ function read_cl_re_default (re_default)
 
 end function read_cl_re_default
 
+! jx-mod -----------------------------------------------------------------
+! Reads command line argument -s for seed airfoil
+! ------------------------------------------------------------------------
+
+function read_cl_airfoil_file (file_name)
+
+  use airfoil_operations, only : my_stop
+
+  character(80), intent(in) :: file_name
+  character(80) :: read_cl_airfoil_file
+
+  character(80) :: arg
+  integer i, nargs
+  logical getting_args
+
+  read_cl_airfoil_file = file_name
+
+  nargs = iargc()
+  if (nargs > 0) then
+    getting_args = .true.
+  else
+    getting_args = .false.
+  end if
+
+  i = 1
+  do while (getting_args)
+    call getarg(i, arg) 
+
+    if (trim(arg) == "-a") then
+      if (i == nargs) then
+        call my_stop("Must specify a airfoil filename with -a option.")
+      else
+        call getarg(i+1, arg)
+        read_cl_airfoil_file = arg
+      end if
+    end if
+    i = i + 1
+    if (i > nargs) getting_args = .false.
+  end do
+
+end function read_cl_airfoil_file
 
 end module input_output
