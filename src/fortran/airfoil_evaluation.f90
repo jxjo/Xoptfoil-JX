@@ -187,7 +187,6 @@ function aero_objective_function(designvars, include_penalty)
     dvbbnd2 = dvtbnd2
   end if
 
-
   if (trim(shape_functions) == 'camb-thick') then
     ! Create new airfoil by changing camber and thickness of seed airfoil.
     call create_airfoil_camb_thick(xseedt, zseedt, xseedb, zseedb,             &
@@ -444,7 +443,7 @@ function aero_objective_function(designvars, include_penalty)
                  actual_flap_degrees(1:noppoint), xfoil_options, lift, drag,   &
                  moment, viscrms, alpha, xtrt, xtrb, ncrit_pt)
 
-
+ 
 ! Add penalty for too large panel angle
 ! jx-mod Due to numerical issues (?) it happens, that the final AMAX ist greater 25.
 
@@ -713,7 +712,7 @@ function aero_objective_function(designvars, include_penalty)
 !         convert slope in rad to get a linear target 
 !         factor 4.d0*pi to adjust range of objective function
       slope = derivation1(noppoint, (alpha * pi/180.d0) , lift)
-      increment = scale_factor(i) * (atan(abs(slope(i))) + + 4.d0*pi)
+      increment = scale_factor(i) * (atan(abs(slope(i))) + 4.d0*pi)
 !      write (*,*) " *** current slope ", slope(i), atan(abs(slope(i))) , " obj ", increment
         
     else

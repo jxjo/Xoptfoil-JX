@@ -275,9 +275,9 @@ subroutine check_seed()
 
     geo_targets(i)%reference_value = ref_value
 
-    ! target value = -1 --> take current seed value as target 
-    if (geo_targets(i)%target_value == -1.d0)                                  &
-        geo_targets(i)%target_value = seed_value 
+    ! target value negative?  --> take current seed value * |target_value| 
+    if (geo_targets(i)%target_value <= 0.d0)                                  &
+        geo_targets(i)%target_value = seed_value * abs(geo_targets(i)%target_value)
     tar_value = geo_targets(i)%target_value
 
     ! will scale objective to 1 ( = no improvement) 
@@ -491,33 +491,32 @@ subroutine check_seed()
 
     if (trim(optimization_type(i)) == 'min-sink') then
       checkval = drag(i)/lift(i)**1.5d0
+
     elseif (trim(optimization_type(i)) == 'max-glide') then
-! jx-test hack =====================================================
-! jx-test hack =====================================================
-! jx-test hack =====================================================
-! jx-test hack =====================================================
-!     get slope of glide ratio i - minimize to 0 - smallest value
-      glide_ratio = derivation1(noppoint, lift, (lift/drag))
-      checkval = (abs(glide_ratio(i)) + 50.d0)
-!      checkval = drag(i)/lift(i)
-! jx-test hack =====================================================
-      elseif (trim(optimization_type(i)) == 'min-drag') then
+      checkval = drag(i)/lift(i)
+
+    elseif (trim(optimization_type(i)) == 'min-drag') then
       checkval = drag(i)
-! jx-mod Geo targets - new op point type - minimize the difference between current drag and target value
+
+    ! jx-mod New op point type 'target-....'
+    !      - minimize the difference between current value and target value
+    !      - target_value negative?  --> take current seed value * |target_value| 
+
     elseif (trim(optimization_type(i)) == 'target-drag') then
-      ! target_value = -1 equals to value of seed airfoil
-      if (target_value(i) == -1.d0) target_value(i) = drag(i)
+      if (target_value(i) < 0.d0) target_value(i) = drag(i) * abs(target_value(i))
       checkval = target_value(i) + ABS (target_value(i)-drag(i))
+
     elseif (trim(optimization_type(i)) == 'target-moment') then
-! jx-mod Geo targets - new op point type - minimize the difference between current moment and target value
-      ! target_value = -1 equals to value of seed airfoil
-      if (target_value(i) == -1.d0) target_value(i) = drag(i)
+      if (target_value(i) < 0.d0) target_value(i) = moment(i) * abs(target_value(i)) 
       ! add a base value (Clark y or so ;-) to the moment difference so the relative change won't be to high
       checkval = ABS (target_value(i)-moment(i)) + 0.05d0
+
     elseif (trim(optimization_type(i)) == 'max-lift') then
       checkval = 1.d0/lift(i)
+
     elseif (trim(optimization_type(i)) == 'max-xtr') then
       checkval = 1.d0/(0.5d0*(xtrt(i)+xtrb(i))+0.1d0)  ! Ensure no division by 0
+
     elseif (trim(optimization_type(i)) == 'max-lift-slope') then
 
 !     Maximize dCl/dalpha (0.1 factor to ensure no division by 0)
@@ -555,6 +554,7 @@ subroutine check_seed()
 ! jx-mod  New: Minimize dCl/dalpha e.g. to reach clmax at alpha(i) 
 !         convert alpha in rad to get more realistic slope values
 !         convert slope in rad to get a linear target 
+!         factor 4.d0*pi to adjust range of objective function
       slope = derivation1(noppoint, (alpha * pi/180.d0) , lift)
       checkval = atan(abs(slope(i))) + 4.d0*pi
      
