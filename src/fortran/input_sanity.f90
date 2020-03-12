@@ -42,9 +42,9 @@ subroutine check_seed()
   use math_deps,          only : interp_point
 
 ! jx-mod additional op-types
-  use math_deps,          only : derivation1
+  use math_deps,          only : derivation_at_point
   double precision, dimension(noppoint) :: glide_ratio
-  double precision, dimension(noppoint) :: slope
+  double precision :: slope
 
 
   double precision, dimension(:), allocatable :: x_interp, thickness
@@ -60,7 +60,7 @@ subroutine check_seed()
   double precision :: pi
   integer :: i, nptt, nptb, nreversalst, nreversalsb, nptint
   character(30) :: text, text2
-  character(14) :: opt_type
+  character(15) :: opt_type
   logical :: addthick_violation
 ! jx-mod Smoothing 
   double precision :: perturbation_top , perturbation_bot
@@ -390,9 +390,10 @@ subroutine check_seed()
     if ((op_point(i) <= 0.d0) .and. (op_mode(i) == 'spec-cl')) then
       if ( (trim(opt_type) /= 'min-drag') .and.                                &
            (trim(opt_type) /= 'max-xtr') .and.                                 &
-            ! jx-mod - allow geo target and min-lift-slope  cl < 0 
+            ! jx-mod - allow geo target and min-lift-slope, min-glide-slope
            (trim(opt_type) /= 'target-drag') .and.                             &
            (trim(opt_type) /= 'min-lift-slope') .and.                          &
+           (trim(opt_type) /= 'min-glide-slope') .and.                          &
            (trim(opt_type) /= 'max-lift-slope') ) then
         write(*,*) "Error: operating point "//trim(text)//" is at Cl = 0. "//  &
                  "Cannot use '"//trim(opt_type)//"' optimization in this case."
@@ -517,46 +518,25 @@ subroutine check_seed()
     elseif (trim(optimization_type(i)) == 'max-xtr') then
       checkval = 1.d0/(0.5d0*(xtrt(i)+xtrb(i))+0.1d0)  ! Ensure no division by 0
 
-    elseif (trim(optimization_type(i)) == 'max-lift-slope') then
-
-!     Maximize dCl/dalpha (0.1 factor to ensure no division by 0)
-
-      checkval = 0.d0
-      if (i < noppoint) then
-        if (alpha(i+1) > alpha(i)) then
-          checkval = derv1f1(lift(i+1), lift(i),                               &
-                             (alpha(i+1)-alpha(i)+0.1d0)*pi/180.d0)
-        else
-          checkval = derv1b1(lift(i+1), lift(i),                               &
-                             (alpha(i)-alpha(i+1)+0.1d0)*pi/180.d0)
-        end if
-      end if
-
-      if (i > 1) then
-        if (alpha(i) > alpha(i-1)) then
-          checkval = checkval + derv1b1(lift(i-1), lift(i),                    &
-                                        (alpha(i)-alpha(i-1)+0.1d0)*pi/180.d0) 
-        else
-          checkval = checkval + derv1f1(lift(i-1), lift(i),                    &
-                                        (alpha(i-1)-alpha(i)+0.1d0)*pi/180.d0) 
-        end if
-      end if
-      if ( (i < noppoint) .and. (i > 1) ) checkval = checkval/2.d0 
-
-!     4*pi factor is to move singularity location. Without it, negative
-!     objective function occurs for Cl_a < 0. With this factor, it occurs for
-!     Cl_a < -4*pi (hopefully never encountered).
-
-      checkval = 1.d0/(checkval + 4.d0*pi)
-
-    elseif (trim(optimization_type(i)) == 'min-lift-slope') then
-
-! jx-mod  New: Minimize dCl/dalpha e.g. to reach clmax at alpha(i) 
+! jx-mod Following optimization based on slope of the curve of op_point
 !         convert alpha in rad to get more realistic slope values
 !         convert slope in rad to get a linear target 
-!         factor 4.d0*pi to adjust range of objective function
-      slope = derivation1(noppoint, (alpha * pi/180.d0) , lift)
-      checkval = atan(abs(slope(i))) + 4.d0*pi
+!         factor 4.d0*pi to adjust range of objective function (not negative)
+
+    elseif (trim(optimization_type(i)) == 'max-lift-slope') then
+    ! Maximize dCl/dalpha (0.1 factor to ensure no division by 0)
+      slope = derivation_at_point (noppoint, i, (alpha * pi/180.d0) , lift)
+      checkval = 1.d0 / (atan(abs(slope))  + 4.d0*pi)
+
+    elseif (trim(optimization_type(i)) == 'min-lift-slope') then
+    ! jx-mod  New: Minimize dCl/dalpha e.g. to reach clmax at alpha(i) 
+      slope = derivation_at_point (noppoint, i,  (alpha * pi/180.d0) , lift)
+      checkval = atan(abs(slope)) + 4.d0*pi
+
+    elseif (trim(optimization_type(i)) == 'min-glide-slope') then
+    ! jx-mod  New: Minimize d(cl/cd)/dcl e.g. to reach best glide at alpha(i) 
+      slope = derivation_at_point (noppoint, i,  (lift * 20d0), (lift/drag))
+      checkval = atan(abs(slope)) + 4.d0*pi
      
     else
       write(*,*)

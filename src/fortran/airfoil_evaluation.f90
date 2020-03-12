@@ -95,7 +95,7 @@ function aero_objective_function(designvars, include_penalty)
                                  show_camb_thick_of_current
   ! jx-mod Geo targets
   use airfoil_operations, only : my_stop
-  use math_deps,          only : interp_point, derivation1
+  use math_deps,          only : interp_point, derivation_at_point
 
   use parametrization, only : top_shape_function, bot_shape_function,          &
                               create_airfoil, create_airfoil_camb_thick
@@ -141,9 +141,8 @@ function aero_objective_function(designvars, include_penalty)
   ! jx-mod  
   double precision :: penaltyi
   double precision :: geo_objective_function
-  double precision :: ref_value, tar_value, cur_value
+  double precision :: ref_value, tar_value, cur_value, slope
   character(100)   :: penalty_info, text
-  double precision, dimension(noppoint) :: slope
   ! jx-mod Smoothing
   double precision :: perturbation_bot, perturbation_top
 
@@ -677,43 +676,31 @@ function aero_objective_function(designvars, include_penalty)
 
       increment = scale_factor(i)/(0.5d0*(xtrt(i)+xtrb(i))+0.1d0)
 
+      ! jx-mod Following optimization based on slope of the curve of op_point
+!         convert alpha in rad to get more realistic slope values
+!         convert slope in rad to get a linear target 
+!         factor eg 4.d0*pi to adjust range of objective function (not negative)
+
     elseif (trim(optimization_type(i)) == 'max-lift-slope') then
 
 !     Maximize dCl/dalpha (0.1 factor to ensure no division by 0)
 
-      increment = 0.d0
-      if (i < noppoint) then
-        if (alpha(i+1) > alpha(i)) then
-          increment = derv1f1(lift(i+1), lift(i),                              &
-                              (alpha(i+1)-alpha(i)+0.1d0)*pi/180.d0)
-        else
-          increment = derv1b1(lift(i+1), lift(i),                              &
-                              (alpha(i)-alpha(i+1)+0.1d0)*pi/180.d0)
-        end if
-      end if
-
-      if (i > 1) then
-        if (alpha(i) > alpha(i-1)) then
-          increment = increment + derv1b1(lift(i-1), lift(i),                  &
-                                          (alpha(i)-alpha(i-1)+0.1d0)*pi/180.d0) 
-        else
-          increment = increment + derv1f1(lift(i-1), lift(i),                  &
-                                          (alpha(i-1)-alpha(i)+0.1d0)*pi/180.d0) 
-        end if
-      end if
-      
-      if ( (i < noppoint) .and. (i > 1) ) increment = increment/2.d0 
-      increment = scale_factor(i) / (increment + 4.d0*pi)
+      slope = derivation_at_point (noppoint, i, (alpha * pi/180.d0) , lift)
+      increment = scale_factor(i) / (atan(abs(slope))  + 4.d0*pi)
 
     elseif (trim(optimization_type(i)) == 'min-lift-slope') then
 
-! jx-mod  New: Minimize dCl/dalpha e.g. to reach clmax at alpha(i) 
-!         convert alpha in rad to get more realistic slope values
-!         convert slope in rad to get a linear target 
-!         factor 4.d0*pi to adjust range of objective function
-      slope = derivation1(noppoint, (alpha * pi/180.d0) , lift)
-      increment = scale_factor(i) * (atan(abs(slope(i))) + 4.d0*pi)
-!      write (*,*) " *** current slope ", slope(i), atan(abs(slope(i))) , " obj ", increment
+!     jx-mod  New: Minimize dCl/dalpha e.g. to reach clmax at alpha(i) 
+      slope = derivation_at_point (noppoint, i, (alpha * pi/180.d0) , lift)
+      increment = scale_factor(i) * (atan(abs(slope)) + 4.d0*pi)
+      write (*,*) " *** current cl slope ", slope, atan(abs(slope)) , " obj ", increment
+
+    elseif (trim(optimization_type(i)) == 'min-glide-slope') then
+
+!     jx-mod  New: Minimize d(cl/cd)/dcl e.g. to reach best glide at alpha(i) 
+      slope = derivation_at_point (noppoint, i,  (lift * 20d0), (lift/drag))
+      increment = scale_factor(i) * (atan(abs(slope))  + 4.d0*pi)
+      write (*,*) " *** current glide slope ", slope, atan(abs(slope)) , " obj ", increment
         
     else
 

@@ -824,6 +824,43 @@ function derivation1(npt, x, y)
 end function derivation1
 
 !------------------------------------------------------------------------------
+! get first derivative of a polyline (x,y) at point i
+!     using Backward, center, forward adapted difference approximation 
+!     For center the mean of backward and forward approximation is taken
+!     which could be more precise ...
+!------------------------------------------------------------------------------
+function derivation_at_point (npt, i, x, y)
+
+  integer, intent(in) :: npt, i 
+  double precision, dimension(npt), intent(in) :: x, y
+  double precision :: derivation_at_point
+
+  derivation_at_point = 0.d0
+  if (i < npt) then
+    ! Forward
+    if (x(i+1) > x(i)) then
+      derivation_at_point = (y(i+1) - y(i))/(x(i+1)-x(i))
+    else
+      derivation_at_point = (y(i) - y(i+1))/(x(i)-x(i+1))
+    end if
+  end if
+
+  if (i > 1) then
+    ! Backward
+    if (x(i) > x(i-1)) then
+      derivation_at_point = derivation_at_point + (y(i) - y(i-1))/(x(i)-x(i-1))
+    else
+      derivation_at_point = derivation_at_point + (y(i-1) - y(i))/(x(i-1)-x(i))
+    end if
+  end if
+  
+  ! center - tage mean value of both 
+  if ( (i < npt) .and. (i > 1) )               &
+  derivation_at_point = derivation_at_point/2.d0 
+
+end function derivation_at_point
+
+!------------------------------------------------------------------------------
 ! Interpolate a point (xnew, ynew) within a vector (x,y) - returns ynew
 !------------------------------------------------------------------------------
 function interp_point(x, y, xnew)

@@ -58,7 +58,7 @@ module vardef
   double precision :: x_flap, y_flap
   character(3) :: y_flap_spec
   logical :: use_flap
-  character(14), dimension(max_op_points) :: optimization_type
+  character(15), dimension(max_op_points) :: optimization_type
   integer :: nflap_optimize          ! Number of operating points where flap 
                                      !   setting will be optimized
   integer, dimension(max_op_points) :: flap_optimize_points
