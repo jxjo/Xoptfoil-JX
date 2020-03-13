@@ -15,7 +15,7 @@
 /  
 
 &operating_conditions
-  noppoint = 8
+  noppoint = 9
 ! get reynolds Type 2 from command line ... ------------------------------
   re_default_as_resqrtcl = .true.
 
@@ -27,39 +27,42 @@
   weighting(1) = 0.5
 
   op_mode(2) = 'spec-cl'
-  op_point(2) = 0.1
+  op_point(2) = 0.15
   optimization_type(2) = 'target-drag'
 ! --* strak *-- decrease drag by factor ----------------------------------
   target_value(2) = -0.985
-  weighting(2) = 2
+  weighting(2) = 2.5
 
   op_mode(3) = 'spec-cl'
   op_point(3) = 0.2
   optimization_type(3) = 'target-drag'
 ! --* strak *-- decrease drag by factor ----------------------------------
   target_value(3) = -0.980
-  weighting(3) = 2
+  weighting(3) = 0.001
+
+!=========================================================================
 
   op_mode(4) = 'spec-cl'
-  op_point(4) = 0.5
+  op_point(4) = 0.57
   optimization_type(4) = 'target-drag'
 ! --* strak *-- increase drag by factor ----------------------------------
-  target_value(4) = -1.010
-  weighting(4) = 1.2
+  target_value(4) = -1.01
+  weighting(4) = 1.0
   
+! --* strak *-- achieve best glide at this point equals to slope become 0-
   op_mode(5) = 'spec-cl'
-  op_point(5) = .60
-  optimization_type(5) = 'target-drag'
-! --* strak *-- increase drag by factor ----------------------------------
-  target_value(5) = -1.005
-  weighting(5) = 2.0
+  op_point(5) = 0.62
+  optimization_type(5) = 'min-glide-slope'
+  weighting(5) = 2
 
   op_mode(6) = 'spec-cl'
-  op_point(6) = 0.7
+  op_point(6) = 0.67
 ! --* strak *-- increase drag by factor ----------------------------------
   optimization_type(6) = 'target-drag'
-  target_value(6) = -1.010
-  weighting(6) = 1.2
+  target_value(6) = -1.01
+  weighting(6) = 1.0
+
+!=========================================================================
 
 ! --* strak *-- max-lift (slope = 0) between these op_points -------------
   op_mode(7) = 'spec-al'
@@ -68,9 +71,15 @@
   weighting(7) = 0.001
 
   op_mode(8) = 'spec-al'
-  op_point(8) =9.8
+  op_point(8) =9.4
   optimization_type(8) = 'min-lift-slope'
   weighting(8) = 1.0
+
+  op_mode(9) = 'spec-al'
+  op_point(9) = 9.8
+  optimization_type(9) = 'max-lift'
+  weighting(9) = 0.001
+
 /
 
 &constraints
@@ -84,8 +93,8 @@
   ngeo_targets = 1
   target_type(1) = 'Thickness'
 ! --* strak *-- reduce thickness by factor x   ---------------------------
-  target_geo(1) = -0.975
-  weighting_geo(1)= 2.5
+  target_geo(1) = -0.986
+  weighting_geo(1)= 3
 
 /  
  
@@ -99,9 +108,9 @@
   pso_pop = 30
   pso_tol = 0.001
 !  pso_convergence_profile = 'exhaustive'
-!  pso_convergence_profile = 'fastest'
-  pso_convergence_profile = 'quick'
-  pso_maxit = 30
+  pso_convergence_profile = 'fastest'
+!  pso_convergence_profile = 'quick'
+  pso_maxit = 40
 /
 
 &simplex_options
