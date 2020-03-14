@@ -602,7 +602,6 @@ subroutine pso_open_particlefile(write_particlefile, particleunit)
       particleunit = 0
       return
     end if
-    write(particleunit,'(A)') 'title="Particle values"'
   else
     particleunit = 0
   end if
