@@ -97,6 +97,14 @@ subroutine load_airfoil(filename, foil)
 
   logical :: labeled
 
+  ! jx-mod additional check
+  if (trim(filename) == '') then
+    write (*,*) 
+    write (*,*) 'Error: No airfoil file defined either in input file nor as command line argument'
+    write (*,*) 
+    stop
+  end if 
+
   write(*,*) 'Reading airfoil from file: '//trim(filename)//' ...'
   write(*,*)
 

@@ -152,6 +152,7 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
   global_search = 'particle_swarm'
   local_search = 'simplex'
   seed_airfoil = 'naca'
+  airfoil_file = ''
   shape_functions = 'hicks-henne'
   min_bump_width = 0.1d0
   nfunctions_top = 4
