@@ -70,6 +70,7 @@ program xfoil_worker
   output_prefix = 'foil'
   call read_clo(input_file, output_prefix, "xfoil_worker")
 
+
 ! Read inputs from namelist file
 
   call read_inputs(input_file, search_type, global_search, local_search,       &
@@ -102,7 +103,9 @@ program xfoil_worker
 ! jx-mod Testfunction for thickness
 
 !  call test_set_thickness_camber (foil)
-  call test_set_LE_radius (foil)
+!  call test_set_LE_radius (foil)
+
+  call test_polar_calculation (foil)
 
 ! Run xfoil
 
@@ -223,3 +226,93 @@ subroutine test_set_LE_radius (foil)
   end do 
 
 end subroutine test_set_LE_radius
+
+
+subroutine test_polar_calculation (foil)
+
+  use vardef,             only : airfoil_type, output_prefix
+  use airfoil_evaluation, only : xfoil_options
+  use polar_operations,   only : polar_type, op_point_type
+  use polar_operations,   only : init_polar, calculate_polar, write_polar_data
+  use polar_operations,   only : write_polar_header
+  
+  type (airfoil_type), intent (in)  :: foil
+
+  type (polar_type) :: polar
+  character (100) :: polars_subdirectory, mkdir_command
+  integer :: stat, i
+
+  character (100) :: re_string
+  double precision, dimension (30) :: re_polars = 0d0
+
+  re_string = '40000, 60000, 100000, 200000, 400000, 800000'
+  read (re_string,*, iostat=stat) re_polars
+  
+  polar%airfoil_name    = trim(output_prefix)
+  polar%type            = 'Type1'
+  polar%base_value_type = 'spec-cl'
+  polar%start_value     = -0.1d0
+  polar%end_value       = 0.95d0
+  polar%increment       = 0.025d0
+  polar%mach            = 0.0d0
+  polar%ncrit           = xfoil_options%ncrit
+
+  polars_subdirectory = trim(output_prefix)//'_polars'
+! Todo detect Unix
+  mkdir_command = 'if not exist '//trim(polars_subdirectory)//' mkdir '//trim(polars_subdirectory)
+
+  stat = system (trim(mkdir_command))
+
+  do i = 1, (size(re_polars)) 
+    
+    if (re_polars(i) > 1000d0) then 
+      polar%reynolds        = re_polars(i)
+      call init_polar (polar)
+      call calculate_polar (foil, polar)
+
+      write (*,'(A, F7.0,/)') ' ... writing to '//trim(polars_subdirectory)//'/'//trim(polar%file_name)
+!      call write_polar_header (6, polar)
+!      call write_polar_data   (6, polar)
+
+      open(unit=13, file= trim(polars_subdirectory)//'/'//trim(polar%file_name), status='replace')
+      call write_polar_header (13, polar)
+      call write_polar_data   (13, polar)
+      close (13)
+
+      deallocate (polar%op_points)
+    end if 
+  end do 
+
+! ------
+
+  re_polars = 0d0
+  re_string = '90000, 110000, 130000'
+  read (re_string,*, iostat=stat) re_polars
+  
+  polar%type            = 'Type2'
+  polar%start_value     = 0.025d0
+
+
+  do i = 1, (size(re_polars)) 
+    
+    if (re_polars(i) > 1000d0) then 
+      polar%reynolds        = re_polars(i)
+      call init_polar (polar)
+      call calculate_polar (foil, polar)
+
+      write (*,'(A, F7.0,/)') ' ... writing to '//trim(polars_subdirectory)//'/'//trim(polar%file_name)
+!      call write_polar_header (6, polar)
+!      call write_polar_data   (6, polar)
+
+      open(unit=13, file= trim(polars_subdirectory)//'/'//trim(polar%file_name), status='replace')
+      call write_polar_header (13, polar)
+      call write_polar_data   (13, polar)
+      close (13)
+
+      deallocate (polar%op_points)
+    end if 
+  end do 
+
+
+end subroutine test_polar_calculation
+
