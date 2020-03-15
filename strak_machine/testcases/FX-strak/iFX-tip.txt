@@ -1,11 +1,12 @@
 ! Test F3F Strak based on JX FXrcn 15
+! Tip airfoil
 
 &optimization_options
   search_type = 'global'
   global_search = 'particle_swarm'
   seed_airfoil = 'from_file'
 ! get airfoil file  from command line ... ---------------------------------
-!  airfoil_file = 'JX-FXrcn-15.dat'
+! airfoil_file = '... dat'
   shape_functions = 'camb-thick'
   initial_perturb = 0.01
   restart = .false.
@@ -31,7 +32,8 @@
   optimization_type(2) = 'target-drag'
 ! --* strak *-- decrease drag by factor ----------------------------------
   target_value(2) = -0.985
-  weighting(2) = 3.5
+! --* tip more weighting ... 
+  weighting(2) = 4.0
 
   op_mode(3) = 'spec-cl'
   op_point(3) = 0.2
@@ -41,42 +43,43 @@
   weighting(3) = 0.001
 
 !=========================================================================
+! --* tip allow more reduction in glide ratio
 
   op_mode(4) = 'spec-cl'
   op_point(4) = 0.55
   optimization_type(4) = 'target-drag'
 ! --* strak *-- increase drag by factor ----------------------------------
-  target_value(4) = -1.005
+  target_value(4) = -1.04
   weighting(4) = 1.0
   
 ! --* strak *-- achieve best glide at this point equals to slope become 0-
   op_mode(5) = 'spec-cl'
   op_point(5) = 0.60
   optimization_type(5) = 'min-glide-slope'
-  weighting(5) = 2
+  weighting(5) = 3.0
 
   op_mode(6) = 'spec-cl'
   op_point(6) = 0.65
 ! --* strak *-- increase drag by factor ----------------------------------
   optimization_type(6) = 'target-drag'
-  target_value(6) = -1.005
+  target_value(6) = -1.05
   weighting(6) = 1.0
 
 !=========================================================================
-
+! --* tip smaller alpha for cl-max
 ! --* strak *-- max-lift (slope = 0) between these op_points -------------
   op_mode(7) = 'spec-al'
-  op_point(7) = 9.0
+  op_point(7) = 8.6
   optimization_type(7) = 'max-lift'
   weighting(7) = 0.001
 
   op_mode(8) = 'spec-al'
-  op_point(8) =9.4
+  op_point(8) =9.0
   optimization_type(8) = 'min-lift-slope'
   weighting(8) = 1.0
 
   op_mode(9) = 'spec-al'
-  op_point(9) = 9.8
+  op_point(9) = 9.4
   optimization_type(9) = 'max-lift'
   weighting(9) = 0.001
 
@@ -93,7 +96,7 @@
   ngeo_targets = 1
   target_type(1) = 'Thickness'
 ! --* strak *-- reduce thickness by factor x   ---------------------------
-  target_geo(1) = -0.99
+  target_geo(1) = -0.986
   weighting_geo(1)= 3
 
 /  
@@ -110,7 +113,7 @@
 !  pso_convergence_profile = 'exhaustive'
   pso_convergence_profile = 'fastest'
 !  pso_convergence_profile = 'quick'
-  pso_maxit = 60
+  pso_maxit = 70
 /
 
 &simplex_options
