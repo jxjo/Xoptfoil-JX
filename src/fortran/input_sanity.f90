@@ -419,8 +419,8 @@ subroutine check_seed()
                  viscrms, alpha, xtrt, xtrb, ncrit_pt)
 
 ! Penalty for too large panel angles
-
-  if (AMAX > 25.d0) then
+! jx-mod increased from 25 30
+  if (AMAX > 30.d0) then
     write(text,'(F8.4)') AMAX
     text = adjustl(text)
     write(*,*) "Max panel angle: "//trim(text)

@@ -446,14 +446,15 @@ function aero_objective_function(designvars, include_penalty)
 ! Add penalty for too large panel angle
 ! jx-mod Due to numerical issues (?) it happens, that the final AMAX ist greater 25.
 !        do not check if camb-thick - it couldn't be solved...
-  if (max(0.0d0,AMAX-25.d0) > 0.d0) then
+!        ... increased to 30
+  if (max(0.0d0,AMAX-30.d0) > 0.d0) then
     ! strong penality - will abort 
-    penaltyval = penaltyval + max(0.0d0,AMAX-25.d0)/5.d0
+    penaltyval = penaltyval + max(0.0d0,AMAX-30.d0)/5.d0
   else
-    if ((max(0.0d0,AMAX-24.5d0) > 0.d0) .and. penalize) then
+    if ((max(0.0d0,AMAX-29.5d0) > 0.d0) .and. penalize) then
       if (trim(shape_functions) /= 'camb-thick') then
           ! weak penalty to avoid getting too close to cut off at 25.0 
-        penaltyval = penaltyval + max(0.0d0,AMAX-24.5d0) * 2.d0  *  epsupdate  ! max 1%
+        penaltyval = penaltyval + max(0.0d0,AMAX-29.5d0) * 2.d0  *  epsupdate  ! max 1%
         penalty_info = trim(penalty_info) // ' AMAX'
       end if 
     end if
