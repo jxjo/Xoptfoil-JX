@@ -43,7 +43,6 @@ subroutine check_seed()
 
 ! jx-mod additional op-types
   use math_deps,          only : derivation_at_point
-  double precision, dimension(noppoint) :: glide_ratio
   double precision :: slope
 
 
