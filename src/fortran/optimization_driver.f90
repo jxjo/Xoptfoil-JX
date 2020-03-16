@@ -403,7 +403,7 @@ end subroutine optimize
 
 !=============================================================================80
 !
-! Writes final airfoil design to a file 
+! Writes final airfoil design to a file
 !
 !=============================================================================80
 subroutine write_final_design(optdesign, f0, fmin, shapetype)
@@ -421,8 +421,8 @@ subroutine write_final_design(optdesign, f0, fmin, shapetype)
   use xfoil_driver,       only : run_xfoil
 
   double precision, dimension(:), intent(in) :: optdesign
-  character(*), intent(in) :: shapetype
-  double precision, intent(in) :: f0, fmin
+  character(*), intent(in)                   :: shapetype
+  double precision, intent(in)               :: f0, fmin
 
   double precision, dimension(size(xseedt,1)) :: zt_new
   double precision, dimension(size(xseedb,1)) :: zb_new
@@ -617,9 +617,13 @@ subroutine write_final_design(optdesign, f0, fmin, shapetype)
   output_file = trim(output_prefix)//'.dat'
   call airfoil_write(output_file, output_prefix, final_airfoil)
 
-! Deallocate final airfoil
+! jx-mod save final_airfoil to curr_foil 
 
+  curr_foil = final_airfoil
+
+! Deallocate final airfoil
   call deallocate_airfoil(final_airfoil)
+
 
 end subroutine write_final_design
 

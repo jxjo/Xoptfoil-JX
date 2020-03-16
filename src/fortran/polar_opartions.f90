@@ -20,12 +20,10 @@ module polar_operations
                         xtrt, xtrb, reynolds
   end type op_point_type
 
-
   type polar_type
     character(50) :: airfoil_name       ! Name of airfoil
     character(50) :: file_name          ! Name of polar file name 
-    character(5)  :: type               ! Type of this polar whiche can be 
-                                        ! 'Type1' - fixed speed or 'Type2' - fixed lift
+    character(5)  :: type               ! 'Type1'(fixed speed) or 'Type2'(fixed lift)
     double precision :: reynolds        ! reynolds number of this polar (re*sqrt(cl) if Type2)
     double precision :: mach            ! mach number of this polar (mach*sqrt(cl) if Type2)
     double precision :: ncrit           ! ncrit of polar
@@ -33,12 +31,194 @@ module polar_operations
     double precision :: start_value     ! polar starting from ...
     double precision :: end_value       ! ... to end value ...
     double precision :: increment       ! ... incremented by 
-
     integer :: n_op_points              ! number of all op_poins of this polar
     type(op_point_type), dimension (:), allocatable :: op_points !array with all calculated op_points
    end type polar_type
 
+   integer :: MAXPOLARS = 30            ! max number of polars
+   integer :: MAXOPS    = 100           ! max number of operating points of a polar 
+
 contains
+
+
+!=============================================================================
+! High level entry for polar generation to kepp all the polar suff local to module
+!
+! - read input file for namelist &polar_generation
+! - get polar definitions
+! - calculate polars for foil with foilname
+! - write each polar to a file 
+!=============================================================================
+
+subroutine check_and_do_polar_generation (input_file, foilname, foil)
+
+  use vardef,             only : airfoil_type
+
+  character(*), intent(in)          :: input_file
+  character (*), intent(in)         :: foilname
+  type (airfoil_type), intent (in)  :: foil
+
+  type (polar_type), dimension (MAXPOLARS) :: polars
+  integer  :: npolars
+
+  call read_polar_inputs  (input_file, npolars, polars)
+
+  if (npolars >= 0)                                               &
+    call generate_polar_files (foilname, foil, npolars, polars)
+
+end subroutine check_and_do_polar_generation
+
+
+
+!=============================================================================
+! Generate and write to file all 'npolars' 'polars' for an airfoil
+!
+! Each polar will be written in a single file in xfoil text format
+! in the subdirectory 'foilname_polars'.
+!
+! The name of the file is aligned to xflr5 polar file naming
+!=============================================================================
+
+subroutine generate_polar_files (foilname, foil, npolars, polars)
+
+  use vardef,             only : airfoil_type
+
+  type (polar_type), dimension (MAXPOLARS), intent (inout) :: polars
+  type (airfoil_type), intent (in)  :: foil
+  integer, intent (in)              :: npolars
+  character (*), intent(in)         :: foilname
+  
+  integer :: i, istat
+  character (255) :: polars_subdirectory, mkdir_command
+
+
+! Create subdir for polar files if not exist
+! jx-todo Detect Unix and do specific make dir 
+
+  polars_subdirectory = trim(foilname)//'_polars'
+  mkdir_command = 'if not exist '//trim(polars_subdirectory)//' mkdir '//trim(polars_subdirectory)
+  istat = system (trim(mkdir_command))
+  
+! calc and write all polars
+  
+  do i = 1, npolars
+
+    write (*,'(/,A,I7,A)') '   calculating polar '//polars(i)%type//' Re=', int(polars(i)%reynolds), &
+                               ' for '// polars(i)%airfoil_name
+    call init_polar (polars(i))
+    call calculate_polar (foil, polars(i))
+
+    write (*,'(A, F7.0,/)') '   ... writing to '//trim(polars_subdirectory)//'/'//trim(polars(i)%file_name)
+    open(unit=13, file= trim(polars_subdirectory)//'/'//trim(polars(i)%file_name), status='replace')
+    call write_polar_header (13, polars(i))
+    call write_polar_data   (13, polars(i))
+    close (13)
+
+    deallocate (polars(i)%op_points)
+
+  end do 
+
+end subroutine generate_polar_files
+
+!=============================================================================
+! Read xoptfoil input file to get polars (definition) 
+!   (separated from read_inputs to be more modular)
+!=============================================================================
+
+subroutine read_polar_inputs  (input_file, npolars, polars)
+
+  use airfoil_operations, only : my_stop
+  use vardef,             only : output_prefix
+  use airfoil_evaluation, only : xfoil_options
+
+  type (polar_type), dimension (MAXPOLARS), intent (out) :: polars
+  character(*), intent(in) :: input_file
+  integer , intent(out)    :: npolars
+
+  logical         :: generate_polars                         ! .true. .false. 
+  character (5)   :: type_of_polar                           ! 'Type1' 'Type2' 
+  character (7)   :: op_mode                                 ! 'spec-al' 'spec_cl'
+  double precision, dimension (MAXPOLARS) :: polar_reynolds  ! 40000, 70000, 100000
+  double precision, dimension (3)  :: op_point_range         ! -1.0, 10.0, 0.5
+
+  integer         :: istat, iunit, i
+
+  namelist /polar_generation/ generate_polars, type_of_polar, polar_reynolds,   &
+                              op_mode, op_point_range
+
+! Init default values  
+
+  npolars         = 0
+  generate_polars = .false.
+  type_of_polar   = 'Type1'
+  op_mode         = 'spec-al'
+  op_point_range  = 0d0
+  polar_reynolds  = 0d0
+                            
+! Open input file and read namelist from file
+
+  iunit = 12
+  open(unit=iunit, file=input_file, status='old', iostat=istat)
+  if (istat /= 0)                                                              &
+    call my_stop('Could not find input file '//trim(input_file)//'.')
+  read(iunit, iostat=istat, nml=polar_generation)
+  close (iunit)
+
+! Input sanity
+
+  if (.not. generate_polars) return 
+
+  if ((op_mode /= 'spec-al') .and. (op_mode /= 'spec-al')) then
+    write (*,*) " Error: op_mode must be 'spec-cl' or 'spec-al'"
+    stop
+  end if
+
+  if     (type_of_polar == 'Type1') then 
+
+  elseif (type_of_polar == 'Type2') then 
+    if (op_mode /= 'spec-cl') then
+      write (*,*) " Error: For 'Type2' polars only 'spec-cl' is supported. Sorry"
+      stop 
+    end if 
+  else
+    write (*,*) " Error: Type of polars must be either 'Type1' or 'Type2'"
+    stop 
+  end if 
+
+  if ((op_point_range(2) - op_point_range(1)) <= 0d0 ) then 
+    write (*,*) " Error: End of polar op_point_range must be higher than the start."
+    stop
+  end if
+
+  if (( op_point_range(1) + op_point_range(3)) >= op_point_range(2) ) then 
+    write (*,*) " Error: Start of polar op_point_range + increment should be end of op_point_range."
+    stop
+  end if
+  
+  
+! Init polar definitions with input 
+
+  do i = 1, size(polar_reynolds)
+    if (polar_reynolds(i) > 1000d0) then 
+      polars(i)%airfoil_name    = trim(output_prefix)
+      polars(i)%type            = type_of_polar
+      polars(i)%base_value_type = op_mode
+      polars(i)%start_value     = op_point_range (1)
+      polars(i)%end_value       = op_point_range (2)
+      polars(i)%increment       = op_point_range (3)
+      polars(i)%mach            = 0.0d0
+      polars(i)%ncrit           = xfoil_options%ncrit
+      polars(i)%reynolds        = polar_reynolds(i)
+      npolars                   = i
+    end if
+  end do
+
+  write (*,'(/,A,I2,A)') ' A total of ',npolars,' polars will be generated '//  &
+                         'for airfoil '//trim(output_prefix)
+
+
+end subroutine read_polar_inputs
+
 
 !=============================================================================
 ! Initialize polar data structure based calculated number of op_points
@@ -110,9 +290,6 @@ subroutine calculate_polar (foil, polar)
   double precision :: x_flap, y_flap
   character(3) :: y_flap_spec
   logical :: use_flap
-  integer :: i
-
-  write (*,'(/,A, F7.0)') ' Calculating polar '//polar%type//' Re = ', polar%reynolds
 
   op_modes (:)     = polar%base_value_type
   mach_numbers (:) = 0.d0

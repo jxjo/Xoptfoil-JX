@@ -32,6 +32,8 @@ program main
   use input_sanity,        only : check_seed
   use optimization_driver, only : matchfoils_preprocessing, optimize,          &
                                   write_final_design
+! jx-mod polar generation for final airfoil                                 
+  use polar_operations,    only : check_and_do_polar_generation
 
   implicit none
 
@@ -157,8 +159,12 @@ program main
 
   call write_final_design(optdesign, f0, fmin, shape_functions)
 
-! Deallocate memory
+! Generate polars for final airfoil if defind in input file - 
+!   - curr_foil was set in write_final_design 
 
+  call check_and_do_polar_generation (input_file, output_prefix, curr_foil)
+
+! Deallocate memory
   call deallocate_airfoil_data()
   deallocate(xseedt)
   deallocate(xseedb)
@@ -166,6 +172,7 @@ program main
   deallocate(zseedb)
   deallocate(optdesign)
   if (allocated(constrained_dvs)) deallocate(constrained_dvs)
+
 
 ! jx-mod Smoothing ---- Deallocate save arrays
   deallocate(zseedt_not_smoothed)
