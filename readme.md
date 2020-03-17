@@ -36,9 +36,8 @@ Descriptions of some new capabilities can be found in [Xoptfoil-JX Describtion](
 
 ## Usage example
 
-The development of a high end F3F airfoil using Xoptfoil-JX is described in the arctivle (Entwicklung eines F3F-Profils)[http://www.rc-network.de/forum/showthread.php/769110-Entwicklung-eines-F3F-Profils] - sorry, it's in German.
+The development of a high end F3F airfoil using Xoptfoil-JX is described in the arctivle [Entwicklung eines F3F-Profils](http://www.rc-network.de/forum/showthread.php/769110-Entwicklung-eines-F3F-Profils) - sorry, it's in German.
 
-_For more examples and usage, please refer to the [Wiki][wiki]._
 
 ## Installation
 
@@ -48,7 +47,7 @@ tbd
 tbd
 ```
 
-## Meta
+## Meta and Contribution
 
 * Initial fork and first modifications by Jochen Guenzel 
 * Camber & Tickness based optimization by Matthias Boese and Jochen Guenzel
