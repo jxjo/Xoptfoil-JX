@@ -268,9 +268,9 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
     else                                  ! take default Re number
       re(i)%number  = re_default
       if (re_default_as_resqrtcl) then
-        re(i)%type    = 1
-      else
         re(i)%type    = 2
+      else
+        re(i)%type    = 1
       end if
     end if
     ma(i)%number  = mach(i)               ! mach number only Type 1
@@ -1183,14 +1183,12 @@ subroutine namelist_check(nmlname, errcode, action_missing_nml)
   character(*), intent(in) :: action_missing_nml
 
   if (errcode < 0) then
-    write(*,*)
     if (trim(action_missing_nml) == 'warn') then
-      write(*,'(A)') 'Warning: namelist '//trim(nmlname)//&
-                     ' not found in input file.'
-      write(*,'(A)') 'Using default values.'
-      write(*,*)
+      write(*,'(A)') ' Warning: namelist '//trim(nmlname)//&
+                     ' not found in input file. Using default values.'
     else
-      write(*,'(A)') 'Warning: namelist '//trim(nmlname)//&
+      write(*,*)
+      write(*,'(A)') 'Error: namelist '//trim(nmlname)//&
                      ' is required and was not found in input file.'
       write(*,*)
       stop
