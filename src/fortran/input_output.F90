@@ -88,7 +88,8 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
 
   ! jx-mod re_default - to ease Type1 and Type2 polar op points
   double precision :: re_default
-  logical :: re_default_as_resqrtcl
+  logical          :: re_default_as_resqrtcl
+  double precision, dimension(max_op_points)  :: reynolds, mach
   ! jx-mod show/suppress extensive echo of input parms
   logical :: echo_input_parms
   
@@ -229,10 +230,10 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
 
   ! jx-mod re_default - to ease Type1 and Type2 polar op points
   re_default_as_resqrtcl = .false.
-  re_default =  1.0D+05                                              
-  reynolds(:) = -1.d0
-
-
+  re_default  =  1.0D+05                                              
+  reynolds(:) = -1.d0                         ! value in input file
+  re(:)%number = 1.0D+05                      ! internal value with 
+  re(:)%type   = 1                            ! ... type 1 and type 2 
 
 ! Read operating conditions and constraints
 
@@ -261,18 +262,20 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
 ! jx-mod Set per-point (default) Reynolds if not specified in namelist
 
   do i = 1, noppoint
-    if (reynolds(i) == -1.d0) then
+    if (reynolds(i) /= -1.d0) then
+      re(i)%number  = reynolds(i)
+      re(i)%type    = 1
+    else                                  ! take default Re number
+      re(i)%number  = re_default
       if (re_default_as_resqrtcl) then
-        if ((trim(op_mode(i)) == 'spec-cl' ) .and. (abs(op_point(i)) /= 0d0))  then             
-          reynolds(i) = re_default / (abs(op_point(i)) ** 0.5d0) 
-        else
-          reynolds(i)  = re_default
-        end if  
-      else 
-        reynolds(i)  = re_default
+        re(i)%type    = 1
+      else
+        re(i)%type    = 2
       end if
     end if
-  end do
+    ma(i)%number  = mach(i)               ! mach number only Type 1
+    ma(i)%type    = 1
+end do
 
 ! jx-mod Smoothing - start read options-----------------------------------------
   
@@ -702,8 +705,10 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
                trim(optimization_type(i))//"'"
     write(*,*) " op_mode("//trim(text)//") = '"//trim(op_mode(i))//"'"
     write(*,*) " op_point("//trim(text)//") = ", op_point(i)
-    write(*,'(A,es17.8)') "  reynolds("//trim(text)//") = ", reynolds(i)
-    write(*,*) " mach("//trim(text)//") = ", mach(i)
+    write(*,'(A,es17.8,A,I1,A)') "  reynolds("//trim(text)//") = ", re(i)%number,  &
+                  " (Type ", re(i)%type, ")"
+    write(*,*) " mach("//trim(text)//") = ", ma(i)%number,                     &
+                  " (Type ", ma(i)%type, ")"
     write(*,*) " flap_selection("//trim(text)//") = '"//                       &
                trim(flap_selection(i))//"'"
     write(*,*) " flap_degrees("//trim(text)//") = ", flap_degrees(i)
@@ -938,9 +943,9 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
   do i = 1, noppoint
     if (trim(op_mode(i)) /= 'spec-cl' .and. trim(op_mode(i)) /= 'spec-al')     &
       call my_stop("op_mode must be 'spec-al' or 'spec-cl'.")
-    if (reynolds(i) <= 0.d0) call my_stop("reynolds must be > 0." //           &
+    if (re(i)%number <= 0.d0) call my_stop("reynolds must be > 0." //           &
                              " Default value (re_default) could not be set")
-    if (mach(i) < 0.d0) call my_stop("mach must be >= 0.")
+    if (ma(i)%number < 0.d0) call my_stop("mach must be >= 0.")
     if (trim(flap_selection(i)) /= 'specify' .and.                             &
         trim(flap_selection(i)) /= 'optimize')                                 &
       call my_stop("flap_selection must be 'specify' or 'optimize'.")

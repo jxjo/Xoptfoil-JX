@@ -13,19 +13,21 @@ module polar_operations
 
 ! Contains subroutines to create and write xfoil based polars
 
+  use vardef,             only : re_type
+
   implicit none
 
   type op_point_type
     double precision :: value, lift, drag, moment, viscrms, alpha, &
-                        xtrt, xtrb, reynolds
+                        xtrt, xtrb
   end type op_point_type
 
   type polar_type
-    character(50) :: airfoil_name       ! Name of airfoil
-    character(50) :: file_name          ! Name of polar file name 
-    character(5)  :: type               ! 'Type1'(fixed speed) or 'Type2'(fixed lift)
-    double precision :: reynolds        ! reynolds number of this polar (re*sqrt(cl) if Type2)
-    double precision :: mach            ! mach number of this polar (mach*sqrt(cl) if Type2)
+    character(50)    :: airfoil_name    ! Name of airfoil
+    character(50)    :: file_name       ! Name of polar file name 
+    character(5)     :: type            ! 'Type1'(fixed speed) or 'Type2'(fixed lift)
+    type(re_type)    :: re              ! Re number of this polar (re*sqrt(cl) if Type2)
+    type(re_type)    :: ma              ! Ma number of this polar (mach*sqrt(cl) if Type2)
     double precision :: ncrit           ! ncrit of polar
     character(7)  :: base_value_type    ! base value of polar either 'spec_al' or 'spec_cl'
     double precision :: start_value     ! polar starting from ...
@@ -103,8 +105,8 @@ subroutine generate_polar_files (foilname, foil, npolars, polars)
   
   do i = 1, npolars
 
-    write (*,'(/,A,I7,A)') '   calculating polar '//polars(i)%type//' Re=', int(polars(i)%reynolds), &
-                               ' for '// polars(i)%airfoil_name
+    write (*,'(/,A,I1,A, I7,A)') '   calculating polar Type ',polars(i)%re%type,' Re=',  &
+          int(polars(i)%re%number), ' for '// polars(i)%airfoil_name
     call init_polar (polars(i))
     call calculate_polar (foil, polars(i))
 
@@ -130,13 +132,14 @@ subroutine read_polar_inputs  (input_file, npolars, polars)
   use airfoil_operations, only : my_stop
   use vardef,             only : output_prefix
   use airfoil_evaluation, only : xfoil_options
+  use input_output,       only : read_cl_re_default
 
   type (polar_type), dimension (MAXPOLARS), intent (out) :: polars
   character(*), intent(in) :: input_file
   integer , intent(out)    :: npolars
 
   logical         :: generate_polars                         ! .true. .false. 
-  character (5)   :: type_of_polar                           ! 'Type1' 'Type2' 
+  integer         :: type_of_polar                           ! 1 or 2 
   character (7)   :: op_mode                                 ! 'spec-al' 'spec_cl'
   double precision, dimension (MAXPOLARS) :: polar_reynolds  ! 40000, 70000, 100000
   double precision, dimension (3)  :: op_point_range         ! -1.0, 10.0, 0.5
@@ -150,7 +153,7 @@ subroutine read_polar_inputs  (input_file, npolars, polars)
 
   npolars         = 0
   generate_polars = .false.
-  type_of_polar   = 'Type1'
+  type_of_polar   = 1
   op_mode         = 'spec-al'
   op_point_range  = 0d0
   polar_reynolds  = 0d0
@@ -164,23 +167,21 @@ subroutine read_polar_inputs  (input_file, npolars, polars)
   read(iunit, iostat=istat, nml=polar_generation)
   close (iunit)
 
+! if there are no re numbers in input file take from command line
+  if (polar_reynolds(1) == 0d0) then
+    polar_reynolds(1) =  read_cl_re_default (0d0) 
+  end if
+
 ! Input sanity
 
   if (.not. generate_polars) return 
 
-  if ((op_mode /= 'spec-al') .and. (op_mode /= 'spec-al')) then
+  if ((op_mode /= 'spec-al') .and. (op_mode /= 'spec-cl')) then
     write (*,*) " Error: op_mode must be 'spec-cl' or 'spec-al'"
     stop
   end if
 
-  if     (type_of_polar == 'Type1') then 
-
-  elseif (type_of_polar == 'Type2') then 
-    if (op_mode /= 'spec-cl') then
-      write (*,*) " Error: For 'Type2' polars only 'spec-cl' is supported. Sorry"
-      stop 
-    end if 
-  else
+  if ((type_of_polar /= 1) .and. (type_of_polar /= 2)) then 
     write (*,*) " Error: Type of polars must be either 'Type1' or 'Type2'"
     stop 
   end if 
@@ -201,14 +202,15 @@ subroutine read_polar_inputs  (input_file, npolars, polars)
   do i = 1, size(polar_reynolds)
     if (polar_reynolds(i) > 1000d0) then 
       polars(i)%airfoil_name    = trim(output_prefix)
-      polars(i)%type            = type_of_polar
       polars(i)%base_value_type = op_mode
       polars(i)%start_value     = op_point_range (1)
       polars(i)%end_value       = op_point_range (2)
       polars(i)%increment       = op_point_range (3)
-      polars(i)%mach            = 0.0d0
+      polars(i)%ma%number       = 0.0d0                   ! currently not supported
+      polars(i)%ma%type         = 1                       ! currently not supported
+      polars(i)%re%number       = polar_reynolds(i)
+      polars(i)%re%type         = type_of_polar
       polars(i)%ncrit           = xfoil_options%ncrit
-      polars(i)%reynolds        = polar_reynolds(i)
       npolars                   = i
     end if
   end do
@@ -246,24 +248,17 @@ subroutine init_polar (polar)
 
 ! init op data points of polar
 
-  if ((polar%type =='Type2') .and. (polar%base_value_type == 'spec_al')) &
-    write (*,*) "Error: Type2 polar based on alpha currently not supported. Sorry!"
   cur_value = polar%start_value
 
   do i = 1, polar%n_op_points
 
     polar%op_points(i)%value    = cur_value
-    if(polar%type =='Type1') then               ! Type1 polar
-      polar%op_points(i)%reynolds = polar%reynolds
-      if (polar%base_value_type == 'spec_al') then
-        polar%op_points(i)%alpha = cur_value
-      else
-        polar%op_points(i)%lift  = cur_value
-      end if 
-    else                                        ! Type2 polar
-      polar%op_points(i)%reynolds = polar%reynolds / (abs(cur_value) ** 0.5d0)                                       
-      polar%op_points(i)%lift     = cur_value
+    if (polar%base_value_type == 'spec_al') then
+      polar%op_points(i)%alpha = cur_value
+    else
+      polar%op_points(i)%lift  = cur_value
     end if 
+
     cur_value = cur_value + polar%increment
 
 end do
@@ -286,13 +281,17 @@ subroutine calculate_polar (foil, polar)
   type (airfoil_type), intent (in)  :: foil
 
   character(7),     dimension(polar%n_op_points) :: op_modes
-  double precision, dimension(polar%n_op_points) :: mach_numbers, flap_degrees
+  type(re_type)   , dimension(polar%n_op_points) :: ma, re
+  double precision, dimension(polar%n_op_points) :: flap_degrees
   double precision :: x_flap, y_flap
   character(3) :: y_flap_spec
   logical :: use_flap
 
   op_modes (:)     = polar%base_value_type
-  mach_numbers (:) = 0.d0
+  re(:)%number     = polar%re%number
+  re(:)%type       = polar%re%type
+  ma(:)%number     = polar%ma%number
+  ma(:)%type       = polar%ma%type
   flap_degrees (:) = 0.d0 
   use_flap         = .false. 
   x_flap           = 0.d0
@@ -300,7 +299,7 @@ subroutine calculate_polar (foil, polar)
   y_flap_spec      = 'y/c'
 
   call run_xfoil(foil, xfoil_geom_options, polar%op_points%value,  op_modes,     &
-    polar%op_points%reynolds, mach_numbers, use_flap, x_flap, y_flap,            &
+    re, ma, use_flap, x_flap, y_flap,                                            &
     y_flap_spec, flap_degrees, xfoil_options,                                    &
     polar%op_points%lift, polar%op_points%drag, polar%op_points%moment,          &
     polar%op_points%viscrms, polar%op_points%alpha, polar%op_points%xtrt, polar%op_points%xtrb)
@@ -366,7 +365,7 @@ subroutine write_polar_header (out_unit, polar)
   write (out_unit,*)
   write (out_unit,'(A)') " Calculated polar for: "//trim(polar%airfoil_name)
   write (out_unit,*)
-  if (polar%type == 'Type1' ) then 
+  if (polar%re%type == 1 ) then 
     write (out_unit,'(A)') " 1 1 Reynolds number fixed          Mach number fixed"
   else
     write (out_unit,'(A)') " 2 2 Reynolds number ~ 1/sqrt(CL)   Mach number ~ 1/sqrt(CL)"
@@ -374,7 +373,7 @@ subroutine write_polar_header (out_unit, polar)
   write (out_unit,*) 
   write (out_unit,'(A)') " xtrf =   1.000 (top)        1.000 (bottom)"
   write (out_unit,'(A,F7.3,5X,A,F9.3,A,5X,A,F7.3 )')                     &
-                     " Mach = ",polar%mach,'Re = ',(polar%reynolds/1.d6),' e 6','Ncrit = ',polar%ncrit
+                     " Mach = ",polar%ma%number,'Re = ',(polar%re%number/1.d6),' e 6','Ncrit = ',polar%ncrit
   write (out_unit,*)
   
 end subroutine write_polar_header
@@ -416,11 +415,11 @@ function  get_n_op_points (polar)
     end if 
 
     build_filename  = trim(build_filename)  // '_Re'
-    write (temp_String, '(F5.3)') polar%reynolds / 1.d6
+    write (temp_String, '(F5.3)') polar%re%number / 1.d6
     build_filename  = trim(build_filename)  // trim(temp_String)
 
     build_filename  = trim(build_filename)  // '_M'
-    write (temp_String, '(F4.2)') polar%mach
+    write (temp_String, '(F4.2)') polar%ma%number
     build_filename  = trim(build_filename)  // trim(temp_String)
 
     build_filename  = trim(build_filename)  // '_N'

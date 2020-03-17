@@ -41,6 +41,13 @@ module vardef
     double precision :: scale_factor                    ! scale for objective function
   end type geo_target_type
 
+! jx-mod Reynolds-Type to handle Type 1 (fixed speedI and Type 2 (fixed lift) 
+!        also used for Mach Number 
+  type re_type
+    double precision :: number                           ! Reynolds Number
+    integer          :: type                             ! Type 
+  end type re_type
+
 ! Global variables (mainly needed to preserve generality of optimization
 ! routines)
 
@@ -49,8 +56,9 @@ module vardef
   double precision, dimension(:), allocatable :: xseedt, xseedb, zseedt, zseedb
   character(7), dimension(max_op_points) :: op_mode
   character(8), dimension(max_op_points) :: flap_selection
-  double precision, dimension(max_op_points) :: op_point, reynolds, mach,      &
+  double precision, dimension(max_op_points) :: op_point,      &
                                  flap_degrees, weighting, scale_factor, ncrit_pt
+  type (re_type), dimension(max_op_points)   :: re, ma
 
 ! jx-mod Aero targets - new Option: target_value for op_mode target-moment and target-drag
   double precision, dimension(max_op_points) :: target_value

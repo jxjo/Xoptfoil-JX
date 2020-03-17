@@ -39,7 +39,6 @@ program xfoil_worker
   use particle_swarm,     only : pso_options_type
   use genetic_algorithm,  only : ga_options_type
   use simplex_search,     only : ds_options_type
-  use airfoil_evaluation, only : xfoil_options, xfoil_geom_options
   use memory_util,        only : deallocate_airfoil
   use airfoil_operations, only : load_airfoil
   use naca,               only : naca_options_type, naca_456
@@ -111,7 +110,7 @@ program xfoil_worker
 ! Run xfoil
 
 !  call run_xfoil(foil, xfoil_geom_options, op_point(1:noppoint),               &
-!                 op_mode(1:noppoint), reynolds(1:noppoint), mach(1:noppoint),  &
+!                 op_mode(1:noppoint), re(1:noppoint), ma(1:noppoint),          &
 !                 use_flap, x_flap, y_flap, y_flap_spec,                        &
 !                 flap_degrees(1:noppoint), xfoil_options, lift, drag, moment,  &
 !                 viscrms, alpha, xtrt, xtrb, ncrit_pt(1:noppoint))
@@ -257,14 +256,13 @@ subroutine test_polar_calculation (input_file, foil)
   do i = 1, size(polars) 
     if (re_polars(i) > 1000d0) then 
       polars(i)%airfoil_name    = trim(output_prefix)
-      polars(i)%type            = 'Type2'
       polars(i)%base_value_type = 'spec-cl'
       polars(i)%start_value     = 0.05d0
       polars(i)%end_value       = 0.95d0
       polars(i)%increment       = 0.025d0
-      polars(i)%mach            = 0.0d0
       polars(i)%ncrit           = xfoil_options%ncrit
-      polars(i)%reynolds        = re_polars(i)
+      polars(i)%re%number       = re_polars(i)
+      polars(i)%re%type         = 2
       npolars                   = i
     end if
   end do

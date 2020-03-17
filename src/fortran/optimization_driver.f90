@@ -530,7 +530,7 @@ subroutine write_final_design(optdesign, f0, fmin, shapetype)
 !   Run xfoil for requested operating points
 
     call run_xfoil(final_airfoil, xfoil_geom_options, op_point(1:noppoint),    &
-                   op_mode(1:noppoint), reynolds(1:noppoint), mach(1:noppoint),&
+                   op_mode(1:noppoint), re(1:noppoint), ma(1:noppoint),        &
                    use_flap, x_flap, y_flap, y_flap_spec,                      &
                    actual_flap_degrees(1:noppoint), xfoil_options, lift, drag, &
                    moment, viscrms, alpha, xtrt, xtrb, ncrit_pt)
@@ -557,10 +557,10 @@ subroutine write_final_design(optdesign, f0, fmin, shapetype)
       end if
       write(*,'(A)') " Operating point "//trim(text)
       write(iunit,'(A)') " Operating point "//trim(text)
-      write(*,'(A18,ES9.3)') " Reynolds number: ", reynolds(i)
-      write(iunit,'(A18,ES9.3)') " Reynolds number: ", reynolds(i)
-      write(*,'(A14,F9.5)') " Mach number: ", mach(i)
-      write(iunit,'(A14,F9.5)') " Mach number: ", mach(i)
+      write(*,'(A18,ES9.3)') " Reynolds number: ", re(i)%number
+      write(iunit,'(A18,ES9.3)') " Reynolds number: ", re(i)%number
+      write(*,'(A14,F9.5)') " Mach number: ", ma(i)%number
+      write(iunit,'(A14,F9.5)') " Mach number: ", ma(i)%number
       write(*,'(A8,F9.5)') " ncrit: ", ncrit_pt(i)
       write(iunit,'(A8,F9.5)') " ncrit: ", ncrit_pt(i)
       if (use_flap) then

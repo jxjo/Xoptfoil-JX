@@ -178,18 +178,17 @@ end subroutine xfoil_apply_flap_deflection
 !
 !=============================================================================80
 subroutine run_xfoil(foil, geom_options, operating_points, op_modes,           &
-                     reynolds_numbers, mach_numbers, use_flap, x_flap, y_flap, &
+                     re, ma, use_flap, x_flap, y_flap,                         &
                      y_flap_spec, flap_degrees, xfoil_options, lift, drag,     &
                      moment, viscrms, alpha, xtrt, xtrb, ncrit_per_point)
 
   use xfoil_inc
-  use vardef,    only : airfoil_type
+  use vardef,    only : airfoil_type, re_type
 
   type(airfoil_type), intent(in) :: foil
   type(xfoil_geom_options_type), intent(in) :: geom_options
-  double precision, dimension(:), intent(in) :: operating_points,              &
-                                                reynolds_numbers, mach_numbers,&
-                                                flap_degrees
+  double precision, dimension(:), intent(in) :: operating_points,  flap_degrees
+  type(re_type), dimension(:), intent(in) :: re, ma
   double precision, intent(in) :: x_flap, y_flap
   character(3), intent(in) :: y_flap_spec
   logical, intent(in) :: use_flap
@@ -259,8 +258,11 @@ subroutine run_xfoil(foil, geom_options, operating_points, op_modes,           &
                                        flap_degrees(i))
     end if
 
-    REINF1 = reynolds_numbers(i)
-    call MINFSET(mach_numbers(i))
+! jx-mod Support Type 1 and 2 re numbers  
+    REINF1 = re(i)%number
+    RETYP  = re(i)%type 
+    MATYP  = re(i)%type 
+    call MINFSET(ma(i)%number)
 
     if (xfoil_options%reinitialize) then
       LIPAN = .false.
