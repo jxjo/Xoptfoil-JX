@@ -11,6 +11,8 @@
 
 This is Xoptfoil-JX, a fork of Xoptfoil - the amazing airfoil optimizer by Daniel Prosser  
 
+
+
 ## About the project
 
 The project was started to handle some off the difficulties when it comes to optimize an airfoil having more advanced requirements on the quality of the generated airfoil. 
@@ -38,6 +40,11 @@ Windows:
 ```sh
 edit autoexec.bat
 ```
+
+## Documentation 
+
+The additional options of Xoptfoil-JX compared to the original Xoptfoil are described in [Xoptfoil-JX Reference](https://github.com/jxjo/Xoptfoil/Xoptfoil-JX%20Reference.pdf)
+
 
 ## Usage example
 
