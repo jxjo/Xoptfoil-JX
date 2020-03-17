@@ -27,55 +27,30 @@ Main changes and improvements made up to now based on the original Xoptfoil
 * Minor other modifications in Xoptfoil and visualizer
 
 
-## Installation
-
-OS X & Linux:
-
-```sh
-npm install my-crazy-module --save
-```
-
-Windows:
-
-```sh
-edit autoexec.bat
-```
-
 ## Documentation 
 
-The additional options of Xoptfoil-JX compared to the original Xoptfoil are described in [Xoptfoil-JX Reference](https://github.com/jxjo/Xoptfoil/Xoptfoil-JX%20Reference.pdf)
+The additional options of Xoptfoil-JX compared to the original Xoptfoil are described in [Xoptfoil-JX Reference](https://github.com/jxjo/Xoptfoil/blob/master/Xoptfoil-JX%20Reference.pdf)
+
+Descriptions of some new capabilities can be found in [Xoptfoil-JX Describtion](https://github.com/jxjo/Xoptfoil/blob/master/Xoptfoil-JX%20Describtion.pdf)
 
 
 ## Usage example
 
-A few motivating and useful examples of how your product can be used. Spice this up with code blocks and potentially more screenshots.
+The development of a high end F3F airfoil using Xoptfoil-JX is described in the arctivle (Entwicklung eines F3F-Profils)[http://www.rc-network.de/forum/showthread.php/769110-Entwicklung-eines-F3F-Profils] - sorry, it's in German.
 
 _For more examples and usage, please refer to the [Wiki][wiki]._
 
-## Development setup
+## Installation
 
-Describe how to install all development dependencies and how to run an automated test-suite of some kind. Potentially do this for multiple platforms.
+tbd
 
 ```sh
-make install
-npm test
+tbd
 ```
-
-## Documentation
 
 ## Meta
 
-Your Name – [@YourTwitter](https://twitter.com/dbader_org) – YourEmail@example.com
+* Initial fork and first modifications by Jochen Guenzel 
+* Camber & Tickness based optimization by Matthias Boese and Jochen Guenzel
 
-Distributed under the XYZ license. See ``LICENSE`` for more information.
-
-[https://github.com/yourname/github-link](https://github.com/dbader/)
-
-## Contributing
-
-1. Fork it (<https://github.com/yourname/yourproject/fork>)
-2. Create your feature branch (`git checkout -b feature/fooBar`)
-3. Commit your changes (`git commit -am 'Add some fooBar'`)
-4. Push to the branch (`git push origin feature/fooBar`)
-5. Create a new Pull Request
-
+Feel free to contact us - and of course we are happy for any contributions and suggestions
