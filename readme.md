@@ -52,4 +52,6 @@ tbd
 * Initial fork and first modifications by Jochen Guenzel 
 * Camber & Tickness based optimization by Matthias Boese and Jochen Guenzel
 
-Feel free to contact us - and of course we are happy for any contributions and suggestions
+Feel free to contact us - and of course we are happy for any contributions and suggestions!
+
+Jochen Guenzel, March 2020
