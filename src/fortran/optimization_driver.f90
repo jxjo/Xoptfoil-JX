@@ -559,20 +559,20 @@ subroutine write_final_design(optdesign, f0, fmin, shapetype)
     do i = 1, noppoint
 
       if (use_flap) then
-        write (flapnote, '(F9.2)') actual_flap_degrees(i)
+        write (flapnote, '(F6.2)') actual_flap_degrees(i)
         if (flap_selection(i) == "specify") then
           flapnote = trim(flapnote) //" spec"
         else
           flapnote = trim(flapnote) //" opt"
         end if 
       else
-        flapnote = "-"
+        flapnote = "   -"
       end if 
 
-      write (iunit,  "(I2,   F8.3,   F9.4,    F10.5, F9.4,   F8.4,   F8.4, ES9.2     F8.3     F7.1, A)") &
+      write (iunit,  "(I2,   F8.3,   F9.4,    F10.5, F9.4,   F8.4,   F8.4, ES9.2     F8.3     F7.1, 3X, A)") &
         i, alpha(i), lift(i), drag(i), moment(i), xtrt(i), xtrb (i), &
         re(i)%number, ma(i)%number, ncrit_pt(i), trim(flapnote)
-      write (*    ,  "(I2,   F8.3,   F9.4,    F10.5, F9.4,   F8.4,   F8.4, ES9.2     F8.3     F7.1, A)") &
+      write (*    ,  "(I2,   F8.3,   F9.4,    F10.5, F9.4,   F8.4,   F8.4, ES9.2     F8.3     F7.1, 3X, A)") &
         i, alpha(i), lift(i), drag(i), moment(i), xtrt(i), xtrb (i), &
         re(i)%number, ma(i)%number, ncrit_pt(i), trim(flapnote)
 

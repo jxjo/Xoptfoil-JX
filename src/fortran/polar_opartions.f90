@@ -326,14 +326,14 @@ subroutine write_polar_data (out_unit, polar)
 !  -1.400   0.0042   0.00513   0.00057  -0.0285  0.7057  0.2705  -0.9363   0.0000   7.0438
 !   F8.3    F9.4     F10.5     F10.5     F9.4    F8.4    F8.4     F9.4     F9.4     F9.4     
 
-  write (out_unit,'(A)') "  alpha     CL        CD       CDp       Cm    Top Xtr Bot Xtr   Cpmin    Chinge    XCp"
-  write (out_unit,'(A)') " ------- -------- --------- --------- -------- ------- ------- -------- --------- ---------"
+  write (out_unit,'(A)') "  alpha     CL        CD       CDp       Cm    Top Xtr Bot Xtr "
+  write (out_unit,'(A)') " ------- -------- --------- --------- -------- ------- ------- "
 
   do i = 1, polar%n_op_points
 
     op = polar%op_points(i)
-    write (out_unit,  "(   F8.3,   F9.4,    F10.5,    F10.5,    F9.4,   F8.4,   F8.4,    F9.4,    F9.4,     F9.4)") &
-                        op%alpha, op%lift, op%drag,    0d0,  op%moment,op%xtrt,op%xtrb,  0d0,     0d0,      0d0
+    write (out_unit,  "(   F8.3,   F9.4,    F10.5,    F10.5,    F9.4,   F8.4,   F8.4)") &
+                        op%alpha, op%lift, op%drag,    0d0,  op%moment,op%xtrt,op%xtrb
 
   end do 
 
