@@ -261,7 +261,7 @@ subroutine run_xfoil(foil, geom_options, operating_points, op_modes,           &
 ! jx-mod Support Type 1 and 2 re numbers  
     REINF1 = re(i)%number
     RETYP  = re(i)%type 
-    MATYP  = re(i)%type 
+    MATYP  = ma(i)%type 
     call MINFSET(ma(i)%number)
 
     if (xfoil_options%reinitialize) then

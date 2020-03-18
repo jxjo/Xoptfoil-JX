@@ -605,7 +605,6 @@ function aero_objective_function(designvars, include_penalty)
   do i = 1, noppoint
     !   Extra checks for really bad designs
     if (viscrms(i) >= 1.d0) then
-      write (*,'(A40,I3, F10.3)') "... No convergence ...    i  viscrms", i, viscrms(i)
       aero_objective_function = 3.33333d0 *1.0D+06
       return
     end if

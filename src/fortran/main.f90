@@ -59,14 +59,12 @@ program main
   call read_clo(input_file, output_prefix)
 
   write(*,*)
-  write(*,*) 'This is Xoptfoil: airfoil optimization with Xfoil'
-  write(*,*) 'Copyright 2017-2019 Daniel Prosser'
+  write(*,*) 'This is Xoptfoil-JX - a modified version of Xoptfoil'
+  write(*,*) 'Xoptfoil Copyright 2017-2019 Daniel Prosser'
   write(*,*) 
-  write(*,*) 'This is Xoptfoil-JX: a patched version of the original Xoptfoil'
-  write(*,*) '    - Optimization targets and Smoothing'
-  write(*,*) '      by Jochen Guenzel 2019-11'
-  write(*,*) '    - Shape_type "camb_thick"'
-  write(*,*) '      by Matthias Boese, Jochen Guenzel 2020-03'
+  write(*,*) '    - Optimization targets & Smoothing by Jochen Guenzel'
+  write(*,*) '    - Shape_type "camb_thick" by Matthias Boese, Jochen Guenzel'
+  write(*,*) 
   
 
 ! Read inputs from namelist file
@@ -153,7 +151,7 @@ program main
 
   write(*,*)
   write(*,*) 'Optimization complete. Totals: '
-  write(*,*) '  Steps: ', steps, ' Objective function evaluations: ', fevals
+  write(*,'(/,A, I5, A, I7)') '  Steps:', steps, '   Objective function evaluations:', fevals
 
 ! Write final design and summary
 

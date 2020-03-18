@@ -434,8 +434,7 @@ subroutine write_final_design(optdesign, f0, fmin, shapetype)
   integer :: flap_idx, dvcounter, iunit
   type(airfoil_type) :: final_airfoil
   character(80) :: output_file, aero_file
-  character(30) :: text
-  character(12) :: flapnote
+  character(20) :: flapnote
 
 ! jx-mod Smoothing
   integer :: dummyint
@@ -542,49 +541,41 @@ subroutine write_final_design(optdesign, f0, fmin, shapetype)
     open(unit=iunit, file=aero_file, status='replace')
 
     write(*,*)
-    write(*,'(A)') " Optimal airfoil performance summary"
+    write(*    ,'(A)') " Optimal airfoil performance summary"
     write(iunit,'(A)') " Optimal airfoil performance summary"
-    write(*,'(A)') " ----------------------------------------------------------"
-    write(iunit,'(A)')                                                         &
-                   " ----------------------------------------------------------"
+    write(*    ,'(A)') ""
+    write(iunit,'(A)') ""
+
+! i    alpha     CL        CD       Cm    Top Xtr Bot Xtr   Re      Mach     ncrit     flap 
+! --  ------- -------- --------- -------- ------- ------- -------- -------- ------- -----------
+!  7  -1.400   0.0042   0.00513  -0.0285  0.7057  0.2705  6.00E+04   0.000     9.1    5.23 spec
+! I2    F8.3    F9.4     F10.5     F9.4    F8.4    F8.4     ES9.2     F8.3     F7.1    F6.2  
+
+    write (iunit,'(A)') " i   alpha     CL        CD       Cm    Top Xtr Bot Xtr   Re      Mach    ncrit     flap"
+    write (iunit,'(A)') " -- ------- -------- --------- -------- ------- ------- ------- -------- ------- -----------"
+    write (*    ,'(A)') " i   alpha     CL        CD       Cm    Top Xtr Bot Xtr   Re      Mach    ncrit     flap"
+    write (*    ,'(A)') " -- ------- -------- --------- -------- ------- ------- ------- -------- ------- -----------"
+
     do i = 1, noppoint
-      write(text,*) i
-      text = adjustl(text)
-      if (flap_selection(i) == "specify") then
-        flapnote = " (specified)"
-      else
-        flapnote = " (optimized)"
-      end if
-      write(*,'(A)') " Operating point "//trim(text)
-      write(iunit,'(A)') " Operating point "//trim(text)
-      write(*,'(A18,ES9.3)') " Reynolds number: ", re(i)%number
-      write(iunit,'(A18,ES9.3)') " Reynolds number: ", re(i)%number
-      write(*,'(A14,F9.5)') " Mach number: ", ma(i)%number
-      write(iunit,'(A14,F9.5)') " Mach number: ", ma(i)%number
-      write(*,'(A8,F9.5)') " ncrit: ", ncrit_pt(i)
-      write(iunit,'(A8,F9.5)') " ncrit: ", ncrit_pt(i)
+
       if (use_flap) then
-        write(*,'(A25,F9.5,A12)') " Flap setting (degrees): ",                 &
-                                  actual_flap_degrees(i), flapnote
-        write(iunit,'(A25,F9.5,A12)') " Flap setting (degrees): ",             &
-                                  actual_flap_degrees(i), flapnote
-      endif
-      write(*,'(A18,F9.5)') " Angle of attack: ", alpha(i) 
-      write(iunit,'(A18,F9.5)') " Angle of attack: ", alpha(i) 
-      write(*,'(A19,F9.5)') " Lift coefficient: ", lift(i)
-      write(iunit,'(A19,F6.4)') " Lift coefficient: ", lift(i)
-      write(*,'(A19,F9.5)') " Drag coefficient: ", drag(i)
-      write(iunit,'(A19,F9.5)') " Drag coefficient: ", drag(i)
-      write(*,'(A21,F9.5)') " Moment coefficient: ", moment(i)
-      write(iunit,'(A21,F9.5)') " Moment coefficient: ", moment(i)
-      write(*,'(A21,F9.5)') " Top transition x/c: ", xtrt(i)
-      write(iunit,'(A21,F9.5)') " Top transition x/c: ", xtrt(i)
-      write(*,'(A24,F9.5)') " Bottom transition x/c: ", xtrb(i)
-      write(iunit,'(A24,F9.5)') " Bottom transition x/c: ", xtrb(i)
-      if (i /= noppoint) then
-        write(*,*)
-        write(iunit,*)
-      end if
+        write (flapnote, '(F9.2)') actual_flap_degrees(i)
+        if (flap_selection(i) == "specify") then
+          flapnote = trim(flapnote) //" spec"
+        else
+          flapnote = trim(flapnote) //" opt"
+        end if 
+      else
+        flapnote = "-"
+      end if 
+
+      write (iunit,  "(I2,   F8.3,   F9.4,    F10.5, F9.4,   F8.4,   F8.4, ES9.2     F8.3     F7.1, A)") &
+        i, alpha(i), lift(i), drag(i), moment(i), xtrt(i), xtrb (i), &
+        re(i)%number, ma(i)%number, ncrit_pt(i), trim(flapnote)
+      write (*    ,  "(I2,   F8.3,   F9.4,    F10.5, F9.4,   F8.4,   F8.4, ES9.2     F8.3     F7.1, A)") &
+        i, alpha(i), lift(i), drag(i), moment(i), xtrt(i), xtrb (i), &
+        re(i)%number, ma(i)%number, ncrit_pt(i), trim(flapnote)
+
     end do
 
 ! jx-mod Smoothing - write final info about smoothing
