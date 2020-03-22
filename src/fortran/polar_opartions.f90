@@ -25,7 +25,6 @@ module polar_operations
   type polar_type
     character(50)    :: airfoil_name    ! Name of airfoil
     character(50)    :: file_name       ! Name of polar file name 
-    character(5)     :: type            ! 'Type1'(fixed speed) or 'Type2'(fixed lift)
     type(re_type)    :: re              ! Re number of this polar (re*sqrt(cl) if Type2)
     type(re_type)    :: ma              ! Ma number of this polar (mach*sqrt(cl) if Type2)
     double precision :: ncrit           ! ncrit of polar
@@ -408,7 +407,7 @@ function  get_n_op_points (polar)
     character (25) :: build_filename
     character (5)  :: temp_String
   
-    if(polar%type =='Type1') then 
+    if(polar%re%type == 1) then 
         build_filename  = 'T1'
     else 
         build_filename  = 'T2'
