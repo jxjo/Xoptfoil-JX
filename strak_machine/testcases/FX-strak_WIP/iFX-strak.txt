@@ -8,8 +8,8 @@
 ! airfoil_file = '... dat'                                 ! strak: get airfoil file  from command line 
   shape_functions = 'camb-thick'
   initial_perturb = 0.002
-  write_designs = .false.
-  show_details   = .false.
+  write_designs = .true.
+  show_details   = .true.
   echo_input_parms = .false.
 /  
 
@@ -22,14 +22,15 @@
   op_mode(1) = 'spec-cl'
   op_point(1) = -0.1
   optimization_type(1) = 'target-drag'
-  target_value(1) = -1                                     ! strak: keep drag valaue of seed airfoil
+  target_value(1) = -1                                     ! strak: keep drag value of seed airfoil
   weighting(1) = 0.5
 
   op_mode(2) = 'spec-cl'
   op_point(2) = 0.15
   optimization_type(2) = 'target-drag'
-  target_value(2) = -0.985                                 ! strak: improve drag value by ...
-  weighting(2) = 3.5                                       
+  !target_value(2) = -0.985                                 ! strak: improve drag value by ...
+  target_value(2) = -0.980                                 ! strak: improve drag value by ...
+  weighting(2) = 4.0                                       
 
 ! ==== strak: cl of best glide ratio constant (slope = 0) between these op_points =============
 
@@ -42,12 +43,15 @@
   op_mode(4) = 'spec-cl'
   op_point(4) = 0.60                                       ! strak: keep cl for best glide ratio
   optimization_type(4) = 'min-glide-slope'
-  weighting(4) = 2.0
+  !weighting(4) = 2.0
+  !weighting(4) = 1.5
+  weighting(4) = 1.3
 
   op_mode(5) = 'spec-cl'
   op_point(5) = 0.65
   optimization_type(5) = 'target-drag'
-  target_value(5) = -1.05                                  ! strak: allow increase in drag for decrease at low
+  !target_value(5) = -1.05                                  ! strak: allow increase in drag for decrease at low
+  target_value(5) = -1.1   
   weighting(5) = 1.0
 
 ! ==== strak: max-lift (slope = 0) between these op_points =============

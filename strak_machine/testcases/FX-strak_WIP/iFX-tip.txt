@@ -8,8 +8,8 @@
 ! airfoil_file = '... dat'                                 ! strak: get airfoil file  from command line 
   shape_functions = 'camb-thick'
   initial_perturb = 0.002
-  write_designs = .false.
-  show_details   = .false.
+  write_designs = .true.
+  show_details   = .true.
   echo_input_parms = .false.
 /  
 
@@ -28,7 +28,8 @@
   op_mode(2) = 'spec-cl'
   op_point(2) = 0.15
   optimization_type(2) = 'target-drag'
-  target_value(2) = -0.985                                 ! strak: improve drag valaue by ...
+  !target_value(2) = -0.985                                 ! strak: improve drag value by ...
+  target_value(2) = -0.970                                 ! strak: improve drag value by ...
   weighting(2) = 4.0                                       ! tip: towards tip fight against bubble drag
 
 ! ==== strak: cl of best glide ratio constant (slope = 0) between these op_points =============
@@ -42,7 +43,8 @@
   op_mode(4) = 'spec-cl'
   op_point(4) = 0.60                                       ! strak: keep cl for best glide ratio
   optimization_type(4) = 'min-glide-slope'
-  weighting(4) = 3.0
+  !weighting(4) = 3.0
+  weighting(4) = 2.0
 
   op_mode(5) = 'spec-cl'
   op_point(5) = 0.65
@@ -97,4 +99,5 @@
   pso_tol = 0.0002
   pso_convergence_profile = 'quick_camb_thick'
   pso_maxit = 30
+  pso_write_particlefile = .true.
 /
