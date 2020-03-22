@@ -77,7 +77,7 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
   integer :: i, iunit, ioerr, iostat1, counter, idx
   character(30) :: text
   character(3) :: family
-  character(10) :: pso_convergence_profile, parents_selection_method
+  character(20) :: pso_convergence_profile, parents_selection_method
   character :: choice
 
   ! jx-mod Geo targets 
@@ -166,7 +166,7 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
 ! jx-mod Show more infos  / supress echo
   show_details = .true. 
   echo_input_parms = .true.
-
+ 
 ! Read main namelist options
 
   rewind(iunit)
@@ -414,9 +414,11 @@ end do
   pso_write_particlefile = .false.
 
   if (trim(shape_functions) == 'camb-thick' ) then
-    pso_convergence_profile = 'fastest'
+    pso_convergence_profile = 'quick_camb_thick'
+    use_old_modes = .false. !TODO MB remove
   else
     pso_convergence_profile = 'exhaustive'
+    use_old_modes = .true. !TODO MB remove
   end if
 
 ! Set default genetic algorithm options
@@ -500,6 +502,14 @@ end do
       pso_options%maxit = pso_maxit
       pso_options%write_particlefile= pso_write_particlefile
       pso_options%convergence_profile = pso_convergence_profile
+
+      !TODO MB remove
+      if (trim(pso_options%convergence_profile) == "quick_camb_thick") then
+        use_old_modes = .false. 
+      else
+        use_old_modes = .true.
+      end if
+
       pso_options%feasible_init = feasible_init
       pso_options%feasible_limit = feasible_limit
       pso_options%feasible_init_attempts = feasible_init_attempts
@@ -1101,9 +1111,9 @@ end do
       if (pso_maxit < 1) call my_stop("pso_maxit must be > 0.")  
       if ( (trim(pso_convergence_profile) /= "quick") .and.                    &
            (trim(pso_convergence_profile) /= "exhaustive") .and.               &
-           (trim(pso_convergence_profile) /= "fastest"))                       &
+           (trim(pso_convergence_profile) /= "quick_camb_thick"))                       &
         call my_stop("pso_convergence_profile must be 'exhaustive' "//&
-                     "or 'quick' or 'fastest'.")
+                     "or 'quick' or 'quick_camb_thick'.")
 
     else if (trim(global_search) == 'genetic_algorithm') then
 
