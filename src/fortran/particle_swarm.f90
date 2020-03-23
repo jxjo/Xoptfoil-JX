@@ -43,9 +43,10 @@ module particle_swarm
     logical :: relative_fmin_report
                                   ! If .true., reports improvement over seed
                                   !   design. Otherwise, reports fmin itself.
-    character(10) :: convergence_profile
-                                  ! 'exhaustive' or 'quick'; exhaustive takes
-                                  !   longer but finds better solutions 
+    character(20) :: convergence_profile
+                                  ! 'exhaustive' or 'quick' or 'quick_camb_thick
+                                  ! exhaustive takes onger but finds better 
+                                  ! solutions 
     logical :: write_particlefile ! Whether to write particle-values for each
                                   ! iteration to file
 
@@ -134,17 +135,17 @@ subroutine particleswarm(xopt, fmin, step, fevals, objfunc, x0, xmin, xmax,    &
     wlow = 0.8d0       ! ending inertial parameter
     convrate = 0.02d0  ! inertial parameter reduction rate
 
-  else if (trim(pso_options%convergence_profile) == "fastest") then
+  else if (trim(pso_options%convergence_profile) == "quick_camb_thick") then
 
-    c1 = 1.4d0         ! particle-best trust factor
-    c2 = 1.0d0         ! swarm-best trust factor
-    whigh = 1.8d0      ! starting inertial parameter
-    wlow = 0.8d0       ! ending inertial parameter
-    convrate = 0.2d0!0.1d0   ! inertial parameter reduction rate
+    c1 = 1.0d0         ! particle-best trust factor
+    c2 = 1.6d0         ! swarm-best trust factor
+    whigh = 1.2d0      ! starting inertial parameter
+    wlow = 0.2d0       ! ending inertial parameter
+    convrate = 0.1d0   ! inertial parameter reduction rate
 
   else
     write(*,*) "Error in particleswarm: convergence mode should be"//          &
-               "'exhaustive' or 'quick'."
+               "'exhaustive' or 'quick' or 'quick_camb_thick'."
     stop
   end if
 

@@ -40,8 +40,9 @@ if __name__ == "__main__":
 
             # an empty string is a separator between particles
             if (element == ''):
-                # append actual particle to Iteration-List
-                Iteration.append(particle)
+                if len(particle["pos"]) > 0:
+                    # append actual particle to Iteration-List
+                    Iteration.append(particle)
                 # create new, empty particle-dict
                 particle =	{"pos": [], "vel": []}
             else:

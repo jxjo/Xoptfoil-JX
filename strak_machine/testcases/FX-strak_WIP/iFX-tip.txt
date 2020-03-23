@@ -1,0 +1,103 @@
+! Test F3F Strak  
+! Tip airfoil
+
+&optimization_options
+  search_type = 'global'
+  global_search = 'particle_swarm'
+  seed_airfoil = 'from_file'
+! airfoil_file = '... dat'                                 ! strak: get airfoil file  from command line 
+  shape_functions = 'camb-thick'
+  initial_perturb = 0.002
+  write_designs = .true.
+  show_details   = .true.
+  echo_input_parms = .false.
+/  
+
+&operating_conditions
+  noppoint = 8
+  re_default_as_resqrtcl = .true.                          ! strak: get reynolds (type 2) from command line
+
+! ==== strak: improve cd at low cl values (speed strak)  =============
+
+  op_mode(1) = 'spec-cl'
+  op_point(1) = -0.1
+  optimization_type(1) = 'target-drag'
+  target_value(1) = -1                                     ! strak: keep drag valaue of seed airfoil
+  weighting(1) = 0.5
+
+  op_mode(2) = 'spec-cl'
+  op_point(2) = 0.15
+  optimization_type(2) = 'target-drag'
+  !target_value(2) = -0.985                                 ! strak: improve drag value by ...
+  target_value(2) = -0.970                                 ! strak: improve drag value by ...
+  weighting(2) = 4.0                                       ! tip: towards tip fight against bubble drag
+
+! ==== strak: cl of best glide ratio constant (slope = 0) between these op_points =============
+
+  op_mode(3) = 'spec-cl'
+  op_point(3) = 0.55
+  optimization_type(3) = 'target-drag'
+  target_value(3) = -1.04                                  ! tip: towards tip allow more decrease in drag
+  weighting(3) = 1.0
+  
+  op_mode(4) = 'spec-cl'
+  op_point(4) = 0.60                                       ! strak: keep cl for best glide ratio
+  optimization_type(4) = 'min-glide-slope'
+  !weighting(4) = 3.0
+  weighting(4) = 2.0
+
+  op_mode(5) = 'spec-cl'
+  op_point(5) = 0.65
+  optimization_type(5) = 'target-drag'
+  target_value(5) = -1.05                                  ! tip: towards tip allow more decrease in drag
+  weighting(5) = 1.0
+
+! ==== strak: max-lift (slope = 0) between these op_points =============
+
+  op_mode(6) = 'spec-al'
+  op_point(6) = 8.6                                        ! tip: decrease alpha for cl-max
+  optimization_type(6) = 'max-lift'
+  weighting(6) = 0.001
+
+  op_mode(7) = 'spec-al'
+  op_point(7) =9.0                                         ! tip: decrease alpha for cl-max
+  optimization_type(7) = 'min-lift-slope'
+  weighting(7) = 1.0
+
+  op_mode(8) = 'spec-al'
+  op_point(8) = 9.4                                        ! tip: decrease alpha for cl-max
+  optimization_type(8) = 'max-lift'
+  weighting(8) = 0.001
+/
+
+&polar_generation
+  generate_polars = .true. 
+  type_of_polar   = 2 
+!  polar_reynolds  = 60000, 90000, 110000, 130000          ! get re number from command line
+  op_mode         = 'spec-al'
+  op_point_range  = -3.0, 10.5, 0.5
+/
+
+&geometry_targets
+  ngeo_targets = 1
+  target_type(1) = 'Thickness'
+  target_geo(1) = -0.986                                   ! strak: reduce thickness by factor x 
+  weighting_geo(1)= 3
+/  
+
+&constraints
+/
+
+&initialization
+  feasible_init = .true.
+  feasible_limit = 100000
+  feasible_init_attempts = 200
+/
+
+&particle_swarm_options
+  pso_pop = 30
+  pso_tol = 0.0002
+  pso_convergence_profile = 'quick_camb_thick'
+  pso_maxit = 30
+  pso_write_particlefile = .true.
+/
