@@ -405,6 +405,12 @@ subroutine check_seed()
                  ". Cannot use 'max-lift' optimization type in this case."
       write(*,*) 
       stop
+    elseif ((op_mode(i) == 'spec-cl') .and.                                    &
+           (trim(optimization_type(i)) == 'target-lift')) then              
+      write (*,*) ("op_mode = 'spec_cl' doesn't make sense "//                &
+                   "for optimization_type 'target-lift'")
+      write(*,*) 
+      stop
     end if
 
   end do
@@ -504,7 +510,13 @@ subroutine check_seed()
 
     elseif (trim(optimization_type(i)) == 'target-drag') then
       if (target_value(i) < 0.d0) target_value(i) = drag(i) * abs(target_value(i))
+      ! add a base value to the drag difference so the relative change won't be to high
       checkval = target_value(i) + ABS (target_value(i)-drag(i))
+
+    elseif (trim(optimization_type(i)) == 'target-lift') then
+      if (target_value(i) < 0.d0) target_value(i) = lift(i) * abs(target_value(i))
+      ! add a constant base value to the lift difference so the relative change won't be to high
+      checkval = 1.d0 + ABS (target_value(i)-lift(i))
 
     elseif (trim(optimization_type(i)) == 'target-moment') then
       if (target_value(i) < 0.d0) target_value(i) = moment(i) * abs(target_value(i)) 

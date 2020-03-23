@@ -275,7 +275,17 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
     end if
     ma(i)%number  = mach(i)               ! mach number only Type 1
     ma(i)%type    = 1
-end do
+  end do
+
+! jx-mod May the king of xfoil polars be lenient ...
+!        ... when patching to support negative cl for Type 2 based op_points
+
+  do i = 1, noppoint
+    if ((re(i)%type == 2) .and. (op_mode(i) == 'spec-cl') .and. (op_point(i) < 0d0)) then
+      re(i)%type    = 1
+      re(i)%number  = re(i)%number / (abs(op_point(i)) ** 0.5d0)
+    end if
+  end do 
 
 ! jx-mod Smoothing - start read options-----------------------------------------
   
@@ -957,17 +967,18 @@ end do
       trim(optimization_type(i)) /= 'min-sink' .and.                           &
       trim(optimization_type(i)) /= 'max-lift' .and.                           &
 ! jx-mod Aero targets - additional op-point type target-moment and target-drag
-!                       min-lift-slope, min-glide-slope
+!                       min-lift-slope, min-glide-slope, target-lift
       trim(optimization_type(i)) /= 'target-moment' .and.                      &
       trim(optimization_type(i)) /= 'target-drag' .and.                        &
+      trim(optimization_type(i)) /= 'target-lift' .and.                        &
       trim(optimization_type(i)) /= 'max-xtr' .and.                            &
       trim(optimization_type(i)) /= 'min-lift-slope' .and.                     &
       trim(optimization_type(i)) /= 'min-glide-slope' .and.                    &
       trim(optimization_type(i)) /= 'max-lift-slope')                          &
       call my_stop("optimization_type must be 'min-drag', 'max-glide', "//     &
                    "'min-sink', 'max-lift', 'max-xtr', 'target-moment', "//    &
-                   "'target-drag', 'min-lift-slope', , 'min-glide-slope'"//    &
-                   " or 'max-lift-slope'.")
+                   "'target-drag', 'min-lift-slope', , 'min-glide-slope',"//   &
+                   "'target-drag' or 'max-lift-slope'.")
     if ((trim(optimization_type(i)) == 'max-lift-slope') .and. (noppoint == 1))&
       call my_stop("at least two operating points are required for to "//      &
                    "maximize lift curve slope.")
@@ -980,7 +991,7 @@ end do
     if (ncrit_pt(i) <= 0.d0) call my_stop("ncrit_pt must be > 0 or -1.")
   end do
 
-! jx-mod Aero targets - Check for an existing moment target value 
+! jx-mod Aero targets - Check for an existing target value 
 !              if optimization_type is target-moment or Target-drag
   do i = 1, noppoint
     if (((trim(optimization_type(i)) == 'target-moment') .and.                &
@@ -991,6 +1002,10 @@ end do
         (target_value(i)) == -1.d3) )                                         &
       call my_stop("No 'target-value' defined for "//  &
                      "for optimization_type 'target-drag'")
+    if (((trim(optimization_type(i)) == 'target-lift') .and.                  &
+        (target_value(i)) == -1.d3) )                                         &
+      call my_stop("No 'target-value' defined for "//  &
+                     "for optimization_type 'target-lift'")
   end do
 
 

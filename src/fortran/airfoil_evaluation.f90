@@ -143,7 +143,9 @@ function aero_objective_function(designvars, include_penalty)
   double precision :: penaltyi
   double precision :: geo_objective_function
   double precision :: ref_value, tar_value, cur_value, slope
-  character(100)   :: penalty_info, text
+  character(100)   :: penalty_info
+  double precision, dimension (noppoint) :: op_point_contribution, geo_target_contribution
+  character(20)   , dimension (noppoint) :: op_point_penalty_info
   ! jx-mod Smoothing
   double precision :: perturbation_bot, perturbation_top
 
@@ -205,6 +207,7 @@ function aero_objective_function(designvars, include_penalty)
 
   penaltyval = 0.d0
   penalty_info = ''                            ! user info on the type of penalities given
+  op_point_penalty_info = ''               
   geo_objective_function  = 0.d0               ! new geo_objective
 
   if (check_curvature .or. do_smoothing) then
@@ -336,7 +339,7 @@ function aero_objective_function(designvars, include_penalty)
                                                 x_interp(i))
       penaltyval = penaltyval + max(0.d0,gapallow-thickness(i))/0.1d0
       ! jx-mod Build user info string
-      if (max(0.d0,gapallow-thickness(i))/0.1d0 > 0.d0) penalty_info = trim(penalty_info) // ' Gap'
+      if (max(0.d0,gapallow-thickness(i))/0.1d0 > 0.d0) penalty_info = trim(penalty_info) // ' TEGap'
     end if
 
   end do
@@ -649,15 +652,23 @@ function aero_objective_function(designvars, include_penalty)
 
     elseif (trim(optimization_type(i)) == 'target-drag') then
 
-! jx-mod Geo targets - Minimize difference between target cd value and current value 
+! jx-mod Minimize difference between target cd value and current value 
     
       increment = (target_value(i) + ABS (target_value(i)-drag(i))) * scale_factor(i) 
 
+
+    elseif (trim(optimization_type(i)) == 'target-lift') then
+
+! jx-mod Minimize difference between target cl value and current value 
+!        Add a base value to the lift difference
+    
+      increment = (1.d0 + ABS (target_value(i)-lift(i))) * scale_factor(i) 
+
     elseif (trim(optimization_type(i)) == 'target-moment') then
 
-! jx-mod Geo targets - Minimize difference between target moment value and current value 
-!                     Add a base value (Clark y or so ;-) to the moment difference
-!                     so the relative change won't be to high
+! jx-mod Minimize difference between target moment value and current value 
+!        Add a base value (Clark y or so ;-) to the moment difference
+!        so the relative change won't be to high
       increment = (ABS (target_value(i)-moment(i))+ 0.05d0)*scale_factor(i)
          
     elseif (trim(optimization_type(i)) == 'max-lift') then
@@ -713,6 +724,10 @@ function aero_objective_function(designvars, include_penalty)
 
     aero_objective_function = aero_objective_function + weighting(i)*increment
 
+!   jx-mod Save contribution of this op_point for user entertainment
+
+    op_point_contribution(i) = weighting(i)* (1d0 - increment)
+
   end do
 
 ! Add penalty for unconverged points
@@ -721,7 +736,7 @@ function aero_objective_function(designvars, include_penalty)
     penaltyval = penaltyval + max(0.d0,viscrms(i)-1.0D-04)/1.0D-04
 
     ! jx-mod Build user info string
-    if ( max(0.d0,viscrms(i)-1.0D-04) > 0.d0) penalty_info = trim(penalty_info) // ' Visc'
+    if ( max(0.d0,viscrms(i)-1.0D-04) > 0.d0) op_point_penalty_info(i) = ' Visc'
 
   end do
 
@@ -746,14 +761,11 @@ function aero_objective_function(designvars, include_penalty)
 ! jx-mod Start many single patches for flip detection and geo targets 
 !------------------------------------------------------------------------------
 
-      write (text,*) i
-      text = '(' // trim(adjustl(text)) // ')'
-
       ! jx-mod cl had changed although should be constant -> penalize
 
       if ((op_mode(i) == 'spec-cl') .and. (abs(lift(i) - op_point(i)) > 0.01d0)) then
         penaltyval = penaltyval + 4.444d0 *  epsupdate             ! = 4.444%
-        penalty_info = trim(penalty_info) // ' clchange' // text
+        op_point_penalty_info(i) = ' clchange' 
       end if 
 
       ! jx-mod cd or cl still flipped away -> penalize
@@ -761,7 +773,7 @@ function aero_objective_function(designvars, include_penalty)
       if ( abs(lift(i)-maxlift(i))/max(0.0001d0,abs(maxlift(i))) > checktol) then              
         penaltyi = 1.111d0 *  epsupdate                             ! = 1.111%
         penaltyval = penaltyval + penaltyi  
-        penalty_info = trim(penalty_info) // ' clflip' // text
+        op_point_penalty_info(i) = ' clflip'
       end if
     end if
 
@@ -779,20 +791,13 @@ function aero_objective_function(designvars, include_penalty)
           penaltyi = 2.222d0 * epsupdate
         end if 
         penaltyval = penaltyval + penaltyi 
-        penalty_info = trim(penalty_info) // ' cdflip' // text
+        op_point_penalty_info(i) = 'cdflip'
       end if
     end if
 
   end do
 
 ! jx-mod Geo targets - Start --------------------------------------------
-
-  if (show_details) then 
-    write (*,*) 
-    if (trim(shape_functions) == 'camb-thick') then
-      call show_camb_thick_of_current
-    end if
-  end if
 
 ! Evaluate current value of geomtry targets - calculate geo_objective 
   do i = 1, ngeo_targets
@@ -815,31 +820,23 @@ function aero_objective_function(designvars, include_penalty)
     increment = (ref_value + abs(tar_value - cur_value)) * geo_targets(i)%scale_factor 
     geo_objective_function = geo_objective_function + geo_targets(i)%weighting * increment
 
-    if (show_details)                                                          &
-      write (*,'(14x,A,1(F9.6),A,F7.5)') "Geo target "//trim(geo_targets(i)%type)//":", cur_value,  &
-                          "     Obj: ", (geo_targets(i)%weighting * increment)
+    geo_target_contribution(i) = geo_targets(i)%weighting * (1d0 - increment)
+
   end do 
 
 ! jx-mod Geo targets - end ------------------------------------------------
-
   
 ! jx-mod Show surface quality for entertainment and info
 !          about objectives at the end of iteration 
   if (show_details) then
-
     if (do_smoothing) then
       call assess_surface ('Top   ', .true., max_curv_reverse_top, xseedt, zt_new, nreversalst, perturbation_top)
       call assess_surface ('Bottom', .true., max_curv_reverse_bot, xseedb, zb_new, nreversalsb, perturbation_bot)
     end if
-
-    if (penaltyval > 0.d0) write (*,'(52x,A)') 'Pen: ' // penalty_info 
-
-    write(*,'(2x,4(A11,G11.4),1(A13,F8.4),A1)')                                 &
-        "    Obj: ", aero_objective_function,                                    &
-        "  + Geo: ", geo_objective_function,                                     &
-        "  + Pen: ", (penaltyval * 1.0D+06),                                     &
-        "  = New: ", (aero_objective_function + geo_objective_function + penaltyval*1.0D+06),  &
-        " Improv: ", (1 - (aero_objective_function + geo_objective_function + penaltyval*1.0D+06))*100.d0, '%'
+    call show_op_point_contributions ( (aero_objective_function+geo_objective_function) , & 
+              noppoint,     op_point_contribution,                                        &
+              ngeo_targets, geo_target_contribution,                                      &
+              (penaltyval*1.0D+06), penalty_info, op_point_penalty_info  )                          
   end if
 
 ! jx-mod Exit wenn flip
@@ -877,11 +874,12 @@ function aero_objective_function(designvars, include_penalty)
     end do
   end if
 
-
 ! jx-mod End many single patches for flip detection and geo targets 
-!------------------------------------------------------------------------------
 
 end function aero_objective_function
+
+
+
 
 !=============================================================================80
 !
@@ -1637,5 +1635,63 @@ function write_function_restart_cleanup(restart_status, global_search,         &
   write_function_restart_cleanup = 0
 
 end function write_function_restart_cleanup
+
+
+!------------------------------------------------------------------------------
+! Shows contribution of each operating point and geotargets to the overall 
+! objective function during optimization  
+!------------------------------------------------------------------------------
+
+subroutine show_op_point_contributions ( obj_func_value,    &
+                noppoint, op_point_contribution,            &
+                ngeo,     geo_target_contribution,          &
+                penalty, penalty_info, op_point_penalty_info  ) 
+
+  double precision, intent (in) :: obj_func_value, penalty
+  integer         , intent (in) :: noppoint, ngeo
+  character(100)  , intent (in) :: penalty_info
+  double precision, dimension (:), intent (in) :: op_point_contribution, geo_target_contribution
+  character(20)   , dimension (:), intent (in) :: op_point_penalty_info
+
+
+  integer :: i 
+  double precision :: total_improvement
+
+  total_improvement = (1.d0-obj_func_value) 
+
+  write (*,'(4x, 25x)', advance = 'no') 
+  do i = 1, noppoint
+    write (*,'(A6,I02,A1)', advance = 'no') '    op',i,''
+  end do 
+  write (*,'(10x)', advance = 'no')
+  do i = 1, ngeo
+    write (*,'(A6,I02,A1)', advance = 'no') '   geo',i,''
+  end do 
+  write (*,*)
+
+  write (*,'(4x, A12,F8.4,A4)', advance = 'no') "Improvement:",total_improvement *100.d0,'%   '
+  do i = 1, noppoint
+    write (*,'(F8.2,A1)', advance = 'no') (op_point_contribution (i) *100.d0),'%'
+  end do 
+  write (*,'(10x)', advance = 'no')
+  do i = 1, ngeo
+    write (*,'(F8.2,A1)', advance = 'no') (geo_target_contribution (i) *100.d0),'%'
+  end do 
+  write (*,*)
+
+  if (penalty > 0d0) then
+    write (*,'(4x, A12,F8.1,A4)', advance = 'no') "    Penalty:", penalty * (-1.d0) * 100.d0,'%   '
+    do i = 1, noppoint
+      write (*,'(A9)', advance = 'no') trim(op_point_penalty_info (i))
+    end do 
+    write (*,'(10x)', advance = 'no')
+    write (*,'(A9)', advance = 'no') trim(penalty_info)
+    write (*,*)
+  end if
+
+  write (*,*)
+
+end subroutine show_op_point_contributions
+
 
 end module airfoil_evaluation
