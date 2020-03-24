@@ -437,8 +437,10 @@ def plot_airfoil_coordinates(seedfoil, designfoils, plotnum, firsttime=True,
 
   # Set up coordinates plot
 
-  if (firsttime): plt.close(1)
-  cfig = plt.figure(1)
+  window_name = "Geometry  " + str(prefix)
+
+  if (firsttime): plt.close(window_name)
+  cfig = plt.figure(num= window_name)
   # jx-mod  New size and location of Windows - only hacked for res 1920x1024
   if (firsttime): plt.get_current_fig_manager().window.setGeometry(850,600,1000,450)
 
@@ -613,6 +615,8 @@ def plot_polars(seedfoil, designfoils, plotnum, firsttime=True, animation=False,
   sc = plotoptions["color_for_seed"]
   nc = plotoptions["color_for_new_designs"]
 
+  window_name = "Polars  " + str(prefix)
+
   # Set up polars plot. Note: for monitoring, must pass pfig, axarr, and legend
   # after the initial plotting, because currently plt.subplots always creates a
   # new figure and the only other options would be to save these as global
@@ -620,16 +624,16 @@ def plot_polars(seedfoil, designfoils, plotnum, firsttime=True, animation=False,
   # polar plot its own class?)
 
   if firsttime: 
-    plt.close(2)
+    plt.close(window_name)
     # jx-mod new subplots for glide ratio and climb
-    pfig, axarr = plt.subplots(2, 3)
+    pfig, axarr = plt.subplots(2, 3, num= window_name)
     pfig.subplots_adjust(hspace=0.3, wspace=0.3)
     pfig.set_size_inches(11, 8, forward=True)
     # jx-mod new sizing
     plt.get_current_fig_manager().window.setGeometry(100,30,1300,550)
 
   else:
-    plt.figure(2)
+    plt.figure(num= window_name)
     axarr[0,0].clear()
     axarr[0,1].clear()
     axarr[1,0].clear()
@@ -897,7 +901,7 @@ def plot_polars(seedfoil, designfoils, plotnum, firsttime=True, animation=False,
 # Plots optimization history
 def plot_optimization_history(steps, fmins, relfmins, rads, firsttime=True,
                               animation=False, ofig=None, axarr=None, 
-                              mirrorax0=None):
+                              prefix=None, mirrorax0=None):
   global plotoptions
 
   # Set up optimization history plot. Note: for monitoring, must pass ofig, 
@@ -906,11 +910,13 @@ def plot_optimization_history(steps, fmins, relfmins, rads, firsttime=True,
   # to save these as global variables or to destry and recreate the figure each
   # time. (Or: make the optimization history plot its own class?)
 
+  window_name = "Optimization History  " + str(prefix)
+
   if firsttime: 
-    plt.close(3)
-    ofig, axarr = plt.subplots(2, 1)
+    plt.close(window_name)
+    ofig, axarr = plt.subplots(2, 1, num= window_name)
   else:
-    plt.figure(3)
+    plt.figure(num= window_name)
     axarr[0].clear()
     mirrorax0.clear()
     axarr[1].clear()
@@ -1429,14 +1435,14 @@ def main_menu(initialchoice, seedfoil, designfoils, prefix):
           numfoils = len(designfoils)
           if plotoptions["plot_airfoils"]:
             plot_airfoil_coordinates(seedfoil, designfoils, numfoils, 
-                                     firsttime=init, animation=True)
+                                     firsttime=init, animation=True, prefix = prefix)
           if plotoptions["plot_polars"]:
             pfig, axarr, leg = plot_polars(seedfoil, designfoils, numfoils,
-                                           firsttime=init, animation=True, 
+                                           firsttime=init, animation=True, prefix = prefix,
                                            pfig=pfig, axarr=axarr, legend=leg)
           if plotoptions["plot_optimization_history"]:
             ofig, oaxarr, mirrorax0 = plot_optimization_history(steps, fmins, 
-                                      relfmins, rads, firsttime=init, 
+                                      relfmins, rads, firsttime=init, prefix = prefix,
                                       animation=True, ofig=ofig, axarr=oaxarr,
                                       mirrorax0=mirrorax0)
           init = False
