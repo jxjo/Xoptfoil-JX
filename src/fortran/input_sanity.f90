@@ -35,9 +35,10 @@ subroutine check_seed()
   use xfoil_driver,       only : run_xfoil
   use xfoil_inc,          only : AMAX, CAMBR
   use airfoil_evaluation, only : xfoil_options, xfoil_geom_options
-! jx-mod Smoothing
+! jx-mod  
   use airfoil_operations, only : assess_surface, smooth_it
   use airfoil_operations, only : my_stop
+  use airfoil_evaluation, only : op_seed_value
 
   use math_deps,          only : interp_point
 
@@ -63,7 +64,7 @@ subroutine check_seed()
   logical :: addthick_violation
 ! jx-mod Smoothing 
   double precision :: perturbation_top , perturbation_bot
-! jx-mod Geo targets
+! jx-mod  
   double precision :: ref_value, seed_value, tar_value
 
   penaltyval = 0.d0
@@ -272,6 +273,7 @@ subroutine check_seed()
         call my_stop("Unknown target_type '"//trim(geo_targets(i)%type))
     end select
 
+    geo_targets(i)%seed_value      = seed_value
     geo_targets(i)%reference_value = ref_value
 
     ! target value negative?  --> take current seed value * |target_value| 
@@ -496,13 +498,16 @@ subroutine check_seed()
     end if
 
     if (trim(optimization_type(i)) == 'min-sink') then
-      checkval = drag(i)/lift(i)**1.5d0
+      checkval   = drag(i)/lift(i)**1.5d0
+      seed_value = lift(i) ** 1.5d0 / drag(i) 
 
     elseif (trim(optimization_type(i)) == 'max-glide') then
-      checkval = drag(i)/lift(i)
+      checkval   = drag(i)/lift(i)
+      seed_value = lift(i) / drag(i) 
 
     elseif (trim(optimization_type(i)) == 'min-drag') then
-      checkval = drag(i)
+      checkval   = drag(i)
+      seed_value = drag(i) 
 
     ! jx-mod New op point type 'target-....'
     !      - minimize the difference between current value and target value
@@ -511,23 +516,28 @@ subroutine check_seed()
     elseif (trim(optimization_type(i)) == 'target-drag') then
       if (target_value(i) < 0.d0) target_value(i) = drag(i) * abs(target_value(i))
       ! add a base value to the drag difference so the relative change won't be to high
-      checkval = target_value(i) + ABS (target_value(i)-drag(i))
+      checkval   = target_value(i) + ABS (target_value(i)-drag(i))
+      seed_value = drag(i)
 
     elseif (trim(optimization_type(i)) == 'target-lift') then
       if (target_value(i) < 0.d0) target_value(i) = lift(i) * abs(target_value(i))
       ! add a constant base value to the lift difference so the relative change won't be to high
-      checkval = 1.d0 + ABS (target_value(i)-lift(i))
+      checkval   = 1.d0 + ABS (target_value(i)-lift(i))
+      seed_value = lift(i)
 
     elseif (trim(optimization_type(i)) == 'target-moment') then
       if (target_value(i) < 0.d0) target_value(i) = moment(i) * abs(target_value(i)) 
       ! add a base value (Clark y or so ;-) to the moment difference so the relative change won't be to high
-      checkval = ABS (target_value(i)-moment(i)) + 0.05d0
+      checkval   = ABS (target_value(i)-moment(i)) + 0.05d0
+      seed_value = moment(i) 
 
     elseif (trim(optimization_type(i)) == 'max-lift') then
-      checkval = 1.d0/lift(i)
+      checkval   = 1.d0/lift(i)
+      seed_value = lift(i) 
 
     elseif (trim(optimization_type(i)) == 'max-xtr') then
-      checkval = 1.d0/(0.5d0*(xtrt(i)+xtrb(i))+0.1d0)  ! Ensure no division by 0
+      checkval   = 1.d0/(0.5d0*(xtrt(i)+xtrb(i))+0.1d0)  ! Ensure no division by 0
+      seed_value = 0.5d0*(xtrt(i)+xtrb(i))
 
 ! jx-mod Following optimization based on slope of the curve of op_point
 !         convert alpha in rad to get more realistic slope values
@@ -537,17 +547,20 @@ subroutine check_seed()
     elseif (trim(optimization_type(i)) == 'max-lift-slope') then
     ! Maximize dCl/dalpha (0.1 factor to ensure no division by 0)
       slope = derivation_at_point (noppoint, i, (alpha * pi/180.d0) , lift)
-      checkval = 1.d0 / (atan(abs(slope))  + 4.d0*pi)
+      checkval   = 1.d0 / (atan(abs(slope))  + 4.d0*pi)
+      seed_value = atan(abs(slope))
 
     elseif (trim(optimization_type(i)) == 'min-lift-slope') then
     ! jx-mod  New: Minimize dCl/dalpha e.g. to reach clmax at alpha(i) 
       slope = derivation_at_point (noppoint, i,  (alpha * pi/180.d0) , lift)
-      checkval = atan(abs(slope)) + 4.d0*pi
+      checkval   = atan(abs(slope)) + 4.d0*pi
+      seed_value = atan(abs(slope))
 
     elseif (trim(optimization_type(i)) == 'min-glide-slope') then
     ! jx-mod  New: Minimize d(cl/cd)/dcl e.g. to reach best glide at alpha(i) 
       slope = derivation_at_point (noppoint, i,  (lift * 20d0), (lift/drag))
-      checkval = atan(abs(slope)) + 1.d0*pi
+      checkval   = atan(abs(slope)) + 1.d0*pi
+      seed_value = atan(abs(slope))
      
     else
       write(*,*)
@@ -555,7 +568,8 @@ subroutine check_seed()
                  trim(text)//" not recognized."
       stop
     end if
-    scale_factor(i) = 1.d0/checkval
+    scale_factor(i)  = 1.d0/checkval
+    op_seed_value(i) = seed_value
   end do
 
 end subroutine check_seed

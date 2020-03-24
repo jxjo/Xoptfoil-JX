@@ -36,6 +36,7 @@ module vardef
     character(10) :: type                               ! eg 'zBot' zTop'
     double precision :: x                               ! x-value of target
     double precision :: target_value                    ! target value to achieve
+    double precision :: seed_value                      ! the value of the seed airfoil
     double precision :: reference_value                 ! to scale improvement (depends on type)
     double precision :: weighting                       ! weighting within objective function
     double precision :: scale_factor                    ! scale for objective function

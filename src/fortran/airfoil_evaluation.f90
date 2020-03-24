@@ -27,6 +27,22 @@ module airfoil_evaluation
   public
   private :: aero_objective_function, matchfoil_objective_function
 
+! jx-mod "Additional infos for user info during optimization"
+  type op_opt_info_type
+    double precision :: obj                    ! the "objective function value" of this point
+    double precision :: weighting              ! and its weighting 
+    double precision :: change                 ! the relative change of the result value eg cd oder cl/cd
+    character (20)   :: penalty_info           ! info string about  penalty occured for this point
+  end type op_opt_info_type
+
+  type geo_opt_info_type
+    double precision :: obj                    ! the "objective function value" of this geo target
+    double precision :: weighting              ! and its weighting 
+    double precision :: change                 ! the relative change of the result value eg thickness
+  end type geo_opt_info_type
+
+  double precision, dimension(max_op_points) :: op_seed_value
+
   type(xfoil_options_type) :: xfoil_options
   type(xfoil_geom_options_type) :: xfoil_geom_options
 
@@ -144,8 +160,9 @@ function aero_objective_function(designvars, include_penalty)
   double precision :: geo_objective_function
   double precision :: ref_value, tar_value, cur_value, slope
   character(100)   :: penalty_info
-  double precision, dimension (noppoint) :: op_point_contribution, geo_target_contribution
-  character(20)   , dimension (noppoint) :: op_point_penalty_info
+  type(op_opt_info_type),  dimension (max_op_points) :: op_opt_info
+  type(geo_opt_info_type), dimension (max_op_points) :: geo_opt_info
+
   ! jx-mod Smoothing
   double precision :: perturbation_bot, perturbation_top
 
@@ -207,7 +224,7 @@ function aero_objective_function(designvars, include_penalty)
 
   penaltyval = 0.d0
   penalty_info = ''                            ! user info on the type of penalities given
-  op_point_penalty_info = ''               
+  op_opt_info%penalty_info = ''               
   geo_objective_function  = 0.d0               ! new geo_objective
 
   if (check_curvature .or. do_smoothing) then
@@ -633,6 +650,7 @@ function aero_objective_function(designvars, include_penalty)
       else
         increment = 1.D9   ! Big penalty for lift <= 0
       end if
+      cur_value  = lift(i)**1.5d0 / drag(i) 
 
     elseif (trim(optimization_type(i)) == 'max-glide') then
 
@@ -643,19 +661,21 @@ function aero_objective_function(designvars, include_penalty)
       else
         increment = 1.D9   ! Big penalty for lift <= 0
       end if
+      cur_value  = lift(i) / drag(i) 
 
     elseif (trim(optimization_type(i)) == 'min-drag') then
 
 !     Minimize Cd
 
       increment = drag(i)*scale_factor(i)
+      cur_value = drag(i) 
 
     elseif (trim(optimization_type(i)) == 'target-drag') then
 
 ! jx-mod Minimize difference between target cd value and current value 
     
       increment = (target_value(i) + ABS (target_value(i)-drag(i))) * scale_factor(i) 
-
+      cur_value = drag(i) 
 
     elseif (trim(optimization_type(i)) == 'target-lift') then
 
@@ -663,6 +683,7 @@ function aero_objective_function(designvars, include_penalty)
 !        Add a base value to the lift difference
     
       increment = (1.d0 + ABS (target_value(i)-lift(i))) * scale_factor(i) 
+      cur_value = lift(i)
 
     elseif (trim(optimization_type(i)) == 'target-moment') then
 
@@ -670,7 +691,8 @@ function aero_objective_function(designvars, include_penalty)
 !        Add a base value (Clark y or so ;-) to the moment difference
 !        so the relative change won't be to high
       increment = (ABS (target_value(i)-moment(i))+ 0.05d0)*scale_factor(i)
-         
+      cur_value = moment(i)
+
     elseif (trim(optimization_type(i)) == 'max-lift') then
 
 !     Maximize Cl (at given angle of attack)
@@ -680,6 +702,7 @@ function aero_objective_function(designvars, include_penalty)
       else
         increment = 1.D9   ! Big penalty for lift <= 0
       end if
+      cur_value = lift(i)
 
     elseif (trim(optimization_type(i)) == 'max-xtr') then
 
@@ -687,6 +710,7 @@ function aero_objective_function(designvars, include_penalty)
 !     division by 0)
 
       increment = scale_factor(i)/(0.5d0*(xtrt(i)+xtrb(i))+0.1d0)
+      cur_value = 0.5d0*(xtrt(i)+xtrb(i))
 
       ! jx-mod Following optimization based on slope of the curve of op_point
 !         convert alpha in rad to get more realistic slope values
@@ -699,18 +723,21 @@ function aero_objective_function(designvars, include_penalty)
 
       slope = derivation_at_point (noppoint, i, (alpha * pi/180.d0) , lift)
       increment = scale_factor(i) / (atan(abs(slope))  + 4.d0*pi)
+      cur_value = atan(abs(slope))
 
     elseif (trim(optimization_type(i)) == 'min-lift-slope') then
 
 !     jx-mod  New: Minimize dCl/dalpha e.g. to reach clmax at alpha(i) 
       slope = derivation_at_point (noppoint, i, (alpha * pi/180.d0) , lift)
       increment = scale_factor(i) * (atan(abs(slope)) + 4.d0*pi)
+      cur_value = atan(abs(slope))
 
     elseif (trim(optimization_type(i)) == 'min-glide-slope') then
 
 !     jx-mod  New: Minimize d(cl/cd)/dcl e.g. to reach best glide at alpha(i) 
       slope = derivation_at_point (noppoint, i,  (lift * 20d0), (lift/drag))
       increment = scale_factor(i) * (atan(abs(slope))  + 1.d0*pi)
+      cur_value = atan(abs(slope))
         
     else
 
@@ -725,8 +752,9 @@ function aero_objective_function(designvars, include_penalty)
     aero_objective_function = aero_objective_function + weighting(i)*increment
 
 !   jx-mod Save contribution of this op_point for user entertainment
-
-    op_point_contribution(i) = weighting(i)* (1d0 - increment)
+    op_opt_info(i)%obj       = increment
+    op_opt_info(i)%weighting = weighting(i)
+    op_opt_info(i)%change    = (cur_value / op_seed_value(i)) - 1d0
 
   end do
 
@@ -736,7 +764,7 @@ function aero_objective_function(designvars, include_penalty)
     penaltyval = penaltyval + max(0.d0,viscrms(i)-1.0D-04)/1.0D-04
 
     ! jx-mod Build user info string
-    if ( max(0.d0,viscrms(i)-1.0D-04) > 0.d0) op_point_penalty_info(i) = ' Visc'
+    if ( max(0.d0,viscrms(i)-1.0D-04) > 0.d0) op_opt_info(i)%penalty_info = ' Visc'
 
   end do
 
@@ -765,7 +793,7 @@ function aero_objective_function(designvars, include_penalty)
 
       if ((op_mode(i) == 'spec-cl') .and. (abs(lift(i) - op_point(i)) > 0.01d0)) then
         penaltyval = penaltyval + 4.444d0 *  epsupdate             ! = 4.444%
-        op_point_penalty_info(i) = ' clchange' 
+        op_opt_info(i)%penalty_info = ' clchange' 
       end if 
 
       ! jx-mod cd or cl still flipped away -> penalize
@@ -773,7 +801,7 @@ function aero_objective_function(designvars, include_penalty)
       if ( abs(lift(i)-maxlift(i))/max(0.0001d0,abs(maxlift(i))) > checktol) then              
         penaltyi = 1.111d0 *  epsupdate                             ! = 1.111%
         penaltyval = penaltyval + penaltyi  
-        op_point_penalty_info(i) = ' clflip'
+        op_opt_info(i)%penalty_info = ' clflip'
       end if
     end if
 
@@ -791,7 +819,7 @@ function aero_objective_function(designvars, include_penalty)
           penaltyi = 2.222d0 * epsupdate
         end if 
         penaltyval = penaltyval + penaltyi 
-        op_point_penalty_info(i) = 'cdflip'
+        op_opt_info(i)%penalty_info = 'cdflip'
       end if
     end if
 
@@ -820,7 +848,9 @@ function aero_objective_function(designvars, include_penalty)
     increment = (ref_value + abs(tar_value - cur_value)) * geo_targets(i)%scale_factor 
     geo_objective_function = geo_objective_function + geo_targets(i)%weighting * increment
 
-    geo_target_contribution(i) = geo_targets(i)%weighting * (1d0 - increment)
+    geo_opt_info(i)%obj        = increment
+    geo_opt_info(i)%weighting  = geo_targets(i)%weighting
+    geo_opt_info(i)%change     = (cur_value / geo_targets(i)%seed_value) - 1d0
 
   end do 
 
@@ -829,14 +859,15 @@ function aero_objective_function(designvars, include_penalty)
 ! jx-mod Show surface quality for entertainment and info
 !          about objectives at the end of iteration 
   if (show_details) then
+
     if (do_smoothing) then
       call assess_surface ('Top   ', .true., max_curv_reverse_top, xseedt, zt_new, nreversalst, perturbation_top)
       call assess_surface ('Bottom', .true., max_curv_reverse_bot, xseedb, zb_new, nreversalsb, perturbation_bot)
     end if
     call show_op_point_contributions ( (aero_objective_function+geo_objective_function) , & 
-              noppoint,     op_point_contribution,                                        &
-              ngeo_targets, geo_target_contribution,                                      &
-              (penaltyval*1.0D+06), penalty_info, op_point_penalty_info  )                          
+                                        noppoint,     op_opt_info,                        &
+                                        ngeo_targets, geo_opt_info,                       &
+                                        (penaltyval*1.0D+06), penalty_info )                          
   end if
 
 ! jx-mod Exit wenn flip
@@ -1643,21 +1674,22 @@ end function write_function_restart_cleanup
 !------------------------------------------------------------------------------
 
 subroutine show_op_point_contributions ( obj_func_value,    &
-                noppoint, op_point_contribution,            &
-                ngeo,     geo_target_contribution,          &
-                penalty, penalty_info, op_point_penalty_info  ) 
+                noppoint, op_opt_info,                      &
+                ngeo,     geo_opt_info,                     &
+                penalty, penalty_info ) 
 
   double precision, intent (in) :: obj_func_value, penalty
   integer         , intent (in) :: noppoint, ngeo
   character(100)  , intent (in) :: penalty_info
-  double precision, dimension (:), intent (in) :: op_point_contribution, geo_target_contribution
-  character(20)   , dimension (:), intent (in) :: op_point_penalty_info
-
+  type(op_opt_info_type),  dimension (noppoint), intent (in) :: op_opt_info
+  type(geo_opt_info_type), dimension (noppoint), intent (in) :: geo_opt_info
 
   integer :: i 
-  double precision :: total_improvement
+  double precision :: total_improvement, contribution
 
   total_improvement = (1.d0-obj_func_value) 
+
+! write info header 
 
   write (*,'(4x, 25x)', advance = 'no') 
   do i = 1, noppoint
@@ -1669,20 +1701,38 @@ subroutine show_op_point_contributions ( obj_func_value,    &
   end do 
   write (*,*)
 
-  write (*,'(4x, A12,F8.4,A4)', advance = 'no') "Improvement:",total_improvement *100.d0,'%   '
+! write relative changes in % per op_point
+
+  write (*,'(4x, A24)', advance = 'no') "     Relative changes "
   do i = 1, noppoint
-    write (*,'(F8.2,A1)', advance = 'no') (op_point_contribution (i) *100.d0),'%'
+    write (*,'(SP, F8.1,A1)', advance = 'no') op_opt_info(i)%change * 100.d0,'%'
   end do 
   write (*,'(10x)', advance = 'no')
   do i = 1, ngeo
-    write (*,'(F8.2,A1)', advance = 'no') (geo_target_contribution (i) *100.d0),'%'
+    write (*,'(SP, F8.2,A1)', advance = 'no') geo_opt_info(i)%change * 100.d0,'%'
   end do 
   write (*,*)
 
+! write contribuiton in % per op_point for the overall improvment
+     
+  write (*,'(4x, A14,F8.4,A2)', advance = 'no') "Improvement:",total_improvement *100.d0,'% '
+  do i = 1, noppoint
+    contribution = (1- op_opt_info(i)%obj) * op_opt_info(i)%weighting *100.d0
+    write (*,'(F8.2,A1)', advance = 'no') contribution,'%'
+  end do 
+  write (*,'(10x)', advance = 'no')
+  do i = 1, ngeo
+    contribution = (1- geo_opt_info(i)%obj) * geo_opt_info(i)%weighting *100.d0
+    write (*,'(F8.2,A1)', advance = 'no') contribution,'%'
+  end do 
+  write (*,*)
+
+! write penaltiy infos per op_point which happend 
+
   if (penalty > 0d0) then
-    write (*,'(4x, A12,F8.1,A4)', advance = 'no') "    Penalty:", penalty * (-1.d0) * 100.d0,'%   '
+    write (*,'(4x, A14,F8.1,A2)', advance = 'no') "    Penalty:", penalty * (-1.d0) * 100.d0,'% '
     do i = 1, noppoint
-      write (*,'(A9)', advance = 'no') trim(op_point_penalty_info (i))
+      write (*,'(A9)', advance = 'no') trim(op_opt_info(i)%penalty_info)
     end do 
     write (*,'(10x)', advance = 'no')
     write (*,'(A9)', advance = 'no') trim(penalty_info)
