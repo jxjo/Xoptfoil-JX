@@ -559,8 +559,8 @@ subroutine check_seed()
     elseif (trim(optimization_type(i)) == 'min-glide-slope') then
     ! jx-mod  New: Minimize d(cl/cd)/dcl e.g. to reach best glide at alpha(i) 
       slope = derivation_at_point (noppoint, i,  (lift * 20d0), (lift/drag))
-      checkval   = atan(abs(slope)) + 1.d0*pi
-      seed_value = atan(abs(slope))
+      checkval   = atan(abs(slope)) + 2.d0*pi
+      seed_value = atan(abs(slope)) 
      
     else
       write(*,*)

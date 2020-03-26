@@ -727,7 +727,7 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
     write(*,*) " op_point("//trim(text)//") = ", op_point(i)
     write(*,'(A,es17.8,A,I1,A)') "  reynolds("//trim(text)//") = ", re(i)%number,  &
                   " (Type ", re(i)%type, ")"
-    write(*,*) " mach("//trim(text)//") = ", ma(i)%number,                     &
+    write(*,'(A,es17.8,A,I1,A)') "  mach("//trim(text)//") = ", ma(i)%number,                     &
                   " (Type ", ma(i)%type, ")"
     write(*,*) " flap_selection("//trim(text)//") = '"//                       &
                trim(flap_selection(i))//"'"

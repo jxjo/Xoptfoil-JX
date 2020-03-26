@@ -166,11 +166,20 @@ function aero_objective_function(designvars, include_penalty)
   ! jx-mod Smoothing
   double precision :: perturbation_bot, perturbation_top
 
+
   pi = acos(-1.d0)
   nmodest = size(top_shape_function,1)
   nmodesb = size(bot_shape_function,1)
   nptt = size(xseedt,1)
   nptb = size(xseedb,1)
+
+  penaltyval   = 0.d0
+  penalty_info = ''                            ! user info on the type of penalities given
+  op_opt_info%obj          = 1d0               
+  op_opt_info%weighting    = 0d0               
+  op_opt_info%change       = -999d0               
+  op_opt_info%penalty_info = ''    
+  geo_objective_function  = 0.d0               ! new geo_objective
 
 ! Enable / disable penalty function
 
@@ -221,11 +230,6 @@ function aero_objective_function(designvars, include_penalty)
 ! jx-mod Smoothing ---- Start  -----------------------------------------------------------
 
 ! Check surface quality - do smoothing  
-
-  penaltyval = 0.d0
-  penalty_info = ''                            ! user info on the type of penalities given
-  op_opt_info%penalty_info = ''               
-  geo_objective_function  = 0.d0               ! new geo_objective
 
   if (check_curvature .or. do_smoothing) then
 
@@ -674,7 +678,7 @@ function aero_objective_function(designvars, include_penalty)
 
 ! jx-mod Minimize difference between target cd value and current value 
     
-      increment = (target_value(i) + ABS (target_value(i)-drag(i))) * scale_factor(i) 
+      increment = (target_value(i) + ABS (target_value(i)-drag(i))) * scale_factor(i)
       cur_value = drag(i) 
 
     elseif (trim(optimization_type(i)) == 'target-lift') then
@@ -721,24 +725,30 @@ function aero_objective_function(designvars, include_penalty)
 
 !     Maximize dCl/dalpha (0.1 factor to ensure no division by 0)
 
-      slope = derivation_at_point (noppoint, i, (alpha * pi/180.d0) , lift)
+      slope     = derivation_at_point (noppoint, i, (alpha * pi/180.d0) , lift)
       increment = scale_factor(i) / (atan(abs(slope))  + 4.d0*pi)
       cur_value = atan(abs(slope))
+      ! relative angle value changes use 90 degree as base value
+      op_opt_info(i)%change = (cur_value- op_seed_value(i)) / (pi/2d0)
 
     elseif (trim(optimization_type(i)) == 'min-lift-slope') then
 
 !     jx-mod  New: Minimize dCl/dalpha e.g. to reach clmax at alpha(i) 
-      slope = derivation_at_point (noppoint, i, (alpha * pi/180.d0) , lift)
+      slope     = derivation_at_point (noppoint, i, (alpha * pi/180.d0) , lift)
       increment = scale_factor(i) * (atan(abs(slope)) + 4.d0*pi)
       cur_value = atan(abs(slope))
+      ! relative angle value changes use 90 degree as base value
+      op_opt_info(i)%change = (cur_value- op_seed_value(i)) / (pi/2d0)
 
     elseif (trim(optimization_type(i)) == 'min-glide-slope') then
 
 !     jx-mod  New: Minimize d(cl/cd)/dcl e.g. to reach best glide at alpha(i) 
-      slope = derivation_at_point (noppoint, i,  (lift * 20d0), (lift/drag))
-      increment = scale_factor(i) * (atan(abs(slope))  + 1.d0*pi)
-      cur_value = atan(abs(slope))
-        
+      slope     = derivation_at_point (noppoint, i,  (lift * 20d0), (lift/drag))
+      increment = scale_factor(i) * (atan(abs(slope))  + 2.d0*pi)
+      cur_value = atan(abs(slope))  
+      ! relative angle value changes use 90 degree as base value
+      op_opt_info(i)%change = (cur_value- op_seed_value(i)) / (pi/2d0)
+
     else
 
       write(*,*)
@@ -754,7 +764,8 @@ function aero_objective_function(designvars, include_penalty)
 !   jx-mod Save contribution of this op_point for user entertainment
     op_opt_info(i)%obj       = increment
     op_opt_info(i)%weighting = weighting(i)
-    op_opt_info(i)%change    = (cur_value / op_seed_value(i)) - 1d0
+    if (op_opt_info(i)%change == -999d0)                     &
+      op_opt_info(i)%change    = (cur_value / op_seed_value(i)) - 1d0
 
   end do
 
