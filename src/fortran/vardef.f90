@@ -113,8 +113,6 @@ module vardef
   double precision :: scale_pertubation, weighting_smoothing
   double precision, dimension(:), allocatable :: zseedt_not_smoothed, zseedb_not_smoothed
   
-  logical :: use_old_modes !TODO MB remove
-  
 !$omp threadprivate(curr_foil)
 
 end module vardef

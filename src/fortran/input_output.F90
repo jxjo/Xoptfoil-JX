@@ -425,10 +425,8 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
 
   if (trim(shape_functions) == 'camb-thick' ) then
     pso_convergence_profile = 'quick_camb_thick'
-    use_old_modes = .false. !TODO MB remove
   else
     pso_convergence_profile = 'exhaustive'
-    use_old_modes = .true. !TODO MB remove
   end if
 
 ! Set default genetic algorithm options
@@ -512,13 +510,6 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
       pso_options%maxit = pso_maxit
       pso_options%write_particlefile= pso_write_particlefile
       pso_options%convergence_profile = pso_convergence_profile
-
-      !TODO MB remove
-      if (trim(pso_options%convergence_profile) == "quick_camb_thick") then
-        use_old_modes = .false. 
-      else
-        use_old_modes = .true.
-      end if
 
       pso_options%feasible_init = feasible_init
       pso_options%feasible_limit = feasible_limit
