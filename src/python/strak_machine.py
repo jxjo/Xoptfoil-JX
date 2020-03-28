@@ -100,13 +100,18 @@ def read_planeDataFile(fileName):
         #append dictionary to data
         data.append(wingDict)
 
-    print data
+    # debug output
+    #print data
+
     return data
 
 
 def generate_batchfile(wing, batchFileName, inputFileName, rootFoilName, ReSqrtCl):
 
-     # create new file
+    # add file-extension
+    batchFileName = batchFileName + '.bat'
+
+    # create a new file
     outputfile = open(batchFileName, "w+")
 
     # an example-file looks like THIS
@@ -115,14 +120,43 @@ def generate_batchfile(wing, batchFileName, inputFileName, rootFoilName, ReSqrtC
     ##xoptfoil-jx -i iFX-strak.txt -r  90000 -a FX-strak-11.dat -o FX-strak-09
     ##xoptfoil-jx -i iFX-tip.txt   -r  60000 -a FX-strak-09.dat -o FX-strak-06
 
-# TODO
-##    for chord in wing.get('chordLengths'):
-##        strakFoilName = wing.get('name')# + ('strak-%d' % (ReSqrtCl / 10000))
-##        file.write("xoptfoil-jx -i %s -r -a %s.dat -o %s" % (inputFileName, rootFoilName, strakFoilName)
-##        #rootFoilName = strakFoilName + '.dat'
-##        #ReSqrtCl =
+    # initialize the chord length of previous airfoil
+    prevChord = 0.0
+    ReSqrtCl_old = 0
 
+    for chord in wing.get('chordLengths'):
+        # skip the root airfoil
+        if (prevChord > 0.0):
+            # calculate new ReSqrtCl
+            ReSqrtCl = ReSqrtCl_old * (chord / prevChord)
+
+            # compose name of strak-airfoil, Remove ReSqrt-CL
+            rootFoilName = rootFoilName.strip('.dat')
+            splitString = '%d' % (ReSqrtCl_old / 10000)
+            elements = rootFoilName.split(splitString)
+            strakFoilName = elements[0] + ('%d' % (ReSqrtCl / 10000))
+
+            # generate Xoptfoil-commandline
+            commandLine = "xoptfoil-jx -i %s -r -a %s.dat -o %s\n"\
+                         % (inputFileName, rootFoilName, strakFoilName)
+
+            # debug-output
+            #print commandLine
+
+            # write Xoptfoil-commandline to outputfile
+            outputfile.write(commandLine)
+
+            # set rootFoilName for next strak-airfoil
+            rootFoilName = strakFoilName + '.dat'
+
+        # store actual chordLength for calculations of next strak-airfoil
+        prevChord = chord
+        ReSqrtCl_old = ReSqrtCl
+
+    # close the outputfile
     outputfile.close()
+    print('File \'%s\' was successfully written' % batchFileName)
+
 
 def getArguments():
 
@@ -130,7 +164,8 @@ def getArguments():
     parser = argparse.ArgumentParser('')
     parser.add_argument("--plane", "-p", help="filename containing plane-data"\
                         "(e.g. plane)")
-#TODO
+
+#TODO implement other arguments
 ##    parser.add_argument("--root", "-r", help="filename root-airfoil-data"\
 ##                        "(e.g. rootfoil)")
 ##
@@ -162,6 +197,7 @@ def getArguments():
     xmlFileName = xmlFileName + '.xml'
     print("filename is: %s" % xmlFileName)
 
+    #TODO remove
     batchFileName = 'make-Fx-strak' #TODO
     inputFileName = 'iFX-strak.txt' #TODO
     rootFoilName =  'JX-FXrcn-15'   #TODO
@@ -184,8 +220,16 @@ if __name__ == "__main__":
         print("Error, file %s could not be opened." % fileName)
         exit -1
 
-    for wing in planeData:
-        generate_batchfile(wing, batchFileName, inputFileName, rootFoilName,\
-        ReSqrtCl)
+    # get only data of the wing
+    wing = planeData[0]
+
+    # generate batchfile for wing
+    generate_batchfile(wing, batchFileName, inputFileName, rootFoilName,\
+                       ReSqrtCl)
+
+#TODO: future use, generate strak for wing and fin
+##    for wing in planeData:
+##        generate_batchfile(wing, batchFileName, inputFileName, rootFoilName,\
+##        ReSqrtCl)
 
     print("Ready.")
