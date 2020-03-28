@@ -23,14 +23,6 @@ from sys import version_info
 
 
 ################################################################################
-#global variables
-wingTag = 'wing'
-sectionsTag = 'Sections'
-chordTag = 'Chord'
-NameTag = 'Name'
-
-
-################################################################################
 # Input function that checks python version
 def my_input(message):
 
@@ -47,38 +39,64 @@ def my_input(message):
 
 
 ################################################################################
+# function, that gets the name of the wing
+def get_wingName(wing):
+    for name in wing.iter('Name'):
+        return name.text
+
+    # name was not found, return default-name
+    return 'wing'
+
+
+################################################################################
+# function, that gets the chord-length of a section
+def get_chordFromSection(section):
+    # create an empty list
+    chordList = []
+
+    # iterate through elements
+    for chord in section.iter('Chord'):
+        chordList.append(chord.text)
+
+    return chordList
+
+
+################################################################################
+# function, that gets the chord-lengths of the wing
+def get_wingChords(wing):
+
+    # iterate the elements of the wing
+    for section in wing.iter('Sections'):
+        return get_chordFromSection(section)
+
+
+################################################################################
 # function that reads plane-data from XFLR5 XML-file
 def read_planeDataFile(fileName):
+
+    # init data as an empty list
     data = []
-     # open file containing XFLR5-plane-data
+
+    # open file containing XFLR5-plane-data
     file = open(fileName, "r")
+
+    # parse the file
     tree = ET.parse('plane.xml')
+
+    #get root of XML-tree
     root = tree.getroot()
 
-    #print root
-    #for section in root.iter(sectionsTag):
-    #for section in root.findall(sectionsTag):
-       # print(section.attrib, section.text)
+    # find wing-data
+    for wing in root.iter('wing'):
+        # create dictionary containg the wing-data
+        wingDict = 	{ "name": get_wingName(wing),
+                      "chordLengths": get_wingChords(wing)
+                    }
 
-    for child in root:
-        #print(child.tag, child.attrib)
-        for subchild in child:
-            #print(subchild.tag, subchild.attrib)
-            if subchild.tag == wingTag:
+        #append dictionary to data
+        data.append(wingDict)
 
-                for element in subchild:
-                    if element.tag == NameTag:
-                        print "Found wing %s" % element.text
-                    if element.tag == sectionsTag:
-                        #print "Found sections"
-                        for section in element:
-                            #print "Section start"
-                            #print(section.tag, section.attrib)
-                            for part in section:
-                                if part.tag == chordTag:
-                                    print(part.tag, part.text)
-                                #print part
-                            #print "Section end\n"
+    print data
     return data
 
 ################################################################################
@@ -87,7 +105,8 @@ if __name__ == "__main__":
 
     # initiate the parser
     parser = argparse.ArgumentParser('')
-    parser.add_argument("--input", "-i", help="filename containing plane-data (e.g. plane)")
+    parser.add_argument("--input", "-i", help="filename containing plane-data"\
+                        "(e.g. plane)")
 
   # read arguments from the command line
     args = parser.parse_args()
