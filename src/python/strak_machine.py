@@ -56,7 +56,11 @@ def get_chordFromSection(section):
 
     # iterate through elements
     for chord in section.iter('Chord'):
-        chordList.append(chord.text)
+        # convert text to float
+        chordlength = float(chord.text.strip("\r\n\t '"))
+
+        #append chordlength to list
+        chordList.append(chordlength)
 
     return chordList
 
@@ -89,8 +93,8 @@ def read_planeDataFile(fileName):
     # find wing-data
     for wing in root.iter('wing'):
         # create dictionary containg the wing-data
-        wingDict = 	{ "name": get_wingName(wing),
-                      "chordLengths": get_wingChords(wing)
+        wingDict = 	{ 'name': get_wingName(wing),
+                      'chordLengths': get_wingChords(wing)
                     }
 
         #append dictionary to data
@@ -99,38 +103,89 @@ def read_planeDataFile(fileName):
     print data
     return data
 
-################################################################################
-# Main program
-if __name__ == "__main__":
+
+def generate_batchfile(wing, batchFileName, inputFileName, rootFoilName, ReSqrtCl):
+
+     # create new file
+    outputfile = open(batchFileName, "w+")
+
+    # an example-file looks like THIS
+    ##xoptfoil-jx -i iFX-strak.txt -r 130000 -a JX-FXrcn-15.dat -o FX-strak-13
+    ##xoptfoil-jx -i iFX-strak.txt -r 110000 -a FX-strak-13.dat -o FX-strak-11
+    ##xoptfoil-jx -i iFX-strak.txt -r  90000 -a FX-strak-11.dat -o FX-strak-09
+    ##xoptfoil-jx -i iFX-tip.txt   -r  60000 -a FX-strak-09.dat -o FX-strak-06
+
+# TODO
+##    for chord in wing.get('chordLengths'):
+##        strakFoilName = wing.get('name')# + ('strak-%d' % (ReSqrtCl / 10000))
+##        file.write("xoptfoil-jx -i %s -r -a %s.dat -o %s" % (inputFileName, rootFoilName, strakFoilName)
+##        #rootFoilName = strakFoilName + '.dat'
+##        #ReSqrtCl =
+
+    outputfile.close()
+
+def getArguments():
 
     # initiate the parser
     parser = argparse.ArgumentParser('')
-    parser.add_argument("--input", "-i", help="filename containing plane-data"\
+    parser.add_argument("--plane", "-p", help="filename containing plane-data"\
                         "(e.g. plane)")
+#TODO
+##    parser.add_argument("--root", "-r", help="filename root-airfoil-data"\
+##                        "(e.g. rootfoil)")
+##
+##    parser.add_argument("-output", "-o", help="filename of the outputfile"\
+##                        "(e.g. make_strak)")
+##
+##    parser.add_argument("-input", "-i", help="filename xoptfoil input-data"\
+##                        "(e.g. inputs.txt)")
+##
+##    parser.add_argument("-resqrtcl", "-r", help="reSqrtCl-Value for the root"\
+##                        "-airfoil")
 
   # read arguments from the command line
     args = parser.parse_args()
 
-    if args.input:
-        fileName = args.input
+    if args.plane:
+        xmlFileName = args.plane
     else:
-        message = "Enter the filename of the plane-data-xml-file"\
+        message = "Enter the filename of the plane-data xml-file"\
         "(e.g., plane, which  is the default filename), "\
         "hit <enter> for default:"
 
-        fileName = my_input(message)
+        xmlFileName = my_input(message)
 
         # set default filename in case there was no input
-        if (fileName == ""):
-            fileName = 'plane'
+        if (xmlFileName == ""):
+            xmlFileName = 'plane'
 
-    fileName = fileName + '.xml'
-    print("filename is: %s" % fileName)
+    xmlFileName = xmlFileName + '.xml'
+    print("filename is: %s" % xmlFileName)
+
+    batchFileName = 'make-Fx-strak' #TODO
+    inputFileName = 'iFX-strak.txt' #TODO
+    rootFoilName =  'JX-FXrcn-15'   #TODO
+    ReSqrtCl = 150000               #TODO
+
+    return (xmlFileName, batchFileName, inputFileName, rootFoilName, ReSqrtCl)
+
+
+################################################################################
+# Main program
+if __name__ == "__main__":
+
+    #get command-line-arguments
+    (xmlFileName, batchFileName, inputFileName, rootFoilName, ReSqrtCl)\
+     = getArguments()
 
     try:
-        planeData = read_planeDataFile(fileName)
+        planeData = read_planeDataFile(xmlFileName)
     except:
         print("Error, file %s could not be opened." % fileName)
         exit -1
+
+    for wing in planeData:
+        generate_batchfile(wing, batchFileName, inputFileName, rootFoilName,\
+        ReSqrtCl)
 
     print("Ready.")
