@@ -316,16 +316,18 @@ def getArguments():
 # Main program
 if __name__ == "__main__":
 
-    #get command-line-arguments
+    #get command-line-arguments or user-input
     (xmlFileName, batchFileName, inputFileName, ReSqrtCl, wingFinSwitch)\
      = getArguments()
 
+    # read plane-data from XML-File
     try:
         planeData = read_planeDataFile(xmlFileName)
     except:
         print("Error, file %s could not be opened." % fileName)
         exit -1
 
+    # generate output-file
     if (wingFinSwitch == 0):
         # generate batchfile for wing
         print("generating outputfile for the wing-strak")
