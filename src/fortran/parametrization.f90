@@ -331,7 +331,7 @@ end subroutine create_airfoil
 subroutine create_airfoil_camb_thick (xt_seed, zt_seed, xb_seed, zb_seed, modes, &
                                       zt_new, zb_new )
 
-  use vardef,       only : airfoil_type, use_old_modes
+  use vardef,       only : airfoil_type
   use xfoil_driver, only : xfoil_scale_thickness_camber, xfoil_scale_LE_radius
                                    
   double precision, dimension(:), intent(in) :: xt_seed, zt_seed, xb_seed, zb_seed
@@ -361,28 +361,16 @@ subroutine create_airfoil_camb_thick (xt_seed, zt_seed, xb_seed, zb_seed, modes,
   end do
   
 ! Change thickness, camber ... according to new values hidden in modes
-  if (use_old_modes) then
-    f_camb   = 1.d0 + 2.d0 * modes(1)
-    f_thick  = 1.d0 + 2.d0 * modes(2)
-    d_xcamb  = 2.d0 * modes(3)
-    d_xthick = 2.d0 * modes(4)
-  else
-    f_camb   = 1.d0 + 10.d0 * modes(1) 
-    f_thick  = 1.d0 + 5.d0 * modes(2)
-    d_xcamb  = 4.d0 * modes(3)
-    d_xthick = 4.d0 * modes(4)
-  end if
+  f_camb   = 1.d0 + 10.d0 * modes(1) 
+  f_thick  = 1.d0 + 5.d0 * modes(2)
+  d_xcamb  = 4.d0 * modes(3)
+  d_xthick = 4.d0 * modes(4)
 
   call xfoil_scale_thickness_camber (seed_foil, f_thick,d_xthick,f_camb,d_xcamb, new_foil_1)
 
   ! Change LE radius ... according to new values hidden in modes
-  if (use_old_modes) then
-    f_radius = 1.d0 + modes(5)
-    x_blend  = max (0.02d0, (2.d0 * modes(6) + 0.1d0))
-  else
-    f_radius = 1.d0 + 10.d0 * modes(5)
-    x_blend  = max (0.02d0, (5.d0 * modes(6) + 0.1d0))
-  end if
+  f_radius = 1.d0 + 10.d0 * modes(5)
+  x_blend  = max (0.02d0, (5.d0 * modes(6) + 0.1d0))
  
   call xfoil_scale_LE_radius (new_foil_1, f_radius, x_blend, new_foil_2)
 
