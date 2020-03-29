@@ -1077,12 +1077,14 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
 
   do i = 1, ngeo_targets
 
-    if ((trim(geo_targets(i)%type) /= 'zBot' .and.                             &
-        trim(geo_targets(i)%type) /= 'zTop') .and.                             &
-        trim(geo_targets(i)%type) /= 'Thickness')                              &
+    if (((trim(geo_targets(i)%type) /= 'zBot' .and.                            &
+      trim(geo_targets(i)%type) /= 'zTop') .and.                               &
+      trim(geo_targets(i)%type) /= 'Camber') .and.                             &
+      trim(geo_targets(i)%type) /= 'Thickness')                                &
       call my_stop("target type must be 'zBot', 'zTop' or'Thickness'.")
     if ((geo_targets(i)%x <= 0.d0 .or.                                         &
         geo_targets(i)%x >= 1.d0) .and.                                        &
+        trim(geo_targets(i)%type) /= 'Camber' .and.                            &
         trim(geo_targets(i)%type) /= 'Thickness')                              &
       call my_stop("x position must be > 0 and < 1.")
  end do   
