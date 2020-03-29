@@ -427,7 +427,9 @@ if __name__ == "__main__":
 
   # create a new planform
   newWing = wing()
-  json.dump(PLanformDict, open("planformdata.txt",'w'))
+
+  #debug
+  #json.dump(PLanformDict, open("planformdata.txt",'w'))
 
   try:
     planformData = json.load(open("planformdata.txt"))
