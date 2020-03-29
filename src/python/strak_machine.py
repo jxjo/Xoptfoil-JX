@@ -39,7 +39,7 @@ def my_input(message):
 
 
 ################################################################################
-# function, that gets the name of the wing
+# function that gets the name of the wing
 def get_wingName(wing):
     for name in wing.iter('Name'):
         return name.text
@@ -66,12 +66,34 @@ def get_chordFromSection(section):
 
 
 ################################################################################
-# function, that gets the chord-lengths of the wing
-def get_wingChords(wing):
+# function that gets the airfoil-name of a section
+def get_airfoilNameFromSection(section):
+    # create an empty list
+    airfoilNameList = []
 
+    # iterate through elements
+    for airfoilName in section.iter('Left_Side_FoilName'):
+
+        #append airfoilName to list
+        airfoilNameList.append(airfoilName.text)
+
+    return airfoilNameList
+
+
+################################################################################
+# function that gets the chord-lengths of the wing
+def get_wingChords(wing):
     # iterate the elements of the wing
     for section in wing.iter('Sections'):
         return get_chordFromSection(section)
+
+
+################################################################################
+# function that gets the airfoil-names of the wing
+def get_airfoilNames(wing):
+    # iterate the elements of the wing
+    for section in wing.iter('Sections'):
+        return get_airfoilNameFromSection(section)
 
 
 ################################################################################
@@ -94,7 +116,8 @@ def read_planeDataFile(fileName):
     for wing in root.iter('wing'):
         # create dictionary containg the wing-data
         wingDict = 	{ 'name': get_wingName(wing),
-                      'chordLengths': get_wingChords(wing)
+                      'chordLengths': get_wingChords(wing),
+                      'airfoilNames': get_airfoilNames(wing)
                     }
 
         #append dictionary to data
@@ -106,10 +129,20 @@ def read_planeDataFile(fileName):
     return data
 
 
-def generate_batchfile(wing, batchFileName, inputFileName, rootFoilName, ReSqrtCl):
+################################################################################
+# function that gets the name of an airfoil
+def get_FoilName(wing, index):
 
-    # add file-extension
-    batchFileName = batchFileName + '.bat'
+    # get airfoil-names from wing-dictionary
+    airfoilNames = wing.get('airfoilNames')
+    foilName = airfoilNames[index]
+
+    return (foilName)
+
+
+################################################################################
+# function that generates a Xoptfoil-batchfile
+def generate_batchfile(wing, batchFileName, inputFileName, ReSqrtCl):
 
     # create a new file
     outputfile = open(batchFileName, "w+")
@@ -120,36 +153,32 @@ def generate_batchfile(wing, batchFileName, inputFileName, rootFoilName, ReSqrtC
     ##xoptfoil-jx -i iFX-strak.txt -r  90000 -a FX-strak-11.dat -o FX-strak-09
     ##xoptfoil-jx -i iFX-tip.txt   -r  60000 -a FX-strak-09.dat -o FX-strak-06
 
-    # initialize the chord length of previous airfoil
+    # do some initializations
     prevChord = 0.0
     ReSqrtCl_old = 0
+    idx = 1
 
     for chord in wing.get('chordLengths'):
         # skip the root airfoil
         if (prevChord > 0.0):
             # calculate new ReSqrtCl
             ReSqrtCl = ReSqrtCl_old * (chord / prevChord)
-
-            # compose name of strak-airfoil, Remove ReSqrt-CL
-            rootFoilName = rootFoilName.strip('.dat')
-            splitString = '%d' % (ReSqrtCl_old / 10000)
-            elements = rootFoilName.split(splitString)
-            strakFoilName = elements[0] + ('%d' % (ReSqrtCl / 10000))
+            rootFoilName = get_FoilName(wing, idx-1)
+            strakFoilName = get_FoilName(wing, idx)
 
             # generate Xoptfoil-commandline
-            commandLine = "xoptfoil-jx -i %s -r -a %s.dat -o %s\n"\
-                         % (inputFileName, rootFoilName, strakFoilName)
+            commandLine = "xoptfoil-jx -i %s -r %d -a %s.dat -o %s\n" %\
+                         (inputFileName, ReSqrtCl, rootFoilName, strakFoilName)
 
             # debug-output
             #print commandLine
 
             # write Xoptfoil-commandline to outputfile
             outputfile.write(commandLine)
+            idx = idx + 1
 
-            # set rootFoilName for next strak-airfoil
-            rootFoilName = strakFoilName + '.dat'
-
-        # store actual chordLength for calculations of next strak-airfoil
+        # store actual chordLength and ReSqrtCl for calculations of next
+        # strak-airfoil
         prevChord = chord
         ReSqrtCl_old = ReSqrtCl
 
@@ -158,31 +187,77 @@ def generate_batchfile(wing, batchFileName, inputFileName, rootFoilName, ReSqrtC
     print('File \'%s\' was successfully written' % batchFileName)
 
 
-def getArguments():
+################################################################################
+# function that gets the ReSqrtCl-value of the root-airfoil
+def getReSqrtCl(args):
 
-    # initiate the parser
-    parser = argparse.ArgumentParser('')
-    parser.add_argument("--plane", "-p", help="filename containing plane-data"\
-                        "(e.g. plane)")
+    if args.resqrtcl:
+        ReSqrtCl = args.resqrtcl
+    else:
+        message = "Enter ReSqrtCl-value for the root-airfoil"\
+        "(e.g. 150000, which  is the default-value), "\
+        "hit <enter> for default:"
 
-#TODO implement other arguments
-##    parser.add_argument("--root", "-r", help="filename root-airfoil-data"\
-##                        "(e.g. rootfoil)")
-##
-##    parser.add_argument("-output", "-o", help="filename of the outputfile"\
-##                        "(e.g. make_strak)")
-##
-##    parser.add_argument("-input", "-i", help="filename xoptfoil input-data"\
-##                        "(e.g. inputs.txt)")
-##
-##    parser.add_argument("-resqrtcl", "-r", help="reSqrtCl-Value for the root"\
-##                        "-airfoil")
+        ReSqrtCl = my_input(message)
 
-  # read arguments from the command line
-    args = parser.parse_args()
+        # set default value in case there was no input
+        if (ReSqrtCl == ""):
+            ReSqrtCl = '150000'
 
-    if args.plane:
-        xmlFileName = args.plane
+    print("ReSqrtCl is: %s" % ReSqrtCl)
+    return ReSqrtCl
+
+
+################################################################################
+# function that gets the name of the Xoptfoil-input-file
+def getInputFileName(args):
+
+    if args.input:
+        inputFileName = args.input
+    else:
+        message = "Enter the filename of the xoptfoil-input-file"\
+        "(e.g., inputs, which  is the default filename), "\
+        "hit <enter> for default:"
+
+        inputFileName = my_input(message)
+
+        # set default value in case there was no input
+        if (inputFileName == ""):
+            inputFileName = 'inputs'
+
+    inputFileName = inputFileName + '.txt'
+    print("input-filename is: %s" % inputFileName)
+    return inputFileName
+
+
+################################################################################
+# function that gets the name of the output-Batchfile
+def getOutFileName(args):
+
+    if args.output:
+        outFileName = args.output
+    else:
+        message = "Enter the filename of the output-file"\
+        "(e.g. make_strak, which  is the default filename), "\
+        "hit <enter> for default:"
+
+        outFileName = my_input(message)
+
+        # set default value in case there was no input
+        if (outFileName == ""):
+            outFileName = 'make_strak'
+
+    outFileName = outFileName + '.bat'
+    print("outFileName is: %s" % outFileName)
+    return outFileName
+
+
+################################################################################
+# function that gets the name of the input-XML-file
+def getXmlFileName(args):
+
+    if args.xml:
+        xmlFileName = args.xml
     else:
         message = "Enter the filename of the plane-data xml-file"\
         "(e.g., plane, which  is the default filename), "\
@@ -190,20 +265,51 @@ def getArguments():
 
         xmlFileName = my_input(message)
 
-        # set default filename in case there was no input
+        # set default value in case there was no input
         if (xmlFileName == ""):
             xmlFileName = 'plane'
 
     xmlFileName = xmlFileName + '.xml'
-    print("filename is: %s" % xmlFileName)
+    print("xml-filename is: %s" % xmlFileName)
+    return xmlFileName
 
-    #TODO remove
-    batchFileName = 'make-Fx-strak' #TODO
-    inputFileName = 'iFX-strak.txt' #TODO
-    rootFoilName =  'JX-FXrcn-15'   #TODO
-    ReSqrtCl = 150000               #TODO
 
-    return (xmlFileName, batchFileName, inputFileName, rootFoilName, ReSqrtCl)
+################################################################################
+# function that gets arguments either from the commandline or by user-input
+def getArguments():
+
+    # initiate the parser
+    parser = argparse.ArgumentParser('')
+    parser.add_argument("--xml", "-x", help="filename containing xml-data"\
+                        "(e.g. plane)")
+
+    parser.add_argument("-output", "-o", help="filename of the outputfile"\
+                        "(e.g. make_strak)")
+
+    parser.add_argument("-fin", "-f", help="generate outputfile for the fin"\
+                                           " instead of wing")
+
+    parser.add_argument("-input", "-i", help="filename xoptfoil input-file"\
+                        "(e.g. inputs.txt)")
+
+    parser.add_argument("-resqrtcl", "-r", help="reSqrtCl-value for the root"\
+                        "-airfoil")
+
+    # read arguments from the command line
+    args = parser.parse_args()
+
+    # get required arguments
+    xmlFileName = getXmlFileName(args)
+    inputFileName = getInputFileName(args)
+    ReSqrtCl = float(getReSqrtCl(args))
+    batchFileName = getOutFileName(args)
+
+    if args.fin:
+        wingFinSwitch = 1
+    else:
+        wingFinSwitch = 0
+
+    return (xmlFileName, batchFileName, inputFileName, ReSqrtCl, wingFinSwitch)
 
 
 ################################################################################
@@ -211,7 +317,7 @@ def getArguments():
 if __name__ == "__main__":
 
     #get command-line-arguments
-    (xmlFileName, batchFileName, inputFileName, rootFoilName, ReSqrtCl)\
+    (xmlFileName, batchFileName, inputFileName, ReSqrtCl, wingFinSwitch)\
      = getArguments()
 
     try:
@@ -220,16 +326,13 @@ if __name__ == "__main__":
         print("Error, file %s could not be opened." % fileName)
         exit -1
 
-    # get only data of the wing
-    wing = planeData[0]
-
-    # generate batchfile for wing
-    generate_batchfile(wing, batchFileName, inputFileName, rootFoilName,\
-                       ReSqrtCl)
-
-#TODO: future use, generate strak for wing and fin
-##    for wing in planeData:
-##        generate_batchfile(wing, batchFileName, inputFileName, rootFoilName,\
-##        ReSqrtCl)
+    if (wingFinSwitch == 0):
+        # generate batchfile for wing
+        print("generating outputfile for the wing-strak")
+        generate_batchfile(planeData[0], batchFileName, inputFileName, ReSqrtCl)
+    else:
+        # generate batchfile for fin
+        print("generating outputfile for the fin-strak")
+        generate_batchfile(planeData[1], batchFileName, inputFileName, ReSqrtCl)
 
     print("Ready.")
