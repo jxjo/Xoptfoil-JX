@@ -20,7 +20,7 @@
 import xml.etree.ElementTree as ET
 import argparse
 from sys import version_info
-
+from sys import exit
 
 ################################################################################
 # Input function that checks python version
@@ -240,8 +240,8 @@ def getInputFileName(args):
 # function that gets the name of the Xoptfoil-tip-input-file
 def getTipInputFileName(args):
 
-    if args.input:
-        tipInputFileName = args.input
+    if args.input_tip:
+        tipInputFileName = args.input_tip
     else:
         message = "Enter the filename of the xoptfoil-input-file"\
         "for the wing-tip (e.g., inputs_tip, which  is the default filename), "\
@@ -357,8 +357,8 @@ if __name__ == "__main__":
     try:
         planeData = read_planeDataFile(xmlFileName)
     except:
-        print("Error, file %s could not be opened." % fileName)
-        exit -1
+        print("Error, file \"%s\" could not be opened.") % xmlFileName
+        exit(-1)
 
     # generate output-file
     if (wingFinSwitch == 0):

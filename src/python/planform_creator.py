@@ -55,13 +55,13 @@ def my_input(message):
 PLanformDict =	{
              "planFormName": 'main wing',
              # spanwidth in m
-             "spanwidth": 2.51,
+             "spanwidth": 2.95,
               # length of the root-chord in m
-             "rootchord": 0.22,
+             "rootchord": 0.241,
              # number of airfoils that shall be calculated along the wing
-             "numberOfSections": 5,
+             "numberOfSections": 4,
              # backsweep of the tip of the wing
-             "backsweep": 0.021,
+             "backsweep": 0.031,
              # over-eliptic shaping of the wing
              "overElipticOffset": 0.0,
              # depth of the aileron / flap in percent of the chord-length
