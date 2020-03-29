@@ -369,7 +369,7 @@ subroutine create_airfoil_camb_thick (xt_seed, zt_seed, xb_seed, zb_seed, modes,
   call xfoil_scale_thickness_camber (seed_foil, f_thick,d_xthick,f_camb,d_xcamb, new_foil_1)
 
   ! Change LE radius ... according to new values hidden in modes
-  f_radius = 1.d0 + 10.d0 * modes(5)
+  f_radius = 1.d0 + 3.d0 * modes(5)
   x_blend  = max (0.02d0, (5.d0 * modes(6) + 0.1d0))
  
   call xfoil_scale_LE_radius (new_foil_1, f_radius, x_blend, new_foil_2)
