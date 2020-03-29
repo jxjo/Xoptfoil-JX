@@ -53,7 +53,7 @@ def my_input(message):
 
 # dictionary, containing all data of the planform
 PLanformDict =	{
-             "planFormName": 'Rocketeer main wing',
+             "planFormName": 'main wing',
              # spanwidth in m
              "spanwidth": 2.51,
               # length of the root-chord in m
@@ -414,7 +414,7 @@ def insert_PlanformDataIntoXFLR5_File(data, inFileName, outFileName, wingFinSwit
         command = WriteSections(data.sections, outputFile, command)
     elif command == 4:
         command = SearchSectionsEnd(line, outputFile, command)
-    elif command == 9:
+    elif command == 5:
         outputFile.write(line)
 
   # close files
