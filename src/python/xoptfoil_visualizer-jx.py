@@ -538,7 +538,8 @@ def plot_airfoil_coordinates(seedfoil, designfoils, plotnum, firsttime=True,
                 "   at x/c: " + str(seedfoil.xmaxt) + '\n' +
                 "Camber: " + str(seedfoil.maxc) + '\n' +
                 "   at x/c: " + str(seedfoil.xmaxc))
-      ax.text(-0.05, -0.2, mytext, color=sc, verticalalignment='top')
+      #ax.text(-0.05, -0.2, mytext, color=sc, verticalalignment='top')
+      ax.text(0.0, -0.1, mytext, color=sc, verticalalignment='top', horizontalalignment='left')
     elif (plotoptions["show_seed_airfoil"]):
       mytext = ("Thickness: " + str(seedfoil.maxt) + '\n' +
                 "   at x/c: " + str(seedfoil.xmaxt) + '\n' +
