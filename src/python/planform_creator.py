@@ -31,7 +31,7 @@ from matplotlib import pyplot as plt
 from matplotlib import rcParams
 import numpy as np
 from math import log10, floor
-
+import json
 
 ################################################################################
 # Input function that checks python version
@@ -53,7 +53,7 @@ def my_input(message):
 
 # dictionary, containing all data of the planform
 PLanformDict =	{
-             "planFormName": 'main wing',
+             "planformName": 'main wing',
              # spanwidth in m
              "spanwidth": 2.95,
               # length of the root-chord in m
@@ -198,7 +198,7 @@ class wing:
     self.hingeDepthPercent = dictData["hingeDepthPercent"]
     self.dihedral = dictData["dihedral"]
     self.rootProfileName = dictData["rootAirfoilName"]
-    self.planformName = dictData["planFormName"]
+    self.planformName = dictData["planformName"]
 
   # find grid-values for a given chord-length
   def findGrid(self, chord):
@@ -427,9 +427,16 @@ if __name__ == "__main__":
 
   # create a new planform
   newWing = wing()
+  json.dump(PLanformDict, open("planformdata.txt",'w'))
+
+  try:
+    planformData = json.load(open("planformdata.txt"))
+  except:
+    print('failed to open file \"planformdata.txt\"')
+    planformData = PLanformDict
 
   # set data for the planform
-  newWing.setData(PLanformDict)
+  newWing.setData(planformData)
 
   # calculate the grid and sections
   newWing.calculateGrid()

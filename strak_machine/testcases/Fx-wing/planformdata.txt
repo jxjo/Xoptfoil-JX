@@ -1,0 +1,1 @@
+{"numberOfSections": 4, "planformName": "main wing", "overElipticOffset": 0.0, "rootchord": 0.241, "rootAirfoilName": "JX-FXrcn", "hingeDepthPercent": 23.5, "spanwidth": 2.95, "backsweep": 0.031, "dihedral": 3.0}
