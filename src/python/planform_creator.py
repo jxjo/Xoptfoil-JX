@@ -63,7 +63,7 @@ PLanformDict =	{
              # backsweep of the tip of the wing
              "backsweep": 0.031,
              # over-eliptic shaping of the wing
-             "overElipticOffset": 0.0,
+             #"overElipticOffset": 0.0,
              # depth of the aileron / flap in percent of the chord-length
              "hingeDepthPercent": 23.5,
              # dihedral of the of the wing in degree
@@ -190,7 +190,7 @@ class wing:
   def setData(self, dictData):
     self.rootchord = dictData["rootchord"]
     self.spanwidth = dictData["spanwidth"]
-    self.overElipticOffset = dictData["overElipticOffset"]
+    #self.overElipticOffset = dictData["overElipticOffset"]
     self.halfspanwidth = (self.spanwidth/2) + self.overElipticOffset
     self.numberOfSections = dictData["numberOfSections"]
     self.numberOfGridChords = self.numberOfSections * 256
@@ -444,10 +444,10 @@ if __name__ == "__main__":
   newWing.calculateGrid()
   newWing.calculateSections()
 
+ # insert the generated-data into the XML-File for XFLR5
+  insert_PlanformDataIntoXFLR5_File(newWing, inputFileName, outputFileName, 0)
+
   # plot the result
   newWing.plotPlanform()
-
-  # insert the generated-data into the XML-File for XFLR5
-  insert_PlanformDataIntoXFLR5_File(newWing, inputFileName, outputFileName, 0)
 
   print("Ready.")
