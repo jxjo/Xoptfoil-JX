@@ -24,8 +24,16 @@ module airfoil_evaluation
 
   implicit none
 
-  public
-  private :: aero_objective_function, matchfoil_objective_function
+  public :: objective_function, objective_function_nopenalty
+  public :: write_function, write_function_restart_cleanup 
+
+  type(xfoil_options_type),      public :: xfoil_options
+  type(xfoil_geom_options_type), public :: xfoil_geom_options
+  
+  double precision, dimension(max_op_points), public :: op_seed_value
+
+
+  private 
 
 ! jx-mod "Additional infos for user info during optimization"
   type op_opt_info_type
@@ -41,10 +49,7 @@ module airfoil_evaluation
     double precision :: change                 ! the relative change of the result value eg thickness
   end type geo_opt_info_type
 
-  double precision, dimension(max_op_points) :: op_seed_value
-
-  type(xfoil_options_type) :: xfoil_options
-  type(xfoil_geom_options_type) :: xfoil_geom_options
+  double precision :: best_obj_func_value = 1d0  ! keep the current best value to show improvement
 
 ! Variables used to check that XFoil results are repeatable when needed
 
@@ -726,7 +731,7 @@ function aero_objective_function(designvars, include_penalty)
 !     Maximize dCl/dalpha (0.1 factor to ensure no division by 0)
 
       slope     = derivation_at_point (noppoint, i, (alpha * pi/180.d0) , lift)
-      increment = scale_factor(i) / (atan(abs(slope))  + 4.d0*pi)
+      increment = scale_factor(i) / (atan(abs(slope))  + 2.d0*pi)
       cur_value = atan(abs(slope))
       ! relative angle value changes use 90 degree as base value
       op_opt_info(i)%change = (cur_value- op_seed_value(i)) / (pi/2d0)
@@ -735,7 +740,7 @@ function aero_objective_function(designvars, include_penalty)
 
 !     jx-mod  New: Minimize dCl/dalpha e.g. to reach clmax at alpha(i) 
       slope     = derivation_at_point (noppoint, i, (alpha * pi/180.d0) , lift)
-      increment = scale_factor(i) * (atan(abs(slope)) + 4.d0*pi)
+      increment = scale_factor(i) * (atan(abs(slope)) + 2.d0*pi)
       cur_value = atan(abs(slope))
       ! relative angle value changes use 90 degree as base value
       op_opt_info(i)%change = (cur_value- op_seed_value(i)) / (pi/2d0)
@@ -848,6 +853,8 @@ function aero_objective_function(designvars, include_penalty)
         cur_value = interp_point(x_interp, zb_interp, geo_targets(i)%x)
       case ('Thickness')      ! take foil thickness calculated above
         cur_value = maxthick
+      case ('Camber')         ! take foil camber from xfoil above
+        cur_value = CAMBR
       case default
         call my_stop("Unknown target_type '"//trim(geo_targets(i)%type))
     end select
@@ -1689,20 +1696,25 @@ subroutine show_op_point_contributions ( obj_func_value,    &
                 ngeo,     geo_opt_info,                     &
                 penalty, penalty_info ) 
 
+  use os_util, only: COLOR_BAD, COLOR_GOOD, COLOR_NORMAL, COLOR_HIGH
+  use os_util, only: print_colored
+ 
   double precision, intent (in) :: obj_func_value, penalty
   integer         , intent (in) :: noppoint, ngeo
   character(100)  , intent (in) :: penalty_info
   type(op_opt_info_type),  dimension (noppoint), intent (in) :: op_opt_info
   type(geo_opt_info_type), dimension (noppoint), intent (in) :: geo_opt_info
 
-  integer :: i 
+  integer :: i, outcolor 
   double precision :: total_improvement, contribution
+
+  character(20) :: outstring
 
   total_improvement = (1.d0-obj_func_value) 
 
-! write info header 
+! write op info header 
 
-  write (*,'(4x, 25x)', advance = 'no') 
+  write (*,'(4x, 24x)', advance = 'no') 
   do i = 1, noppoint
     write (*,'(A6,I02,A1)', advance = 'no') '    op',i,''
   end do 
@@ -1714,7 +1726,7 @@ subroutine show_op_point_contributions ( obj_func_value,    &
 
 ! write relative changes in % per op_point
 
-  write (*,'(4x, A24)', advance = 'no') "     Relative changes "
+  write (*,'(4x, A23)', advance = 'no') "       Relative changes"
   do i = 1, noppoint
     write (*,'(SP, F8.1,A1)', advance = 'no') op_opt_info(i)%change * 100.d0,'%'
   end do 
@@ -1725,11 +1737,28 @@ subroutine show_op_point_contributions ( obj_func_value,    &
   write (*,*)
 
 ! write contribuiton in % per op_point for the overall improvment
+
+  if (obj_func_value < best_obj_func_value) then 
+    outcolor = COLOR_HIGH
+    best_obj_func_value = obj_func_value
+  else 
+    outcolor = COLOR_NORMAL
+  end if
+  write (*,'(4x, A14,F8.4,A2)', advance = 'no') "Improvement:"
+  write (outstring,'(F8.4,A1)') total_improvement *100.d0,'%'
+  call print_colored (outcolor, trim(outstring))
      
-  write (*,'(4x, A14,F8.4,A2)', advance = 'no') "Improvement:",total_improvement *100.d0,'% '
   do i = 1, noppoint
     contribution = (1- op_opt_info(i)%obj) * op_opt_info(i)%weighting *100.d0
-    write (*,'(F8.2,A1)', advance = 'no') contribution,'%'
+    write (outstring,'(F8.2,A1)') contribution,'%'
+    if (contribution >= 0.5d0) then
+      outcolor = COLOR_GOOD
+    elseif (contribution <= -0.5d0) then
+      outcolor = COLOR_BAD
+    else
+      outcolor = COLOR_NORMAL
+    end if
+    call print_colored (outcolor, trim(outstring))
   end do 
   write (*,'(10x)', advance = 'no')
   do i = 1, ngeo
@@ -1741,7 +1770,7 @@ subroutine show_op_point_contributions ( obj_func_value,    &
 ! write penaltiy infos per op_point which happend 
 
   if (penalty > 0d0) then
-    write (*,'(4x, A14,F8.1,A2)', advance = 'no') "    Penalty:", penalty * (-1.d0) * 100.d0,'% '
+    write (*,'(4x, A14,F8.1,A1)', advance = 'no') "    Penalty:", penalty * (-1.d0) * 100.d0,'%'
     do i = 1, noppoint
       write (*,'(A9)', advance = 'no') trim(op_opt_info(i)%penalty_info)
     end do 
