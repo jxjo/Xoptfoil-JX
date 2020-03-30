@@ -95,7 +95,7 @@
 /
 
 &particle_swarm_options
-  pso_pop = 30
+  pso_pop = 50
   pso_tol = 0.0002
   pso_convergence_profile = 'quick_camb_thick'
   pso_maxit = 30
