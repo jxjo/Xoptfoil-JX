@@ -1,7 +1,7 @@
 {
 "planformName": "main wing",
 "spanwidth": 2.95,
-"numberOfSections": 4, 
+"numberOfSections": 5, 
 "rootchord": 0.241,
 "rootAirfoilName": "JX-FXrcn",
 "hingeDepthPercent": 25.0,
