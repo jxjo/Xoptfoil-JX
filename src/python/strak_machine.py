@@ -139,7 +139,7 @@ def get_FoilName(wing, index):
 ################################################################################
 # function that generates a Xoptfoil-batchfile
 def generate_batchfile(wing, batchFileName, inputFileName, tipInputFileName,
-                       ReSqrtCl):
+                       firstTipAirfoil, ReSqrtCl):
 
     # create a new file
     outputfile = open(batchFileName, "w+")
@@ -156,6 +156,11 @@ def generate_batchfile(wing, batchFileName, inputFileName, tipInputFileName,
     idx = 1
     numChords = len(wing.get('chordLengths'))
 
+    if (firstTipAirfoil == 0):
+        firstTipIdx = numChords-1
+    else:
+        firstTipIdx = firstTipAirfoil-1
+
     for chord in wing.get('chordLengths'):
         # skip the root airfoil
         if (prevChord > 0.0):
@@ -165,7 +170,7 @@ def generate_batchfile(wing, batchFileName, inputFileName, tipInputFileName,
             strakFoilName = get_FoilName(wing, idx)
 
             #choose input-file, strak or tip?
-            if (idx < (numChords-1)):
+            if (idx < firstTipIdx):
                 #set inputFileName to strak-input-file
                 iFile = inputFileName
             else:
@@ -200,8 +205,8 @@ def getReSqrtCl(args):
     if args.resqrtcl:
         ReSqrtCl = args.resqrtcl
     else:
-        message = "Enter ReSqrtCl-value for the root-airfoil"\
-        "(e.g. 150000, which  is the default-value), "\
+        message = "Enter ReSqrtCl-value for the root-airfoil\n"\
+        "(e.g. \"150000\", which  is the default-value),\n"\
         "hit <enter> for default:"
 
         ReSqrtCl = my_input(message)
@@ -221,8 +226,8 @@ def getInputFileName(args):
     if args.input:
         inputFileName = args.input
     else:
-        message = "Enter the filename of the xoptfoil-input-file"\
-        "(e.g., inputs, which  is the default filename), "\
+        message = "Enter the filename of the xoptfoil-input-file\n"\
+        "(e.g., \"inputs\", which  is the default filename),\n"\
         "hit <enter> for default:"
 
         inputFileName = my_input(message)
@@ -243,8 +248,8 @@ def getTipInputFileName(args):
     if args.input_tip:
         tipInputFileName = args.input_tip
     else:
-        message = "Enter the filename of the xoptfoil-input-file"\
-        "for the wing-tip (e.g., inputs_tip, which  is the default filename), "\
+        message = "Enter the filename of the xoptfoil-input-file for the wing-tip\n"\
+        "(e.g., \"inputs_tip\", which  is the default filename),\n"\
         "hit <enter> for default:"
 
         tipInputFileName = my_input(message)
@@ -265,8 +270,8 @@ def getOutFileName(args):
     if args.output:
         outFileName = args.output
     else:
-        message = "Enter the filename of the output-file"\
-        "(e.g. make_strak, which  is the default filename), "\
+        message = "Enter the filename of the output-file\n"\
+        "(e.g. \"make_strak\", which  is the default filename),\n"\
         "hit <enter> for default:"
 
         outFileName = my_input(message)
@@ -287,8 +292,8 @@ def getXmlFileName(args):
     if args.xml:
         xmlFileName = args.xml
     else:
-        message = "Enter the filename of the plane-data xml-file"\
-        "(e.g., plane, which  is the default filename), "\
+        message = "Enter the filename of the plane-data xml-file\n"\
+        "(e.g., \"plane\", which  is the default filename),\n"\
         "hit <enter> for default:"
 
         xmlFileName = my_input(message)
@@ -300,6 +305,26 @@ def getXmlFileName(args):
     xmlFileName = xmlFileName + '.xml'
     print("xml-filename is: %s" % xmlFileName)
     return xmlFileName
+
+
+################################################################################
+# function that gets the number of the first tip-airfoil (starting at 1)
+def getFirstTipNumber(args):
+
+    if args.first_tip:
+        firstTip = args.first_tip
+    else:
+        message = "Enter the number of the first tip-airfoil,\n"\
+        "hit <enter> for using only the outer airfoil as tip-airfoil"
+
+        firstTip = my_input(message)
+
+        # set default value in case there was no input
+        if (firstTip == ""):
+            firstTip = 0
+
+    print("first tip-airfoil is: %s" % firstTip)
+    return int(firstTip)
 
 
 ################################################################################
@@ -323,6 +348,9 @@ def getArguments():
     parser.add_argument("-input_tip", "-it", help="filename xoptfoil of input-"\
                         "file for the wing-tip (e.g. inputs_tip.txt)")
 
+    parser.add_argument("-first_tip", "-ft", help="number of first "\
+                        "airfoil using tip-inputfile, root-airfoil is no. 1")
+
     parser.add_argument("-resqrtcl", "-r", help="reSqrtCl-value for the root"\
                         "-airfoil")
 
@@ -333,6 +361,7 @@ def getArguments():
     xmlFileName = getXmlFileName(args)
     inputFileName = getInputFileName(args)
     tipInputFileName = getTipInputFileName(args)
+    firstTip = getFirstTipNumber(args)
     ReSqrtCl = float(getReSqrtCl(args))
     batchFileName = getOutFileName(args)
 
@@ -342,7 +371,7 @@ def getArguments():
         wingFinSwitch = 0
 
     return (xmlFileName, batchFileName, inputFileName, tipInputFileName,
-            ReSqrtCl, wingFinSwitch)
+            firstTip, ReSqrtCl, wingFinSwitch)
 
 
 ################################################################################
@@ -350,8 +379,8 @@ def getArguments():
 if __name__ == "__main__":
 
     #get command-line-arguments or user-input
-    (xmlFileName, batchFileName, inputFileName, tipInputFileName, ReSqrtCl,\
-     wingFinSwitch) = getArguments()
+    (xmlFileName, batchFileName, inputFileName, tipInputFileName, firstTip,\
+    ReSqrtCl, wingFinSwitch) = getArguments()
 
     # read plane-data from XML-File
     try:
@@ -365,7 +394,7 @@ if __name__ == "__main__":
         # generate batchfile for wing
         print("generating outputfile for the wing-strak")
         generate_batchfile(planeData[0], batchFileName, inputFileName,
-                           tipInputFileName, ReSqrtCl)
+                           tipInputFileName, firstTip, ReSqrtCl)
     else:
         # generate batchfile for fin
         print("generating outputfile for the fin-strak")
