@@ -22,7 +22,7 @@ module input_output
   implicit none
 
 #ifndef PACKAGE_VERSION
-  #define PACKAGE_VERSION ""
+#define PACKAGE_VERSION ""
 #endif
 
   contains
@@ -77,7 +77,8 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
   integer :: i, iunit, ioerr, iostat1, counter, idx
   character(30) :: text
   character(3) :: family
-  character(20) :: pso_convergence_profile, parents_selection_method
+  character(20) :: pso_convergence_profile
+  character(10) :: parents_selection_method
   character :: choice
 
   ! jx-mod Geo targets 
