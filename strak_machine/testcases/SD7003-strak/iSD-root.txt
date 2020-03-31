@@ -1,0 +1,51 @@
+! SD 7003 Strak Root airfoil
+! Generate root airfoil based on SD-7003 which is similar to MH30 at Re*sqrt(cl) = 220000  
+
+&optimization_options
+  search_type      = 'global'
+  global_search    = 'particle_swarm'
+  seed_airfoil     = 'from_file'
+! airfoil_file     = '... dat'                        		! get airfoil file  from command line 
+  shape_functions  = 'camb-thick'
+  initial_perturb  = 0.01
+  write_designs    = .true.
+  show_details     = .true.
+  echo_input_parms = .false.
+/  
+
+&operating_conditions
+  re_default_as_resqrtcl = .true.                          	! strak: get reynolds (type 2) from command line
+
+					   ! Speed	                <--- achieve desired Glide High Point      --->     
+  noppoint 		   = 7 ! 1				2			  3			      4				   5			  6				  7
+  op_mode  		   = 'spec-cl'	  , 'spec-cl'	, 'spec-cl'	    , 'spec-cl'		 , 'spec-cl'	, 'spec-cl'		, 'spec-cl'
+  op_point 		   = -0.10		  , 0.20		, 0.58		    , 0.62 			 , 0.66 		, 0.8			, 1.0
+  optimization_type= 'target-drag','target-drag','target-drag'  ,'min-glide-slope','min-drag'	, 'target-drag'	, 'target-drag'
+  target_value	   =  0.00686	  , 0.00575		, 0.00815	    ,		  		 , 			    , 0.0121		, 0.0196	
+  weighting 	   =  1.1 	 	  , 3.5		    , 1				, 1				 , 0.5		    , 2				, 0.3
+/
+
+
+&polar_generation
+  generate_polars  = .true. 								! get re number from command line
+  type_of_polar    = 2 
+  op_mode          = 'spec-al'
+  op_point_range   = -2.0, 12, 0.25
+/
+
+&geometry_targets
+  ngeo_targets     = 1										! achieve desired root thickness
+  target_type(1)   = 'Thickness'
+  target_geo(1)    = 0.090                                  
+  weighting_geo(1) = 2.5
+/  
+
+&constraints
+  min_te_angle     = 3
+/
+
+&particle_swarm_options
+  pso_pop          = 30
+  pso_convergence_profile = 'quick_camb_thick'
+  pso_maxit        = 40
+/

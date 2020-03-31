@@ -252,42 +252,6 @@ subroutine check_seed()
 
   end if
 
-! jx-mod Geo targets start -------------------------------------------------
-
-! Evaluate seed value of geomtry targets and scale factor 
-  
-  do i = 1, ngeo_targets
-
-    select case (trim(geo_targets(i)%type))
-
-      case ('zTop')           ! get z_value top side 
-        seed_value = interp_point(x_interp, zt_interp, geo_targets(i)%x)
-        ref_value  = interp_point(x_interp, thickness, geo_targets(i)%x)
-      case ('zBot')           ! get z_value bot side
-        seed_value = interp_point(x_interp, zb_interp, geo_targets(i)%x)
-        ref_value  = interp_point(x_interp, thickness, geo_targets(i)%x)
-      case ('Thickness')      ! take foil thickness calculated above
-        seed_value = maxthick
-        ref_value  = maxthick
-      case default
-        call my_stop("Unknown target_type '"//trim(geo_targets(i)%type))
-    end select
-
-    geo_targets(i)%seed_value      = seed_value
-    geo_targets(i)%reference_value = ref_value
-
-    ! target value negative?  --> take current seed value * |target_value| 
-    if (geo_targets(i)%target_value <= 0.d0)                                  &
-        geo_targets(i)%target_value = seed_value * abs(geo_targets(i)%target_value)
-    tar_value = geo_targets(i)%target_value
-
-    ! will scale objective to 1 ( = no improvement) 
-    geo_targets(i)%scale_factor = 1 / ( ref_value + abs(tar_value - seed_value))
-
-  end do 
-
-! jx-mod Geo targets - end --------------------------------------------
-
 ! Free memory
 
   deallocate(x_interp)
@@ -453,6 +417,46 @@ subroutine check_seed()
     call ask_stop("Seed airfoil violates min_camber constraint.")
   end if
 
+! jx-mod Geo targets start -------------------------------------------------
+
+! Evaluate seed value of geomtry targets and scale factor 
+  
+  do i = 1, ngeo_targets
+
+    select case (trim(geo_targets(i)%type))
+
+      case ('zTop')           ! get z_value top side 
+        seed_value = interp_point(x_interp, zt_interp, geo_targets(i)%x)
+        ref_value  = interp_point(x_interp, thickness, geo_targets(i)%x)
+      case ('zBot')           ! get z_value bot side
+        seed_value = interp_point(x_interp, zb_interp, geo_targets(i)%x)
+        ref_value  = interp_point(x_interp, thickness, geo_targets(i)%x)
+      case ('Thickness')      ! take foil thickness calculated above
+        seed_value = maxthick
+        ref_value  = maxthick
+      case ('Camber')         ! take xfoil camber from  above
+        seed_value = CAMBR
+        ref_value  = CAMBR
+      case default
+        call my_stop("Unknown target_type '"//trim(geo_targets(i)%type))
+    end select
+
+    geo_targets(i)%seed_value      = seed_value
+    geo_targets(i)%reference_value = ref_value
+
+    ! target value negative?  --> take current seed value * |target_value| 
+    if (geo_targets(i)%target_value <= 0.d0)                                  &
+        geo_targets(i)%target_value = seed_value * abs(geo_targets(i)%target_value)
+    tar_value = geo_targets(i)%target_value
+
+    ! will scale objective to 1 ( = no improvement) 
+    geo_targets(i)%scale_factor = 1 / ( ref_value + abs(tar_value - seed_value))
+
+  end do 
+
+! jx-mod Geo targets - end --------------------------------------------
+
+
 ! Check for unconverged points
 
   do i = 1, noppoint
@@ -547,13 +551,13 @@ subroutine check_seed()
     elseif (trim(optimization_type(i)) == 'max-lift-slope') then
     ! Maximize dCl/dalpha (0.1 factor to ensure no division by 0)
       slope = derivation_at_point (noppoint, i, (alpha * pi/180.d0) , lift)
-      checkval   = 1.d0 / (atan(abs(slope))  + 4.d0*pi)
+      checkval   = 1.d0 / (atan(abs(slope))  + 2.d0*pi)
       seed_value = atan(abs(slope))
 
     elseif (trim(optimization_type(i)) == 'min-lift-slope') then
     ! jx-mod  New: Minimize dCl/dalpha e.g. to reach clmax at alpha(i) 
       slope = derivation_at_point (noppoint, i,  (alpha * pi/180.d0) , lift)
-      checkval   = atan(abs(slope)) + 4.d0*pi
+      checkval   = atan(abs(slope)) + 2.d0*pi
       seed_value = atan(abs(slope))
 
     elseif (trim(optimization_type(i)) == 'min-glide-slope') then

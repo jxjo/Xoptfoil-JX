@@ -2,8 +2,10 @@
 #
 # Xoptfoil-JX (patched edition bei jojo)
 #
+# - switched off Multithreading (OpenMP) 
+# - added -cpp to gfortran to activate precompiler
 
-
+set (_WIN32 yes)
 
 cmake_minimum_required(VERSION 2.8.8)
 set(XOPTFOIL_VERSION 1.2.0beta)
@@ -42,8 +44,8 @@ endif (CMAKE_BUILD_TYPE MATCHES "Release")
 
 # Default compiler flags
 if (Fortran_COMPILER_NAME MATCHES "gfortran")
-  set (CMAKE_Fortran_FLAGS_RELEASE "-O3 ${OPENMP_FLAG}")
-  set (CMAKE_Fortran_FLAGS_DEBUG "-g -fdump-core -fcheck=all -fbacktrace -ffpe-trap=invalid,zero,overflow -Wall ${OPENMP_FLAG}")
+  set (CMAKE_Fortran_FLAGS_RELEASE "-O3 ${OPENMP_FLAG} -cpp")
+  set (CMAKE_Fortran_FLAGS_DEBUG "-g -fdump-core -fcheck=all -fbacktrace -ffpe-trap=invalid,zero,overflow -Wall ${OPENMP_FLAG} -cpp")
   set (Fortran_REAL8_FLAG "-fdefault-real-8")
 elseif (Fortran_COMPILER_NAME MATCHES "ifort")
   set (CMAKE_Fortran_FLAGS_RELEASE "-O3 ${OPENMP_FLAG}")
