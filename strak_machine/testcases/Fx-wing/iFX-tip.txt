@@ -29,7 +29,7 @@
   op_point(2) = 0.15
   optimization_type(2) = 'target-drag'
   !target_value(2) = -0.985                                 ! strak: improve drag value by ...
-  target_value(2) = -0.970                                 ! strak: improve drag value by ...
+  target_value(2) = -0.985                                 ! strak: improve drag value by ...
   weighting(2) = 4.0                                       ! tip: towards tip fight against bubble drag
 
 ! ==== strak: cl of best glide ratio constant (slope = 0) between these op_points =============
@@ -37,7 +37,7 @@
   op_mode(3) = 'spec-cl'
   op_point(3) = 0.55
   optimization_type(3) = 'target-drag'
-  target_value(3) = -1.04                                  ! tip: towards tip allow more decrease in drag
+  target_value(3) = -1.02                                  ! tip: towards tip allow more decrease in drag
   weighting(3) = 1.0
   
   op_mode(4) = 'spec-cl'
@@ -49,7 +49,7 @@
   op_mode(5) = 'spec-cl'
   op_point(5) = 0.65
   optimization_type(5) = 'target-drag'
-  target_value(5) = -1.05                                  ! tip: towards tip allow more decrease in drag
+  target_value(5) = -1.025                                  ! tip: towards tip allow more decrease in drag
   weighting(5) = 1.0
 
 ! ==== strak: max-lift (slope = 0) between these op_points =============

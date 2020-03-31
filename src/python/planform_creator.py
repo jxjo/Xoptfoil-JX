@@ -59,9 +59,9 @@ PLanformDict =	{
               # length of the root-chord in m
              "rootchord": 0.241,
              # number of airfoils that shall be calculated along the wing
-             "numberOfSections": 4,
+             "numberOfSections": 9,
              # backsweep of the tip of the wing
-             "backsweep": 0.031,
+             "backsweep": 0.051,
              # over-eliptic shaping of the wing
              #"overElipticOffset": 0.0,
              # depth of the aileron / flap in percent of the chord-length
@@ -84,8 +84,8 @@ fin_Tag = "<Name>%s</Name>" % "Fin"
 StartOfSections_Tag = "            <Sections>"
 EndOfSections_Tag = "            </Sections>"
 
-inputFileName = "plane.xml"
-outputFileName = "plane_out.xml"
+inputFileName = "plane_template.xml"
+outputFileName = "plane.xml"
 
 
 ################################################################################

@@ -29,7 +29,7 @@
   op_point(2) = 0.15
   optimization_type(2) = 'target-drag'
   !target_value(2) = -0.985                                 ! strak: improve drag value by ...
-  target_value(2) = -0.980                                 ! strak: improve drag value by ...
+  target_value(2) = -0.990                                 ! strak: improve drag value by ...
   weighting(2) = 4.0                                       
 
 ! ==== strak: cl of best glide ratio constant (slope = 0) between these op_points =============
@@ -37,7 +37,7 @@
   op_mode(3) = 'spec-cl'
   op_point(3) = 0.55
   optimization_type(3) = 'target-drag'
-  target_value(3) = -1.005                                 ! strak: allow increase in drag for decrease at low cl
+  target_value(3) = -1.0025                                 ! strak: allow increase in drag for decrease at low cl
   weighting(3) = 1.0
   
   op_mode(4) = 'spec-cl'
@@ -50,7 +50,7 @@
   op_mode(5) = 'spec-cl'
   op_point(5) = 0.65
   optimization_type(5) = 'target-drag'
-  !target_value(5) = -1.05                                  ! strak: allow increase in drag for decrease at low
+  !target_value(5) = -1.025                                  ! strak: allow increase in drag for decrease at low
   target_value(5) = -1.1   
   weighting(5) = 1.0
 
@@ -83,7 +83,7 @@
 &geometry_targets
   ngeo_targets = 1
   target_type(1) = 'Thickness'
-  target_geo(1) = -0.99                                    ! strak: reduce thickness by factor x 
+  target_geo(1) = -0.993                                    ! strak: reduce thickness by factor x 
   weighting_geo(1)= 3
 /  
 
