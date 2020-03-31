@@ -1736,10 +1736,10 @@ subroutine show_op_point_contributions ( obj_func_value,    &
   end do 
   write (*,*)
 
-! write contribuiton in % per op_point for the overall improvment
+! write contribuiton in % per op_point and geo_targets for the overall improvment
 
   if (obj_func_value < best_obj_func_value) then 
-    outcolor = COLOR_HIGH
+    outcolor = COLOR_GOOD
     best_obj_func_value = obj_func_value
   else 
     outcolor = COLOR_NORMAL
@@ -1763,7 +1763,15 @@ subroutine show_op_point_contributions ( obj_func_value,    &
   write (*,'(10x)', advance = 'no')
   do i = 1, ngeo
     contribution = (1- geo_opt_info(i)%obj) * geo_opt_info(i)%weighting *100.d0
-    write (*,'(F8.2,A1)', advance = 'no') contribution,'%'
+    write (outstring,'(F8.2,A1)') contribution,'%'
+    if (contribution >= 0.5d0) then
+      outcolor = COLOR_GOOD
+    elseif (contribution <= -0.5d0) then
+      outcolor = COLOR_BAD
+    else
+      outcolor = COLOR_NORMAL
+    end if
+    call print_colored (outcolor, trim(outstring))
   end do 
   write (*,*)
 
