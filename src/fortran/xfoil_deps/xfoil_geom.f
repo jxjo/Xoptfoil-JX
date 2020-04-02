@@ -2119,6 +2119,15 @@ C     DP mod: added SILENT_MODE option
  1200 FORMAT(/' Current airfoil nodes set from buffer airfoil nodes (',
      &        I4,' )')
 C
+
+C     jx mod: added thickness and camber calculations here
+C             to be able to retrieve geo data when current is set 
+      CALL TCCALC(X,XP,Y,YP,S,N,SILENT_MODE,
+     &            THICKB,XTHICKB,THICKM,XTHICKM,CAMBR,XCAMBR)
+C
+C     jx mod: added panel corner angle calculations here
+      CALL CANG(X,Y,N,0,IMAX,AMAX)
+
       RETURN
       END ! ABCOPY
 

@@ -381,6 +381,16 @@ subroutine check_seed()
 
   end do
 
+  ! jx-mod Check for a good value of xfoil vaccel to ensure convergence at hiher cl
+  if (xfoil_options%vaccel >= 0.01d0) then
+    write(text,'(F8.4)') xfoil_options%vaccel
+    text = adjustl(text)
+    write(*,*) "Xfoil vaccel: "//trim(text)
+    call ask_stop("The convergence paramter should be less then 0.01 "//&
+                  "to avoid convergence problems.")
+  end if
+  
+
 ! Analyze airfoil at requested operating conditions with Xfoil
 
   call run_xfoil(curr_foil, xfoil_geom_options, op_point(1:noppoint),          &

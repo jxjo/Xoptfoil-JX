@@ -92,7 +92,6 @@ subroutine generate_polar_files (foilname, foil, npolars, polars)
   integer :: i, istat
   character (255) :: polars_subdirectory, mkdir_command
 
-
 ! Create subdir for polar files if not exist
 ! jx-todo Detect Unix and do specific make dir 
 
@@ -104,12 +103,12 @@ subroutine generate_polar_files (foilname, foil, npolars, polars)
   
   do i = 1, npolars
 
-    write (*,'(/,A,I1,A, I7,A)') '   calculating polar Type ',polars(i)%re%type,' Re=',  &
+    write (*,'(/,A,I1,A, I7,A)') '   Calculating polar Type ',polars(i)%re%type,' Re=',  &
           int(polars(i)%re%number), ' for '// polars(i)%airfoil_name
     call init_polar (polars(i))
     call calculate_polar (foil, polars(i))
 
-    write (*,'(A, F7.0,/)') '   ... writing to '//trim(polars_subdirectory)//'/'//trim(polars(i)%file_name)
+    write (*,'(A, F7.0,/)')      '   Writing to '//trim(polars_subdirectory)//'/'//trim(polars(i)%file_name)
     open(unit=13, file= trim(polars_subdirectory)//'/'//trim(polars(i)%file_name), status='replace')
     call write_polar_header (13, polars(i))
     call write_polar_data   (13, polars(i))
@@ -297,6 +296,9 @@ subroutine calculate_polar (foil, polar)
   y_flap           = 0.d0
   y_flap_spec      = 'y/c'
 
+  ! suppress a re-paneling of the airfoil as we want the original properties.
+  xfoil_options%auto_smooth = .false. 
+
   call run_xfoil(foil, xfoil_geom_options, polar%op_points%value,  op_modes,     &
     re, ma, use_flap, x_flap, y_flap,                                            &
     y_flap_spec, flap_degrees, xfoil_options,                                    &
@@ -422,7 +424,12 @@ function  get_n_op_points (polar)
     build_filename  = trim(build_filename)  // trim(temp_String)
 
     build_filename  = trim(build_filename)  // '_N'
-    write (temp_String, '(F3.1)') polar%ncrit
+    if (polar%ncrit < 10d0) then 
+      write (temp_String, '(F3.1)') polar%ncrit
+    else
+      write (temp_String, '(F3.0)') polar%ncrit
+    end if
+
     build_filename  = trim(build_filename)  // trim(temp_String)
 
     build_filename  = trim(build_filename)  // '.txt'

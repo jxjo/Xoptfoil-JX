@@ -590,7 +590,9 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
   viscous_mode = .true.
   silent_mode = .true.
   bl_maxit = 100
-  vaccel = 0.01d0
+! jx-mod die original value of vaccel 0.01 leads to too many non convergences at 
+!        higher lift --> reduced 
+  vaccel = 0.005d0
   fix_unconverged = .true.
   reinitialize = .true.
 
@@ -638,6 +640,20 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
   xfoil_options%vaccel = vaccel
   xfoil_options%fix_unconverged = fix_unconverged
   xfoil_options%reinitialize = reinitialize
+! jx-mod swtich to avoid PANGEN before each xfoil calculation as 
+!        it could have influence at high cl (TE micro stuff) 
+!        default is "always smooth" before xfoil
+  xfoil_options%auto_smooth  = .true.
+  xfoil_options%show_details = show_details
+
+
+  if (trim(shape_functions) == 'camb-thick') then
+    ! in case of camb_thick a re-paneling is not needed and
+    ! not good for high cl
+    xfoil_options%auto_smooth = .false.
+  end if 
+ 
+
 
   xfoil_geom_options%npan = npan
   xfoil_geom_options%cvpar = cvpar

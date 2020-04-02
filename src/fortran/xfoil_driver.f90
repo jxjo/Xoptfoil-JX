@@ -27,6 +27,10 @@ module xfoil_driver
     double precision :: xtript, xtripb !Trip locations
     logical :: viscous_mode                       
     logical :: silent_mode             !Toggle xfoil screen write
+    ! jx-mod new 
+    logical :: auto_smooth             ! = true (default) do re-paneling (PANGEN)
+                                       ! before xfoil is called for aero calcs 
+    logical :: show_details            ! show some user entertainment during xfoil loop
     integer :: maxit                   !Iterations for BL calcs
     double precision :: vaccel         !Xfoil BL convergence accelerator
     logical :: fix_unconverged         !Reinitialize to fix unconverged pts.
@@ -210,6 +214,8 @@ subroutine run_xfoil(foil, geom_options, operating_points, op_modes,           &
     write(*,*) 
     write(*,*) 'Analyzing aerodynamics using the XFOIL engine ...'
   end if 
+  ! jx-test 
+  if (xfoil_options%show_details) write (*,'(31x)',advance = 'no') 
 
 ! Check to make sure xfoil is initialized
 
@@ -232,9 +238,11 @@ subroutine run_xfoil(foil, geom_options, operating_points, op_modes,           &
   call xfoil_set_paneling(geom_options)
 
 ! Set airfoil and smooth paneling
+  call xfoil_set_airfoil(foil)
 
-  if (.not. use_flap) then
-    call xfoil_set_airfoil(foil)
+! jx-mod avoid (eg camb-thick) to always PANGEN as it could have
+!        influence at high cl (TE micro stuff) 
+  if (xfoil_options%auto_smooth) then
     call PANGEN(.not. SILENT_MODE)
   end if
 
@@ -301,7 +309,7 @@ subroutine run_xfoil(foil, geom_options, operating_points, op_modes,           &
     if ((re(i)%type == 2) .and. (lift(i) <= 0d0)) then 
       write(*,*)
       write(*,'(A,I2,A)') "Warning in xfoil_driver: Negative lift is not supported for Type 2 polars!" // " (op_point(",i,"))"
-      write(*,*)
+      if (xfoil_options%show_details) write (*,'(31x)',advance = 'no') 
     end if 
 
 !   Get optional outputs
@@ -349,6 +357,9 @@ subroutine run_xfoil(foil, geom_options, operating_points, op_modes,           &
       if (present(xtrt)) xtrt(i) = XOCTR(1)
       if (present(xtrb)) xtrb(i) = XOCTR(2)
 
+      if(xfoil_options%show_details) write (*,'(A)',advance = 'no') 'nc'
+    else
+      if(xfoil_options%show_details) write (*,'(A)',advance = 'no') '.'
     end if
 
 !   Convergence check
@@ -376,6 +387,8 @@ subroutine run_xfoil(foil, geom_options, operating_points, op_modes,           &
       viscrms(i) = 1.D+08
     end if
   end do
+
+  if(xfoil_options%show_details) write (*,*) 
 
 ! Print warnings about unconverged points
 
@@ -594,7 +607,7 @@ end subroutine xfoil_defaults
 
 !=============================================================================80
 !
-! Sets airfoil for xfoil
+! Sets airfoil for xfoil into buffer and current airfoil
 !
 !=============================================================================80
 subroutine xfoil_set_airfoil(foil)
@@ -607,6 +620,10 @@ subroutine xfoil_set_airfoil(foil)
   NB = foil%npoint
   XB(1:NB) = foil%x
   YB(1:NB) = foil%z
+
+! jx-mod Also copy buffer airfoil to current. This is also made in PANGEN -
+!        ... but PANGEN shouldn't always be called before xfoil calculations
+  call ABCOPY (.true.)
 
 end subroutine xfoil_set_airfoil
 
@@ -735,7 +752,6 @@ subroutine xfoil_scale_thickness_camber (infoil, f_thick, d_xthick, f_camb, d_xc
     write(*,*) "Error: xfoil is not initialized!  Call xfoil_init() first."
     stop
   end if
-
 ! Set xfoil airfoil and prepare globals, get current thickness
   call xfoil_set_buffer_airfoil (infoil)
   call xfoil_get_geometry_info  (thick, xthick, camb, xcamb) 
