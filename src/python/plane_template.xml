@@ -38,7 +38,7 @@
             <Sections>
                 <Section>
                     <y_position>  0.000000</y_position>
-                    <Chord>  0.241000</Chord>
+                    <Chord>  0.220000</Chord>
                     <xOffset>  0.000000</xOffset>
                     <Dihedral>  3.000000</Dihedral>
                     <Twist>  0.000</Twist>
@@ -46,112 +46,60 @@
                     <x_panel_distribution>COSINE</x_panel_distribution>
                     <y_number_of_panels>5</y_number_of_panels>
                     <y_panel_distribution>UNIFORM</y_panel_distribution>
-                    <Left_Side_FoilName>JX-FXrcn_1</Left_Side_FoilName>
-                    <Right_Side_FoilName>JX-FXrcn_1</Right_Side_FoilName>
+                    <Left_Side_FoilName>MainWing_1</Left_Side_FoilName>
+                    <Right_Side_FoilName>MainWing_1</Right_Side_FoilName>
                 </Section>
                 <Section>
-                    <y_position>  0.676335</y_position>
-                    <Chord>  0.214171</Chord>
-                    <xOffset>  0.015880</xOffset>
+                    <y_position>  0.753589</y_position>
+                    <Chord>0.175923</Chord>
+                    <xOffset>  0.011322</xOffset>
                     <Dihedral>  3.000000</Dihedral>
                     <Twist>  0.000</Twist>
                     <x_number_of_panels>13</x_number_of_panels>
                     <x_panel_distribution>COSINE</x_panel_distribution>
                     <y_number_of_panels>5</y_number_of_panels>
                     <y_panel_distribution>UNIFORM</y_panel_distribution>
-                    <Left_Side_FoilName>JX-FXrcn_2</Left_Side_FoilName>
-                    <Right_Side_FoilName>JX-FXrcn_2</Right_Side_FoilName>
+                    <Left_Side_FoilName>MainWing_2</Left_Side_FoilName>
+                    <Right_Side_FoilName>MainWing_2</Right_Side_FoilName>
                 </Section>
                 <Section>
-                    <y_position>  0.927399</y_position>
-                    <Chord>  0.187404</Chord>
-                    <xOffset>  0.034381</xOffset>
+                    <y_position>  1.004785</y_position>
+                    <Chord>  0.131816</Chord>
+                    <xOffset>  0.037597</xOffset>
                     <Dihedral>  3.000000</Dihedral>
                     <Twist>  0.000</Twist>
                     <x_number_of_panels>13</x_number_of_panels>
                     <x_panel_distribution>COSINE</x_panel_distribution>
                     <y_number_of_panels>5</y_number_of_panels>
                     <y_panel_distribution>UNIFORM</y_panel_distribution>
-                    <Left_Side_FoilName>JX-FXrcn_3</Left_Side_FoilName>
-                    <Right_Side_FoilName>JX-FXrcn_3</Right_Side_FoilName>
+                    <Left_Side_FoilName>MainWing_3</Left_Side_FoilName>
+                    <Right_Side_FoilName>MainWing_3</Right_Side_FoilName>
                 </Section>
                 <Section>
-                    <y_position>  1.099685</y_position>
-                    <Chord>  0.160615</Chord>
-                    <xOffset>  0.053393</xOffset>
+                    <y_position>  1.150989</y_position>
+                    <Chord>  0.087693</Chord>
+                    <xOffset>  0.067006</xOffset>
                     <Dihedral>  3.000000</Dihedral>
                     <Twist>  0.000</Twist>
                     <x_number_of_panels>13</x_number_of_panels>
                     <x_panel_distribution>COSINE</x_panel_distribution>
                     <y_number_of_panels>5</y_number_of_panels>
                     <y_panel_distribution>UNIFORM</y_panel_distribution>
-                    <Left_Side_FoilName>JX-FXrcn_4</Left_Side_FoilName>
-                    <Right_Side_FoilName>JX-FXrcn_4</Right_Side_FoilName>
+                    <Left_Side_FoilName>MainWing_4</Left_Side_FoilName>
+                    <Right_Side_FoilName>MainWing_4</Right_Side_FoilName>
                 </Section>
                 <Section>
-                    <y_position>  1.226498</y_position>
-                    <Chord>  0.133873</Chord>
-                    <xOffset>  0.072654</xOffset>
+                    <y_position>  1.230469</y_position>
+                    <Chord>  0.043285</Chord>
+                    <xOffset>  0.098616</xOffset>
                     <Dihedral>  3.000000</Dihedral>
                     <Twist>  0.000</Twist>
                     <x_number_of_panels>13</x_number_of_panels>
                     <x_panel_distribution>COSINE</x_panel_distribution>
                     <y_number_of_panels>5</y_number_of_panels>
                     <y_panel_distribution>UNIFORM</y_panel_distribution>
-                    <Left_Side_FoilName>JX-FXrcn_5</Left_Side_FoilName>
-                    <Right_Side_FoilName>JX-FXrcn_5</Right_Side_FoilName>
-                </Section>
-                <Section>
-                    <y_position>  1.321928</y_position>
-                    <Chord>  0.106909</Chord>
-                    <xOffset>  0.092278</xOffset>
-                    <Dihedral>  3.000000</Dihedral>
-                    <Twist>  0.000</Twist>
-                    <x_number_of_panels>13</x_number_of_panels>
-                    <x_panel_distribution>COSINE</x_panel_distribution>
-                    <y_number_of_panels>5</y_number_of_panels>
-                    <y_panel_distribution>UNIFORM</y_panel_distribution>
-                    <Left_Side_FoilName>JX-FXrcn_6</Left_Side_FoilName>
-                    <Right_Side_FoilName>JX-FXrcn_6</Right_Side_FoilName>
-                </Section>
-                <Section>
-                    <y_position>  1.391099</y_position>
-                    <Chord>  0.080123</Chord>
-                    <xOffset>  0.111934</xOffset>
-                    <Dihedral>  3.000000</Dihedral>
-                    <Twist>  0.000</Twist>
-                    <x_number_of_panels>13</x_number_of_panels>
-                    <x_panel_distribution>COSINE</x_panel_distribution>
-                    <y_number_of_panels>5</y_number_of_panels>
-                    <y_panel_distribution>UNIFORM</y_panel_distribution>
-                    <Left_Side_FoilName>JX-FXrcn_7</Left_Side_FoilName>
-                    <Right_Side_FoilName>JX-FXrcn_7</Right_Side_FoilName>
-                </Section>
-                <Section>
-                    <y_position>  1.438493</y_position>
-                    <Chord>  0.053287</Chord>
-                    <xOffset>  0.131764</xOffset>
-                    <Dihedral>  3.000000</Dihedral>
-                    <Twist>  0.000</Twist>
-                    <x_number_of_panels>13</x_number_of_panels>
-                    <x_panel_distribution>COSINE</x_panel_distribution>
-                    <y_number_of_panels>5</y_number_of_panels>
-                    <y_panel_distribution>UNIFORM</y_panel_distribution>
-                    <Left_Side_FoilName>JX-FXrcn_8</Left_Side_FoilName>
-                    <Right_Side_FoilName>JX-FXrcn_8</Right_Side_FoilName>
-                </Section>
-                <Section>
-                    <y_position>  1.466033</y_position>
-                    <Chord>  0.026533</Chord>
-                    <xOffset>  0.151656</xOffset>
-                    <Dihedral>  3.000000</Dihedral>
-                    <Twist>  0.000</Twist>
-                    <x_number_of_panels>13</x_number_of_panels>
-                    <x_panel_distribution>COSINE</x_panel_distribution>
-                    <y_number_of_panels>5</y_number_of_panels>
-                    <y_panel_distribution>UNIFORM</y_panel_distribution>
-                    <Left_Side_FoilName>JX-FXrcn_9</Left_Side_FoilName>
-                    <Right_Side_FoilName>JX-FXrcn_9</Right_Side_FoilName>
+                    <Left_Side_FoilName>MainWing_5</Left_Side_FoilName>
+                    <Right_Side_FoilName>MainWing_5</Right_Side_FoilName>
                 </Section>
             </Sections>
         </wing>

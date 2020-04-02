@@ -21,6 +21,23 @@ import xml.etree.ElementTree as ET
 import argparse
 from sys import version_info
 from sys import exit
+import json
+import os
+
+strakdata = {
+             # name of XFLR5-xml-file
+             "XMLfileName": 'plane.xml',
+             # choice of the planform, 'wing' or 'fin'
+             "planformType": 'wing',
+             # ReSqrtCl of root airfoil
+             "ReSqrtCl": '150000',
+              # name of the xoptfoil-inputfile for strak-airfoil(s)
+             "strakInputFileName": 'inputs-strak.txt',
+             # name of the xoptfoil-inputfile for tip-airfoil(s)
+             "tipInputFileName": 'inputs-tip.txt',
+             # number of tip-airfoils
+             "numberOfTipAirfoils": 1,
+            }
 
 ################################################################################
 # Input function that checks python version
@@ -139,7 +156,7 @@ def get_FoilName(wing, index):
 ################################################################################
 # function that generates a Xoptfoil-batchfile
 def generate_batchfile(wing, batchFileName, inputFileName, tipInputFileName,
-                       firstTipAirfoil, ReSqrtCl):
+                       numTipArifoils, ReSqrtCl):
 
     # create a new file
     outputfile = open(batchFileName, "w+")
@@ -156,10 +173,11 @@ def generate_batchfile(wing, batchFileName, inputFileName, tipInputFileName,
     idx = 1
     numChords = len(wing.get('chordLengths'))
 
-    if (firstTipAirfoil == 0):
-        firstTipIdx = numChords-1
+    if (numTipArifoils == 0):
+        firstTipIdx = numChords
     else:
-        firstTipIdx = firstTipAirfoil-1
+        if (numTipArifoils < numChords):
+            firstTipIdx = numChords - numTipArifoils
 
     for chord in wing.get('chordLengths'):
         # skip the root airfoil
@@ -199,68 +217,18 @@ def generate_batchfile(wing, batchFileName, inputFileName, tipInputFileName,
 
 
 ################################################################################
-# function that gets the ReSqrtCl-value of the root-airfoil
-def getReSqrtCl(args):
-
-    if args.resqrtcl:
-        ReSqrtCl = args.resqrtcl
-    else:
-        message = "Enter ReSqrtCl-value for the root-airfoil\n"\
-        "(e.g. \"150000\", which  is the default-value),\n"\
-        "hit <enter> for default:"
-
-        ReSqrtCl = my_input(message)
-
-        # set default value in case there was no input
-        if (ReSqrtCl == ""):
-            ReSqrtCl = '150000'
-
-    print("ReSqrtCl is: %s" % ReSqrtCl)
-    return ReSqrtCl
-
-
-################################################################################
-# function that gets the name of the Xoptfoil-input-file
-def getInputFileName(args):
+# function that gets the name of the strak-machine-data-file
+def getInFileName(args):
 
     if args.input:
-        inputFileName = args.input
+        inFileName = args.input
     else:
-        message = "Enter the filename of the xoptfoil-input-file\n"\
-        "(e.g., \"inputs\", which  is the default filename),\n"\
-        "hit <enter> for default:"
+        # use Default-name
+        inFileName = 'strakdata'
 
-        inputFileName = my_input(message)
-
-        # set default value in case there was no input
-        if (inputFileName == ""):
-            inputFileName = 'inputs'
-
-    inputFileName = inputFileName + '.txt'
-    print("input-filename is: %s" % inputFileName)
-    return inputFileName
-
-
-################################################################################
-# function that gets the name of the Xoptfoil-tip-input-file
-def getTipInputFileName(args):
-
-    if args.input_tip:
-        tipInputFileName = args.input_tip
-    else:
-        message = "Enter the filename of the xoptfoil-input-file for the wing-tip\n"\
-        "(e.g., \"inputs_tip\", which  is the default filename),\n"\
-        "hit <enter> for default:"
-
-        tipInputFileName = my_input(message)
-
-        # set default value in case there was no input
-        if (tipInputFileName == ""):
-            tipInputFileName = 'inputs_tip'
-
-    tipInputFileName = tipInputFileName + '.txt'
-    print("tip-input-filename is: %s" % tipInputFileName)
-    return tipInputFileName
+    inFileName = inFileName + '.txt'
+    print("filename for strak-machine input-data is: %s" % inFileName)
+    return inFileName
 
 
 ################################################################################
@@ -270,15 +238,8 @@ def getOutFileName(args):
     if args.output:
         outFileName = args.output
     else:
-        message = "Enter the filename of the output-file\n"\
-        "(e.g. \"make_strak\", which  is the default filename),\n"\
-        "hit <enter> for default:"
-
-        outFileName = my_input(message)
-
-        # set default value in case there was no input
-        if (outFileName == ""):
-            outFileName = 'make_strak'
+        # use Default-name
+        outFileName = 'make_strak'
 
     outFileName = outFileName + '.bat'
     print("outFileName is: %s" % outFileName)
@@ -286,92 +247,41 @@ def getOutFileName(args):
 
 
 ################################################################################
-# function that gets the name of the input-XML-file
-def getXmlFileName(args):
-
-    if args.xml:
-        xmlFileName = args.xml
-    else:
-        message = "Enter the filename of the plane-data xml-file\n"\
-        "(e.g., \"plane\", which  is the default filename),\n"\
-        "hit <enter> for default:"
-
-        xmlFileName = my_input(message)
-
-        # set default value in case there was no input
-        if (xmlFileName == ""):
-            xmlFileName = 'plane'
-
-    xmlFileName = xmlFileName + '.xml'
-    print("xml-filename is: %s" % xmlFileName)
-    return xmlFileName
-
-
-################################################################################
-# function that gets the number of the first tip-airfoil (starting at 1)
-def getFirstTipNumber(args):
-
-    if args.first_tip:
-        firstTip = args.first_tip
-    else:
-        message = "Enter the number of the first tip-airfoil,\n"\
-        "hit <enter> for using only the outer airfoil as tip-airfoil"
-
-        firstTip = my_input(message)
-
-        # set default value in case there was no input
-        if (firstTip == ""):
-            firstTip = 0
-
-    print("first tip-airfoil is: %s" % firstTip)
-    return int(firstTip)
-
-
-################################################################################
-# function that gets arguments either from the commandline or by user-input
+# function that gets arguments from the commandline
 def getArguments():
 
     # initiate the parser
     parser = argparse.ArgumentParser('')
-    parser.add_argument("--xml", "-x", help="filename containing xml-data"\
-                        "(e.g. plane)")
+
+    parser.add_argument("-input", "-i", help="filename of strak-machine input"\
+                        "-file (e.g. strak_data)")
 
     parser.add_argument("-output", "-o", help="filename of the outputfile"\
                         "(e.g. make_strak)")
 
-    parser.add_argument("-fin", "-f", help="generate outputfile for the fin"\
-                                           " instead of wing")
-
-    parser.add_argument("-input", "-i", help="filename xoptfoil of input-file"\
-                        "(e.g. inputs.txt)")
-
-    parser.add_argument("-input_tip", "-it", help="filename xoptfoil of input-"\
-                        "file for the wing-tip (e.g. inputs_tip.txt)")
-
-    parser.add_argument("-first_tip", "-ft", help="number of first "\
-                        "airfoil using tip-inputfile, root-airfoil is no. 1")
-
-    parser.add_argument("-resqrtcl", "-r", help="reSqrtCl-value for the root"\
-                        "-airfoil")
 
     # read arguments from the command line
     args = parser.parse_args()
+    return (getInFileName(args), getOutFileName(args))
 
-    # get required arguments
-    xmlFileName = getXmlFileName(args)
-    inputFileName = getInputFileName(args)
-    tipInputFileName = getTipInputFileName(args)
-    firstTip = getFirstTipNumber(args)
-    ReSqrtCl = float(getReSqrtCl(args))
-    batchFileName = getOutFileName(args)
 
-    if args.fin:
+################################################################################
+# function that gets parameters from dictionary
+def getParameters(dict):
+
+    xmlFileName = dict["XMLfileName"]
+    inputFileName = dict["strakInputFileName"]
+    tipInputFileName = dict["tipInputFileName"]
+    numberOfTipAirfoils = dict["numberOfTipAirfoils"]
+    ReSqrtCl = int(dict["ReSqrtCl"])
+
+    if (dict["planformType"] == 'fin'):
         wingFinSwitch = 1
     else:
         wingFinSwitch = 0
 
-    return (xmlFileName, batchFileName, inputFileName, tipInputFileName,
-            firstTip, ReSqrtCl, wingFinSwitch)
+    return (xmlFileName, inputFileName, tipInputFileName, numberOfTipAirfoils,
+            ReSqrtCl, wingFinSwitch)
 
 
 ################################################################################
@@ -379,8 +289,21 @@ def getArguments():
 if __name__ == "__main__":
 
     #get command-line-arguments or user-input
-    (xmlFileName, batchFileName, inputFileName, tipInputFileName, firstTip,\
-    ReSqrtCl, wingFinSwitch) = getArguments()
+    (strakDataFileName, batchFileName) = getArguments()
+
+    #debug
+    #json.dump(strakdata, open("strakdata.txt",'w'))
+
+    # read strak-machine-parameters from file
+    try:
+        strakdata = json.load(open(strakDataFileName))
+    except:
+        print('Error, failed to open file %s' % strakDataFileName)
+        exit(-1)
+
+    # get strak-machine-parameters from dictionary
+    (xmlFileName, inputFileName, tipInputFileName, numberOfTipAirfoils,\
+    ReSqrtCl, wingFinSwitch) = getParameters(strakdata)
 
     # read plane-data from XML-File
     try:
@@ -389,16 +312,16 @@ if __name__ == "__main__":
         print("Error, file \"%s\" could not be opened.") % xmlFileName
         exit(-1)
 
-    # generate output-file
     if (wingFinSwitch == 0):
         # generate batchfile for wing
         print("generating outputfile for the wing-strak")
-        generate_batchfile(planeData[0], batchFileName, inputFileName,
-                           tipInputFileName, firstTip, ReSqrtCl)
+        wingData = planeData[0]
     else:
-        # generate batchfile for fin
         print("generating outputfile for the fin-strak")
-        generate_batchfile(planeData[1], batchFileName, inputFileName,
-                           tipInputFileName, ReSqrtCl)
+        wingData = planeData[1]
+
+    generate_batchfile(wingData, batchFileName, inputFileName, tipInputFileName,
+                       numberOfTipAirfoils, ReSqrtCl)
+
 
     print("Ready.")

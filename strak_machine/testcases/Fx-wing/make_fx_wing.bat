@@ -3,7 +3,7 @@ start "" python ..\..\..\src\python\planform_creator.py
 timeout /T 3
 
 rem create batchfile for strak generation
-python ..\..\..\src\python\strak_machine.py -x plane_out -o make_fx_strak -i iFX-strak -it iFX-tip -ft 7 -r 150000
+python ..\..\..\src\python\strak_machine.py -i fx_strakdata -o make_fx_strak
 
 rem execute batchfile, generate strak
 make_fx_strak.bat
