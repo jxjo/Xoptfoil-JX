@@ -83,6 +83,7 @@ end subroutine check_and_do_polar_generation
 subroutine generate_polar_files (foilname, foil, npolars, polars)
 
   use vardef,             only : airfoil_type
+  use os_util,            only : make_directory
 
   type (polar_type), dimension (MAXPOLARS), intent (inout) :: polars
   type (airfoil_type), intent (in)  :: foil
@@ -93,11 +94,9 @@ subroutine generate_polar_files (foilname, foil, npolars, polars)
   character (255) :: polars_subdirectory, mkdir_command
 
 ! Create subdir for polar files if not exist
-! jx-todo Detect Unix and do specific make dir 
 
   polars_subdirectory = trim(foilname)//'_polars'
-  mkdir_command = 'if not exist '//trim(polars_subdirectory)//' mkdir '//trim(polars_subdirectory)
-  istat = system (trim(mkdir_command))
+  call make_directory (polars_subdirectory)
   
 ! calc and write all polars
   
