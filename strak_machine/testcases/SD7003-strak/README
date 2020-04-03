@@ -2,5 +2,7 @@ Build an airfoil strak which is similar to the well known MHSD-strak by Philip K
 for mid size fast gliders (RE*sqrt(cl) at root = 220000) 
 
 In the first step a root airfoil with desired properties is generated based on the well known SD 7003.
+--> make-SD-root.bat
 
 Afters this a set of airfoils in the range of RE*sqrt(cl) = 190.000 - 70.000 is generated based on the new root airfoil.
+--> make-SD-strak.bat

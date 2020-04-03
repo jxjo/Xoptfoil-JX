@@ -1,5 +1,5 @@
 ! SD 7003 Strak Root airfoil
-! Generate root airfoil based on SD-7003 which is similar to MH30 at Re*sqrt(cl) = 220000  
+! Generate root airfoil based on SD-7003 - result should be similar to MH30 at Re*sqrt(cl) = 220000  
 
 &optimization_options
   search_type      = 'global'
@@ -18,11 +18,11 @@
 
 					   ! Speed	                <--- achieve desired Glide High Point      --->     
   noppoint 		   = 7 ! 1				2			  3			      4				   5			  6				  7
-  op_mode  		   = 'spec-cl'	  , 'spec-cl'	, 'spec-cl'	    , 'spec-cl'		 , 'spec-cl'	, 'spec-cl'		, 'spec-cl'
-  op_point 		   = -0.10		  , 0.20		, 0.58		    , 0.62 			 , 0.66 		, 0.8			, 1.0
-  optimization_type= 'target-drag','target-drag','target-drag'  ,'min-glide-slope','min-drag'	, 'target-drag'	, 'target-drag'
-  target_value	   =  0.00686	  , 0.00575		, 0.00815	    ,		  		 , 			    , 0.0121		, 0.0196	
-  weighting 	   =  1.1 	 	  , 3.5		    , 1				, 1				 , 0.5		    , 2				, 0.3
+  op_mode  		   = 'spec-cl'	  , 'spec-cl'	, 'spec-cl'	    , 'spec-cl'		 , 'spec-cl'	, 'spec-cl'		, 'spec-al'
+  op_point 		   = -0.10		  , 0.20		, 0.58		    , 0.62 			 , 0.66 		, 0.8			, 10.5
+  optimization_type= 'target-drag','target-drag','target-drag'  ,'min-glide-slope','min-drag'	, 'target-drag'	, 'target-lift'
+  target_value	   =  0.00686	  , 0.0057		, 0.00816	    ,		  		 , 			    , 0.0122		, 1.16
+  weighting 	   =  1.1 	 	  , 3.0		    , 1				, 1				 , 0.5		    , 2.2			, 0.5
 /
 
 
@@ -48,4 +48,10 @@
   pso_pop          = 30
   pso_convergence_profile = 'quick_camb_thick'
   pso_maxit        = 40
+/
+
+&xfoil_run_options
+  vaccel          = 0.005
+  reinitialize    = .false.									! speed up a little (set true if too many no convergence) 
+
 /
