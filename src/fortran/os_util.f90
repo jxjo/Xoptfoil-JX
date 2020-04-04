@@ -27,8 +27,6 @@ module os_util
   private
 
   public :: print_colored
-  public :: print_colored_windows
-
   public :: make_directory
   
   interface print_colored
