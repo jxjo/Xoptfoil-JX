@@ -1,0 +1,7 @@
+{"XMLfileName": "plane.xml",
+ "planformType": "wing",
+ "ReSqrtCl": "150000",
+ "strategy" : "fromRootAirfoil",
+ "strakInputFileName": "iFX-strak_root.txt",
+ "tipInputFileName": "iFX-tip_roottxt",
+ "numberOfTipAirfoils": 3}
