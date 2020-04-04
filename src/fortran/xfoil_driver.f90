@@ -306,9 +306,10 @@ subroutine run_xfoil(foil, geom_options, operating_points, op_modes,           &
 
 ! jx-mod Support Type 1 and 2 re numbers - cl may not be negative (test here because of spec-al) 
 
-    if ((re(i)%type == 2) .and. (lift(i) <= 0d0)) then 
+    if ((re(i)%type == 2) .and. (lift(i) <= 0d0) .and. LVCONV) then 
       write(*,*)
-      write(*,'(A,I2,A)') "Warning in xfoil_driver: Negative lift is not supported for Type 2 polars!" // " (op_point(",i,"))"
+      write(*,'(6x,A,I2,A, F6.2)') "Warning: Negative lift for Type 2 Reynolds at" // &
+       " op",i," - cl:",lift(i)
       if (xfoil_options%show_details) write (*,'(31x)',advance = 'no') 
     end if 
 
