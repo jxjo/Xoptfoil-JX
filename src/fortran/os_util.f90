@@ -39,6 +39,7 @@ module os_util
 
   interface make_directory
 #ifdef UNIX
+ module procedure make_directory_unix
 #else
   module procedure make_directory_windows
 #endif    
@@ -191,19 +192,28 @@ end subroutine print_colored_windows
 !  Create Directory
 !------------------------------------------------------------------------------------------
 #ifdef UNIX
-#else
 
-subroutine make_directory_windows (subdirectory)
-
+subroutine make_directory_unix (subdirectory)
   character(*),  intent (in) :: subdirectory
-
   integer         :: istat
   character (255) :: mkdir_command
 
-  mkdir_command = 'if not exist '//trim(subdirectory)//' mkdir '//trim(subdirectory)
+! jx-todo  
+  mkdir_command = 'mkdir '//trim(subdirectory)
   istat = system (trim(mkdir_command))
   
-end subroutine make_directory_windows
+end subroutine make_directory_unix
+
+#else
+
+  subroutine make_directory_windows (subdirectory)
+    character(*),  intent (in) :: subdirectory
+    integer         :: istat
+    character (255) :: mkdir_command
+
+    mkdir_command = 'if not exist '//trim(subdirectory)//' mkdir '//trim(subdirectory)
+    istat = system (trim(mkdir_command))
+  end subroutine make_directory_windows
 
 #endif
   
