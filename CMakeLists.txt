@@ -4,8 +4,11 @@
 #
 # - switched off Multithreading (OpenMP) 
 # - added -cpp to gfortran to activate precompiler
+# - aded precompiler flag for OS - WIn32 or UNIX 
 
-set (_WIN32 yes)
+# *** set operating system  here ****
+# set (OS_FLAG "-DUNIX=1")
+set (OS_FLAG "-DWIN32=1")
 
 cmake_minimum_required(VERSION 2.8.8)
 set(XOPTFOIL_VERSION 1.2.0beta)
@@ -44,8 +47,8 @@ endif (CMAKE_BUILD_TYPE MATCHES "Release")
 
 # Default compiler flags
 if (Fortran_COMPILER_NAME MATCHES "gfortran")
-  set (CMAKE_Fortran_FLAGS_RELEASE "-O3 ${OPENMP_FLAG} -cpp")
-  set (CMAKE_Fortran_FLAGS_DEBUG "-g -fdump-core -fcheck=all -fbacktrace -ffpe-trap=invalid,zero,overflow -Wall ${OPENMP_FLAG} -cpp")
+  set (CMAKE_Fortran_FLAGS_RELEASE "-O3 ${OPENMP_FLAG} -cpp ${OS_FLAG}")
+  set (CMAKE_Fortran_FLAGS_DEBUG "-g -fdump-core -fcheck=all -fbacktrace -ffpe-trap=invalid,zero,overflow -Wall ${OPENMP_FLAG} -cpp ${OS_FLAG}")
   set (Fortran_REAL8_FLAG "-fdefault-real-8")
 elseif (Fortran_COMPILER_NAME MATCHES "ifort")
   set (CMAKE_Fortran_FLAGS_RELEASE "-O3 ${OPENMP_FLAG}")
