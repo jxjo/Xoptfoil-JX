@@ -7,7 +7,7 @@
   seed_airfoil     = 'from_file'
 ! airfoil_file     = '... dat'                        		! strak: get airfoil file  from command line 
   shape_functions  = 'camb-thick'
-  initial_perturb  = 0.002
+  initial_perturb  = 0.01
   write_designs    = .true.
   show_details     = .true.
   echo_input_parms = .false.
@@ -22,7 +22,7 @@
   op_point 	   = -0.10	  , 0.15	, 0.55		, 0.60 		  , 0.65 	    , 9.4
   optimization_type= 'min-drag'	  ,'min-drag'   ,'min-drag'     ,'min-glide-slope','target-drag'    , 'target-lift'
   target_value	   =     	  , 		,	        ,		  , -1		    , 1.16 		
-  weighting 	   =  0.5	  , 4.0	        , 0.01		, 0.5		  , 0.6		    , 0.75
+  weighting 	   =  0.9	  , 1.0	        , 0.01		, 0.5		  , 0.6		    , 0.9
 /
 
 &polar_generation
@@ -36,7 +36,7 @@
   ngeo_targets    = 1
   target_type 	  = 'Camber'
   target_geo      = 0.0142                                       
-  weighting_geo   = 0.2									    ! strak: keep camber  
+  weighting_geo   = 0.5								    ! strak: keep camber  
 /  
 
 &constraints
@@ -45,6 +45,7 @@
  
 &particle_swarm_options
   pso_pop         = 30
+  pso_tol         = 0.0015    
   pso_convergence_profile = 'quick_camb_thick'
-  pso_maxit       = 40
+  pso_maxit       = 50
 /
