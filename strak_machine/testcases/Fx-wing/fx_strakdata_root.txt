@@ -3,5 +3,5 @@
  "ReSqrtCl": "150000",
  "strategy" : "fromRootAirfoil",
  "strakInputFileName": "iFX-strak_root.txt",
- "tipInputFileName": "iFX-tip_roottxt",
+ "tipInputFileName": "iFX-tip_root.txt",
  "numberOfTipAirfoils": 3}
