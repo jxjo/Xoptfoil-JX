@@ -31,6 +31,8 @@ strakdata = {
              "planformType": 'wing',
              # ReSqrtCl of root airfoil
              "ReSqrtCl": '150000',
+             # strategy for strak-airfoil-generation
+             "strategy" : 'fromRootAirfoil',
               # name of the xoptfoil-inputfile for strak-airfoil(s)
              "strakInputFileName": 'inputs-strak.txt',
              # name of the xoptfoil-inputfile for tip-airfoil(s)
@@ -156,16 +158,24 @@ def get_FoilName(wing, index):
 ################################################################################
 # function that generates a Xoptfoil-batchfile
 def generate_batchfile(wing, batchFileName, inputFileName, tipInputFileName,
-                       numTipArifoils, ReSqrtCl):
+                       numTipArifoils, ReSqrtCl, fromRootAirfoil):
 
     # create a new file
     outputfile = open(batchFileName, "w+")
 
-    # an example-file looks like THIS
+    # if strak-airfoil is created from previous airfoil, an example-file looks
+    # like THIS
     ##xoptfoil-jx -i iFX-strak.txt -r 130000 -a JX-FXrcn-15.dat -o FX-strak-13
     ##xoptfoil-jx -i iFX-strak.txt -r 110000 -a FX-strak-13.dat -o FX-strak-11
     ##xoptfoil-jx -i iFX-strak.txt -r  90000 -a FX-strak-11.dat -o FX-strak-09
     ##xoptfoil-jx -i iFX-tip.txt   -r  60000 -a FX-strak-09.dat -o FX-strak-06
+
+    # if strak-airfoil is created from root-airfoil, an example looks like THIS
+    # xoptfoil-jx -i iSD-strak.txt -r 190000 -a SD-root-22.dat    -o SD-strak-19
+    # xoptfoil-jx -i iSD-strak.txt -r 160000 -a SD-root-22.dat    -o SD-strak-16
+    # xoptfoil-jx -i iSD-strak.txt -r 130000 -a SD-root-22.dat    -o SD-strak-13
+    # xoptfoil-jx -i iSD-strak.txt -r 100000 -a SD-root-22.dat    -o SD-strak-10
+    # xoptfoil-jx -i iSD-strak.txt -r  70500 -a SD-root-22.dat    -o SD-strak-07
 
     # do some initializations
     prevChord = 0.0
@@ -184,7 +194,12 @@ def generate_batchfile(wing, batchFileName, inputFileName, tipInputFileName,
         if (prevChord > 0.0):
             # calculate new ReSqrtCl
             ReSqrtCl = ReSqrtCl_old * (chord / prevChord)
-            rootFoilName = get_FoilName(wing, idx-1)
+
+            if fromRootAirfoil:
+                rootFoilName = get_FoilName(wing, 0)
+            else:
+                rootFoilName = get_FoilName(wing, idx-1)
+
             strakFoilName = get_FoilName(wing, idx)
 
             #choose input-file, strak or tip?
@@ -197,7 +212,7 @@ def generate_batchfile(wing, batchFileName, inputFileName, tipInputFileName,
 
             # generate Xoptfoil-commandline
             commandLine = "xoptfoil-jx -i %s -r %d -a %s.dat -o %s\n" %\
-                         (iFile, ReSqrtCl, rootFoilName, strakFoilName)
+                        (iFile, ReSqrtCl, rootFoilName, strakFoilName)
 
             # debug-output
             #print commandLine
@@ -280,8 +295,14 @@ def getParameters(dict):
     else:
         wingFinSwitch = 0
 
+    if (dict["strategy"] == 'fromRootAirfoil'):
+        fromRootAirfoil = 1
+    else:
+        fromRootAirfoil = 0
+
+
     return (xmlFileName, inputFileName, tipInputFileName, numberOfTipAirfoils,
-            ReSqrtCl, wingFinSwitch)
+            ReSqrtCl, wingFinSwitch, fromRootAirfoil)
 
 
 ################################################################################
@@ -303,7 +324,7 @@ if __name__ == "__main__":
 
     # get strak-machine-parameters from dictionary
     (xmlFileName, inputFileName, tipInputFileName, numberOfTipAirfoils,\
-    ReSqrtCl, wingFinSwitch) = getParameters(strakdata)
+    ReSqrtCl, wingFinSwitch, fromRootAirfoil) = getParameters(strakdata)
 
     # read plane-data from XML-File
     try:
@@ -321,7 +342,7 @@ if __name__ == "__main__":
         wingData = planeData[1]
 
     generate_batchfile(wingData, batchFileName, inputFileName, tipInputFileName,
-                       numberOfTipAirfoils, ReSqrtCl)
+                       numberOfTipAirfoils, ReSqrtCl, fromRootAirfoil)
 
 
     print("Ready.")
