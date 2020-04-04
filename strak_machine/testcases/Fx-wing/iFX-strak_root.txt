@@ -16,13 +16,13 @@
 &operating_conditions
   re_default_as_resqrtcl = .true.                          	! strak: get reynolds (type 2) from command line
 
-		   ! Speed	      Bubble     <- Helper --    Glide High Point  keep glide ->  alpha cl-max
+		   ! Speed	   Bubble       <- Helper --    Glide High Point  keep glide ->  alpha cl-max
   noppoint 	   = 6 ! 1	       2	    3		      4		       5		6	
   op_mode  	   = 'spec-cl'	  , 'spec-cl'	, 'spec-cl'     , 'spec-cl'	  , 'spec-cl'	    , 'spec-al'
-  op_point 	   = -0.10	  , 0.20	, 0.60		, 0.63 		  , 0.71 	    , 10
+  op_point 	   = -0.10	  , 0.15	, 0.55		, 0.60 		  , 0.65 	    , 9.4
   optimization_type= 'min-drag'	  ,'min-drag'   ,'min-drag'     ,'min-glide-slope','target-drag'    , 'target-lift'
   target_value	   =     	  , 		,	        ,		  , -1		    , 1.16 		
-  weighting 	   =  0.5	  , 0.7	        , 0.01		, 0.5		  , 0.6		    , 0.75
+  weighting 	   =  0.5	  , 4.0	        , 1.0		, 2.0		  , 0.6		    , 1.0
 /
 
 &polar_generation
