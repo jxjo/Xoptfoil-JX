@@ -49,6 +49,12 @@ module os_util
 !  unix  specific 
 !------------------------------------------------------------------------------------------
 #ifdef UNIX
+
+  character (4)  :: FOREGROUND_LIGHT_GREEN = '[92m'
+  character (4)  :: FOREGROUND_LIGHT_RED   = '[91m'
+  character (4)  :: FOREGROUND_LIGHT_BLUE  = '[94m'
+  character (4)  :: FOREGROUND_BOLD        = '[1m'
+  character (4)  :: FOREGROUND_DEFAULT     = '[39m'
   
 !------------------------------------------------------------------------------------------
 !  windows specific 
@@ -155,9 +161,28 @@ subroutine print_colored (color_attribute, text)
 
   integer, intent (in) :: color_attribute
   character(*),  intent (in) :: text
+  character (20) :: color_string, normal_string
 
-! jx-todo - color have to be implemented via ansi escape codes 
-  write(*,'(A)', advance = 'no') text
+  select case (color_attribute)
+    case (COLOR_GOOD)
+      color_string = FOREGROUND_LIGHT_GREEN
+    case (COLOR_BAD)
+      color_string = FOREGROUND_LIGHT_RED
+    case (COLOR_HIGH)
+      color_string = FOREGROUND_BOLD
+    case default
+      color_string = ''
+  end select
+
+  if (len(trim(color_string)) > 0) then 
+    color_string  = achar(27) // color_string
+    normal_string = achar(27) // FOREGROUND_DEFAULT
+  else
+    color_string  = ''
+    normal_string = '' 
+  end if
+
+  write(*,'(A)', advance = 'no') trim(color_string) // text // trim(normal_string)
 
 end subroutine print_colored
 
@@ -201,7 +226,7 @@ subroutine make_directory_unix (subdirectory)
 ! jx-todo  
   mkdir_command = 'mkdir '//trim(subdirectory)
   istat = system (trim(mkdir_command))
-  
+
 end subroutine make_directory_unix
 
 #else
