@@ -1,0 +1,56 @@
+! SA7036 Strak similar to the strak by Benjamin Rodax 
+! gnerate tip airfoil
+
+&optimization_options
+  search_type      = 'global'
+  global_search    = 'particle_swarm'
+  seed_airfoil     = 'from_file'
+! airfoil_file     = '... dat'                        		! strak: get airfoil file from command line 
+  shape_functions  = 'camb-thick'
+  initial_perturb  = 0.01
+  write_designs    = .true.
+  show_details     = .true.
+  echo_input_parms = .false.
+/  
+  
+&operating_conditions
+  re_default_as_resqrtcl = .true.                          	! strak: get reynolds (type 2) from command line
+
+					   ! Speed	      Bubble     <- Helper --    Glide High Point  keep glide ->  alpha cl-max
+  noppoint 		   = 6 ! 1				2			  3			      4				   5			  6	
+  op_mode  		   = 'spec-cl'	  , 'spec-cl'	, 'spec-cl'	    , 'spec-cl'		 , 'spec-cl'	, 'spec-al'
+  op_point 		   = -0.10		  , 0.20		, 0.76		    , 0.83 			 , 0.90 		, 11
+  optimization_type= 'min-drag'	  ,'min-drag'   ,'min-drag'     ,'min-glide-slope','target-drag', 'target-lift'
+  target_value	   =     		  , 			,			    ,		  		 , -1		    , 1.32 		
+  weighting 	   =  0.2	 	  , 1.5		    , 0.01			, 1.0			 , 1.5		    , 0.2
+/
+
+&polar_generation
+  generate_polars  = .true. 								! get re number from command line
+  type_of_polar    = 2 
+  op_mode          = 'spec-al'
+  op_point_range   =  -2.0, 12.5, 0.25
+/
+
+&constraints
+  min_te_angle = 3.0
+/
+
+&geometry_targets
+  ngeo_targets    = 1
+  target_type 	  = 'Camber'
+  target_geo      = 0.0258                                       
+  weighting_geo   = 0.3									    ! strak: keep camber  
+/  
+ 
+&particle_swarm_options
+  pso_pop         = 30										! 30 particles are fine
+  pso_tol         = 0.0015                                  ! slightly increased for faster convergence
+  pso_convergence_profile = 'quick_camb_thick'
+  pso_maxit       = 50
+/
+
+&xfoil_run_options
+  vaccel          = 0.004
+  reinitialize    = .false.									! speed up a little (set true if too many no convergence) 
+/
