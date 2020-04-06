@@ -53,23 +53,32 @@ def my_input(message):
 
 # dictionary, containing all data of the planform
 PLanformDict =	{
-             "planformName": 'main wing',
-             # spanwidth in m
-             "spanwidth": 2.95,
-              # length of the root-chord in m
-             "rootchord": 0.241,
-             # number of airfoils that shall be calculated along the wing
-             "numberOfSections": 9,
-             # backsweep of the tip of the wing
-             "backsweep": 0.051,
-             # over-eliptic shaping of the wing
-             #"overElipticOffset": 0.0,
-             # depth of the aileron / flap in percent of the chord-length
-             "hingeDepthPercent": 23.5,
-             # dihedral of the of the wing in degree
-             "dihedral": 3.0,
-             # name of the root-airfoil
-             "rootAirfoilName": "JX-FXrcn"
+            # folder containing the inputs-files
+            "inputFolder": 'ressources',
+            # folder containing the output / result-files
+            "outputFolder": 'ressources',
+            # name of XFLR5-template-xml-file
+            "templateFileName": 'plane_template.xml',
+            # name of the generated XFLR5-xml-file
+            "outFileName": "plane.xml",
+            # name of the root-airfoil
+            "rootAirfoilName": "JX-FXrcn",
+            # name of the planform
+            "planformName": 'main wing',
+            # spanwidth in m
+            "spanwidth": 2.95,
+             # length of the root-chord in m
+            "rootchord": 0.241,
+            # number of airfoils that shall be calculated along the wing
+            "numberOfSections": 9,
+            # backsweep of the tip of the wing
+            "backsweep": 0.051,
+            # over-eliptic shaping of the wing
+            #"overElipticOffset": 0.0,
+            # depth of the aileron / flap in percent of the chord-length
+            "hingeDepthPercent": 23.5,
+            # dihedral of the of the wing in degree
+            "dihedral": 3.0
             }
 
 ################################################################################
@@ -422,14 +431,64 @@ def insert_PlanformDataIntoXFLR5_File(data, inFileName, outFileName, wingFinSwit
   outputFile.close()
 
 
+################################################################################
+# function that gets the name of the strak-machine-data-file
+def getInFileName(args):
+
+    if args.input:
+        inFileName = args.input
+    else:
+        # use Default-name
+        inFileName = 'planformdata'
+
+    inFileName = inFileName + '.txt'
+    print("filename for planform input-data is: %s" % inFileName)
+    return inFileName
+
+
+################################################################################
+# function that gets arguments from the commandline
+def getArguments():
+
+    # initiate the parser
+    parser = argparse.ArgumentParser('')
+
+    parser.add_argument("-input", "-i", help="filename of planformdata input"\
+                        "-file (e.g. planformdata)")
+
+    # read arguments from the command line
+    args = parser.parse_args()
+    return (getInFileName(args))
+
+
 # Main program
 if __name__ == "__main__":
+
+  #get command-line-arguments or user-input
+  planformDataFileName = getArguments()
 
   # create a new planform
   newWing = wing()
 
   #debug
-  #json.dump(PLanformDict, open("planformdata.txt",'w'))
+#json.dump(PLanformDict, open("planformdata.txt",'w'))
+
+  # try to open .json-file
+  try:
+     planform = open(planformDataFileName)
+  except:
+    print('Error, failed to open file %s' % planformDataFileName)
+    exit(-1)
+
+  # load dictionary from .json-file
+  try:
+    planformData = json.load( planform)
+    planform.close()
+  except:
+    print('Error, failed to read data from file %s' % planformDataFileName)
+    planform.close()
+    exit(-1)
+
 
   try:
     planformData = json.load(open("planformdata.txt"))
@@ -443,6 +502,18 @@ if __name__ == "__main__":
   # calculate the grid and sections
   newWing.calculateGrid()
   newWing.calculateSections()
+
+  inputFileName =  './' +planformData["inputFolder"] + '/'\
+                 + planformData["templateFileName"]
+  print inputFileName
+
+
+  outputFileName = './' + planformData["outputFolder"] + '/'\
+                 + planformData["outFileName"]
+  print outputFileName
+
+  if not os.path.exists(planformData["outputFolder"]):
+      os.makedirs(planformData["outputFolder"])
 
  # insert the generated-data into the XML-File for XFLR5
   insert_PlanformDataIntoXFLR5_File(newWing, inputFileName, outputFileName, 0)

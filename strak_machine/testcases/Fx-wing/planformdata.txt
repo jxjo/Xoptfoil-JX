@@ -1,9 +1,13 @@
 {
+"inputFolder": "ressources",
+"outputFolder": "ressources",
+"templateFileName": "plane_template.xml",
+"outFileName": "plane.xml",
+"rootAirfoilName": "JX-FXrcn",
 "planformName": "main wing",
 "spanwidth": 2.95,
 "numberOfSections": 9, 
 "rootchord": 0.241,
-"rootAirfoilName": "JX-FXrcn",
 "hingeDepthPercent": 25.0,
 "backsweep": 0.051,
 "dihedral": 3.0}

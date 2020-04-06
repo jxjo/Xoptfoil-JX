@@ -24,22 +24,56 @@ from sys import exit
 import json
 import os
 
+################################################################################
+#
+# example-dictionary for creating .json-file
+#
+################################################################################
 strakdata = {
-             # name of XFLR5-xml-file
-             "XMLfileName": 'plane.xml',
-             # choice of the planform, 'wing' or 'fin'
-             "planformType": 'wing',
-             # ReSqrtCl of root airfoil
-             "ReSqrtCl": '150000',
-             # strategy for strak-airfoil-generation
-             "strategy" : 'fromRootAirfoil',
-              # name of the xoptfoil-inputfile for strak-airfoil(s)
-             "strakInputFileName": 'inputs-strak.txt',
-             # name of the xoptfoil-inputfile for tip-airfoil(s)
-             "tipInputFileName": 'inputs-tip.txt',
-             # number of tip-airfoils
-             "numberOfTipAirfoils": 1,
+            # folder containing the inputs-files
+            "inputFolder": 'ressources',
+            # folder containing the output / result-files
+            "outputFolder": 'build',
+            # name of XFLR5-xml-file
+            "XMLfileName": 'plane_template.xml',
+            # choice of the planform, 'wing' or 'fin'
+            "planformType": 'wing',
+            # ReSqrtCl of root airfoil
+            "ReSqrtCl": '150000',
+            # strategy for strak-airfoil-generation
+            "strategy" : 'fromRootAirfoil',
+             # name of the xoptfoil-inputfile for strak-airfoil(s)
+            "strakInputFileName": 'i-strak.txt',
+            # name of the xoptfoil-inputfile for tip-airfoil(s)
+            "tipInputFileName": 'i-tip.txt',
+            # number of tip-airfoils
+            "numberOfTipAirfoils": 0,
+            # generate batchfile for running Xoptfoil
+            "generateBatchfile" : 'true',
+            # name of the batchfile
+            "batchfileName" : 'make_strak.bat',
             }
+
+################################################################################
+#
+# strakData class
+#
+################################################################################
+class strakData:
+    def __init__(self):
+        self.inputFolder = ''
+        self.outputFolder = '',
+        self.xmlFileName = None
+        self.strakInputFileName = 'i-strak.txt'
+        self.tipInputFileName = None
+        self.numberOfTipAirfoils = 0
+        self.ReSqrtCl = 150000
+        self.useWingPlanform = True
+        self.fromRootAirfoil= True
+        self.generateBatch = True
+        self.batchfileName = 'make_strak.bat'
+        self.wingData = {}
+
 
 ################################################################################
 # Input function that checks python version
@@ -155,13 +189,13 @@ def get_FoilName(wing, index):
     return (foilName)
 
 
-################################################################################
-# function that generates a Xoptfoil-batchfile
-def generate_batchfile(wing, batchFileName, inputFileName, tipInputFileName,
-                       numTipArifoils, ReSqrtCl, fromRootAirfoil):
 
-    # create a new file
-    outputfile = open(batchFileName, "w+")
+################################################################################
+# function that generates commandlines to run Xoptfoil
+def generate_commandlines(params):
+
+    #create an empty list
+    commandLines = []
 
     # if strak-airfoil is created from previous airfoil, an example-file looks
     # like THIS
@@ -177,48 +211,52 @@ def generate_batchfile(wing, batchFileName, inputFileName, tipInputFileName,
     # xoptfoil-jx -i iSD-strak.txt -r 100000 -a SD-root-22.dat    -o SD-strak-10
     # xoptfoil-jx -i iSD-strak.txt -r  70500 -a SD-root-22.dat    -o SD-strak-07
 
-    # do some initializations
+    # do some initializations / set local variables
+    numChords = len(params.wingData.get('chordLengths'))
+    ReSqrtCl = params.ReSqrtCl
     prevChord = 0.0
     ReSqrtCl_old = 0
     idx = 1
-    numChords = len(wing.get('chordLengths'))
 
-    if (numTipArifoils == 0):
+    if (params.numberOfTipAirfoils == 0):
         firstTipIdx = numChords
     else:
-        if (numTipArifoils < numChords):
-            firstTipIdx = numChords - numTipArifoils
+        if (params.numberOfTipAirfoils < numChords):
+            firstTipIdx = numChords - params.numberOfTipAirfoils
 
-    for chord in wing.get('chordLengths'):
+    for chord in params.wingData.get('chordLengths'):
         # skip the root airfoil
         if (prevChord > 0.0):
             # calculate new ReSqrtCl
             ReSqrtCl = ReSqrtCl_old * (chord / prevChord)
 
-            if fromRootAirfoil:
-                rootFoilName = get_FoilName(wing, 0)
+            if params.fromRootAirfoil:
+                rootFoilName =  './' + params.inputFolder + '/' + get_FoilName(params.wingData, 0)
             else:
-                rootFoilName = get_FoilName(wing, idx-1)
+                rootFoilName = './' + params.outputFolder + '/' +get_FoilName(params.wingData, idx-1)
 
-            strakFoilName = get_FoilName(wing, idx)
+            strakFoilName = get_FoilName(params.wingData, idx)
+            strakFoilName = './' + params.outputFolder + '/' + strakFoilName
+
+            #set input-file name for Xoptfoil
+            iFile =  './' + params.inputFolder + '/'
 
             #choose input-file, strak or tip?
             if (idx < firstTipIdx):
                 #set inputFileName to strak-input-file
-                iFile = inputFileName
+                iFile =  iFile + params.strakInputFileName
             else:
                 #set inputFileName to tip-input-file
-                iFile = tipInputFileName
+                iFile = iFile + params.tipInputFileName
 
             # generate Xoptfoil-commandline
-            commandLine = "xoptfoil-jx -i %s -r %d -a %s.dat -o %s\n" %\
+            commandline = "xoptfoil-jx -i %s -r %d -a %s.dat -o %s\n" %\
                         (iFile, ReSqrtCl, rootFoilName, strakFoilName)
 
+            commandLines.append(commandline)
             # debug-output
-            #print commandLine
+            print commandline
 
-            # write Xoptfoil-commandline to outputfile
-            outputfile.write(commandLine)
             idx = idx + 1
 
         # store actual chordLength and ReSqrtCl for calculations of next
@@ -226,9 +264,25 @@ def generate_batchfile(wing, batchFileName, inputFileName, tipInputFileName,
         prevChord = chord
         ReSqrtCl_old = ReSqrtCl
 
+    return commandLines
+
+
+################################################################################
+# function that generates a Xoptfoil-batchfile
+def generate_batchfile(batchFileName, commandlines):
+    try:
+        # create a new file
+        outputfile = open(batchFileName, "w+")
+    except:
+        print ('Error, file %s could not be opened' % batchFileName)
+        return
+
+    # write Xoptfoil-commandline to outputfile
+    for element in commandlines:
+        outputfile.write(element)
+
     # close the outputfile
     outputfile.close()
-    print('File \'%s\' was successfully written' % batchFileName)
 
 
 ################################################################################
@@ -247,21 +301,6 @@ def getInFileName(args):
 
 
 ################################################################################
-# function that gets the name of the output-Batchfile
-def getOutFileName(args):
-
-    if args.output:
-        outFileName = args.output
-    else:
-        # use Default-name
-        outFileName = 'make_strak'
-
-    outFileName = outFileName + '.bat'
-    print("outFileName is: %s" % outFileName)
-    return outFileName
-
-
-################################################################################
 # function that gets arguments from the commandline
 def getArguments():
 
@@ -271,38 +310,89 @@ def getArguments():
     parser.add_argument("-input", "-i", help="filename of strak-machine input"\
                         "-file (e.g. strak_data)")
 
-    parser.add_argument("-output", "-o", help="filename of the outputfile"\
-                        "(e.g. make_strak)")
-
-
     # read arguments from the command line
     args = parser.parse_args()
-    return (getInFileName(args), getOutFileName(args))
+    return (getInFileName(args))
 
 
 ################################################################################
 # function that gets parameters from dictionary
 def getParameters(dict):
 
-    xmlFileName = dict["XMLfileName"]
-    inputFileName = dict["strakInputFileName"]
-    tipInputFileName = dict["tipInputFileName"]
-    numberOfTipAirfoils = dict["numberOfTipAirfoils"]
-    ReSqrtCl = int(dict["ReSqrtCl"])
+    params = strakData()
 
-    if (dict["planformType"] == 'fin'):
-        wingFinSwitch = 1
+    try:
+        params.inputFolder = dict["inputFolder"]
+    except:
+        print ('inputFolder not specified, assuming no input-folder shall be used.')
+
+    try:
+        params.outputFolder = dict["outputFolder"]
+    except:
+        print ('outputFolder not specified, assuming no output-folder shall be used.')
+
+    try:
+        params.batchfileName = dict["batchfileName"]
+    except:
+        print ('batchfileName not found, setting default-filename \'%s\'.'\
+                % params.batchfileName)
+
+    try:
+        params.xmlFileName = dict["XMLfileName"]
+    except:
+        print ('XMLfileName not specified, assuming no xml-file shall be used.')
+
+    try:
+        params.strakInputFileName = dict["strakInputFileName"]
+    except:
+        print ('strakInputFileName not found, setting default-filename \'%s\'.'\
+                % params.strakInputFileName)
+
+    try:
+        params.tipInputFileName = dict["tipInputFileName"]
+    except:
+        params.numberOfTipAirfoils = 0
+        print ('tipInputFileName not speciified, using no tip-input-file and'\
+                'no tip-airfoils.')
+
+    if params.tipInputFileName != None:
+        try:
+            params.numberOfTipAirfoils = dict["numberOfTipAirfoils"]
+        except:
+            print ('numberOfTipAirfoils not specified, assuming that no'\
+                   'tip-airfoils shall be created.')
+
+    try:
+        params.ReSqrtCl = int(dict["ReSqrtCl"])
+    except:
+        print ('ReSqrtCl not specified, assuming default-value \'%d\'.' % params.ReSqrtCl)
+
+    try:
+        planformtype = dict["planformType"]
+    except:
+        planformtype == 'wing'
+        print ('planformType not specified, assuming planformType is \'%s\'.'\
+               % planformtype)
+
+
+    if (planformtype == 'wing'):
+        params.useWingPlanform = True
     else:
-        wingFinSwitch = 0
+        params.useWingPlanform = False
 
-    if (dict["strategy"] == 'fromRootAirfoil'):
-        fromRootAirfoil = 1
+    try:
+        strategy = dict["strategy"]
+    except:
+        strategy == 'fromRootAirfoil'
+        print ('strategy not specified, assuming strategy is \'%s\'.'\
+         % strategy)
+
+    if (strategy == 'fromRootAirfoil'):
+        params.fromRootAirfoil = True
     else:
-        fromRootAirfoil = 0
+        params.fromRootAirfoil = False
 
-
-    return (xmlFileName, inputFileName, tipInputFileName, numberOfTipAirfoils,
-            ReSqrtCl, wingFinSwitch, fromRootAirfoil)
+    return params
 
 
 ################################################################################
@@ -310,39 +400,59 @@ def getParameters(dict):
 if __name__ == "__main__":
 
     #get command-line-arguments or user-input
-    (strakDataFileName, batchFileName) = getArguments()
+    strakDataFileName = getArguments()
 
     #debug
     #json.dump(strakdata, open("strakdata.txt",'w'))
 
-    # read strak-machine-parameters from file
+    # try to open .json-file
     try:
-        strakdata = json.load(open(strakDataFileName))
+        strakDataFile = open(strakDataFileName)
     except:
         print('Error, failed to open file %s' % strakDataFileName)
         exit(-1)
 
-    # get strak-machine-parameters from dictionary
-    (xmlFileName, inputFileName, tipInputFileName, numberOfTipAirfoils,\
-    ReSqrtCl, wingFinSwitch, fromRootAirfoil) = getParameters(strakdata)
-
-    # read plane-data from XML-File
+    # load dictionary from .json-file
     try:
-        planeData = read_planeDataFile(xmlFileName)
+        strakdata = json.load(strakDataFile)
+        strakDataFile.close()
     except:
-        print("Error, file \"%s\" could not be opened.") % xmlFileName
+        print('Error, failed to read data from file %s' % strakDataFileName)
+        strakDataFile.close()
         exit(-1)
 
-    if (wingFinSwitch == 0):
-        # generate batchfile for wing
-        print("generating outputfile for the wing-strak")
-        wingData = planeData[0]
-    else:
-        print("generating outputfile for the fin-strak")
-        wingData = planeData[1]
+    # get strak-machine-parameters from dictionary
+    params = getParameters(strakdata)
+    print strakdata
 
-    generate_batchfile(wingData, batchFileName, inputFileName, tipInputFileName,
-                       numberOfTipAirfoils, ReSqrtCl, fromRootAirfoil)
+    # read plane-data from XML-File
+    if (params.xmlFileName != None):
+        try:
+            xmlFileName = './' + params.inputFolder + '/' + params.xmlFileName
+            planeData = read_planeDataFile(xmlFileName)
+        except:
+            print("Error, file \"%s\" could not be opened.") % xmlFileName
+            exit(-1)
+
+   # choose wing or fin
+    if (params.useWingPlanform == True):
+        print("the wing-strak shall be created")
+        params.wingData = planeData[0]
+    else:
+        print("the fin-strak shall be created")
+        params.wingData = planeData[1]
+
+    # generate Xoptfoil command-lines
+    commandlines = generate_commandlines(params)
+
+    # generate batchfile
+    if (params.generateBatch == True):
+        # check if output folder exists. If not, create folder.
+        if not os.path.exists(params.outputFolder):
+            os.makedirs(params.outputFolder)
+
+        print ('generating batchfile \'%s\'' % params.batchfileName)
+        generate_batchfile(params.batchfileName, commandlines)
 
 
     print("Ready.")
