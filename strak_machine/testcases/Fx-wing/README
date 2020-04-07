@@ -1,8 +1,11 @@
 Build an airfoil strak, based on a given wing-planform-definition.
 
 - It is necessary that you have python installed on your PC.
-- It is recommended to use "Anaconda", that can be downloaded here: https://www.anaconda.com/distribution/
-- The scripts were teseted with Python 2.7
+
+- It is recommended to use python-"Anaconda"-package, that can be downloaded here:
+  https://www.anaconda.com/distribution/
+
+- The scripts were teseted with Python 2.7 on Windows 10
 
 1. Specify planform-data in file "planformdata.txt" (json-file-format) or just take it like it is
    
@@ -30,18 +33,21 @@ Build an airfoil strak, based on a given wing-planform-definition.
    corresponding lines in the batchfile.
 
 
-4. execute batchfile "make_f_wing.bat"
+4. Execute batchfile "make_f_wing.bat"
 
    - The planform of the wing will be created and will be shown in a separate window.
 
-   - The file "plane.xml" will be created, which can be imported into XFLR5 
+   - The file "plane.xml" will be created in the "ressources"-folder, which can be imported into XFLR5 
      (wing and plane design->plane->inport plane(s) from  xml files). 
      The plane will stay in a half-defined state unless all airfoils are imported into XFLR5
      (which of course is only possible after the generation of all airfoils)
 
    - The batch-file "make_fx_strak.bat" will be created, which contains all necessary command-lines
-     for xoptfoil to genereate the strak-airfoils
+     for xoptfoil to generate the strak-airfoils
 
-   - The batch-file "make_fx_strak.bat" will be executed and the strak-airfoils will be generated
-     Depending on your PC, it will take 10..30 minutes to generate one of the strak-airfoils,
+   - The batch-file "make_fx_strak.bat" will be executed and the strak-airfoils will be generated.
+     Depending on your PC, it will take 10..30 minutes to generate each strak-airfoil,
      so the whole process may take several hours.
+
+
+5. The generated airfoils can be found in "build/airfoils/"-folder

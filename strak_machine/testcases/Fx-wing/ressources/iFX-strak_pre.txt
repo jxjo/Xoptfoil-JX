@@ -8,8 +8,8 @@
 ! airfoil_file = '... dat'                                 ! strak: get airfoil file  from command line 
   shape_functions = 'camb-thick'
   initial_perturb = 0.002
-  write_designs = .false.
-  show_details   = .false.
+  write_designs = .true.
+  show_details   = .true.
   echo_input_parms = .false.
 /  
 

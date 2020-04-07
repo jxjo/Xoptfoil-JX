@@ -62,7 +62,8 @@ strakdata = {
 class strakData:
     def __init__(self):
         self.inputFolder = ''
-        self.outputFolder = '',
+        self.outputFolder = ''
+        self.airfoilFolder = ''
         self.xmlFileName = None
         self.strakInputFileName = 'i-strak.txt'
         self.tipInputFileName = None
@@ -212,6 +213,7 @@ def generate_commandlines(params):
     # xoptfoil-jx -i iSD-strak.txt -r  70500 -a SD-root-22.dat    -o SD-strak-07
 
     # do some initializations / set local variables
+    rootFoilName = get_FoilName(params.wingData, 0)
     numChords = len(params.wingData.get('chordLengths'))
     ReSqrtCl = params.ReSqrtCl
     prevChord = 0.0
@@ -224,6 +226,20 @@ def generate_commandlines(params):
         if (params.numberOfTipAirfoils < numChords):
             firstTipIdx = numChords - params.numberOfTipAirfoils
 
+    # change current working dir to output folder
+    commandline = "cd %s\n" % params.outputFolder
+    commandLines.append(commandline)
+
+    #copy rootfoil to output-folder
+    commandline = "copy ..\\%s\\%s %s\n" % \
+    (params.inputFolder, rootFoilName+'.dat', rootFoilName +'.dat')
+    commandLines.append(commandline)
+
+    #copy root-airfoil to airfoil-folder
+    commandline = "copy %s %s\\%s\n" % \
+    (rootFoilName+'.dat', params.airfoilFolder, rootFoilName +'.dat')
+    commandLines.append(commandline)
+
     for chord in params.wingData.get('chordLengths'):
         # skip the root airfoil
         if (prevChord > 0.0):
@@ -231,15 +247,14 @@ def generate_commandlines(params):
             ReSqrtCl = ReSqrtCl_old * (chord / prevChord)
 
             if params.fromRootAirfoil:
-                rootFoilName =  './' + params.inputFolder + '/' + get_FoilName(params.wingData, 0)
+                rootFoilName = get_FoilName(params.wingData, 0)
             else:
-                rootFoilName = './' + params.outputFolder + '/' +get_FoilName(params.wingData, idx-1)
+                rootFoilName = get_FoilName(params.wingData, idx-1)
 
             strakFoilName = get_FoilName(params.wingData, idx)
-            strakFoilName = './' + params.outputFolder + '/' + strakFoilName
 
             #set input-file name for Xoptfoil
-            iFile =  './' + params.inputFolder + '/'
+            iFile =  '../' + params.inputFolder + '/'
 
             #choose input-file, strak or tip?
             if (idx < firstTipIdx):
@@ -254,15 +269,23 @@ def generate_commandlines(params):
                         (iFile, ReSqrtCl, rootFoilName, strakFoilName)
 
             commandLines.append(commandline)
-            # debug-output
-            print commandline
 
+            #copy strak-airfoil to airfoil-folder
+            commandline = "copy %s %s\\%s\n" % \
+            (strakFoilName +'.dat', params.airfoilFolder, strakFoilName +'.dat')
+            commandLines.append(commandline)
+
+            # set index to next airfoil
             idx = idx + 1
 
         # store actual chordLength and ReSqrtCl for calculations of next
         # strak-airfoil
         prevChord = chord
         ReSqrtCl_old = ReSqrtCl
+
+    # change current working dir back
+    commandline = "cd..\n"
+    commandLines.append(commandline)
 
     return commandLines
 
@@ -423,12 +446,12 @@ if __name__ == "__main__":
 
     # get strak-machine-parameters from dictionary
     params = getParameters(strakdata)
-    print strakdata
+    # print strakdata
 
     # read plane-data from XML-File
     if (params.xmlFileName != None):
         try:
-            xmlFileName = './' + params.inputFolder + '/' + params.xmlFileName
+            xmlFileName = params.inputFolder + '/' + params.xmlFileName
             planeData = read_planeDataFile(xmlFileName)
         except:
             print("Error, file \"%s\" could not be opened.") % xmlFileName
@@ -442,17 +465,27 @@ if __name__ == "__main__":
         print("the fin-strak shall be created")
         params.wingData = planeData[1]
 
+    # compose name of the folder, where the airfoils shall be stored
+    params.airfoilFolder = 'airfoils'
+
+    # check if output-folder exists. If not, create folder.
+    if not os.path.exists(params.outputFolder):
+        os.makedirs(params.outputFolder)
+
+    # check if airfoil-folder exists. If not, create folder.
+    if not os.path.exists(params.outputFolder + '\\' + params.airfoilFolder):
+        os.makedirs(params.outputFolder + '\\' + params.airfoilFolder)
+
     # generate Xoptfoil command-lines
     commandlines = generate_commandlines(params)
 
-    # generate batchfile
-    if (params.generateBatch == True):
-        # check if output folder exists. If not, create folder.
-        if not os.path.exists(params.outputFolder):
-            os.makedirs(params.outputFolder)
+    # debug-output
+    #for element in commandlines:
+    #    print element
 
+        # generate batchfile
+    if (params.generateBatch == True):
         print ('generating batchfile \'%s\'' % params.batchfileName)
         generate_batchfile(params.batchfileName, commandlines)
-
 
     print("Ready.")
