@@ -135,26 +135,17 @@ function aero_objective_function(designvars, include_penalty)
   double precision, dimension(size(xseedb,1)) :: curvb
   double precision, dimension(naddthickconst) :: add_thickvec
   integer :: nmodest, nmodesb, nptt, nptb, i, dvtbnd1, dvtbnd2, dvbbnd1,       &
-             dvbbnd2, ncheckpt, nptint
+             dvbbnd2, nptint
   double precision :: penaltyval
   double precision :: tegap, growth1, growth2, maxgrowth, len1, len2
   double precision :: panang1, panang2, maxpanang, heightfactor
-  integer, dimension(noppoint) :: checkpt_list
-  character(7), dimension(noppoint) :: opm_check
-  double precision, dimension(noppoint) :: opp_check 
-  type (re_type),   dimension(noppoint) :: re_check, ma_check 
-  double precision, dimension(noppoint) :: fd_check, ncrit_check
   double precision, dimension(noppoint) :: lift, drag, moment, viscrms, alpha, &
                                            xtrt, xtrb
-  double precision, dimension(noppoint) :: clcheck, cdcheck, cmcheck, rmscheck,&
-                                           alcheck, xtrtcheck, xtrbcheck
   double precision, dimension(noppoint) :: actual_flap_degrees
-  logical, dimension(noppoint) :: checkpt
-  logical :: check
   double precision :: increment, curv1, curv2
   integer :: nreversalst, nreversalsb, ndvs
   double precision :: gapallow, maxthick, ffact
-  integer :: check_idx, flap_idx, dvcounter
+  integer :: flap_idx, dvcounter
   double precision, parameter :: epsexit = 1.0D-04
   double precision, parameter :: epsupdate = 1.0D-08
   double precision :: pi
@@ -234,26 +225,24 @@ function aero_objective_function(designvars, include_penalty)
 
 ! jx-mod Smoothing ---- Start  -----------------------------------------------------------
 
-! Check surface quality - do smoothing  
-
   if (check_curvature .or. do_smoothing) then
 
 ! Check surface for pertubation (ups and downs) and number of reversals
 
-    call assess_surface ('Top    ', .false., max_curv_reverse_top, xseedt, zt_new, nreversalst, perturbation_top)
+    call assess_surface ('Top', .false., max_curv_reverse_top, xseedt, zt_new, nreversalst, perturbation_top)
     if ((do_smoothing .and. (perturbation_top > 0.6)) .and. penalize) then    ! do not smooth seed ! (penalize==false) 
       call smooth_it (xseedt, zt_new)
-      call assess_surface ('Top    ', .false., max_curv_reverse_top, xseedt, zt_new, nreversalst, perturbation_top)
+      call assess_surface ('Top', .false., max_curv_reverse_top, xseedt, zt_new, nreversalst, perturbation_top)
     end if
 
     ! Penality for too many curve_reservals for speed-up reason already here 
     penaltyval = penaltyval + max(0.d0,dble(nreversalst-max_curv_reverse_top))
     if (max(0.d0,dble(nreversalst-max_curv_reverse_top)) > 0.d0) penalty_info = trim(penalty_info) // ' RevT'
 
-    call assess_surface ('Bottom ',  .false., max_curv_reverse_bot, xseedb, zb_new, nreversalsb, perturbation_bot)
+    call assess_surface ('Bot',  .false., max_curv_reverse_bot, xseedb, zb_new, nreversalsb, perturbation_bot)
     if ((do_smoothing .and. (perturbation_bot > 0.6)) .and. penalize) then     ! do not smooth seed
       call smooth_it (xseedb, zb_new)
-      call assess_surface ('Bottom ', .false., max_curv_reverse_bot, xseedb, zb_new, nreversalsb, perturbation_bot)
+      call assess_surface ('Bot', .false., max_curv_reverse_bot, xseedb, zb_new, nreversalsb, perturbation_bot)
     end if
 
     ! Penality for too many curve_reservals for speed-up reason already here 
@@ -274,8 +263,14 @@ function aero_objective_function(designvars, include_penalty)
     end if
   end if
 
-! jx-mod Smoothing ---- End  -----------------------------------------------------------
+! Show surface quality for entertainment and info
+  if (show_details .and. do_smoothing) then
+    write (*,*)
+    call assess_surface ('Top', .true., max_curv_reverse_top, xseedt, zt_new, nreversalst, perturbation_top)
+    call assess_surface ('Bot', .true., max_curv_reverse_bot, xseedb, zb_new, nreversalsb, perturbation_bot)
+  end if
 
+! jx-mod Smoothing ---- End  -----------------------------------------------------------
 
 
 ! Format coordinates in a single loop in derived type. Also remove translation
@@ -508,140 +503,10 @@ function aero_objective_function(designvars, include_penalty)
   end if
 
 ! Determine if points need to be checked for xfoil consistency
-
-  ncheckpt = 0
-  checkpt_list(:) = 0
-  checkpt(:) = .false.
-  do i = 1, noppoint
-
-!   Don't check the very first design
-
-    if (maxlift(1) == -100.d0) exit
-
-!   Check when lift or drag values are suspect
-
-    check = .false.
-
-!   jx-mod Flip detection of cd/cl due to xfoil behaviour
-!            Attention cl could be 0.0
-    if (( abs(lift(i)-maxlift(i))/max(0.0001d0,abs(maxlift(i))) > checktol) .or.                          &
-       ((abs((drag(i)-mindrag(i))/mindrag(i))) > checktol)) then                          
-       check = .true.
-    end if
-
-!   jx-mod Flip detection of cd/cl due to xfoil behaviour
-!            In strange circumstances though op_mode = spec-cl 
-!            xfoil-calculation will result in new lift-values (!?) 
-    if ((op_mode(i) == 'spec-cl') .and. (abs(lift(i) - op_point(i)) > 0.01d0)) then
-      check = .true.
-    end if 
-
-!   jx-mod Flip detection of cd/cl due to xfoil behaviour
-!            Do not trust if no early convergence --> better re-check
-    if (viscrms(i) > 1.D-4) then
-      check = .true.
-    end if
-
-    if (check) then
-      checkpt(i) = .true.
-      ncheckpt = ncheckpt + 1
-      checkpt_list(i) = ncheckpt
-      opm_check(ncheckpt) = op_mode(i)
-      opp_check(ncheckpt) = op_point(i)
-      ma_check(ncheckpt)  = ma(i)
-      fd_check(ncheckpt)  = actual_flap_degrees(i)
-      ncrit_check(ncheckpt) = ncrit_pt(i)
-
-!     Perturb Reynolds number slightly to check that XFoil result is 
-!     repeatable
-      re_check(ncheckpt)%number = 0.997d0*re(i)%number
-      re_check(ncheckpt)%type   =         re(i)%type
- 
-    end if
-
-  end do
-
-! Analyze airfoil at perturbed operating points to check for repeatability
-
-  anychecked: if (ncheckpt > 0) then
-
-    call run_xfoil(curr_foil, xfoil_geom_options, opp_check(1:ncheckpt),       &
-                   opm_check(1:ncheckpt), re_check(1:ncheckpt),                &
-                   ma_check(1:ncheckpt), use_flap, x_flap, y_flap, y_flap_spec,&
-                   fd_check(1:ncheckpt), xfoil_options, clcheck, cdcheck,      &
-                   cmcheck, rmscheck, alcheck, xtrtcheck, xtrbcheck,           &
-                   ncrit_check(1:ncheckpt))
-
-!   Keep the more conservative of the two runs
-
-    do i = 1, noppoint
-
-      ischecked: if (checkpt(i)) then
-
-        check_idx = checkpt_list(i)
-
-!   jx-mod Flip repair of cd/cl due to xfoil behaviour
-!            Take cl value which is closer to maxlift 
-!            Att: maxlift holds now "last good value of cl"
-        !checklift: if (clcheck(check_idx) < lift(i)) then
-        checklift: if (abs(lift(i)-maxlift(i)) > abs(clcheck(check_idx)-maxlift(i))) then
-          lift(i) = clcheck(check_idx)
-        end if checklift
-
-!   jx-mod Flip repair of cd/cl due to xfoil behaviour
-!            Take cd value which is closer to mindrag 
-!            Att: mindrag holds now "last good value of cd"
-        !checkdrag: if (cdcheck(check_idx) > drag(i)) then
-        checkdrag: if (abs(drag(i)-mindrag(i)) > abs(cdcheck(check_idx)-mindrag(i))) then
-          drag(i) = cdcheck(check_idx)
-!   jx-mod take the belonging convergence value 
-!            Otherwise wrong following penalizing -see below --
-          viscrms(i) = rmscheck(check_idx)
-        end if checkdrag
-
-        checkmoment: if (cmcheck(check_idx) < moment(i)) then
-          moment(i) = cmcheck(check_idx)
-        end if checkmoment
-
-!   jx-mod Flip repair of cd/cl due to xfoil behaviour
-!            In case of former non convergence take new value 
-!            - else normal handling
-        checkrms: if (viscrms(i) > 1.D-4) then
-          viscrms(i) = rmscheck(check_idx)
-        else
-          if (rmscheck(check_idx) > viscrms(i)) then
-            viscrms(i) = rmscheck(check_idx)
-          end if 
-        end if checkrms
-
-        checkxtrt: if (xtrtcheck(check_idx) < xtrt(i)) then
-          xtrt(i) = xtrtcheck(check_idx)
-        end if checkxtrt
-
-        checkxtrb: if (xtrbcheck(check_idx) < xtrb(i)) then
-          xtrb(i) = xtrbcheck(check_idx)
-        end if checkxtrb
-
-      end if ischecked
-
-    end do
-
-  end if anychecked
-
-!   jx-mod Flip repair of cd/cl due to xfoil behaviour
-!            Early exit with a high penalty if no convergence reached
-!            to avoid any following trouble with bad values 
-  do i = 1, noppoint
-    !   Extra checks for really bad designs
-    if (viscrms(i) >= 1.d0) then
-      aero_objective_function = 3.33333d0 *1.0D+06
-      return
-    end if
-  end do
+! jx-mod --> removed all re-check stuff!
 
 
-
-! Get objective function contribution from aerodynamics (aero performance
+  ! Get objective function contribution from aerodynamics (aero performance
 ! times normalized weight)
 
   aero_objective_function = 0.d0
@@ -877,11 +742,6 @@ function aero_objective_function(designvars, include_penalty)
 ! jx-mod Show surface quality for entertainment and info
 !          about objectives at the end of iteration 
   if (show_details) then
-
-    if (do_smoothing) then
-      call assess_surface ('Top   ', .true., max_curv_reverse_top, xseedt, zt_new, nreversalst, perturbation_top)
-      call assess_surface ('Bottom', .true., max_curv_reverse_bot, xseedb, zb_new, nreversalsb, perturbation_bot)
-    end if
     call show_op_point_contributions ( (aero_objective_function+geo_objective_function) , & 
                                         noppoint,     op_opt_info,                        &
                                         ngeo_targets, geo_opt_info,                       &

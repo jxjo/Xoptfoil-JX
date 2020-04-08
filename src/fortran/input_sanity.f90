@@ -82,11 +82,11 @@ subroutine check_seed()
 
   if (do_smoothing) then
 
-    call check_surface_and_smooth ('Top surface   ', max_curv_reverse_top, nptt, xseedt, zseedt)
-    call check_surface_and_smooth ('Bottom surface', max_curv_reverse_bot, nptb, xseedb, zseedb)
+    call check_surface_and_smooth ('Top', max_curv_reverse_top, nptt, xseedt, zseedt)
+    call check_surface_and_smooth ('Bot', max_curv_reverse_bot, nptb, xseedb, zseedb)
 
-    call assess_surface ('Top    ', .false., max_curv_reverse_top, xseedt, zseedt, nreversalst, perturbation_top)
-    call assess_surface ('Bot    ', .false., max_curv_reverse_bot, xseedb, zseedb, nreversalsb, perturbation_bot)
+    call assess_surface ('Top', .false., max_curv_reverse_top, xseedt, zseedt, nreversalst, perturbation_top)
+    call assess_surface ('Bot', .false., max_curv_reverse_bot, xseedb, zseedb, nreversalsb, perturbation_bot)
 
     if (trim(shape_functions) == 'camb-thick') then
       write (*,*)
@@ -252,13 +252,6 @@ subroutine check_seed()
 
   end if
 
-! Free memory
-
-  deallocate(x_interp)
-  deallocate(zt_interp)
-  deallocate(zb_interp)
-  deallocate(thickness)
-
 ! Max thickness too low
 
   if (maxthick < min_thickness) then
@@ -389,7 +382,7 @@ subroutine check_seed()
     call ask_stop("The convergence paramter should be less then 0.01 "//&
                   "to avoid convergence problems.")
   end if
-  
+
 
 ! Analyze airfoil at requested operating conditions with Xfoil
 
@@ -463,6 +456,13 @@ subroutine check_seed()
     geo_targets(i)%scale_factor = 1 / ( ref_value + abs(tar_value - seed_value))
 
   end do 
+
+! Free memory
+
+  deallocate(x_interp)
+  deallocate(zt_interp)
+  deallocate(zb_interp)
+  deallocate(thickness)
 
 ! jx-mod Geo targets - end --------------------------------------------
 
