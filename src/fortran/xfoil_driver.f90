@@ -39,14 +39,28 @@ module xfoil_driver
 
   end type xfoil_options_type
 
-  type xfoil_geom_options_type
+  type xfoil_geom_options_type   
 
     integer :: npan
     double precision :: cvpar, cterat, ctrrat, xsref1, xsref2, xpref1, xpref2
 
   end type xfoil_geom_options_type
 
+
+  type value_statistics_type   
+                                       ! for drag(lift) outlier detetction 
+    logical :: no_check                ! deactivate detection e.g. when flaps are set
+    integer :: nvalue                  ! total numer of values tested
+    double precision :: minval         ! the smallest value up to now 
+    double precision :: maxval         ! the biggest value up to now 
+    double precision :: meanval        ! the average value up to now 
+
+  end type value_statistics_type
+
+  type (value_statistics_type), dimension(:), allocatable, private :: drag_statistics
+
   contains
+
 
 !=============================================================================80
 !
@@ -208,14 +222,8 @@ subroutine run_xfoil(foil, geom_options, operating_points, op_modes,           &
   integer :: iretry, nretry
   logical, dimension(size(operating_points,1)) :: point_converged, point_fixed 
   double precision :: newpoint
-  character(30) :: text
-  character(150) :: message
 
-  if (.not. xfoil_options%silent_mode) then
-    write(*,*) 
-    write(*,*) 'Analyzing aerodynamics using the XFOIL engine ...'
-  end if 
-  ! jx-test 
+
   if (xfoil_options%show_details) write (*,'(31x)',advance = 'no') 
 
 ! Check to make sure xfoil is initialized
@@ -224,6 +232,14 @@ subroutine run_xfoil(foil, geom_options, operating_points, op_modes,           &
     write(*,*) "Error: xfoil is not initialized!  Call xfoil_init() first."
     stop
   end if
+
+! jx-mod init statistics for out lier detection the first time and when polar changes
+  if (.not. allocated(drag_statistics)) then
+    call init_statistics (size(operating_points,1), drag_statistics)
+  else if (size(drag_statistics) /= size(operating_points,1)) then 
+    call init_statistics (size(operating_points,1), drag_statistics)
+  end if
+
 
 ! Set default Xfoil parameters
 
@@ -325,6 +341,12 @@ subroutine run_xfoil(foil, geom_options, operating_points, op_modes,           &
     if (xfoil_options%viscous_mode .and. (.not. LVCONV .or. (RMSBL > 1.D-4))) then
       point_converged(i) = .false.
       if(xfoil_options%show_details) write (*,'(A)',advance = 'no') 'nc'
+    else if (is_out_lier (drag_statistics(i), drag(i))) then
+      point_converged(i) = .false.
+      if(xfoil_options%show_details) write (*,'(A)',advance = 'no') 'flip'
+    else if (lift_changed (op_modes(i), operating_points(i), lift(i))) then
+      point_converged(i) = .false.
+      if(xfoil_options%show_details) write (*,'(A)',advance = 'no') 'lift'
     else
       point_converged(i) = .true.
       if(xfoil_options%show_details) write (*,'(A)',advance = 'no') '.'
@@ -365,11 +387,13 @@ subroutine run_xfoil(foil, geom_options, operating_points, op_modes,           &
                             xfoil_options%maxit, lift(i), drag(i), moment(i))
         end if
 
-        if (LVCONV .and. (RMSBL <= 1.D-4)) then 
+        if (LVCONV .and. (RMSBL <= 1.D-4)    & 
+            .and. (.not. is_out_lier (drag_statistics(i), drag(i)))  &
+            .and. (.not. lift_changed (op_modes(i), operating_points(i), lift(i)))) then 
           point_fixed(i) = .true.
-          if(xfoil_options%show_details) write (*,'(A)',advance = 'no') 'fx'
+          if(xfoil_options%show_details) write (*,'(A)',advance = 'no') 'fixed '
         else 
-          if(xfoil_options%show_details) write (*,'(A, I1)',advance = 'no') 'r',iretry 
+          if(xfoil_options%show_details) write (*,'(I1)',advance = 'no') (iretry+1) 
           ! increase a little RE to converge and try again, re-init BL
           REINF1 =  REINF1 * 1.002d0
           LIPAN  = .false.
@@ -392,6 +416,8 @@ subroutine run_xfoil(foil, geom_options, operating_points, op_modes,           &
 
   end do run_oppoints
 
+  if(xfoil_options%show_details) write (*,*) 
+
 ! Final check for NaNs
 
   do i = 1, noppoint
@@ -412,33 +438,16 @@ subroutine run_xfoil(foil, geom_options, operating_points, op_modes,           &
     end if
   end do
 
-  if(xfoil_options%show_details) write (*,*) 
 
 ! Print warnings about unconverged points
+! jx-mod replaced by show_details 
+!        Update statistics
 
-  if (.not. xfoil_options%silent_mode) then
-
-    write(*,*)
-
-    do i = 1, noppoint
-  
-      write(text,*) i
-      text = adjustl(text)
-  
-      if (point_converged(i)) then
-        message = 'Operating point '//trim(text)//' converged.'
-      elseif (.not. point_converged(i) .and. point_fixed(i)) then
-        message = 'Operating point '//trim(text)//' initially did not '//      &
-                  'converge but was fixed.'
-      elseif (.not. point_converged(i) .and. .not. point_fixed(i)) then
-        message = 'Operating point '//trim(text)//' initially did not '//      &
-                  'converge and was not fixed.'
-      end if
-  
-      write(*,*) trim(message)
-  
-    end do
-  end if
+  do i = 1, noppoint
+    if (.not. is_out_lier (drag_statistics(i), drag(i))) then 
+      call update_statistic (drag_statistics(i), drag(i))
+    end if 
+  end do
 
 end subroutine run_xfoil
 
@@ -972,9 +981,91 @@ subroutine xfoil_reload_airfoil(foil)
   
 end subroutine xfoil_reload_airfoil
 
-
-
+!--JX-mod  --------------------------------------------------------------------
+! 
+!  Toolfunctions to handle out lier (flip) detection of drag and lift 
+!
 !------------------------------------------------------------------------------
+
+subroutine init_statistics (npoints, value_statistics)
+
+  type ( value_statistics_type), dimension (:), allocatable, intent (inout) :: value_statistics
+  integer, intent (in) :: npoints 
+  integer :: i
+  
+  if (allocated(value_statistics))  deallocate (value_statistics)
+
+  allocate (value_statistics(npoints))
+  do i = 1, npoints
+    value_statistics(i)%nvalue   = 0
+    value_statistics(i)%no_check = .false.
+    value_statistics(i)%minval   = 0.d0
+    value_statistics(i)%maxval   = 0.d0
+    value_statistics(i)%meanval  = 0.d0
+  end do 
+
+end subroutine init_statistics
+!------------------------------------------------------------------------------
+subroutine update_statistic (value_statistic, new_value)
+
+  type ( value_statistics_type), intent (inout) :: value_statistic
+  doubleprecision, intent (in) :: new_value 
+  
+  value_statistic%minval  = min (value_statistic%minval, new_value) 
+  value_statistic%maxval  = max (value_statistic%maxval, new_value)
+  value_statistic%meanval = (value_statistic%meanval * value_statistic%nvalue + new_value) / &
+                            (value_statistic%nvalue + 1)
+  value_statistic%nvalue  = value_statistic%nvalue + 1
+
+end subroutine update_statistic
+!------------------------------------------------------------------------------
+function is_out_lier (value_statistic, check_value)
+
+  type ( value_statistics_type), intent (in) :: value_statistic
+  doubleprecision, intent (in) :: check_value
+  logical :: is_out_lier 
+  doubleprecision :: out_lier_tolerance, value_tolerance
+
+  is_out_lier = .false. 
+  out_lier_tolerance = 0.4
+
+  if(value_statistic%nvalue > 0 .and. (.not. value_statistic%no_check)) then           !do we have enough values to check? 
+
+    value_tolerance    = abs(check_value - value_statistic%meanval)/max(0.0001d0, value_statistic%meanval) 
+    is_out_lier = (value_tolerance > out_lier_tolerance )  
+
+  end if 
+
+end function is_out_lier
+!------------------------------------------------------------------------------
+subroutine show_out_lier (ipoint, value_statistic, check_value)
+
+  type ( value_statistics_type), intent (in) :: value_statistic
+  doubleprecision, intent (in) :: check_value
+  integer, intent (in) :: ipoint
+
+  write (*,'( 30x, A,A,I2,A,F8.6, A,F8.6)') 'Out lier - ', 'op', ipoint, ": ", check_value, & 
+              '    meanvalue: ', value_statistic%meanval
+
+end subroutine show_out_lier
+!------------------------------------------------------------------------------
+
+!----Check if lift has changed although it should be fix with spec_cl ---------
+function lift_changed (op_mode, op_point, lift)
+
+  doubleprecision, intent (in) :: op_point, lift
+  character (*), intent (in) :: op_mode
+  logical :: lift_changed
+
+  if ((op_mode == 'spec_cl') .and. (abs(lift - op_point) > 0.01d0)) then
+    lift_changed = .true.
+  else
+    lift_changed = .false.
+  end if 
+
+end function lift_changed
+!------------------------------------------------------------------------------
+
 end module xfoil_driver
 
 
