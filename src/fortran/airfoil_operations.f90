@@ -534,7 +534,8 @@ subroutine airfoil_write(filename, title, foil)
 ! Write coordinates
 
   do i = 1, foil%npoint
-    write(iunit,*) foil%x(i), foil%z(i)
+! jx-mod adjusted deciaml places to 7 - inline with intermediate write and other pgms
+    write(iunit,'(2F12.7)') foil%x(i), foil%z(i)
   end do
 
 ! Close file
