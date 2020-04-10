@@ -63,7 +63,6 @@ subroutine check_and_do_polar_generation (input_file, foilname, foil)
   integer  :: npolars
 
   call read_polar_inputs  (input_file, npolars, polars)
-
   if (npolars >= 0)                                               &
     call generate_polar_files (foilname, foil, npolars, polars)
 
@@ -90,8 +89,8 @@ subroutine generate_polar_files (foilname, foil, npolars, polars)
   integer, intent (in)              :: npolars
   character (*), intent(in)         :: foilname
   
-  integer :: i, istat
-  character (255) :: polars_subdirectory, mkdir_command
+  integer :: i
+  character (255) :: polars_subdirectory
 
 ! Create subdir for polar files if not exist
 

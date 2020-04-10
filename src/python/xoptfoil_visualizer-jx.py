@@ -209,7 +209,7 @@ def read_airfoil_polars(filename, zonetitle):
     f = open(filename) 
   except IOError:
     ioerror = 1
-    return x, y, ioerror
+    return ioerror
 
   # Read lines until we get to the correct zone
 
@@ -564,7 +564,7 @@ def plot_airfoil_coordinates(seedfoil, designfoils, plotnum, firsttime=True,
 
   # Legend for coordinates plot
 
-  bbox_loc = (0.5, 1.1)
+  # bbox_loc = (0.5, 1.1)
 
   # Fake lines for legend
 
