@@ -2666,7 +2666,6 @@ C
       CALL SEGSPL(XB,XBP,SB,NB)
       CALL SEGSPL(YB,YBP,SB,NB)
 C
-C jx-mod todo needed?
 C      CALL GEOPAR(XB,XBP,YB,YBP,SB,NB,W1,
 C     &            SBLE,CHORDB,AREAB,RADBLE,ANGBTE,
 C     &            EI11BA,EI22BA,APX1BA,APX2BA,
@@ -2837,7 +2836,6 @@ C
       CALL SEGSPL(XB,XBP,SB,NB)
       CALL SEGSPL(YB,YBP,SB,NB)
 C
-C jx-mod todo needed?
 C      CALL GEOPAR(XB,XBP,YB,YBP,SB,NB,W1,
 C     &            SBLE,CHORDB,AREAB,RADBLE,ANGBTE,
 C     &            EI11BA,EI22BA,APX1BA,APX2BA,
@@ -2961,7 +2959,6 @@ C---- spline new coordinates
       CALL SEGSPL(XB,XBP,SB,NB)
       CALL SEGSPL(YB,YBP,SB,NB)
 C
-C jx-mod todo needed?
 C     CALL GEOPAR(XB,XBP,YB,YBP,SB,NB,W1,
 C     &            SBLE,CHORDB,AREAB,RADBLE,ANGBTE,
 C     &            EI11BA,EI22BA,APX1BA,APX2BA,

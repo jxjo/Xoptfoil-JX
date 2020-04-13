@@ -952,8 +952,8 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
     call my_stop("nfunctions_bot must be >= 0.")
   if (initial_perturb <= 0.d0)                                                 &
     call my_stop("initial_perturb must be > 0.")
-  if (min_bump_width <= 0.d0)                                                  &
-    call my_stop("min_bump_width must be > 0.")!TODO MB bei camber thickness auch?
+  if ((min_bump_width <= 0.d0) .and. trim(shape_functions) /= 'camb-thick')    &
+    call my_stop("min_bump_width must be > 0.")
 
 ! Operating points
 
@@ -1495,7 +1495,7 @@ function read_cl_re_default (re_default)
 end function read_cl_re_default
 
 ! jx-mod -----------------------------------------------------------------
-! Reads command line argument -s for seed airfoil
+! Reads command line argument -a for seed airfoil
 ! ------------------------------------------------------------------------
 
 function read_cl_airfoil_file (file_name)

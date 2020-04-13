@@ -223,7 +223,6 @@ subroutine make_directory_unix (subdirectory)
   integer         :: istat
   character (255) :: mkdir_command
 
-! jx-todo  
   mkdir_command = 'mkdir '//trim(subdirectory)
   istat = system (trim(mkdir_command))
 

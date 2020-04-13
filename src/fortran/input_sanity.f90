@@ -675,7 +675,7 @@ subroutine check_surface_and_smooth (info, maxreversals, npoints, x, y)
   end if
 
   ! write data to a local csv file to visualize in Excel smoothing results 
-  call write_deriv_to_file (info, npoints, x, y_sav, deriv2, deriv3, y, derivation2(npoints, x, y), derivation3(npoints, x, y))
+  ! call write_deriv_to_file (info, npoints, x, y_sav, deriv2, deriv3, y, derivation2(npoints, x, y), derivation3(npoints, x, y))
 
 end subroutine check_surface_and_smooth
 

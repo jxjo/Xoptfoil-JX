@@ -464,7 +464,7 @@ subroutine particleswarm(xopt, fmin, step, fevals, objfunc, x0, xmin, xmax,    &
 
 ! Write restart at end of optimization
 
-  if (restartcounter /= 1)                                                     &
+  if ((restartcounter /= 1) .and. (restart_write_freq /=0))                    &
     call pso_write_restart(step, designcounter, dv, objval, vel, speed,        &
                            bestdesigns, minvals, wcurr)
 

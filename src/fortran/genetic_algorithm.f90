@@ -430,7 +430,7 @@ subroutine geneticalgorithm(xopt, fmin, step, fevals, objfunc, x0, xmin, xmax, &
 
 ! Write restart at end of optimization
 
-  if (restartcounter /= 1)                                                     &
+  if ((restartcounter /= 1) .and. (restart_write_freq /=0))                    &
     call ga_write_restart(step, designcounter, dv, objval, fmin, xopt)
 
 end subroutine geneticalgorithm

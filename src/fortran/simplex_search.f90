@@ -411,7 +411,7 @@ subroutine simplexsearch(xopt, fmin, step, fevals, objfunc, x0, given_f0_ref,  &
 
 ! Write restart at end of optimization
 
-  if (restartcounter /= 1)                                                     &
+  if ((restartcounter /= 1) .and. (restart_write_freq /=0))                    &
     call simplex_write_restart(step+prevsteps, designcounter, dv, objvals, f0, &
                                fevals)
 
