@@ -115,7 +115,7 @@ subroutine load_airfoil(filename, foil)
 
 ! Read airfoil from file
 
-  call airfoil_read(filename, foil%npoint, labeled, foil%x, foil%z)
+  call airfoil_read(filename, foil%npoint, labeled, foil%name, foil%x, foil%z)
 
 ! Change point ordering to counterclockwise, if necessary
 
@@ -178,9 +178,10 @@ end subroutine airfoil_points
 ! Also checks for incorrect format.
 !
 !=============================================================================80
-subroutine airfoil_read(filename, npoints, labeled, x, z)
+subroutine airfoil_read(filename, npoints, labeled, name, x, z)
 
   character(*), intent(in) :: filename
+  character(*), intent(out) :: name
   integer, intent(in) :: npoints
   logical, intent(in) :: labeled
   double precision, dimension(:), intent(inout) :: x, z
@@ -200,7 +201,7 @@ subroutine airfoil_read(filename, npoints, labeled, x, z)
 
 ! Read points from file
 
-  if (labeled) read(iunit,*)
+  if (labeled) read(iunit,*) name
   do i = 1, npoints
     read(iunit,*,end=500,err=500) x(i), z(i)
   end do

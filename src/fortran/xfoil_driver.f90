@@ -754,6 +754,18 @@ end subroutine xfoil_geometry_info
 !------------------------------------------------------------------------------
 
 !------------------------------------------------------------------------------
+!
+! Reset xfoil_driver e.g. for an new polar 
+!
+!------------------------------------------------------------------------------
+subroutine xfoil_driver_reset ()
+
+  if (allocated(drag_statistics))  deallocate (drag_statistics)
+
+end subroutine xfoil_driver_reset 
+
+
+!------------------------------------------------------------------------------
 ! Scale max thickness and camber and their positions of foil 
 !        using xfoil THKCAM and HIPNT
 !

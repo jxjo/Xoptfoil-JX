@@ -51,20 +51,19 @@ contains
 ! - write each polar to a file 
 !=============================================================================
 
-subroutine check_and_do_polar_generation (input_file, foilname, foil)
+subroutine check_and_do_polar_generation (input_file, output_prefix, foil)
 
   use vardef,             only : airfoil_type
 
-  character(*), intent(in)          :: input_file
-  character (*), intent(in)         :: foilname
+  character(*), intent(in)          :: input_file, output_prefix
   type (airfoil_type), intent (in)  :: foil
 
   type (polar_type), dimension (MAXPOLARS) :: polars
   integer  :: npolars
 
-  call read_polar_inputs  (input_file, npolars, polars)
+  call read_polar_inputs  (input_file, foil%name, npolars, polars)
   if (npolars >= 0)                                               &
-    call generate_polar_files (foilname, foil, npolars, polars)
+    call generate_polar_files (output_prefix, foil, npolars, polars)
 
 end subroutine check_and_do_polar_generation
 
@@ -79,7 +78,7 @@ end subroutine check_and_do_polar_generation
 ! The name of the file is aligned to xflr5 polar file naming
 !=============================================================================
 
-subroutine generate_polar_files (foilname, foil, npolars, polars)
+subroutine generate_polar_files (output_prefix, foil, npolars, polars)
 
   use vardef,             only : airfoil_type
   use os_util,            only : make_directory
@@ -87,14 +86,14 @@ subroutine generate_polar_files (foilname, foil, npolars, polars)
   type (polar_type), dimension (MAXPOLARS), intent (inout) :: polars
   type (airfoil_type), intent (in)  :: foil
   integer, intent (in)              :: npolars
-  character (*), intent(in)         :: foilname
+  character (*), intent(in)         :: output_prefix
   
   integer :: i
   character (255) :: polars_subdirectory
 
 ! Create subdir for polar files if not exist
 
-  polars_subdirectory = trim(foilname)//'_polars'
+  polars_subdirectory = trim(output_prefix)//'_polars'
   call make_directory (polars_subdirectory)
   
 ! calc and write all polars
@@ -119,19 +118,18 @@ subroutine generate_polar_files (foilname, foil, npolars, polars)
 end subroutine generate_polar_files
 
 !=============================================================================
-! Read xoptfoil input file to get polars (definition) 
+! Read xoptfoil input file to get polars (definition) and xfoil run options
 !   (separated from read_inputs to be more modular)
 !=============================================================================
 
-subroutine read_polar_inputs  (input_file, npolars, polars)
+subroutine read_polar_inputs  (input_file, foil_name, npolars, polars)
 
   use airfoil_operations, only : my_stop
-  use vardef,             only : output_prefix
   use airfoil_evaluation, only : xfoil_options
   use input_output,       only : read_cl_re_default
 
   type (polar_type), dimension (MAXPOLARS), intent (out) :: polars
-  character(*), intent(in) :: input_file
+  character(*), intent(in) :: input_file, foil_name
   integer , intent(out)    :: npolars
 
   logical         :: generate_polars                         ! .true. .false. 
@@ -140,12 +138,20 @@ subroutine read_polar_inputs  (input_file, npolars, polars)
   double precision, dimension (MAXPOLARS) :: polar_reynolds  ! 40000, 70000, 100000
   double precision, dimension (3)  :: op_point_range         ! -1.0, 10.0, 0.5
 
+  double precision :: ncrit, xtript, xtripb, vaccel
+  logical :: viscous_mode, silent_mode, fix_unconverged, reinitialize
+  integer :: bl_maxit
+
+
   integer         :: istat, iunit, i
 
   namelist /polar_generation/ generate_polars, type_of_polar, polar_reynolds,   &
                               op_mode, op_point_range
 
-! Init default values  
+  namelist /xfoil_run_options/ ncrit, xtript, xtripb, viscous_mode,            &
+            silent_mode, bl_maxit, vaccel, fix_unconverged, reinitialize
+
+! Init default values for polars
 
   npolars         = 0
   generate_polars = .false.
@@ -153,7 +159,19 @@ subroutine read_polar_inputs  (input_file, npolars, polars)
   op_mode         = 'spec-al'
   op_point_range  = 0d0
   polar_reynolds  = 0d0
-                            
+
+  ! Init default values for xfoil options
+
+  ncrit           = 9.d0
+  xtript          = 1.d0
+  xtripb          = 1.d0
+  viscous_mode    = .true.
+  silent_mode     = .true.
+  bl_maxit        = 100
+  vaccel          = 0.005d0
+  fix_unconverged = .true.
+  reinitialize    = .true.
+  
 ! Open input file and read namelist from file
 
   iunit = 12
@@ -161,6 +179,8 @@ subroutine read_polar_inputs  (input_file, npolars, polars)
   if (istat /= 0)                                                              &
     call my_stop('Could not find input file '//trim(input_file)//'.')
   read(iunit, iostat=istat, nml=polar_generation)
+  rewind(iunit)
+  read(iunit, iostat=istat, nml=xfoil_run_options)
   close (iunit)
 
 ! if there are no re numbers in input file take from command line
@@ -191,13 +211,29 @@ subroutine read_polar_inputs  (input_file, npolars, polars)
     write (*,*) " Error: Start of polar op_point_range + increment should be end of op_point_range."
     stop
   end if
-  
+
+! Put xfoil options into derived types
+
+  xfoil_options%ncrit        = ncrit
+  xfoil_options%xtript       = xtript
+  xfoil_options%xtripb       = xtripb
+  xfoil_options%viscous_mode = viscous_mode
+  xfoil_options%silent_mode  = silent_mode
+  xfoil_options%maxit        = bl_maxit
+  xfoil_options%vaccel       = vaccel
+  xfoil_options%fix_unconverged = fix_unconverged
+  xfoil_options%reinitialize = reinitialize
+  xfoil_options%auto_smooth  = .true.
+! jx-todo - read show_details
+  xfoil_options%show_details = .true.
+  xfoil_options%auto_smooth  = .false.
+
   
 ! Init polar definitions with input 
 
   do i = 1, size(polar_reynolds)
     if (polar_reynolds(i) > 1000d0) then 
-      polars(i)%airfoil_name    = trim(output_prefix)
+      polars(i)%airfoil_name    = trim(foil_name)
       polars(i)%base_value_type = op_mode
       polars(i)%start_value     = op_point_range (1)
       polars(i)%end_value       = op_point_range (2)
@@ -212,7 +248,7 @@ subroutine read_polar_inputs  (input_file, npolars, polars)
   end do
 
   write (*,'(/,A,I2,A)') ' A total of ',npolars,' polars will be generated '//  &
-                         'for airfoil '//trim(output_prefix)
+                         'for airfoil '//trim(foil_name)
 
 
 end subroutine read_polar_inputs
@@ -270,7 +306,7 @@ end subroutine init_polar
 subroutine calculate_polar (foil, polar)
 
   use vardef,             only : airfoil_type
-  use xfoil_driver,       only : run_xfoil
+  use xfoil_driver,       only : run_xfoil, xfoil_driver_reset
   use airfoil_evaluation, only : xfoil_options, xfoil_geom_options
 
   type (polar_type), intent (inout) :: polar
@@ -296,6 +332,9 @@ subroutine calculate_polar (foil, polar)
 
   ! suppress a re-paneling of the airfoil as we want the original properties.
   xfoil_options%auto_smooth = .false. 
+
+  ! reset out lier detection tect. for a new polar 
+  call xfoil_driver_reset
 
   call run_xfoil(foil, xfoil_geom_options, polar%op_points%value,  op_modes,     &
     re, ma, use_flap, x_flap, y_flap,                                            &

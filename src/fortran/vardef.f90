@@ -22,6 +22,7 @@ module vardef
   implicit none
 
   type airfoil_type
+    character(80) :: name                               ! jx-mod Name of the airfoil
     integer :: npoint
     double precision, dimension(:), allocatable :: x, z ! Airfoil coordinates
     double precision :: xle, zle                        ! Leading edge coords
