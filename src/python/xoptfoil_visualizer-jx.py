@@ -127,7 +127,7 @@ def read_airfoil_coordinates(filename, zonetitle, designnum):
     f = open(filename) 
   except IOError:
     ioerror = 1
-    return x, y, maxt, xmaxt, maxc, xmaxc, ioerror
+    return x, y, maxt, xmaxt, maxc, xmaxc, ioerror, deriv2, deriv3
 
   # Read lines until we get to the correct zone
 
