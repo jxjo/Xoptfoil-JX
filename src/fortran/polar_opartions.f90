@@ -92,11 +92,10 @@ subroutine generate_polar_files (output_prefix, foil, npolars, polars)
   character (255) :: polars_subdirectory
 
 ! Create subdir for polar files if not exist
-
   polars_subdirectory = trim(output_prefix)//'_polars'
-  call make_directory (polars_subdirectory)
-  
-! calc and write all polars
+  call make_directory (trim(polars_subdirectory))
+
+  ! calc and write all polars
   
   do i = 1, npolars
 
@@ -370,8 +369,13 @@ subroutine write_polar_data (out_unit, polar)
   do i = 1, polar%n_op_points
 
     op = polar%op_points(i)
-    write (out_unit,  "(   F8.3,   F9.4,    F10.5,    F10.5,    F9.4,   F8.4,   F8.4)") &
-                        op%alpha, op%lift, op%drag,    0d0,  op%moment,op%xtrt,op%xtrb
+    if (op%viscrms < 1.0D-04) then
+      write (out_unit,  "(   F8.3,   F9.4,    F10.5,    F10.5,    F9.4,   F8.4,   F8.4)") &
+                          op%alpha, op%lift, op%drag,    0d0,  op%moment,op%xtrt,op%xtrb
+    else
+      write(*,'(31x,A,I2,A, F6.2)') "Warning: No convergence - Skipped" // &
+      " op",i," - ",op%value
+    end if
 
   end do 
 

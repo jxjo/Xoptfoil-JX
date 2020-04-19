@@ -289,6 +289,7 @@ subroutine run_xfoil(foil, geom_options, operating_points, op_modes,           &
     MATYP  = ma(i)%type 
     call MINFSET(ma(i)%number)
 
+!   Init boundary layer if requested 
     if (xfoil_options%reinitialize) then
       LIPAN = .false.
       LBLINI = .false.
@@ -313,29 +314,18 @@ subroutine run_xfoil(foil, geom_options, operating_points, op_modes,           &
                         xfoil_options%maxit, lift(i), drag(i), moment(i))
 
     else
-
       write(*,*)
       write(*,*) "Error in xfoil_driver: op_mode must be 'spec-al' or 'spec-cl'"
       write(*,*)
       stop
-
     end if
-
-! jx-mod Support Type 1 and 2 re numbers - cl may not be negative (test here because of spec-al) 
-
-    if ((re(i)%type == 2) .and. (lift(i) <= 0d0) .and. LVCONV) then 
-      write(*,*)
-      write(*,'(6x,A,I2,A, F6.2)') "Warning: Negative lift for Type 2 Reynolds at" // &
-       " op",i," - cl:",lift(i)
-      if (xfoil_options%show_details) write (*,'(31x)',advance = 'no') 
-    end if 
 
 !   Get optional outputs
 
     if (present(alpha)) alpha(i) = ALFA/DTOR
     if (present(xtrt)) xtrt(i) = XOCTR(1)
     if (present(xtrb)) xtrb(i) = XOCTR(2)
-
+ 
 !   Handling of unconverged points
 
     if (xfoil_options%viscous_mode .and. (.not. LVCONV .or. (RMSBL > 1.D-4))) then
@@ -438,15 +428,20 @@ subroutine run_xfoil(foil, geom_options, operating_points, op_modes,           &
     end if
   end do
 
-
 ! Print warnings about unconverged points
-! jx-mod replaced by show_details 
 !        Update statistics
 
   do i = 1, noppoint
     if (.not. is_out_lier (drag_statistics(i), drag(i))) then 
       call update_statistic (drag_statistics(i), drag(i))
     end if 
+
+    ! jx-mod Support Type 1 and 2 re numbers - cl may not be negative  
+    if ((re(i)%type == 2) .and. (lift(i) <= 0d0) .and. (viscrms(i) < 1.d-4)) then 
+      write(*,'(31x,A,I2,A, F6.2)') "Warning: Negative lift for Re-Type 2 at" // &
+       " op",i," - cl:",lift(i)
+    end if 
+
   end do
 
 end subroutine run_xfoil
@@ -985,8 +980,11 @@ subroutine xfoil_reload_airfoil(foil)
 
   type(airfoil_type), intent(inout) :: foil
 
+  if (allocated (foil%x))  deallocate (foil%x)
+  if (allocated (foil%z))  deallocate (foil%z)
   allocate(foil%x(NB))
   allocate(foil%z(NB))
+
   foil%npoint = NB
   foil%x = XB(1:NB)
   foil%z = YB(1:NB)

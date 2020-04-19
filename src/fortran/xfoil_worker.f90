@@ -38,9 +38,11 @@ program xfoil_worker
 
   use vardef,             only : airfoil_type
   use memory_util,        only : deallocate_airfoil
-  use airfoil_operations, only : load_airfoil, my_stop
-  use xfoil_driver,       only : xfoil_init, xfoil_cleanup
+  use airfoil_operations, only : load_airfoil, my_stop, airfoil_write
+  use xfoil_driver,       only : xfoil_init, xfoil_cleanup 
+  use xfoil_driver,       only : xfoil_set_buffer_airfoil, xfoil_reload_airfoil
   use polar_operations,   only : check_and_do_polar_generation
+
 
   implicit none
 
@@ -79,16 +81,28 @@ program xfoil_worker
       call xfoil_cleanup()
       call deallocate_airfoil (foil)
 
+    case ('test')
+
+      ! Test for change max thickness location 
+      airfoil_filename = 'JX-FXrcn-15.dat'
+      output_prefix = 'FX-thick-test'
+      call load_airfoil(airfoil_filename, foil)
+      call xfoil_init()
+      call xfoil_set_buffer_airfoil (foil)
+
+      call HIPNT (0.3d0, 0.25d0)
+
+      call xfoil_reload_airfoil(foil)
+      call airfoil_write (trim(output_prefix)//'.dat', output_prefix, foil)
+    
+      call xfoil_cleanup()
+      call deallocate_airfoil (foil)
+
+
     case default
 
       call print_worker_usage()
 
-    ! Colored console output 
-    ! call test_color 
-
-    ! Testfunction for thickness
-    ! call test_set_thickness_camber (foil)
-    ! call test_set_LE_radius (foil)
 
   end select 
 
@@ -219,32 +233,31 @@ subroutine test_set_thickness_camber (foil)
   maxc = 2.5d-2
   xmaxc = 45.d-2
 
-  f_thick  =  0.95d0
-  d_xthick = -0.02d0
-  f_camb   =  0.95d0
-  d_xcamb  = -0.05d0
-
   ! Use Xfoil to smooth airfoil paneling
-  call smooth_paneling(foil, 200, foilsmoothed)
+  ! call smooth_paneling(foil, 200, foilsmoothed)
 
   call xfoil_set_thickness_camber (foilsmoothed, maxt, xmaxt, maxc, xmaxc, outfoil)
 
   foilsmoothed = outfoil
+  f_thick  =  0.95d0
+  d_xthick = -0.02d0
+  f_camb   =  0.95d0
+  d_xcamb  = -0.05d0
   
-  do i = 1, 6
-
-    write(charI,"(I0)") i
-    output_file = trim(output_prefix)//trim(charI) //'.dat'
-    call airfoil_write(output_file, trim(output_prefix)//trim(charI), outfoil)
-
-    call xfoil_scale_thickness_camber (foilsmoothed, f_thick, d_xthick, f_camb, d_xcamb, outfoil)
-
-    f_thick  =  f_thick - 0.05d0
-    d_xthick = d_xthick - 0.02d0
-    f_camb   =   f_camb - 0.05d0
-    d_xcamb  =  d_xcamb - 0.04d0
-  
-  end do 
+!  do i = 1, 6
+!
+!    write(charI,"(I0)") i
+!    output_file = trim(output_prefix)//trim(charI) //'.dat'
+!    call airfoil_write(output_file, trim(output_prefix)//trim(charI), outfoil)
+!
+!    call xfoil_scale_thickness_camber (foilsmoothed, f_thick, d_xthick, f_camb, d_xcamb, outfoil)
+!
+!    f_thick  =  f_thick - 0.05d0
+!    d_xthick = d_xthick - 0.02d0
+!    f_camb   =   f_camb - 0.05d0
+!    d_xcamb  =  d_xcamb - 0.04d0
+!  
+!  end do 
 
 end subroutine test_set_thickness_camber 
 

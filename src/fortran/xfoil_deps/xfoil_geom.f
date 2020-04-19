@@ -2703,6 +2703,10 @@ C---  jx-mod init global
 C
 C--- Check chordline direction (should be unrotated for camber routines)
 C    to function correctly
+
+C jx-mod LE must be calculated for the rotation test
+      CALL LEFIND(SBLE,XB,XBP,YB,YBP,SB,NB, SILENT_MODE)
+
       XLE = SEVAL(SBLE,XB,XBP,SB,NB)
       YLE = SEVAL(SBLE,YB,YBP,SB,NB)
       XTE = 0.5*(XB(1)+XB(NB))
