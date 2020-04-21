@@ -105,6 +105,7 @@ subroutine load_airfoil(filename, foil)
     stop
   end if 
 
+  write(*,*)
   write(*,*) 'Reading airfoil from file: '//trim(filename)//' ...'
   write(*,*)
 
@@ -589,17 +590,19 @@ end function isnum
 !=============================================================================80
 subroutine my_stop(message, stoptype)
 
+  use os_util, only: print_error, print_warning
+
   character(*), intent(in) :: message
   character(4), intent(in), optional :: stoptype
 
   if ((.not. present(stoptype)) .or. (stoptype == 'stop')) then
     write(*,*)
-    write(*,'(A)') 'Error: '//trim(message)
+    call print_error (message)
     write(*,*)
     stop 1
   else
     write(*,*)
-    write(*,'(A)') 'Warning: '//trim(message)
+    call print_warning (message)
     write(*,*)
   end if
 

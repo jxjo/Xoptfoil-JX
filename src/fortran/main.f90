@@ -37,6 +37,10 @@ program main
 
   implicit none
 
+#ifndef PACKAGE_VERSION
+#define PACKAGE_VERSION ""
+#endif
+
   type(airfoil_type) :: buffer_foil
   character(80) :: search_type, global_search, local_search, seed_airfoil,     &
                    airfoil_file, matchfoil_file
@@ -52,20 +56,20 @@ program main
   double precision :: f0, fmin
   logical :: restart
 
-! Set default names and read command line arguments
+!-------------------------------------------------------------------------------
+  
+  write(*,'(A)')
+  write(*,'(A)') 'Xoptfoil-JX  The Airfoil Optimizer                  Version '//trim(PACKAGE_VERSION)
+  write(*,'(A)') 
+  write(*,'(A)') '         (c) 2017-2019 Daniel Prosser (original Xoptfoil)'
+  write(*,'(A)') '         (c) 2019-2020 Jochen Guenzel, Matthias Boese'
+  write(*,'(A)') 
 
+! Set default names and read command line arguments
+  
   input_file = 'inputs.txt'
   output_prefix = 'optfoil'
-  call read_clo(input_file, output_prefix)
-
-  write(*,*)
-  write(*,*) 'This is Xoptfoil-JX - a modified version of Xoptfoil'
-  write(*,*) 'Xoptfoil Copyright 2017-2019 Daniel Prosser'
-  write(*,*) 
-  write(*,*) '    - Optimization targets & Smoothing by Jochen Guenzel'
-  write(*,*) '    - Shape_type "camb_thick" by Matthias Boese, Jochen Guenzel'
-  write(*,*) 
-  
+  call read_clo(input_file, output_prefix,'Xoptfoil-JX')
 
 ! Read inputs from namelist file
 

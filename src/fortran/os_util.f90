@@ -24,10 +24,17 @@ module os_util
   integer, parameter, public  :: COLOR_NORMAL = iany([COLOR_RED, COLOR_GREEN, COLOR_BLUE])
   integer, parameter, public  :: COLOR_HIGH   = iany([COLOR_NORMAL, COLOR_INTENS])
 
+  integer, parameter, public  :: COLOR_ERROR  = iany([COLOR_RED,  COLOR_INTENS])
+  integer, parameter, public  :: COLOR_WARNING= iany([COLOR_RED, COLOR_GREEN])
+  integer, parameter, public  :: COLOR_NOTE   = iany([COLOR_BLUE, COLOR_GREEN])
+
   private
 
   public :: print_colored
   public :: make_directory
+  public :: print_error
+  public :: print_warning
+  public :: print_note
   
   interface print_colored
 #ifdef UNIX
@@ -50,6 +57,8 @@ module os_util
 !------------------------------------------------------------------------------------------
 #ifdef UNIX
 
+  character (4)  :: FOREGROUND_YELLOW      = '[33m'
+  character (4)  :: FOREGROUND_CYAN        = '[36m'
   character (4)  :: FOREGROUND_LIGHT_GREEN = '[92m'
   character (4)  :: FOREGROUND_LIGHT_RED   = '[91m'
   character (4)  :: FOREGROUND_LIGHT_BLUE  = '[94m'
@@ -170,6 +179,12 @@ subroutine print_colored (color_attribute, text)
       color_string = FOREGROUND_LIGHT_RED
     case (COLOR_HIGH)
       color_string = FOREGROUND_BOLD
+    case (COLOR_ERROR)
+      color_string = FOREGROUND_LIGHT_RED
+    case (COLOR_WARNING)
+      color_string = FOREGROUND_YELLOW
+    case (COLOR_NOTE)
+      color_string = FOREGROUND_CYAN
     case default
       color_string = ''
   end select
@@ -240,5 +255,30 @@ end subroutine make_directory_unix
   end subroutine make_directory_windows
 
 #endif
-  
+
+!------------------------------------------------------------------------------------------
+!  Print colored error, warning, note strings to console
+!------------------------------------------------------------------------------------------
+
+subroutine print_error (text)
+  character(*),  intent (in) :: text
+  write(*,'(1x)', advance = 'no')
+  call print_colored (COLOR_ERROR, trim(text))
+  write (*,'(A)')
+end subroutine print_error
+
+subroutine print_warning (text)
+  character(*),  intent (in) :: text
+  write(*,'(1x)', advance = 'no')
+  call print_colored (COLOR_WARNING, 'Warning: ')
+  write (*,'(A)') trim(text)
+end subroutine print_warning
+
+subroutine print_note (text)
+  character(*),  intent (in) :: text
+  write(*,'(1x)', advance = 'no')
+  call print_colored (COLOR_NOTE, 'Note: ')
+  write (*,'(A)') trim(text)
+end subroutine print_note
+
 end module os_util

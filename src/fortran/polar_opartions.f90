@@ -99,7 +99,7 @@ subroutine generate_polar_files (output_prefix, foil, npolars, polars)
   
   do i = 1, npolars
 
-    write (*,'(/,A,I1,A, I7,A)') '   Calculating polar Type ',polars(i)%re%type,' Re=',  &
+    write (*,'(A,I1,A, I7,A)') '   Calculating polar Type ',polars(i)%re%type,' Re=',  &
           int(polars(i)%re%number), ' for '// polars(i)%airfoil_name
     call init_polar (polars(i))
     call calculate_polar (foil, polars(i))
@@ -192,23 +192,16 @@ subroutine read_polar_inputs  (input_file, foil_name, npolars, polars)
   if (.not. generate_polars) return 
 
   if ((op_mode /= 'spec-al') .and. (op_mode /= 'spec-cl')) then
-    write (*,*) " Error: op_mode must be 'spec-cl' or 'spec-al'"
-    stop
+    call my_stop ("op_mode must be 'spec-cl' or 'spec-al'")
   end if
-
   if ((type_of_polar /= 1) .and. (type_of_polar /= 2)) then 
-    write (*,*) " Error: Type of polars must be either 'Type1' or 'Type2'"
-    stop 
+    call my_stop ("Type of polars must be either 'Type1' or 'Type2'")
   end if 
-
   if ((op_point_range(2) - op_point_range(1)) <= 0d0 ) then 
-    write (*,*) " Error: End of polar op_point_range must be higher than the start."
-    stop
+    call my_stop ("End of polar op_point_range must be higher than the start.")
   end if
-
   if (( op_point_range(1) + op_point_range(3)) >= op_point_range(2) ) then 
-    write (*,*) " Error: Start of polar op_point_range + increment should be end of op_point_range."
-    stop
+    call my_stop ("Start of polar op_point_range + increment should be end of op_point_range.")
   end if
 
 ! Put xfoil options into derived types
@@ -246,7 +239,7 @@ subroutine read_polar_inputs  (input_file, foil_name, npolars, polars)
     end if
   end do
 
-  write (*,'(/,A,I2,A)') ' A total of ',npolars,' polars will be generated '//  &
+  write (*,'(A,I2,A)') ' A total of ',npolars,' polars will be generated '//  &
                          'for airfoil '//trim(foil_name)
 
 

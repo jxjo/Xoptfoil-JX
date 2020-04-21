@@ -1,17 +1,29 @@
 # Set up project
 #
-# Xoptfoil-JX (patched edition bei jojo)
+# Xoptfoil-JX  
 #
 # - switched off Multithreading (OpenMP) 
 # - added -cpp to gfortran to activate precompiler
-# - aded precompiler flag for OS - WIn32 or UNIX 
+# - added precompiler flag for OS - WIn32 or UNIX
+# - set XOPTFOIL_VERSION in build_windows.bat 
+# - removed xfoil_only and doc files etc
 
-# *** set operating system  here ****
-# set (OS_FLAG "-DUNIX=1")
-set (OS_FLAG "-DWIN32=1")
+# Variables from build_windows / build_linux
+#
+#       INSTALLDIR                   e.g. %CD%\windows
+#       XOPTFOIL_VERSION             e.g. 1.5.0beta
+#       TARGET_OS                         UNIX or WIN
+
+
+if($ENV{TARGET_OS} MATCHES "UNIX")
+  set (OS_FLAG "-DUNIX=1")
+  message (STATUS "\n \n   Building XFoptfoil-JX Version $ENV{XOPTFOIL_VERSION} for UNIX\n\n")
+else ($ENV{TARGET_OS} MATCHES "UNIX")
+  set (OS_FLAG "-DWIN32=1")  
+  message (STATUS "\n \n   Building XFoptfoil-JX Version $ENV{XOPTFOIL_VERSION} for Windows\n\n")
+endif ($ENV{TARGET_OS} MATCHES "UNIX") 
 
 cmake_minimum_required(VERSION 2.8.8)
-set(XOPTFOIL_VERSION 1.2.0beta)
 project(Xoptfoil-JX)
 enable_language(Fortran)
 
@@ -22,7 +34,7 @@ set(DATADIR ${CMAKE_INSTALL_PREFIX}/share
 
 # Determine compiler
 get_filename_component(Fortran_COMPILER_NAME ${CMAKE_Fortran_COMPILER} NAME)
-message("Fortran compiler: " ${CMAKE_Fortran_COMPILER})
+message(STATUS "Fortran compiler: " ${CMAKE_Fortran_COMPILER})
 
 # !!! Multithreading switched of !!!!!
 # Option to build with/without OpenMP support
@@ -34,13 +46,13 @@ set(ENABLE_OPENMP FALSE
 if (CMAKE_BUILD_TYPE MATCHES "Release")
   set (OPENMP_FLAG "-fopenmp")
   if (NOT ENABLE_OPENMP)
-    MESSAGE(WARNING "Disabling OpenMP support since ENABLE_OPENMP=FALSE")
+    MESSAGE(STATUS "Disabling OpenMP support since ENABLE_OPENMP=FALSE")
     set (OPENMP_FLAG "")
   endif (NOT ENABLE_OPENMP)
 elseif (CMAKE_BUILD_TYPE MATCHES "Debug")
   set (OPENMP_FLAG "")
   if (ENABLE_OPENMP)
-    MESSAGE(WARNING "Enabling OpenMP support for debug build since ENABLE_OPENMP=TRUE")
+    MESSAGE(STATUS "Enabling OpenMP support for debug build since ENABLE_OPENMP=TRUE")
     set (OPENMP_FLAG "-fopenmp")
   endif (ENABLE_OPENMP)
 endif (CMAKE_BUILD_TYPE MATCHES "Release")
@@ -59,13 +71,13 @@ else (Fortran_COMPILER_NAME MATCHES "gfortran")
 endif (Fortran_COMPILER_NAME MATCHES "gfortran")
 
 # Preprocessor definitions
-add_definitions(-DPACKAGE_VERSION=\"${XOPTFOIL_VERSION}\")
+add_definitions(-DPACKAGE_VERSION=\"$ENV{XOPTFOIL_VERSION}\")
 
 # Set source files (exclude programs here)
 file(GLOB SOURCESDBLE "src/fortran/*.f90" "src/fortran/*.F90" "src/fortran/xfoil_deps/*.f90")
 file(GLOB SOURCESREAL "src/fortran/xfoil_deps/*.f" "src/fortran/naca456_deps/*.f90")
 list(REMOVE_ITEM SOURCESDBLE "${CMAKE_SOURCE_DIR}/src/fortran/main.f90")
-list(REMOVE_ITEM SOURCESDBLE "${CMAKE_SOURCE_DIR}/src/fortran/xfoil_only.f90")
+#list(REMOVE_ITEM SOURCESDBLE "${CMAKE_SOURCE_DIR}/src/fortran/xfoil_only.f90")
 list(REMOVE_ITEM SOURCESDBLE "${CMAKE_SOURCE_DIR}/src/fortran/xfoil_worker.f90")
 
 # Real-8 flag for xfoil and naca456 source files
@@ -78,26 +90,12 @@ add_library(MYOBJLIB OBJECT ${SOURCESDBLE} ${SOURCESREAL})
 
 # Build executables
 add_executable("xoptfoil-JX" $<TARGET_OBJECTS:MYOBJLIB> "src/fortran/main.f90")
-add_executable("xfoil_only" $<TARGET_OBJECTS:MYOBJLIB> "src/fortran/xfoil_only.f90")
 add_executable("xfoil_worker" $<TARGET_OBJECTS:MYOBJLIB> "src/fortran/xfoil_worker.f90")
 
 # Installation
-install(TARGETS xoptfoil-JX xfoil_only xfoil_worker DESTINATION bin)
-install(FILES src/python/xoptfoil_visualizer.py
-        PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE
-                    GROUP_READ             GROUP_EXECUTE
-                    WORLD_READ             WORLD_EXECUTE
-        DESTINATION bin)
+install(TARGETS xoptfoil-JX xfoil_worker DESTINATION bin)
 install(FILES src/python/xoptfoil_visualizer-jx.py
         PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE
                     GROUP_READ             GROUP_EXECUTE
                     WORLD_READ             WORLD_EXECUTE
         DESTINATION bin)
-install(FILES "doc/User_Guide.pdf" DESTINATION ${DATADIR})
-install(FILES "doc/example_case/example_case.pdf"
-              "doc/example_case/inputs.txt" 
-              "doc/example_case/inputs_withflap.txt" 
-              DESTINATION ${DATADIR}/example_case)
-file(GLOB AIRFOILS "sample_airfoils/*.dat")
-install(FILES ${AIRFOILS} DESTINATION ${DATADIR}/sample_airfoils)
-install(FILES "doc/all_inputs.txt" DESTINATION ${DATADIR})

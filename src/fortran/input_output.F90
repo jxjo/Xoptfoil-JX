@@ -21,10 +21,6 @@ module input_output
 
   implicit none
 
-#ifndef PACKAGE_VERSION
-#define PACKAGE_VERSION ""
-#endif
-
   contains
 
 !=============================================================================80
@@ -1213,28 +1209,25 @@ end subroutine read_inputs
 !=============================================================================80
 subroutine namelist_check(nmlname, errcode, action_missing_nml)
 
+  use os_util,            only : print_note
+  use airfoil_operations, only : my_stop
+ 
+
   character(*), intent(in) :: nmlname
   integer, intent(in) :: errcode
   character(*), intent(in) :: action_missing_nml
 
   if (errcode < 0) then
     if (trim(action_missing_nml) == 'warn') then
-      write(*,'(A)') ' Warning: namelist '//trim(nmlname)//&
-                     ' not found in input file. Using default values.'
+      call print_note ('Namelist '//trim(nmlname)//& 
+                      ' not found in input file. Using default values.')
     else
-      write(*,*)
-      write(*,'(A)') 'Error: namelist '//trim(nmlname)//&
-                     ' is required and was not found in input file.'
-      write(*,*)
-      stop
+      call my_stop ('Error: namelist '//trim(nmlname)//&
+                     ' is required and was not found in input file.')
     end if
   else if (errcode > 0) then
-    write(*,*)
-    write(*,'(A)') 'Error: unrecognized variable in namelist '//trim(nmlname)//&
-                   '.'
-    write(*,'(A)') 'See User Guide for correct variable names.'
-    write(*,*)
-    stop
+    call my_stop ('Error: unrecognized variable in namelist '//trim(nmlname)//&
+                   '. See User Guide for correct variable names.')
   else
     continue
   end if
@@ -1249,6 +1242,7 @@ end subroutine namelist_check
 subroutine read_clo(input_file, output_prefix, exename)
 
   use airfoil_operations, only : my_stop
+  use os_util, only: print_error
 
   character(*), intent(inout) :: input_file, output_prefix
   character(*), intent(in), optional :: exename
@@ -1304,15 +1298,12 @@ subroutine read_clo(input_file, output_prefix, exename)
         call getarg(i+1, arg)
         i = i+2
       end if
-    else if ( (trim(arg) == "-v") .or. (trim(arg) == "--version") ) then
-      call print_version()
-      stop
     else if ( (trim(arg) == "-h") .or. (trim(arg) == "--help") ) then
       call print_usage(exeprint)
       stop
     else
-      write(*,'(A)') "Unrecognized option "//trim(arg)//"."
-      call print_usage(exeprint)
+      call print_error ("Unrecognized option "//trim(arg)//".")
+      call print_usage (exeprint)
       stop 1
     end if
 
@@ -1321,22 +1312,6 @@ subroutine read_clo(input_file, output_prefix, exename)
 
 end subroutine read_clo
 
-!=============================================================================80
-!
-! Prints version information
-!
-!=============================================================================80
-subroutine print_version()
-
-  write(*,'(A)') "Xoptfoil-JX "//trim(PACKAGE_VERSION)
-  write(*,'(A)') "Copyright (C) 2017-2019 Daniel Prosser"
-  write(*,'(A)') "License GPLv3+: GNU GPL version 3 or later "//               &
-                 "<http://gnu.org/licenses/gpl.html>"
-  write(*,'(A)') "This is free software: you are free to change and "//        &
-                 "redistribute it."
-  write(*,'(A)') "There is NO WARRANTY, to the extent permitted by law."
-
-end subroutine print_version
 
 !=============================================================================80
 !
@@ -1347,26 +1322,22 @@ subroutine print_usage(exeprint)
 
   character(*), intent(in) :: exeprint
 
+  write(*,'(A)')
   write(*,'(A)') "Usage: "//trim(exeprint)//" [OPTION]"
   write(*,'(A)')
   write(*,'(A)') "Options:"
   write(*,'(A)') "  -i input_file     Specify a non-default input file"
   write(*,'(A)') "  -o output_prefix  Specify a non-default output prefix"
-! jx-mod new default reynolds number and seed airfoil filename
   write(*,'(A)') "  -r xxxxxx         Specify a default reynolds number (re_default)"
   write(*,'(A)') "  -a airfoil_file   Specify filename of seed airfoil"
   write(*,'(A)') "  -h, --help        Display usage information and exit"
-  write(*,'(A)') "  -v, --version     Display Xoptfoil version and exit"
   write(*,'(A)')
-  write(*,'(A)') "Refer to the PDF user guide for complete input help."
+  write(*,'(A)') "Refer to the Xoptfoil    user guide and" 
+  write(*,'(A)') "             Xoptfoil-JX reference guide for further help."
   write(*,'(A)')
-  ! jx-mod
-  write(*,'(A)') "Modified version! Refer to additional doc at development page"
-  write(*,'(A)')
-  write(*,'(A)') "Home page: https://sourceforge.net/projects/xoptfoil/"
   write(*,'(A)') "Development page: https://github.com/jxjo/Xoptfoil"
-  write(*,'(A)') "Report bugs using the issue reporting system at either "//   &
-                 "of the above sites."
+  write(*,'(A)') "Report bugs using the issue reporting system "
+  write(*,'(A)')
 
 end subroutine print_usage
 
