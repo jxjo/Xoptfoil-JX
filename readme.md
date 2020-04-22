@@ -41,11 +41,21 @@ Various ready to run examples can be found in the ./examples subdirectory includ
 
 ## Installation
 
-A compiled Windows version of Xoptfoil-JX can be found in the Code-Releases tab on this side.
+### Windows Runtime
 
-Developers and linux users should download the complete repository. The build script (build_windows.bat and build_linux.sh) will start the compilation. 
+The actual compiled Windows version of Xoptfoil-JX can be found in  [Code-Releases tab](https://github.com/jxjo/Xoptfoil/releases) on this side.
+Download the zip file and copy the files either in an existing Xoptfoil directory or into a new directory of your choice. In the latter case add the bin subdirectory of Xoptfoil-JX to your path envireonment.
 
-Windows developers will have to install the MinGW toolchain
+Xoptfoil newbies will have to install a python environment like [Anaconda](https://www.anaconda.com/distribution/).
+
+- The optimizer Xopfoil-JX is started from a windows command prompt (shell).
+- The visualizer Xoptfoil_visualizer-JX.py is started from a 'Python/Anaconda prompt'.
+
+### Linux and Developers
+
+Developers and linux users should download the complete repository. The build script (build_windows.bat and build_linux.sh) will start the compilation.
+
+Windows developers will have to install the [MinGW toolchain](https://sourceforge.net/projects/mingw-w64/files/Toolchains%20targetting%20Win32/Personal%20Builds/mingw-builds/)
 
 ## Meta and Contribution
 
