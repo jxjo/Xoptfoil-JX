@@ -1,0 +1,15 @@
+! input file for xfoil-worker to generate polar set of an airfoil
+! the airfoil is passed via command ine
+
+&polar_generation
+  generate_polars = .true. 									 
+  type_of_polar   = 1 
+  op_mode         = 'spec-al'
+  op_point_range  = -3.0, 11, 0.25
+  polar_reynolds  = 30000, 60000, 100000, 200000, 600000 
+/
+
+&xfoil_run_options
+  vaccel          = 0.007
+  reinitialize    = .false.									! speed up a little (set true if too many no convergence) 
+/

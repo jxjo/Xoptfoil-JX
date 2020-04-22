@@ -39,6 +39,8 @@ subroutine check_seed()
   use airfoil_operations, only : assess_surface, smooth_it
   use airfoil_operations, only : my_stop
   use airfoil_evaluation, only : op_seed_value
+  use os_util,            only : print_note
+
 
   use math_deps,          only : interp_point
 
@@ -378,9 +380,8 @@ subroutine check_seed()
   if (xfoil_options%vaccel >= 0.01d0) then
     write(text,'(F8.4)') xfoil_options%vaccel
     text = adjustl(text)
-    write(*,*) "Xfoil vaccel: "//trim(text)
-    call ask_stop("The convergence paramter should be less then 0.01 "//&
-                  "to avoid convergence problems.")
+    call print_note ("The xfoil convergence paramter vaccel: "//trim(text)// &
+                     " should be less then 0.01 to avoid convergence problems.")
   end if
 
 

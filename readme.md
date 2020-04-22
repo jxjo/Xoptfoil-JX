@@ -29,23 +29,23 @@ Main changes and improvements made up to now based on the original Xoptfoil
 
 ## Documentation 
 
-The additional options of Xoptfoil-JX compared to the original Xoptfoil are described in [Xoptfoil-JX Reference](https://github.com/jxjo/Xoptfoil/blob/master/Xoptfoil-JX%20Reference.pdf)
+The additional options of Xoptfoil-JX compared to the original Xoptfoil are described in [Xoptfoil-JX Reference](https://github.com/jxjo/Xoptfoil/blob/master/doc/Xoptfoil-JX%20Reference.pdf)
 
-Descriptions of some new capabilities can be found in [Xoptfoil-JX Describtion](https://github.com/jxjo/Xoptfoil/blob/master/Xoptfoil-JX%20Describtion.pdf)
-
+Descriptions of some new capabilities can be found in [Xoptfoil-JX Describtion](https://github.com/jxjo/Xoptfoil/blob/master/doc/Xoptfoil-JX%20Description.pdf)
 
 ## Usage example
 
 The development of a high end F3F airfoil using Xoptfoil-JX is described in the arctivle [Entwicklung eines F3F-Profils](http://www.rc-network.de/forum/showthread.php/769110-Entwicklung-eines-F3F-Profils) - sorry, it's in German.
 
+Various ready to run examples can be found in the ./examples subdirectory including a brief description of the features used.
 
 ## Installation
 
-tbd
+A compiled Windows version of Xoptfoil-JX can be found in the Code-Releases tab on this side.
 
-```sh
-tbd
-```
+Developers and linux users should download the complete repository. The build script (build_windows.bat and build_linux.sh) will start the compilation. 
+
+Windows developers will have to install the MinGW toolchain
 
 ## Meta and Contribution
 
@@ -54,4 +54,4 @@ tbd
 
 Feel free to contact us - and of course we are happy for any contributions and suggestions!
 
-Jochen Guenzel, March 2020
+Jochen Guenzel, April 2020
