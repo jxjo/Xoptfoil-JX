@@ -1,7 +1,7 @@
 #!/bin/bash
 
 INSTALLDIR=$(pwd)/linux
-XOPTFOIL_VERSION=1.5.0beta
+XOPTFOIL_VERSION=1.50.0
 TARGET_OS=UNIX
 
 rm -rf build
