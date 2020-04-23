@@ -14,19 +14,13 @@ module os_util
 
   implicit none
 
-  integer, parameter, private :: COLOR_BLUE   = int(Z"1")
-  integer, parameter, private :: COLOR_GREEN  = int(Z"2")
-  integer, parameter, private :: COLOR_RED    = int(Z"4")
-  integer, parameter, private :: COLOR_INTENS = int(Z"8")
-
-  integer, parameter, public  :: COLOR_GOOD   = iany([COLOR_GREEN, COLOR_INTENS])
-  integer, parameter, public  :: COLOR_BAD    = iany([COLOR_RED,   COLOR_INTENS])
-  integer, parameter, public  :: COLOR_NORMAL = iany([COLOR_RED, COLOR_GREEN, COLOR_BLUE])
-  integer, parameter, public  :: COLOR_HIGH   = iany([COLOR_NORMAL, COLOR_INTENS])
-
-  integer, parameter, public  :: COLOR_ERROR  = iany([COLOR_RED,  COLOR_INTENS])
-  integer, parameter, public  :: COLOR_WARNING= iany([COLOR_RED, COLOR_GREEN])
-  integer, parameter, public  :: COLOR_NOTE   = iany([COLOR_BLUE, COLOR_GREEN])
+  integer, parameter, public  :: COLOR_GOOD   = 1
+  integer, parameter, public  :: COLOR_BAD    = 2
+  integer, parameter, public  :: COLOR_NORMAL = 3
+  integer, parameter, public  :: COLOR_HIGH   = 4
+  integer, parameter, public  :: COLOR_ERROR  = 5
+  integer, parameter, public  :: COLOR_WARNING= 6
+  integer, parameter, public  :: COLOR_NOTE   = 7
 
   private
 
@@ -166,13 +160,13 @@ module os_util
 !------------------------------------------------------------------------------------------
 #ifdef UNIX
 
-subroutine print_colored (color_attribute, text)
+subroutine print_colored (color_typ, text)
 
-  integer, intent (in) :: color_attribute
+  integer, intent (in) :: color_typ
   character(*),  intent (in) :: text
   character (20) :: color_string, normal_string
 
-  select case (color_attribute)
+  select case (color_typ)
     case (COLOR_GOOD)
       color_string = FOREGROUND_LIGHT_GREEN
     case (COLOR_BAD)
@@ -203,16 +197,32 @@ end subroutine print_colored
 
 #else
   
-subroutine print_colored_windows (color_attribute, text)
+subroutine print_colored_windows (color_typ, text)
 
-  integer, intent (in) :: color_attribute
-!  integer(WORD), intent (in) :: wAttributes
-  integer(WORD) :: wAttributes
+  integer, intent (in) :: color_typ
+  integer(WORD) :: wAttributes, color_attribute
   character(*),  intent (in) :: text
   
   integer(HANDLE) :: hConsoleOutput
   integer(BOOL) :: iresult
   type(T_CONSOLE_SCREEN_BUFFER_INFO) lpConsoleScreenBufferInfo
+
+  select case (color_typ)
+    case (COLOR_GOOD)
+      color_attribute = iany([FOREGROUND_GREEN, FOREGROUND_INTENSITY])
+    case (COLOR_BAD)
+      color_attribute = iany([FOREGROUND_RED, FOREGROUND_INTENSITY])
+    case (COLOR_HIGH)
+      color_attribute = iany([FOREGROUND_RED, FOREGROUND_GREEN, FOREGROUND_BLUE, FOREGROUND_INTENSITY])
+    case (COLOR_ERROR)
+      color_attribute = iany([FOREGROUND_RED, FOREGROUND_INTENSITY])
+    case (COLOR_WARNING)
+      color_attribute = iany([FOREGROUND_RED, FOREGROUND_GREEN])
+    case (COLOR_NOTE)
+      color_attribute = iany([FOREGROUND_BLUE, FOREGROUND_GREEN])
+    case default
+      color_attribute = iany([FOREGROUND_RED, FOREGROUND_GREEN, FOREGROUND_BLUE])
+  end select
 
   wAttributes = int(color_attribute, 2) 
   

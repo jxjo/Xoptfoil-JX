@@ -55,7 +55,7 @@ Xoptfoil newbies will have to install a python environment like [Anaconda](https
 
 Developers and linux users should download the complete repository. The build script (build_windows.bat and build_linux.sh) will start the compilation.
 
-Windows developers will have to install the [MinGW toolchain](https://sourceforge.net/projects/mingw-w64/files/Toolchains%20targetting%20Win32/Personal%20Builds/mingw-builds/)
+Windows developers will have to install the [MinGW toolchain](https://sourceforge.net/projects/mingw-w64/files/Toolchains%20targetting%20Win32/Personal%20Builds/mingw-builds/) for compilation.
 
 ## Meta and Contribution
 

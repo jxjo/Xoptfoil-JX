@@ -500,7 +500,9 @@ subroutine write_final_design(optdesign, f0, fmin, shapetype)
 
 ! Format coordinates in a single loop (in airfoil_type derived type)
 
+  final_airfoil%name   = output_prefix
   final_airfoil%npoint = nptt + nptb - 1
+  
   call allocate_airfoil(final_airfoil)
   do i = 1, nptt
     final_airfoil%x(i) = xseedt(nptt-i+1)/foilscale - xoffset
