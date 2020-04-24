@@ -14,14 +14,15 @@
 #       XOPTFOIL_VERSION             e.g. 1.5.0beta
 #       TARGET_OS                         UNIX or WIN
 
+set(CMAKE_SYSTEM_NAME $ENV{TARGET_OS})
 
-if($ENV{TARGET_OS} MATCHES "UNIX")
+if(CMAKE_SYSTEM_NAME MATCHES "UNIX")
   set (OS_FLAG "-DUNIX=1")
-  message (STATUS "\n \n   Building XFoptfoil-JX Version $ENV{XOPTFOIL_VERSION} for UNIX\n\n")
-else ($ENV{TARGET_OS} MATCHES "UNIX")
-  set (OS_FLAG "-DWIN32=1")  
-  message (STATUS "\n \n   Building XFoptfoil-JX Version $ENV{XOPTFOIL_VERSION} for Windows\n\n")
-endif ($ENV{TARGET_OS} MATCHES "UNIX") 
+  message (STATUS "\n \n Building XFoptfoil-JX Version $ENV{XOPTFOIL_VERSION} for UNIX\n\n")
+else (CMAKE_SYSTEM_NAME MATCHES "UNIX")
+  set (OS_FLAG "-DWIN32=1")
+  message (STATUS "\n \n Building XFoptfoil-JX Version $ENV{XOPTFOIL_VERSION} for Windows\n\n")
+endif (CMAKE_SYSTEM_NAME MATCHES "UNIX")
 
 cmake_minimum_required(VERSION 2.8.8)
 project(Xoptfoil-JX)
