@@ -131,7 +131,7 @@ function aero_objective_function(designvars, include_penalty)
              dvbbnd2, nptint
   double precision :: penaltyval
   double precision :: tegap, growth1, growth2, maxgrowth, len1, len2
-  double precision :: panang1, panang2, maxpanang, heightfactor
+  double precision :: panang1, panang2, maxpanang, heightfactor, cur_te_curvature
   double precision, dimension(noppoint) :: lift, drag, moment, viscrms, alpha, &
                                            xtrt, xtrb
   double precision, dimension(noppoint) :: actual_flap_degrees
@@ -150,8 +150,6 @@ function aero_objective_function(designvars, include_penalty)
   character(100)   :: penalty_info
   type(op_opt_info_type),  dimension (max_op_points) :: op_opt_info
   type(geo_opt_info_type), dimension (max_op_points) :: geo_opt_info
-
-  ! jx-mod Smoothing
   double precision :: perturbation_bot, perturbation_top
 
 
@@ -229,7 +227,7 @@ function aero_objective_function(designvars, include_penalty)
 
     ! Penality for too many curve_reservals for speed-up reason already here 
     penaltyval = penaltyval + max(0.d0,dble(nreversalst-max_curv_reverse_top))
-    if (max(0.d0,dble(nreversalst-max_curv_reverse_top)) > 0.d0) penalty_info = trim(penalty_info) // ' RevT'
+    if (max(0.d0,dble(nreversalst-max_curv_reverse_top)) > 0.d0) penalty_info = trim(penalty_info) // ' maxReversal'
 
     call assess_surface ('Bot',  .false., max_curv_reverse_bot, xseedb, zb_new, nreversalsb, perturbation_bot)
     if ((do_smoothing .and. (perturbation_bot > 0.6)) .and. penalize) then     ! do not smooth seed
@@ -239,7 +237,7 @@ function aero_objective_function(designvars, include_penalty)
 
     ! Penality for too many curve_reservals for speed-up reason already here 
     penaltyval = penaltyval + max(0.d0,dble(nreversalsb-max_curv_reverse_bot))
-    if (max(0.d0,dble(nreversalsb-max_curv_reverse_bot)) > 0.d0) penalty_info = trim(penalty_info) // ' RevB'
+    if (max(0.d0,dble(nreversalsb-max_curv_reverse_bot)) > 0.d0) penalty_info = trim(penalty_info) // ' maxReversal'
 
     ! Calculate geometry objective based on the assessed quality (pertubation)
     if (do_smoothing) then 
@@ -297,7 +295,7 @@ function aero_objective_function(designvars, include_penalty)
 ! Penalty for too large growth rate
 
   penaltyval = penaltyval + max(0.d0,maxgrowth-growth_allowed)/1.d0
-  if (max(0.d0,maxgrowth-growth_allowed)/1.d0 > 0.d0) penalty_info = trim(penalty_info) // ' Grow'
+  if (max(0.d0,maxgrowth-growth_allowed)/1.d0 > 0.d0) penalty_info = trim(penalty_info) // ' maxGrowth'
 
 ! Penalty for too blunt leading edge
 
@@ -308,12 +306,32 @@ function aero_objective_function(designvars, include_penalty)
   maxpanang = max(panang2,panang1)
 
   penaltyval = penaltyval + max(0.d0,maxpanang-89.99d0)/0.01d0
-  if (max(0.d0,maxpanang-89.99d0)/0.01d0 > 0.d0) penalty_info = trim(penalty_info) // ' LEbl'
+  if (max(0.d0,maxpanang-89.99d0)/0.01d0 > 0.d0) penalty_info = trim(penalty_info) // ' bluntLE'
 
 ! Penalty for too sharp leading edge
 
   penaltyval = penaltyval + max(0.d0,abs(panang1-panang2)-20.d0)/5.d0
-  if (max(0.d0,maxpanang-89.99d0)/0.01d0 > 0.d0) penalty_info = trim(penalty_info) // ' LEsh'
+  if (max(0.d0,abs(panang1-panang2)-20.d0) > 0.d0) penalty_info = trim(penalty_info) // ' sharpLE'
+
+! Penalty for TE panel problem 
+!    In the current Hicks Henne shape functions implementation, the last panel is
+!    forced to become TE which can lead to a thick TE area with steep last panel(s)
+!       (see create_shape ... do j = 2, npt-1 ...)
+!    so the curvature (2nd derivative) at the last 10 panels is checked
+
+  if (check_curvature) then
+    cur_te_curvature = maxval (abs(curvature(11, xseedt(nptt-10:nptt), zt_new(nptt-10:nptt))))
+    if (cur_te_curvature  > max_te_curvature) then 
+      penalty_info = trim(penalty_info) // ' TEmaxAngle'
+      penaltyval = penaltyval + cur_te_curvature
+    end if 
+
+    cur_te_curvature = maxval (abs(curvature(11, xseedb(nptb-10:nptb), zb_new(nptb-10:nptb))))
+    if (cur_te_curvature  > max_te_curvature) then 
+      penalty_info = trim(penalty_info) // ' TEmaxAngle'
+      penaltyval = penaltyval + cur_te_curvature
+    end if 
+  end if 
 
 ! Interpolate bottom surface to xseedt points (to check thickness)
 
@@ -348,7 +366,7 @@ function aero_objective_function(designvars, include_penalty)
       gapallow = tegap + 2.d0 * heightfactor * (x_interp(nptint) -             &
                                                 x_interp(i))
       penaltyval = penaltyval + max(0.d0,gapallow-thickness(i))/0.1d0
-      if (max(0.d0,gapallow-thickness(i))/0.1d0 > 0.d0) penalty_info = trim(penalty_info) // ' TEGap'
+      if (max(0.d0,gapallow-thickness(i))/0.1d0 > 0.d0) penalty_info = trim(penalty_info) // ' minTEAngle'
     end if
 
   end do
@@ -360,8 +378,8 @@ function aero_objective_function(designvars, include_penalty)
     do i = 1, naddthickconst
       penaltyval = penaltyval + max(0.d0,addthick_min(i)-add_thickvec(i))/0.1d0
       penaltyval = penaltyval + max(0.d0,add_thickvec(i)-addthick_max(i))/0.1d0
-      if (max(0.d0,add_thickvec(i)-addthick_max(i))/0.1d0 > 0.d0) penalty_info = trim(penalty_info) // ' aThmax'
-      if (max(0.d0,addthick_min(i)-add_thickvec(i))/0.1d0 > 0.d0) penalty_info = trim(penalty_info) // ' aThmin'
+      if (max(0.d0,add_thickvec(i)-addthick_max(i))/0.1d0 > 0.d0) penalty_info = trim(penalty_info) // ' addThickMax'
+      if (max(0.d0,addthick_min(i)-add_thickvec(i))/0.1d0 > 0.d0) penalty_info = trim(penalty_info) // ' addThickMin'
     end do
   end if
 
@@ -369,8 +387,8 @@ function aero_objective_function(designvars, include_penalty)
 
   penaltyval = penaltyval + max(0.d0,min_thickness-maxthick)/0.1d0
   penaltyval = penaltyval + max(0.d0,maxthick-max_thickness)/0.1d0
-  if (max(0.d0,min_thickness-maxthick)/0.1d0 > 0.d0) penalty_info = trim(penalty_info) // ' Thmax'
-  if (max(0.d0,maxthick-max_thickness)/0.1d0 > 0.d0) penalty_info = trim(penalty_info) // ' Thmax'
+  if (max(0.d0,min_thickness-maxthick)/0.1d0 > 0.d0) penalty_info = trim(penalty_info) // ' minThick'
+  if (max(0.d0,maxthick-max_thickness)/0.1d0 > 0.d0) penalty_info = trim(penalty_info) // ' maxThick'
 
 ! Check for curvature reversals
 
@@ -405,8 +423,8 @@ function aero_objective_function(designvars, include_penalty)
 
     penaltyval = penaltyval + max(0.d0,dble(nreversalst-max_curv_reverse_top))
     penaltyval = penaltyval + max(0.d0,dble(nreversalsb-max_curv_reverse_bot))
-    if (max(0.d0,dble(nreversalst-max_curv_reverse_top)) > 0.d0) penalty_info = trim(penalty_info) // ' RevT'
-    if (max(0.d0,dble(nreversalsb-max_curv_reverse_bot)) > 0.d0) penalty_info = trim(penalty_info) // ' RevB'
+    if (max(0.d0,dble(nreversalst-max_curv_reverse_top)) > 0.d0) penalty_info = trim(penalty_info) // ' maxReversal'
+    if (max(0.d0,dble(nreversalsb-max_curv_reverse_bot)) > 0.d0) penalty_info = trim(penalty_info) // ' maxReversal'
 
   end if
 
@@ -463,7 +481,7 @@ function aero_objective_function(designvars, include_penalty)
       if (trim(shape_functions) /= 'camb-thick') then
           ! weak penalty to avoid getting too close to cut off at 25.0 
         penaltyval   = penaltyval + max(0.0d0,AMAX-29.5d0) * 2.d0  *  epsupdate  ! max 1%
-        penalty_info = trim(penalty_info) // ' AMAX'
+        penalty_info = trim(penalty_info) // ' MxAng'
       end if 
     end if
   end if
@@ -472,8 +490,8 @@ function aero_objective_function(designvars, include_penalty)
 
   penaltyval = penaltyval + max(0.d0,CAMBR-max_camber)/0.025d0
   penaltyval = penaltyval + max(0.d0,min_camber-CAMBR)/0.025d0
-  if (max(0.d0,CAMBR-max_camber) > 0.d0) penalty_info = trim(penalty_info) // ' CAMmax'
-  if (max(0.d0,min_camber-CAMBR) > 0.d0) penalty_info = trim(penalty_info) // ' CAMmin'
+  if (max(0.d0,CAMBR-max_camber) > 0.d0) penalty_info = trim(penalty_info) // ' MxCmb'
+  if (max(0.d0,min_camber-CAMBR) > 0.d0) penalty_info = trim(penalty_info) // ' MiCmb'
 
 
 ! Exit if panel angles and camber constraints don't check out
@@ -483,12 +501,12 @@ function aero_objective_function(designvars, include_penalty)
     return
   end if
 
-! Determine if points need to be checked for xfoil consistency
+! Determine if op points need to be checked for xfoil consistency
 ! jx-mod --> removed all re-check stuff!
 
 
-  ! Get objective function contribution from aerodynamics (aero performance
-! times normalized weight)
+! Get objective function contribution from aerodynamics 
+!    (aero performance times normalized weight)
 
   aero_objective_function = 0.d0
 
@@ -711,7 +729,7 @@ function matchfoil_objective_function(designvars)
 
   use parametrization, only : top_shape_function, bot_shape_function,          &
                               create_airfoil, create_airfoil_camb_thick
-  use math_deps,       only : norm_2
+  use math_deps,       only : norm_2, curvature
 
   double precision, dimension(:), intent(in) :: designvars
   double precision :: matchfoil_objective_function
@@ -719,6 +737,12 @@ function matchfoil_objective_function(designvars)
   double precision, dimension(size(xseedt,1)) :: zt_new
   double precision, dimension(size(xseedb,1)) :: zb_new
   integer :: nmodest, nmodesb, nptt, nptb, dvtbnd, dvbbnd
+
+  double precision :: penaltyval, match_delta, cur_te_curvature
+  character (80) :: penalty_info
+
+  penaltyval   = 0d0
+  penalty_info = ''
 
   nmodest = size(top_shape_function,1)
   nmodesb = size(bot_shape_function,1)
@@ -749,11 +773,41 @@ function matchfoil_objective_function(designvars)
                         shape_functions, .false.)
   end if
 
-! Evaluate the new airfoil, not counting fixed LE and TE points
+! Penalty for TE panel problem 
+!    In the current Hicks Henne shape functions implementation, the last panel is
+!    forced to become TE which can lead to a thick TE area with steep last panel
+!       (see create_shape ... do j = 2, npt-1 ...)
+!    so the curvature (2nd derivative) at the last 10 panels is checked
 
-  matchfoil_objective_function = norm_2(zt_new(2:nptt-1) - zmatcht(2:nptt-1))
-  matchfoil_objective_function = matchfoil_objective_function +                &
-                                 norm_2(zb_new(2:nptb-1) - zmatchb(2:nptb-1))
+  if (check_curvature) then
+    cur_te_curvature = maxval (abs(curvature(11, xseedt(nptt-10:nptt), zt_new(nptt-10:nptt))))
+    if (cur_te_curvature  > max_te_curvature) then 
+      penalty_info = trim(penalty_info) // ' TEat'
+      penaltyval = penaltyval + cur_te_curvature
+    end if 
+
+    cur_te_curvature = maxval (abs(curvature(11, xseedb(nptb-10:nptb), zb_new(nptb-10:nptb))))
+    if (cur_te_curvature  > max_te_curvature) then 
+      penalty_info = trim(penalty_info) // ' TEab'
+      penaltyval = penaltyval + cur_te_curvature
+    end if 
+  end if 
+
+  if (penaltyval > 0d0) then 
+    matchfoil_objective_function = max (penaltyval, 2.d0)
+    ! write (*,*) 'Penalty ', trim(penalty_info)
+  else
+
+! Evaluate the new airfoil, (not-> changed)  counting fixed LE and TE points
+
+    match_delta = norm_2(zt_new(2:nptt-1) - zmatcht(2:nptt-1)) + &
+                  norm_2(zb_new(2:nptb-1) - zmatchb(2:nptb-1))
+    if (match_delta < 1d-20)  match_delta = 1d-1 
+
+    ! Scale result to initial value 1.
+    matchfoil_objective_function = match_delta * match_foils_scale_factor
+
+  end if
 
 end function matchfoil_objective_function
 
@@ -787,11 +841,10 @@ end function write_function
 !=============================================================================80
 function write_airfoil_optimization_progress(designvars, designcounter)
 
-  use math_deps,       only : interp_vector 
-
-! jx-mod Smoothing
-  use math_deps,       only : derivation2, derivation3 
+  use math_deps,          only : interp_vector 
   use airfoil_operations, only : smooth_it
+  use airfoil_operations, only : airfoil_write_to_unit
+
 
   use parametrization, only : top_shape_function, bot_shape_function,          &
                               create_airfoil, create_airfoil_camb_thick
@@ -811,12 +864,9 @@ function write_airfoil_optimization_progress(designvars, designcounter)
   double precision :: ffact, maxt, xmaxt, maxc, xmaxc
   integer :: ndvs, flap_idx, dvcounter
  
-  character(100) :: foilfile, polarfile, text
+  character(100) :: foilfile, polarfile, text, title
   character(8) :: maxtchar, xmaxtchar, maxcchar, xmaxcchar
   integer :: foilunit, polarunit
-
-! jx-mod Smoothing
-  double precision, dimension(size(curr_foil%x)) :: deriv2, deriv3
 
   nmodest = size(top_shape_function,1)
   nmodesb = size(bot_shape_function,1)
@@ -955,14 +1005,13 @@ function write_airfoil_optimization_progress(designvars, designcounter)
     open(unit=foilunit, file=foilfile, status='replace')
     write(foilunit,'(A)') 'title="Airfoil coordinates"'
 
-! jx-mod Smoothing
-!        Add 2nd and 3rd derivative to
+!  Add 2nd and 3rd derivative to
 !        ...design_coordinates.dat to show it in visualizer
     write(foilunit,'(A)') 'variables="x" "z" "2nd derivative" "3rd derivative"'
 
-    write(foilunit,'(A)') 'zone t="Seed airfoil, maxt='//trim(maxtchar)//&
-                          ', xmaxt='//trim(xmaxtchar)//', maxc='//&
-                          trim(maxcchar)//', xmaxc='//trim(xmaxcchar)//'"'
+    title =  'zone t="Seed airfoil, maxt='//trim(maxtchar)//&
+             ', xmaxt='//trim(xmaxtchar)//', maxc='//&
+              trim(maxcchar)//', xmaxc='//trim(xmaxcchar)//'"'
 
 !   Header for polar file
 
@@ -987,12 +1036,11 @@ function write_airfoil_optimization_progress(designvars, designcounter)
 
     write(*,*) "  Writing coordinates for design number "//trim(text)//        &
                " to file "//trim(foilfile)//" ..."
-    open(unit=foilunit, file=foilfile, status='old', position='append',        &
-         err=900)
-    write(foilunit,'(A)') 'zone t="Airfoil, maxt='//trim(maxtchar)//&
-                          ', xmaxt='//trim(xmaxtchar)//', maxc='//&
-                          trim(maxcchar)//', xmaxc='//trim(xmaxcchar)//'", '//&
-                          'SOLUTIONTIME='//trim(text)
+    open(unit=foilunit, file=foilfile, status='old', position='append', err=900)
+    title =  'zone t="Airfoil, maxt='//trim(maxtchar)//&
+             ', xmaxt='//trim(xmaxtchar)//', maxc='//&
+              trim(maxcchar)//', xmaxc='//trim(xmaxcchar)//'", '//&
+             'SOLUTIONTIME='//trim(text)
 
     ! Open polar file and write zone header
     
@@ -1006,26 +1054,13 @@ function write_airfoil_optimization_progress(designvars, designcounter)
 
 ! Write coordinates to file
 
-! jx-mod Smoothing
-!        Add 2nd and 3rd derivative to
-!        ...design_coordinates.dat to show it in visualizer
-  deriv2 = derivation2 ((nptt + nptb - 1), curr_foil%x, curr_foil%z)
-  deriv3 = derivation3 ((nptt + nptb - 1), curr_foil%x, curr_foil%z)
+  call  airfoil_write_to_unit (foilunit, title, curr_foil, .True.)
 
-  do i = 1, nptt + nptb - 1
-    ! jx-mod numerical issues
-    if (abs(deriv2(i)) < 1.d-10) deriv2(i) = 0.d0
-    if (abs(deriv3(i)) < 1.d-10) deriv3(i) = 0.d0
-
-! jx-mod adjusted deciaml places to from 6 to 7 - inline with final write
-    write(foilunit,'(2F12.7,2G18.8)') curr_foil%x(i), curr_foil%z(i), deriv2(i), deriv3(i)
-  end do
 
 ! Write polars to file
 
   do i = 1, noppoint
-! jx-mod Entertainment
-!        Add current flap angle to polars to show it in visualizer
+    ! Add current flap angle to polars to show it in visualizer
     write(polarunit,'(6ES14.6, 1ES14.3)') alpha(i), lift(i), drag(i), moment(i), &
                                  xtrt(i), xtrb(i), actual_flap_degrees (i)
   end do
@@ -1062,8 +1097,10 @@ end function write_airfoil_optimization_progress
 !=============================================================================80
 function write_matchfoil_optimization_progress(designvars, designcounter)
 
-  use parametrization, only : top_shape_function, bot_shape_function,          &
-                              create_airfoil, create_airfoil_camb_thick
+  use parametrization,    only : top_shape_function, bot_shape_function,          &
+                                create_airfoil, create_airfoil_camb_thick
+  use xfoil_driver,       only : xfoil_set_airfoil, xfoil_geometry_info
+  use airfoil_operations, only : airfoil_write_to_unit
 
   double precision, dimension(:), intent(in) :: designvars
   integer, intent(in) :: designcounter
@@ -1072,8 +1109,11 @@ function write_matchfoil_optimization_progress(designvars, designcounter)
   double precision, dimension(size(xseedt,1)) :: zt_new
   double precision, dimension(size(xseedb,1)) :: zb_new
   integer :: i, nmodest, nmodesb, nptt, nptb, dvtbnd, dvbbnd
+  double precision :: maxt, xmaxt, maxc, xmaxc
+  character(8) :: maxtchar, xmaxtchar, maxcchar, xmaxcchar
 
-  character(100) :: foilfile, text
+
+  character(100) :: foilfile, text, title
   integer :: foilunit
 
   nmodest = size(top_shape_function,1)
@@ -1081,41 +1121,60 @@ function write_matchfoil_optimization_progress(designvars, designcounter)
   nptt = size(xseedt,1)
   nptb = size(xseedb,1)
 
+! Design 0 is seed airfoil to output - take the original values 
+
+  if (designcounter == 0) then
+    zt_new = zseedt
+    zb_new = zseedb
+  else
+
 ! Set modes for top and bottom surfaces
 
-  if ((trim(shape_functions) == 'naca')  .or. &
-      (trim(shape_functions) == 'camb-thick')) then
-    dvtbnd = nmodest
-    dvbbnd = nmodest + nmodesb
-  else
-    dvtbnd = nmodest*3
-    dvbbnd = nmodest*3 + nmodesb*3
-  end if
+    if ((trim(shape_functions) == 'naca')  .or. &
+        (trim(shape_functions) == 'camb-thick')) then
+      dvtbnd = nmodest
+      dvbbnd = nmodest + nmodesb
+    else
+      dvtbnd = nmodest*3
+      dvbbnd = nmodest*3 + nmodesb*3
+    end if
 
 ! Format coordinates in a single loop in derived type. Also remove translation
 ! and scaling to ensure Cm_x=0.25 doesn't change.
 
-  if (trim(shape_functions) == 'camb-thick') then
-    ! Create new airfoil by changing camber and thickness of seed airfoil,
-    ! use fixed set of 4 DVs
-    call create_airfoil_camb_thick(xseedt, zseedt, xseedb, zseedb,             &
-                      designvars(1:dvtbnd), zt_new, zb_new)
-  else 
-    call create_airfoil(xseedt, zseedt, xseedb, zseedb, designvars(1:dvtbnd),  &
-                      designvars(dvtbnd+1:dvbbnd), zt_new, zb_new,             &
-                      shape_functions, .false.)
-  end if
+    if (trim(shape_functions) == 'camb-thick') then
+      call create_airfoil_camb_thick(xseedt, zseedt, xseedb, zseedb,             &
+                        designvars(1:dvtbnd), zt_new, zb_new)
+    else 
+      call create_airfoil(xseedt, zseedt, xseedb, zseedb, designvars(1:dvtbnd),  &
+                        designvars(dvtbnd+1:dvbbnd), zt_new, zb_new,             &
+                        shape_functions, .false.)
+    end if
+  end if 
 
-  ! Format coordinates in a single loop in derived type
 
+  ! do *not* Format coordinates in a single loop in derived type
+  !     to have the real working foil in visualizer
   do i = 1, nptt
-    curr_foil%x(i) = xseedt(nptt-i+1)/foilscale - xoffset
-    curr_foil%z(i) = zt_new(nptt-i+1)/foilscale - zoffset
+    curr_foil%x(i) = xseedt(nptt-i+1)!/foilscale - xoffset
+    curr_foil%z(i) = zt_new(nptt-i+1)!/foilscale - zoffset
   end do
   do i = 1, nptb-1
-    curr_foil%x(i+nptt) = xseedb(i+1)/foilscale - xoffset
-    curr_foil%z(i+nptt) = zb_new(i+1)/foilscale - zoffset
+    curr_foil%x(i+nptt) = xseedb(i+1)!/foilscale - xoffset
+    curr_foil%z(i+nptt) = zb_new(i+1)!/foilscale - zoffset
   end do
+
+  call xfoil_set_airfoil(curr_foil)
+  call xfoil_geometry_info(maxt, xmaxt, maxc, xmaxc)
+
+  write(maxtchar,'(F8.5)') maxt
+  maxtchar = adjustl(maxtchar)
+  write(xmaxtchar,'(F8.5)') xmaxt
+  xmaxtchar = adjustl(xmaxtchar)
+  write(maxcchar,'(F8.5)') maxc
+  maxcchar = adjustl(maxcchar)
+  write(xmaxcchar,'(F8.5)') xmaxc
+  xmaxcchar = adjustl(xmaxcchar)
 
 ! Set output file names and identifiers
 
@@ -1126,46 +1185,45 @@ function write_matchfoil_optimization_progress(designvars, designcounter)
 
   if (designcounter == 0) then
 
-!   Header for coordinate file
+!   New File: Header for coordinate file & Seed foil 
 
     write(*,*) "Writing coordinates for seed airfoil to file "//               &
                trim(foilfile)//" ..."
     open(unit=foilunit, file=foilfile, status='replace')
     write(foilunit,'(A)') 'title="Airfoil coordinates"'
     write(foilunit,'(A)') 'variables="x" "z"'
-    write(foilunit,'(A)') 'zone t="Seed airfoil"'
-
+    title = 'zone t="Seed airfoil", maxt='//trim(maxtchar)//&
+            ', xmaxt='//trim(xmaxtchar)//', maxc='//&
+             trim(maxcchar)//', xmaxc='//trim(xmaxcchar)
   else
 
-!   Format designcounter as string
+!   Append to file: Header for design foil coordinates
 
     write(text,*) designcounter
     text = adjustl(text)
 
-!   Open coordinate file and write zone header
-
     write(*,*) "  Writing coordinates for design number "//trim(text)//        &
                " to file "//trim(foilfile)//" ..."
-    open(unit=foilunit, file=foilfile, status='old', position='append',        &
-         err=910)
-    write(foilunit,'(A)') 'zone t="Airfoil", SOLUTIONTIME='//trim(text)
-
+    open(unit=foilunit, file=foilfile, status='old', position='append', err=910)
+    title =  'zone t="Airfoil, maxt='//trim(maxtchar)//&
+             ', xmaxt='//trim(xmaxtchar)//', maxc='//&
+              trim(maxcchar)//', xmaxc='//trim(xmaxcchar)//'", '//&
+             'SOLUTIONTIME='//trim(text)
   end if
 
-! Write coordinates to file
-
-  do i = 1, nptt + nptb - 1
-! jx-mod adjusted deciaml places to from 6 to 7 - inline with final write
-    write(foilunit,'(2F12.7)') curr_foil%x(i), curr_foil%z(i)
-  end do
-
-! Close output file
+  call  airfoil_write_to_unit (foilunit, title, curr_foil, .True.)
 
   close(foilunit)
 
-! Set return value (needed for compiler)
 
-  write_matchfoil_optimization_progress = 0
+  if (designcounter == 0) then
+! Append the coordinates of the match foil when seed foil is written
+    write_matchfoil_optimization_progress = write_matchfoil_coordinates ()
+  else
+! Set return value (needed for compiler)
+    write_matchfoil_optimization_progress = 0
+  end if 
+
   return
 
 ! Warning if there was an error opening design_coordinates file
@@ -1175,6 +1233,63 @@ function write_matchfoil_optimization_progress(designvars, designcounter)
   return
 
 end function write_matchfoil_optimization_progress
+
+
+!=============================================================================80
+!
+! Writes airfoil coordinates of match_foil at the beginning of optimization 
+!
+!=============================================================================80
+function write_matchfoil_coordinates ()
+
+  use memory_util, only : allocate_airfoil
+  use airfoil_operations, only : airfoil_write_to_unit
+
+
+  character(100) :: foilfile
+  integer :: foilunit
+  integer :: write_matchfoil_coordinates
+  integer :: i, nptt, nptb
+  type(airfoil_type) :: tmpfoil
+
+
+  foilfile = trim(output_prefix)//'_design_coordinates.dat'
+  foilunit = 13
+
+  nptt = size(xmatcht,1)
+  nptb = size(xmatchb,1)
+
+  tmpfoil%npoint = nptt + nptb - 1
+  call allocate_airfoil(tmpfoil)
+
+  ! do *not* Format coordinates in a single loop in derived type
+  !     to have the real working foil in visualizer
+  do i = 1, nptt
+    tmpfoil%x(i) = xmatcht(nptt-i+1)
+    tmpfoil%z(i) = zmatcht(nptt-i+1)
+  end do
+  do i = 1, nptb-1
+    tmpfoil%x(i+nptt) = xmatchb(i+1)
+    tmpfoil%z(i+nptt) = zmatchb(i+1)
+  end do
+
+  write(*,*) "Writing coordinates for match airfoil to file "//trim(foilfile)//" ..."
+
+  open(unit=foilunit, file=foilfile, status='old', position='append', err=910)
+  call  airfoil_write_to_unit (foilunit, 'zone t="Match airfoil"', tmpfoil, .True.)
+  close(foilunit)
+
+  write_matchfoil_coordinates = 0
+
+  return
+
+! Warning if there was an error opening design_coordinates file
+
+910 write(*,*) "Warning: unable to open "//trim(foilfile)//". Skipping ..."
+  write_matchfoil_coordinates = 1
+  return
+
+end function write_matchfoil_coordinates
 
 !=============================================================================80
 !
@@ -1304,11 +1419,7 @@ function write_function_restart_cleanup(restart_status, global_search,         &
 
     do j = 1, ncoord
       ! jx-mod Smoothing Additional 2nd and 3rd derivative when writing the file
-      ! jx-mod rounding issues...
-      if (abs(deriv2(j,i+1)) < 1.d-10) deriv2(j,i+1) = 0.d0
-      if (abs(deriv3(j,i+1)) < 1.d-10) deriv3(j,i+1) = 0.d0
-
-      write(foilunit,'(2F12.6,2G18.8)') x(j,i+1), z(j,i+1), deriv2(j,i+1), deriv3(j,i+1)
+      write(foilunit,'(2F12.6,2G18.7)') x(j,i+1), z(j,i+1), deriv2(j,i+1), deriv3(j,i+1)
     end do
   end do
 

@@ -31,7 +31,7 @@ module input_sanity
 subroutine check_seed()
 
   use vardef
-  use math_deps,          only : interp_vector, curvature, derv1f1, derv1b1
+  use math_deps,          only : interp_vector, curvature, derv1f1, derv1b1, norm_2
   use xfoil_driver,       only : run_xfoil
   use xfoil_inc,          only : AMAX, CAMBR
   use airfoil_evaluation, only : xfoil_options, xfoil_geom_options
@@ -40,7 +40,6 @@ subroutine check_seed()
   use airfoil_operations, only : my_stop
   use airfoil_evaluation, only : op_seed_value
   use os_util,            only : print_note
-
 
   use math_deps,          only : interp_point
 
@@ -64,10 +63,9 @@ subroutine check_seed()
   character(30) :: text, text2
   character(15) :: opt_type
   logical :: addthick_violation
-! jx-mod Smoothing 
-  double precision :: perturbation_top , perturbation_bot
 ! jx-mod  
-  double precision :: ref_value, seed_value, tar_value
+  double precision :: ref_value, seed_value, tar_value, match_delta, cur_te_curvature
+  double precision :: perturbation_top , perturbation_bot
 
   penaltyval = 0.d0
   pi = acos(-1.d0)
@@ -170,6 +168,30 @@ subroutine check_seed()
     write(*,*) "LE panel angle: "//trim(text)//" degrees"
     call ask_stop("Seed airfoil's leading edge is too sharp.")
   end if
+
+! Too high curvature at TE - TE panel problem 
+!    In the current Hicks Henne shape functions implementation, the last panel is
+!    forced to become TE which can lead to a thick TE area with steep last panel(s)
+!       (see create_shape ... do j = 2, npt-1 ...)
+!    so the curvature (2nd derivative) at the last 10 panels is checked
+
+  if (check_curvature) then
+    cur_te_curvature = maxval (abs(curvature(11, xseedt(nptt-10:nptt), zseedt(nptt-10:nptt))))
+    if (cur_te_curvature  > max_te_curvature) then 
+      write(text,'(F8.4)') cur_te_curvature
+      text = adjustl(text)
+      call ask_stop("Curvature of "//trim(text)// &
+                    " on top surface at trailing edge violates max_te_curvature constraint.")
+    end if 
+
+    cur_te_curvature = maxval (abs(curvature(11, xseedb(nptb-10:nptb), zseedb(nptb-10:nptb))))
+    if (cur_te_curvature  > max_te_curvature) then 
+      write(text,'(F8.4)') cur_te_curvature
+      text = adjustl(text)
+      call ask_stop("Curvature of "//trim(text)// &
+                    " on bottom surface at trailing edge violates max_te_curvature constraint.")
+    end if 
+  end if 
 
 ! Interpolate either bottom surface to top surface x locations or vice versa
 ! to determine thickness
@@ -339,6 +361,23 @@ subroutine check_seed()
       call ask_stop("Seed airfoil violates max_curv_reverse_bot constraint.")
 
   end if
+
+! If mode match_foils end here with checks as it becomes aero specific, calc scale
+
+  if (match_foils) then
+    ! jx-test
+    match_delta = norm_2(zseedt(2:nptt-1) - zmatcht(2:nptt-1)) + &
+                  norm_2(zseedb(2:nptb-1) - zmatchb(2:nptb-1))
+    ! Playground: Match foil equals seed foil. Take a dummy objective value to start
+    if (match_delta < 1d-20) then 
+      call ask_stop('Match foil and seed foil are equal. A dummy initial value '// &
+                     'for the objective function will be taken for demo')
+      match_delta = 1d-1 
+    end if
+    match_foils_scale_factor = 1.d0 / match_delta
+    return
+  end if 
+
 
 ! Check for bad combinations of operating conditions and optimization types
 
@@ -596,6 +635,8 @@ end subroutine check_seed
 !=============================================================================80
 subroutine ask_stop(message)
 
+  use os_util, only: print_error, print_warning
+
   character(*), intent(in) :: message
 
   character :: choice
@@ -606,8 +647,8 @@ subroutine ask_stop(message)
   valid_choice = .false.
   do while (.not. valid_choice)
   
-    write(*,'(A)') 'Warning: '//trim(message)
-    write(*,'(A)', advance='no') 'Continue anyway? (y/n): '
+    call print_warning (message)
+    write(*,'(/,1x,A)', advance='no') 'Continue anyway? (y/n): '
     read(*,'(A)') choice
 
     if ( (choice == 'y') .or. (choice == 'Y') ) then

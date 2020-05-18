@@ -2655,7 +2655,9 @@ C
         W2(I) = (YCAVG+YCDEL)*DXC + (XCAVG+XCDEL)*DYC
       ENDDO
 C
-      DO I=1, NB
+C     jx-mod do not change TE coordinates 
+C     DO I=1, NB
+      DO I=2, (NB-1)
         XB(I) = W1(I)
         YB(I) = W2(I)
       ENDDO

@@ -1,0 +1,29 @@
+! Match-foil mode using camb-thick functions
+!
+! The seed airfoil JX-Seed is matched to JX-Seed-deformed,
+! which was generated in Xflr5 with'Change camber and thickness'
+
+&optimization_options
+  search_type    = 'global'
+  global_search  = 'particle_swarm'
+  seed_airfoil   = 'from_file'
+  airfoil_file   = 'JX-Seed.dat'
+  shape_functions = 'camb-thick'
+  initial_perturb = 0.01
+  restart_write_freq = 0
+  echo_input_parms = .false.
+/  
+
+&matchfoil_options
+   match_foils = .true.
+   matchfoil_file = 'JX-Seed-deformed.dat'
+/
+
+&particle_swarm_options
+  pso_pop = 30
+  pso_tol = 0.00001
+  pso_convergence_profile = 'quick_camb_thick'
+  pso_maxit = 200
+/
+
+

@@ -67,9 +67,8 @@ subroutine get_seed_airfoil(seed_airfoil, airfoil_file, naca_options, foil,    &
     stop
 
   end if
-
 ! Use Xfoil to smooth airfoil paneling
-call smooth_paneling(tempfoil, 200, foil)
+  call smooth_paneling(tempfoil, 200, foil)
 
 ! Calculate leading edge information
 
@@ -132,6 +131,8 @@ end subroutine load_airfoil
 !=============================================================================80
 subroutine airfoil_points(filename, npoints, labeled)
 
+  use os_util, only: print_error
+
   character(*), intent(in) :: filename
   integer, intent(out) :: npoints
   logical, intent(out) :: labeled
@@ -144,7 +145,7 @@ subroutine airfoil_points(filename, npoints, labeled)
   iunit = 12
   open(unit=iunit, file=filename, status='old', position='rewind', iostat=ioerr)
   if (ioerr /= 0) then
-     write(*,*) 'Error: cannot find airfoil file '//trim(filename)
+     call print_error ('Error: cannot find airfoil file '//trim(filename))
      write(*,*)
      stop
   end if
@@ -181,6 +182,8 @@ end subroutine airfoil_points
 !=============================================================================80
 subroutine airfoil_read(filename, npoints, labeled, name, x, z)
 
+  use os_util, only: print_error
+
   character(*), intent(in) :: filename
   character(*), intent(out) :: name
   integer, intent(in) :: npoints
@@ -195,9 +198,9 @@ subroutine airfoil_read(filename, npoints, labeled, name, x, z)
   iunit = 12
   open(unit=iunit, file=filename, status='old', position='rewind', iostat=ioerr)
   if (ioerr /= 0) then
-     write(*,*) 'Error: cannot find airfoil file '//trim(filename)
-     write(*,*)
-     stop
+    call print_error ('Error: cannot find airfoil file '//trim(filename))
+    write(*,*)
+    stop
   end if
 
 ! Read points from file
@@ -454,7 +457,7 @@ end subroutine get_split_points
 !=============================================================================80
 subroutine split_airfoil(foil, xseedt, xseedb, zseedt, zseedb, symmetrical)
 
-  use vardef, only : airfoil_type
+  use vardef, only : airfoil_type, match_foils
 
   type(airfoil_type), intent(in) :: foil
   double precision, dimension(:), intent(inout) :: xseedt, xseedb, zseedt,     &
@@ -462,6 +465,8 @@ subroutine split_airfoil(foil, xseedt, xseedb, zseedt, zseedb, symmetrical)
   logical, intent(in) :: symmetrical
   
   integer i, boundst, boundsb, pointst, pointsb
+  double precision :: angle, cosa, sina
+
 
   pointst = size(xseedt,1)
   pointsb = size(xseedb,1)
@@ -486,6 +491,20 @@ subroutine split_airfoil(foil, xseedt, xseedb, zseedt, zseedb, symmetrical)
     zseedt(i+1) = foil%z(boundst-i+1)
   end do
 
+! In matchfoil mode rotate polyline to make sure both seed and match foil are "horizontal" 
+  if (match_foils) then
+    ! at TE take the mean value of upper and lower side (open TE) to get chord angle
+    angle = atan2 (zseedt(pointst),xseedt(pointst))
+    cosa  = cos (-angle) 
+    sina  = sin (-angle) 
+    do i = 1, pointst
+      ! do only chnage z value to reduce artefacts
+      !xseedt(i) = xseedt(i) * cosa - zseedt(i) * sina
+      zseedt(i) = xseedt(i) * sina + zseedt(i) * cosa
+    end do
+  end if
+
+
 ! Copy points for the bottom surface
 
   xseedb(1) = foil%xle
@@ -502,6 +521,20 @@ subroutine split_airfoil(foil, xseedt, xseedb, zseedt, zseedb, symmetrical)
     end do
   end if
 
+! In matchfoil mode rotate polyline to make sure both seed and match foil are "horizontal" 
+  if (match_foils) then
+    ! at TE take the mean value of upper and lower side (open TE) to get chord angle
+    angle = atan2 (zseedb(pointsb),xseedb(pointsb))
+    cosa  = cos (-angle) 
+    sina  = sin (-angle) 
+    do i = 1, pointsb
+      ! do only chnage z value to reduce artefacts
+      !xseedb(i) = xseedb(i) * cosa - zseedb(i) * sina
+      zseedb(i) = xseedb(i) * sina + zseedb(i) * cosa
+    end do
+  end if
+
+
 end subroutine split_airfoil
 
 !=============================================================================80
@@ -515,19 +548,48 @@ subroutine airfoil_write(filename, title, foil)
 
   character(*), intent(in) :: filename, title
   type(airfoil_type), intent(in) :: foil
-  
-  integer :: i, iunit
-
-! Write notification to screen
+  integer :: iunit
 
   write(*,*)
   write(*,*) 'Writing labeled airfoil file '//trim(filename)//' ...'
   write(*,*)
 
-! Open file for writing
+! Open file for writing and out ...
 
   iunit = 13
-  open(unit=iunit, file=filename, status='replace')
+  open  (unit=iunit, file=filename, status='replace')
+  call  airfoil_write_to_unit (iunit, title, foil, .false.)
+  close (iunit)
+
+end subroutine airfoil_write
+
+!-----------------------------------------------------------------------------
+!
+! Writes an airfoil with a title to iunit
+!    --> central function for all foil coordinate writes
+!
+! write_derivatives = true: additional to x and y write derivative 2 and 3
+!-----------------------------------------------------------------------------
+
+subroutine airfoil_write_to_unit (iunit, title, foil, write_derivatives)
+
+  use vardef,          only : airfoil_type
+  use math_deps,       only : derivation2, derivation3 
+
+  integer, intent(in) :: iunit
+  character(*), intent(in) :: title
+  type(airfoil_type), intent(in) :: foil
+  logical, intent(in):: write_derivatives
+
+  double precision, dimension(size(foil%x)) :: deriv2, deriv3
+  integer :: i
+
+! Add 2nd and 3rd derivative to
+!        ...design_coordinates.dat to show it in visualizer
+  if (write_derivatives) then
+    deriv2 = derivation2 (foil%npoint, foil%x, foil%z)
+    deriv3 = derivation3 (foil%npoint, foil%x, foil%z)
+  end if
 
 ! Write label to file
   
@@ -536,15 +598,15 @@ subroutine airfoil_write(filename, title, foil)
 ! Write coordinates
 
   do i = 1, foil%npoint
-! jx-mod adjusted deciaml places to 7 - inline with intermediate write and other pgms
-    write(iunit,'(2F12.7)') foil%x(i), foil%z(i)
+    if (write_derivatives) then
+      write(iunit,'(2F12.7,2G17.7)')  foil%x(i), foil%z(i), deriv2(i), deriv3(i)
+    else
+      write(iunit,'(2F12.7)')         foil%x(i), foil%z(i)
+    end if
   end do
 
-! Close file
 
-  close(iunit)
-
-end subroutine airfoil_write
+end subroutine airfoil_write_to_unit
 
 !=============================================================================80
 !

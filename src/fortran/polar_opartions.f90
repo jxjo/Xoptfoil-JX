@@ -62,7 +62,7 @@ subroutine check_and_do_polar_generation (input_file, output_prefix, foil)
   integer  :: npolars
 
   call read_polar_inputs  (input_file, foil%name, npolars, polars)
-  if (npolars >= 0)                                               &
+  if (npolars > 0)                                               &
     call generate_polar_files (output_prefix, foil, npolars, polars)
 
 end subroutine check_and_do_polar_generation
@@ -207,7 +207,7 @@ subroutine read_polar_inputs  (input_file, foil_name, npolars, polars)
 ! Put xfoil options into derived types
 
   xfoil_options%ncrit        = ncrit
-  xfoil_options%xtript       = xtript
+  xfoil_options%xtript       = xtript 
   xfoil_options%xtripb       = xtripb
   xfoil_options%viscous_mode = viscous_mode
   xfoil_options%silent_mode  = silent_mode
@@ -396,7 +396,7 @@ subroutine write_polar_header (out_unit, polar)
 ! Mach =   0.000     Re =     0.400 e 6     Ncrit =   9.000
 !
 !-
-  write (out_unit,'(A)') "Xfoil_worker v1.0"
+  write (out_unit,'(A)') "Xoptfoil-JX"
   write (out_unit,*)
   write (out_unit,'(A)') " Calculated polar for: "//trim(polar%airfoil_name)
   write (out_unit,*)

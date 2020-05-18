@@ -78,14 +78,20 @@ module vardef
   double precision :: min_thickness, max_thickness, min_te_angle,              &
                       growth_allowed, min_flap_degrees, max_flap_degrees,      &
                       min_camber, max_camber
+  double precision :: max_te_curvature
+
   double precision :: curv_threshold
   integer :: max_curv_reverse_top, max_curv_reverse_bot
   character(8), dimension(max_op_points) :: moment_constraint_type
   double precision, dimension(max_op_points) :: min_moment
   character(11) :: shape_functions
-  double precision, dimension(:), allocatable :: xmatcht, xmatchb, zmatcht,    &
-                                                 zmatchb
+
+! Match foil mode
+  double precision, dimension(:), allocatable :: xmatcht, xmatchb, zmatcht, zmatchb
+  double precision :: xoffmatch, zoffmatch, scale_match
   logical :: match_foils
+  double precision :: match_foils_scale_factor 
+  
   logical :: check_curvature
   logical :: symmetrical
 

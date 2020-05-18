@@ -1,0 +1,36 @@
+! Match-foil mode using hicks-henne shape functions
+!
+! The seed airfoil JX-Seed is matched to itself to evaluate 
+! the maximum precision which can be achived...
+
+&optimization_options
+  search_type    = 'global'
+  global_search  = 'particle_swarm'
+  seed_airfoil   = 'from_file'
+  airfoil_file   = 'JX-Seed.dat'
+  shape_functions = 'hicks-henne'
+  min_bump_width = 0.1
+  nfunctions_top = 5
+  nfunctions_bot = 5
+  initial_perturb = 0.01
+  restart_write_freq = 0
+  echo_input_parms = .false.
+/  
+
+&matchfoil_options
+  match_foils    = .true.
+  matchfoil_file = 'JX-Seed.dat'
+/
+
+&constraints
+  max_te_curvature = 0.5
+/
+
+&particle_swarm_options
+  pso_pop = 40
+  pso_tol = 0.000001
+  pso_convergence_profile = 'exhaustive'
+  pso_maxit = 700
+/
+
+

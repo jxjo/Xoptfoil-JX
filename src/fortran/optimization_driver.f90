@@ -33,11 +33,14 @@ subroutine matchfoils_preprocessing(matchfoil_file)
 
   use vardef,             only : airfoil_type, xmatcht, xmatchb, zmatcht,      &
                                  zmatchb, xseedt, xseedb, symmetrical
+  use vardef,             only : xoffmatch, zoffmatch, scale_match
   use memory_util,        only : deallocate_airfoil
   use airfoil_operations, only : get_seed_airfoil, get_split_points,           &
                                  split_airfoil, my_stop
   use math_deps,          only : interp_vector
   use naca,               only : naca_options_type
+  use os_util,            only : print_note
+
   
   character(*), intent(in) :: matchfoil_file
 
@@ -45,11 +48,9 @@ subroutine matchfoils_preprocessing(matchfoil_file)
   type(naca_options_type) :: dummy_naca_options
   integer :: pointst, pointsb
   double precision, dimension(:), allocatable :: zttmp, zbtmp
-  double precision :: xoffmatch, zoffmatch, scale_match
 
-  write(*,*) 'Note: using the optimizer to match the seed airfoil to the '
-  write(*,*) 'airfoil about to be loaded.'
-  write(*,*)
+  call print_note ('Using the optimizer to match the seed airfoil to the '//&
+                   'airfoil about to be loaded.')
 
 ! Check if symmetrical airfoil was requested (not allowed for this type)
 
@@ -158,6 +159,14 @@ subroutine optimize(search_type, global_search, local_search, constrained_dvs, &
   open(unit=iunit, file='run_control', status='replace')
   close(iunit)
 
+! Delete existing optimization history for visualizer to start new
+  
+  if (.not. restart) then 
+    iunit = 17
+    open(unit=iunit, file='optimization_history.dat', status='replace')
+    close(iunit)
+  end if 
+    
 ! Restart status file setup
 
   iunit = 15
@@ -219,6 +228,7 @@ subroutine optimize(search_type, global_search, local_search, constrained_dvs, &
 
   f0_ref = objective_function_nopenalty(x0) 
 
+  
 ! Set default restart status (global or local optimization) from user input
 
   if (trim(search_type) == 'global_and_local' .or. trim(search_type) ==    &
@@ -324,9 +334,11 @@ subroutine optimize(search_type, global_search, local_search, constrained_dvs, &
 
 !   Write restart status to file
 
-    open(unit=iunit, file=restart_status_file, status='replace')
-    write(iunit,'(A)') trim(restart_status)
-    close(iunit)
+    if (restart_write_freq /=0) then  
+      open(unit=iunit, file=restart_status_file, status='replace')
+      write(iunit,'(A)') trim(restart_status)
+      close(iunit)
+    end if 
 
     if (trim(global_search) == 'particle_swarm') then
 
@@ -502,7 +514,7 @@ subroutine write_final_design(optdesign, f0, fmin, shapetype)
 
   final_airfoil%name   = output_prefix
   final_airfoil%npoint = nptt + nptb - 1
-  
+
   call allocate_airfoil(final_airfoil)
   do i = 1, nptt
     final_airfoil%x(i) = xseedt(nptt-i+1)/foilscale - xoffset
@@ -603,6 +615,9 @@ subroutine write_final_design(optdesign, f0, fmin, shapetype)
     write(*,*) "Optimal airfoil performance summary written to "               &
                //trim(aero_file)//"."
 
+
+  else
+    call write_matchfoil_summary (zt_new, zb_new)
   end if
 
 ! Write airfoil to file
@@ -617,7 +632,41 @@ subroutine write_final_design(optdesign, f0, fmin, shapetype)
 ! Deallocate final airfoil
   call deallocate_airfoil(final_airfoil)
 
-
 end subroutine write_final_design
+
+
+!-----------------------------------------------------------------------------
+! Write some data of the final match foil 
+!-----------------------------------------------------------------------------
+subroutine write_matchfoil_summary (zt_new, zb_new)
+
+  use vardef, only    : zmatcht, zmatchb, xseedt, xseedb
+  
+  double precision, dimension(size(xseedt,1)), intent(in) :: zt_new
+  double precision, dimension(size(xseedb,1)), intent(in) :: zb_new
+  double precision :: maxdeltat, maxdeltab, averaget, averageb, maxdt_rel, maxdb_rel
+
+  maxdeltat = maxval(abs (zt_new - zmatcht))
+  maxdeltab = maxval(abs (zb_new - zmatchb))
+
+  maxdt_rel = (maxdeltat / maxval(abs (zmatcht))) * 100.d0
+  maxdb_rel = (maxdeltab / maxval(abs (zmatchb))) * 100.d0
+ 
+  averaget  = sum (zt_new - zmatcht) / size(xseedt,1)
+  averageb  = sum (zb_new - zmatchb) / size(xseedb,1)
+
+  write(*,*)
+  write(*,'(A)') " Match airfoil deviation summary"
+  write(*,*)
+  write(*,'(A)') "      Delta of y-coordinate between adjusted match and seed surface"
+  write(*,*)
+  write(*,'(A)') "                average    max delta   to max y"
+
+  write (*,'(A10)', advance = 'no') "   top:"
+  write (*,'(1x, ES12.1, ES12.1, F10.3,A1)') averaget, maxdeltat, maxdt_rel,'%'
+  write (*,'(A10)', advance = 'no') "   bot:"
+  write (*,'(1x, ES12.1, ES12.1, F10.3,A1)') averageb, maxdeltab, maxdb_rel,'%'
+
+end subroutine write_matchfoil_summary
 
 end module optimization_driver

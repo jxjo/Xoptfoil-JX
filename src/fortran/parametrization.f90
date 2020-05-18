@@ -190,7 +190,7 @@ subroutine create_shape(x, modes, shapetype, shape_function)
       shape_function(i,:) = shape_function(i,:)*dvscale
     end do
 
-    elseif (trim(shapetype) == 'hicks-henne') then
+  elseif (trim(shapetype) == 'hicks-henne') then
       
     nmodes = size(modes,1)/3
     t1fact = initial_perturb/(1.d0 - 0.001d0)
@@ -333,6 +333,7 @@ subroutine create_airfoil_camb_thick (xt_seed, zt_seed, xb_seed, zb_seed, modes,
 
   use vardef,       only : airfoil_type
   use xfoil_driver, only : xfoil_scale_thickness_camber, xfoil_scale_LE_radius
+  use xfoil_driver, only : smooth_paneling
                                    
   double precision, dimension(:), intent(in) :: xt_seed, zt_seed, xb_seed, zb_seed
   double precision, dimension(:), intent(in) :: modes
@@ -359,7 +360,7 @@ subroutine create_airfoil_camb_thick (xt_seed, zt_seed, xb_seed, zb_seed, modes,
     seed_foil%x(i+nptt) = xb_seed(i+1)
     seed_foil%z(i+nptt) = zb_seed(i+1)
   end do
-  
+
 ! Change thickness, camber ... according to new values hidden in modes
   f_camb   = 1.d0 + 10.d0 * modes(1) 
   f_thick  = 1.d0 + 5.d0 * modes(2)
@@ -371,12 +372,11 @@ subroutine create_airfoil_camb_thick (xt_seed, zt_seed, xb_seed, zb_seed, modes,
   ! Change LE radius ... according to new values hidden in modes
   f_radius = 1.d0 + 3.d0 * modes(5)
   x_blend  = max (0.02d0, (5.d0 * modes(6) + 0.1d0))
- 
   call xfoil_scale_LE_radius (new_foil_1, f_radius, x_blend, new_foil_2)
 
   ! Sanity check - new_foil may not have different number of points
   if (seed_foil%npoint /= new_foil_2%npoint) then
-    write(*,(/'A'/)) 'Error: Number of points changed during thickness/camber modification'
+    write(*,'(A)') 'Error: Number of points changed during thickness/camber modification'
     stop 1
   end if
 

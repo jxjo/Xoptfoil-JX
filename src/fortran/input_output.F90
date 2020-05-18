@@ -109,7 +109,8 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
                          max_curv_reverse_top, max_curv_reverse_bot,           &
                          curv_threshold, symmetrical, min_flap_degrees,        &
                          max_flap_degrees, min_camber, max_camber,             &
-                         naddthickconst, addthick_x, addthick_min, addthick_max
+                         naddthickconst, addthick_x, addthick_min, addthick_max, &
+                         max_te_curvature
   namelist /naca_airfoil/ family, maxt, xmaxt, maxc, xmaxc, design_cl, a,      &
                           leidx, reflexed
   namelist /initialization/ feasible_init, feasible_limit,                     &
@@ -206,17 +207,20 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
 ! jx-mod Aero target - new option 
   target_value(:) = -1.d3 
 
-  min_thickness = 0.06d0
+  min_thickness = 0.04d0
   max_thickness = 1000.d0
   min_camber = -0.1d0
   max_camber = 0.1d0
   moment_constraint_type(:) = 'none'
   min_moment(:) = -1.d0
-  min_te_angle = 5.d0
+  min_te_angle = 2.d0
+
   check_curvature = .false.
+  max_te_curvature = 1.d0
   max_curv_reverse_top = 1
   max_curv_reverse_bot = 1
   curv_threshold = 0.30d0
+
   symmetrical = .false.
   min_flap_degrees = -5.d0
   max_flap_degrees = 15.d0
@@ -236,10 +240,10 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
 
   rewind(iunit)
   read(iunit, iostat=iostat1, nml=operating_conditions)
-  call namelist_check('operating_conditions', iostat1, 'stop')
+  call namelist_check('operating_conditions', iostat1, 'warn')
   rewind(iunit)
   read(iunit, iostat=iostat1, nml=constraints)
-  call namelist_check('constraints', iostat1, 'stop')
+  call namelist_check('constraints', iostat1, 'warn')
 
 ! Store operating points where flap setting will be optimized
 
@@ -670,6 +674,7 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
 
   match_foils = .false.
   matchfoil_file = 'none'
+  rewind(iunit)
   read(iunit, iostat=iostat1, nml=matchfoil_options)
   call namelist_check('matchfoil_options', iostat1, 'warn')
 
@@ -759,6 +764,7 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
     write(*,*) " min_moment("//trim(text)//") = ", min_moment(i)
   end do
   write(*,*) " min_te_angle = ", min_te_angle
+  write(*,*) " max_te_curvature = ", max_te_curvature
   write(*,*) " check_curvature = ", check_curvature
   write(*,*) " max_curv_reverse_top = ", max_curv_reverse_top
   write(*,*) " max_curv_reverse_bot = ", max_curv_reverse_bot
@@ -953,7 +959,7 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
 
 ! Operating points
 
-  if (noppoint < 1) call my_stop("noppoint must be > 0.")
+  if ((noppoint < 1) .and. .not. match_foils) call my_stop("noppoint must be > 0.")
   if (noppoint > max_op_points) then
      write(text,*) max_op_points
      text = adjustl(text)
@@ -1037,6 +1043,7 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
                  "or 'none'.")
   end do
   if (min_te_angle < 0.d0) call my_stop("min_te_angle must be >= 0.")
+  if (max_te_curvature < 0.d0) call my_stop("max_te_curvature must be >= 0.")
   if (check_curvature .and. (curv_threshold <= 0.d0))                          &
     call my_stop("curv_threshold must be > 0.")
   if (check_curvature .and. (max_curv_reverse_top < 0))                        &

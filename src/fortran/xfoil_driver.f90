@@ -799,10 +799,10 @@ subroutine xfoil_scale_thickness_camber (infoil, f_thick, d_xthick, f_camb, d_xc
 
 ! Run xfoil to change thickness and camber and positions
 
-  IF ((f_thick /= 1.d0) .or. (f_camb /= 1.d0))  &
-    call THKCAM (f_thick, f_camb)
   IF ((d_xcamb /= 0.d0) .or. (d_xthick /= 0.d0))  &
     call HIPNT  (xcamb + d_xcamb, xthick + d_xthick)
+  IF ((f_thick /= 1.d0) .or. (f_camb /= 1.d0))  &
+    call THKCAM (f_thick, f_camb)
 
                 
 ! retrieve outfoil from xfoil buffer
