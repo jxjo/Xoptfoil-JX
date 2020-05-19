@@ -596,7 +596,8 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
   fix_unconverged = .true.
   reinitialize = .true.
 
-  npan = 160
+  npan   = 201              ! default adapted to xoptfoils internal 201 panels
+                            !   ... to have run_xfoil results equal airfoil external results
   cvpar = 1.d0
   cterat = 0.15d0
   ctrrat = 0.2d0

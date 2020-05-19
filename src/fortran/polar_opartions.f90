@@ -124,7 +124,7 @@ end subroutine generate_polar_files
 subroutine read_polar_inputs  (input_file, foil_name, npolars, polars)
 
   use airfoil_operations, only : my_stop
-  use airfoil_evaluation, only : xfoil_options
+  use airfoil_evaluation, only : xfoil_options, xfoil_geom_options
   use input_output,       only : read_cl_re_default
 
   type (polar_type), dimension (MAXPOLARS), intent (out) :: polars
@@ -138,9 +138,10 @@ subroutine read_polar_inputs  (input_file, foil_name, npolars, polars)
   double precision, dimension (3)  :: op_point_range         ! -1.0, 10.0, 0.5
 
   double precision :: ncrit, xtript, xtripb, vaccel
-  logical :: viscous_mode, silent_mode, fix_unconverged, reinitialize
-  integer :: bl_maxit
+  double precision :: cvpar, cterat, ctrrat, xsref1, xsref2, xpref1, xpref2
 
+  logical :: viscous_mode, silent_mode, fix_unconverged, reinitialize
+  integer :: bl_maxit, npan
 
   integer         :: istat, iunit, i
 
@@ -149,6 +150,9 @@ subroutine read_polar_inputs  (input_file, foil_name, npolars, polars)
 
   namelist /xfoil_run_options/ ncrit, xtript, xtripb, viscous_mode,            &
             silent_mode, bl_maxit, vaccel, fix_unconverged, reinitialize
+
+  namelist /xfoil_paneling_options/ npan, cvpar, cterat, ctrrat, xsref1,       &
+            xsref2, xpref1, xpref2
 
 ! Init default values for polars
 
@@ -170,6 +174,16 @@ subroutine read_polar_inputs  (input_file, foil_name, npolars, polars)
   vaccel          = 0.005d0
   fix_unconverged = .true.
   reinitialize    = .true.
+
+  npan   = 201              ! default adapted to xoptfoils internal 201 panels
+                            !   ... to have run_xfoil results equal airfoil external results
+  cvpar  = 1.d0
+  cterat = 0.15d0
+  ctrrat = 0.2d0
+  xsref1 = 1.d0
+  xsref2 = 1.d0
+  xpref1 = 1.d0
+  xpref2 = 1.d0
   
 ! Open input file and read namelist from file
 
@@ -180,6 +194,8 @@ subroutine read_polar_inputs  (input_file, foil_name, npolars, polars)
   read(iunit, iostat=istat, nml=polar_generation)
   rewind(iunit)
   read(iunit, iostat=istat, nml=xfoil_run_options)
+  rewind(iunit)
+  read(iunit, iostat=istat, nml=xfoil_paneling_options)
   close (iunit)
 
 ! if there are no re numbers in input file take from command line
@@ -215,10 +231,18 @@ subroutine read_polar_inputs  (input_file, foil_name, npolars, polars)
   xfoil_options%vaccel       = vaccel
   xfoil_options%fix_unconverged = fix_unconverged
   xfoil_options%reinitialize = reinitialize
-  xfoil_options%auto_smooth  = .true.
-! jx-todo - read show_details
+  ! suppress a re-paneling of the airfoil as we want the original properties.
+  xfoil_options%auto_smooth  = .false. 
   xfoil_options%show_details = .true.
-  xfoil_options%auto_smooth  = .false.
+
+  xfoil_geom_options%npan   = npan
+  xfoil_geom_options%cvpar  = cvpar
+  xfoil_geom_options%cterat = cterat
+  xfoil_geom_options%ctrrat = ctrrat
+  xfoil_geom_options%xsref1 = xsref1
+  xfoil_geom_options%xsref2 = xsref2
+  xfoil_geom_options%xpref1 = xpref1
+  xfoil_geom_options%xpref2 = xpref2
 
   
 ! Init polar definitions with input 
@@ -321,9 +345,6 @@ subroutine calculate_polar (foil, polar)
   x_flap           = 0.d0
   y_flap           = 0.d0
   y_flap_spec      = 'y/c'
-
-  ! suppress a re-paneling of the airfoil as we want the original properties.
-  xfoil_options%auto_smooth = .false. 
 
   ! reset out lier detection tect. for a new polar 
   call xfoil_driver_reset

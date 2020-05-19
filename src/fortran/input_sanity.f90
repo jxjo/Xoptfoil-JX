@@ -60,7 +60,7 @@ subroutine check_seed()
                                            xtrt, xtrb
   double precision :: pi
   integer :: i, nptt, nptb, nreversalst, nreversalsb, nptint
-  character(30) :: text, text2
+  character(100) :: text, text2
   character(15) :: opt_type
   logical :: addthick_violation
 ! jx-mod  
@@ -75,6 +75,16 @@ subroutine check_seed()
 
   write(*,*) 'Checking to make sure seed airfoil passes all constraints ...'
   write(*,*)
+
+
+!  Check paneling option - npan (number of panels) should be equal to internal panel number
+!       - to ensure xfoil results to not differ during optimization from results of final airfoil! 
+
+  if (xfoil_geom_options%npan /= (nptt + nptb - 1)) then
+    write (text,'(A,I3,A,I3)') 'Number of panels (npan=',xfoil_geom_options%npan,') '// &
+                               'should be set to ', (nptt + nptb - 1)
+    call ask_stop (trim(text))
+  end if 
 
 ! jx-mod Smoothing ---- Ask user for Smoothing - switch off if 'camb_thick'---------
 
