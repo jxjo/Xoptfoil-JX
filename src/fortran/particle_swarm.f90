@@ -140,8 +140,8 @@ subroutine particleswarm(xopt, fmin, step, fevals, objfunc, x0, xmin, xmax,    &
     c1 = 1.0d0         ! particle-best trust factor
     c2 = 1.6d0         ! swarm-best trust factor
     whigh = 1.2d0      ! starting inertial parameter
-    wlow = 0.2d0       ! ending inertial parameter
-    convrate = 0.1d0   ! inertial parameter reduction rate
+    wlow = 0.02d0       ! ending inertial parameter
+    convrate = 0.01d0   ! inertial parameter reduction rate
 
   else
     write(*,*) "Error in particleswarm: convergence mode should be"//          &
