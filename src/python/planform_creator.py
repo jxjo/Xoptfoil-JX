@@ -60,25 +60,25 @@ PLanformDict =	{
             # name of XFLR5-template-xml-file
             "templateFileName": 'plane_template.xml',
             # name of the generated XFLR5-xml-file
-            "outFileName": "plane.xml",
+            "outFileName": "rocketeer.xml",
             # name of the root-airfoil
             "rootAirfoilName": "JX-FXrcn",
             # name of the planform
             "planformName": 'main wing',
             # spanwidth in m
-            "spanwidth": 2.95,
+            "spanwidth": 2.54,
              # length of the root-chord in m
-            "rootchord": 0.241,
+            "rootchord": 0.223,
+            # list of manual given values
+            "listValues": [137000, 120000, 100000, 80000, 60000, 40000, 20000],
             # number of airfoils that shall be calculated along the wing
-            "numberOfSections": 9,
+            "numberOfSections": 7,
             # backsweep of the tip of the wing
             "backsweep": 0.051,
-            # over-eliptic shaping of the wing
-            #"overElipticOffset": 0.0,
             # depth of the aileron / flap in percent of the chord-length
-            "hingeDepthPercent": 23.5,
+            "hingeDepthPercent": 25.0,
             # dihedral of the of the wing in degree
-            "dihedral": 3.0
+            "dihedral": 2.5
             }
 
 ################################################################################
@@ -190,6 +190,7 @@ class wing:
     self.dihedral = 0.00
     self.sections = []
     self.grid = []
+    self.valueList = []
 
     # Fontsize for planform-plotting
     self.fontsize = 10
@@ -208,6 +209,10 @@ class wing:
     self.dihedral = dictData["dihedral"]
     self.rootProfileName = dictData["rootAirfoilName"]
     self.planformName = dictData["planformName"]
+    try:
+        self.valueList = dictData["listValues"]
+    except:
+        pass
 
   # find grid-values for a given chord-length
   def findGrid(self, chord):
@@ -264,7 +269,7 @@ class wing:
     chord = self.rootchord
 
     # create all sections
-    for i in range(1, (self.numberOfSections+1)):
+    for i in range(1, (self.numberOfSections + 1)):
         # create new section
         section = wingSection()
 
@@ -284,7 +289,12 @@ class wing:
         self.copyGridToSection(grid, section)
 
         # calculate chord for the next section
-        chord = chord - chord_decrement
+        if (i < len(self.valueList)):
+            # calculate cordlangths from given valueList
+            chord = (self.rootchord * self.valueList[i]) / self.valueList[0]
+        else:
+            # calculate chord with fixed difference
+            chord = chord - chord_decrement
 
 
   # plot the wing planform
@@ -316,7 +326,7 @@ class wing:
             xytext=(+(12*factor), -offset), textcoords='offset points', fontsize=self.fontsize,
             arrowprops=dict(arrowstyle="->", connectionstyle="arc, rad =0"))
             factor = factor + 1
-            offset = offset + 12
+            offset = offset + 5#12
 
         for element in self.grid:
             #build up list of x-values
@@ -471,7 +481,7 @@ if __name__ == "__main__":
   newWing = wing()
 
   #debug
-#json.dump(PLanformDict, open("planformdata.txt",'w'))
+  #json.dump(PLanformDict, open("planformdata.txt",'w'))
 
   # try to open .json-file
   try:
