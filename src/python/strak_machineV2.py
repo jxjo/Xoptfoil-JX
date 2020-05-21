@@ -17,16 +17,30 @@
 
 #  Copyright (C) 2020 Matthias Boese
 
+# imports
 import xml.etree.ElementTree as ET
 import argparse
-from sys import version_info
-from sys import exit
 import json
-import os
+import sys, os
 from matplotlib import pyplot as plt
 import matplotlib.image as mpimg
 import numpy as np
 import f90nml
+
+# paths and separators
+bs = "\\"
+presetsPath = 'ressources' + bs + 'presets'
+imagesPath = 'ressources' + bs + 'images'
+logoName = 'strakmachine.png'
+
+#fonts
+csfont = {'fontname':'Segoe Print'}
+
+# fontsizes
+fs_infotext = 10
+
+# colours
+cl_infotext = 'aqua'
 
 ################################################################################
 #
@@ -57,12 +71,24 @@ strakdata = {
 #
 ################################################################################
 class inputFile:
-    def __init__(self):
+    def __init__(self, libDir, strakType):
         self.values = {}
+        self.presetInputFileName = ""
+        presetInputFiles = getListOfFiles(libDir + bs + presetsPath)
+        self.getInputFileName(presetInputFiles, strakType)
 
-    def setPredefinedValues(self, values):
-        self.values = values
+        # read input-file as a Fortan namelist
+        self.values = f90nml.read(self.presetInputFileName)
 
+    def getInputFileName(self, fileList, strakType):
+        # search the whole list of files for the desired strak-type
+        for name in fileList:
+            if name.find(strakType) >= 0:
+                self.presetInputFileName = name
+                return
+
+    def getPresetInputFileName(self):
+        return self.presetInputFileName
 
     def changeTargetValue(self, keyName, targetValue):
         # get operating-conditions from dictionary
@@ -319,8 +345,8 @@ class polarData:
         self.textstring = text
 
 
-    def plotLogo(self, ax):
-        image = mpimg.imread('ressources/strakmachine.png')
+    def plotLogo(self, ax, scriptDir):
+        image = mpimg.imread(scriptDir + bs + imagesPath + bs + logoName)
         ax.imshow(image)
         ax.set_axis_off()
 
@@ -341,7 +367,7 @@ class polarData:
         ax.plot(x, y, 'bo')
         ax.annotate('maxGlide @ Cl = %.2f, Cl/Cd = %.2f' % (y, (y/x)), xy=(x,y),
                       xytext=(10,0), textcoords='offset points',
-                      fontsize = 20, color="dodgerblue")
+                      fontsize = fs_infotext, color=cl_infotext)
 
         # plot max lift
         x = self.CD[self.maxLift_idx]
@@ -349,7 +375,7 @@ class polarData:
         ax.plot(x, y, 'ro')
         ax.annotate('maxLift @ alpha = %.2f, Cl = %.2f' %(self.alpha_maxLift,
           self.CL_maxLift), xy=(x,y), xytext=(10,10), textcoords='offset points',
-          fontsize = 20, color="dodgerblue")
+          fontsize = fs_infotext, color=cl_infotext)
 
         # plot additional markers
         ax.plot(self.CD_Markers, self.CL_Markers,'ro')
@@ -372,8 +398,8 @@ class polarData:
 
         # additonal text
         ax.annotate('maxLift @ alpha = %.2f, Cl = %.2f' %(self.alpha_maxLift,
-          self.CL_maxLift), xy=(x,y), xytext=(-300,15), textcoords='offset points',
-          fontsize = 20, color="dodgerblue")
+          self.CL_maxLift), xy=(x,y), xytext=(-80,15), textcoords='offset points',
+          fontsize = fs_infotext, color=cl_infotext)
 
 
     def setAxesAndLabels(self, ax, title, xlabel, ylabel):
@@ -405,17 +431,17 @@ class polarData:
         y = self.CL_CD[self.maxGlide_idx]
         ax.plot(x, y, 'ro')
         ax.annotate('maxGlide @ alpha = %.2f, Cl/Cd = %.2f' % (x, y), xy=(x,y),
-                      xytext=(10,10), textcoords='offset points', fontsize = 20, color="dodgerblue")
+                      xytext=(10,10), textcoords='offset points', fontsize = fs_infotext, color=cl_infotext)
 
 
-    def draw(self):
+    def draw(self, scriptDir):
         print("plotting polar of airfoil %s at Re = %.0f..."
                        % (self.airfoilname, self.Re))
 
         plt.style.use('dark_background')
         #plt.autoscale(enable=True, axis='both', tight=None)
         fig, (upper,lower) = plt.subplots(2,2)
-        plt.autoscale(enable=True, axis='both', tight=True)
+        #plt.autoscale(enable=True, axis='both', tight=True)
 
         if (self.polarType == 2):
             text = ("Analysis of root-airfoil \"%s\" at ReSqrt(Cl) = %d, Type %d polar" %
@@ -424,11 +450,10 @@ class polarData:
             text = ("Analysis of root-airfoil \"%s\" at Re = %d, Type %d polar" %
                      (self.airfoilname, self.Re, self.polarType))
 
-        csfont = {'fontname':'Segoe Print'}
-        fig.suptitle(text, fontsize = 40, color="darkgrey", **csfont)
+        fig.suptitle(text, fontsize = 20, color="darkgrey", **csfont)
 
         # first figure, display strak-machine-logo
-        self.plotLogo(upper[0])
+        self.plotLogo(upper[0], scriptDir)
 
         # second figure, display the Lift / Drag-Polar
         self.plotLiftDragPolar(lower[0])
@@ -439,8 +464,11 @@ class polarData:
         # fourth figure, display the lift/drag /alpha polar
         self.plotLiftDragAlphaPolar(lower[1])
 
-        # show diagram
+        # maximize window
+        figManager = plt.get_current_fig_manager()
+        figManager.window.showMaximized()
 
+        # show diagram
         plt.show()
 
 ################################################################################
@@ -742,20 +770,16 @@ def getListOfFiles(dirName):
 
     return allFiles
 
-def getInputFileName(fileList, strakType):
-    # search the whole list of files for the desired strak-type
-    for name in fileList:
-        if name.find(strakType) >= 0:
-            return name
-    # this should never happen
-    return none
-
 ################################################################################
 # Main program
 if __name__ == "__main__":
 
-    #get command-line-arguments or user-input
+    # get command-line-arguments or user-input
     strakDataFileName = getArguments()
+
+    # get real path of the script
+    pathname = os.path.dirname(sys.argv[0])
+    scriptPath = os.path.abspath(pathname)
 
     #debug
     #json.dump(strakdata, open("strakdata.txt",'w'))
@@ -780,7 +804,7 @@ if __name__ == "__main__":
     params = getParameters(strakdata)
     # print strakdata
 
-    # read plane-data from XML-File
+    # read plane-data from XML-File, if requested //TODO: only wing-data
     if (params.xmlFileName != None):
         try:
             xmlFileName = params.inputFolder + '/' + params.xmlFileName
@@ -794,6 +818,9 @@ if __name__ == "__main__":
 
     # compose name of the folder, where the airfoils shall be stored
     params.airfoilFolder = 'airfoils'
+
+    # get current working dir
+    workingDir = os.getcwd()
 
     # check if output-folder exists. If not, create folder.
     if not os.path.exists(params.outputFolder):
@@ -815,40 +842,29 @@ if __name__ == "__main__":
         print ('generating batchfile \'%s\'' % params.batchfileName)
         generate_batchfile(params.batchfileName, commandlines)
 
-##    # generate polars
-##    for Re in ReList:
-##        rootfoilName = get_FoilName(params.wingData, 0) + ".dat"
-##        systemString = "xfoil_worker.exe -w polar -a %s -r %d" % (rootfoilName, Re)
-##        #os.system(systemString) //TODO comment in
+    # create instance of new inputfile, automatically get preset-values for
+    # strak-Type
+    newInputFile = inputFile(scriptPath, params.strakType)
 
-    # generate polar of root-airfoil
-    # get Re-Number of root-airfoil from list
-    Re = ReList[0]
-
+    # generate polar of root-airfoil:
     # get name of root-airfoil
     rootfoilName = get_FoilName(params.wingData, 0) + ".dat"
 
-    # get predefined input-file for the specified strak-type
-    workingDir = os.getcwd()
-    libDir = workingDir + "\\lib"
-    presetInputFiles = getListOfFiles(libDir)
-    inputFileName = getInputFileName(presetInputFiles, params.strakType)
+    print("Generating polar for airfoil %s" % rootfoilName)
 
-    # read input-file as a Fortan namelist
-    nml = f90nml.read(inputFileName)
-    newInputFile = inputFile()
-    newInputFile.setPredefinedValues(nml)
-
-    print("Generating polar for airfoil %s, Re = %.0f..." % (rootfoilName, Re))
     # compose string for system-call of XFOIL-worker
+    airfoilName = workingDir + bs + params.inputFolder + bs + rootfoilName
     systemString = "xfoil_worker.exe -i %s -w polar -a %s -r %d" % (
-           inputFileName, (params.inputFolder+"/"+rootfoilName), Re)
+           newInputFile.getPresetInputFileName(), airfoilName, ReList[0])
+
+    print systemString #Debug
+
     # execute xfoil-worker
     os.system(systemString)
     print("Done.")
 
     # get list of polar-files
-    polarDir = workingDir + "\\foil_polars"
+    polarDir = workingDir + bs + "foil_polars"
     polarFiles = getListOfFiles(polarDir)
 
     # import all polars
@@ -859,8 +875,7 @@ if __name__ == "__main__":
         # Analyze polar
         newPolar.analyze()
 
-
-    # adapt oppoints according to generated polars
+    # adapt oppoints of inputfile according to generated polars
     newInputFile.adaptOppoints(newPolar)
 
     # write new input-file with the given filename
@@ -873,6 +888,6 @@ if __name__ == "__main__":
     newPolar.SetTextstring(newInputFile.getOppointText())
 
     # show diagram
-    newPolar.draw()
+    newPolar.draw(scriptPath)
 
     print("Ready.")
