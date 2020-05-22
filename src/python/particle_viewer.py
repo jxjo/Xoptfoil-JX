@@ -21,8 +21,11 @@ import csv
 from matplotlib import pyplot as plt
 import numpy as np
 import argparse
-from sys import version_info
+import sys
+import math
 
+#fonts
+csfont = {'fontname':'Segoe Print'}
 ################################################################################
 
 ################################################################################
@@ -124,6 +127,7 @@ def plot_particleData(data):
             posValues[i-1].append([])
             velValues[i-1].append([])
 
+    # collect all values
     for iteration in data:
         particleNum = 0
 
@@ -144,41 +148,62 @@ def plot_particleData(data):
         iterationNumbers.append(iterationNum)
         iterationNum = iterationNum + 1
 
+    # setup subplots, determine columns and rows
+    columns = int(round(math.sqrt(NumDimensions)+0.5))
+    rows = NumDimensions / columns
+
+    # set 'dark' style
+    plt.style.use('dark_background')
+
+    # double the rows as we have position- and velocity-values
+    fig, subplots = plt.subplots(rows*2, columns)
+
     # plot all position-values
     for i in range(NumDimensions):
-        plt.figure(i)
+        # determine row and column of subplot
+        col = i % columns
+        row = i / columns
+        ax = subplots[row, col]
 
         # plot all position values
         for particle in range(0, NumParticles-1):
-            plt.plot(iterationNumbers, posValues[i][particle])
+            ax.plot(iterationNumbers, posValues[i][particle])
 
-        plt.xlabel('Iteration Number')
-        plt.ylabel('position-value')
-        text = ("position-values[%d]" % i)
-        plt.title(text, fontsize = 14)
-        plt.grid(True)
+        # set axis-labels
+        xlabel = 'iteration Number'
+        ylabel = ('[%d] position-value' % i)
+        ax.set_xlabel(xlabel, fontsize = 20, color="darkgrey")
+        ax.set_ylabel(ylabel, fontsize = 20, color="darkgrey")
 
-    plt.show()
-
-    # clear figure
-    plt.clf()
+        # customize grid
+        ax.grid(True, color='darkgrey',  linestyle='-.', linewidth=0.7)
 
     # plot all velocity-values
     for i in range(NumDimensions):
-        plt.figure(i)
+
+        # determine row and column of subplot
+        col = i % columns
+        row = (rows) + (i/columns)
+        ax = subplots[row, col]
 
         # plot all velocity values
         for particle in range(0, NumParticles-1):
-            plt.plot(iterationNumbers, velValues[i][particle])
+            ax.plot(iterationNumbers, velValues[i][particle])
 
-        plt.xlabel('Iteration Number')
-        plt.ylabel('velocity-value')
-        text = ("velocity-values[%d]" % i)
-        plt.title(text, fontsize = 14)
-        plt.grid(True)
+        # set axis-labels
+        xlabel = 'iteration Number'
+        ylabel = ('[%d] velocity-value' % i)
+        ax.set_xlabel(xlabel, fontsize = 20, color="darkgrey")
+        ax.set_ylabel(ylabel, fontsize = 20, color="darkgrey")
+
+        # customize grid
+        ax.grid(True, color='darkgrey',  linestyle='-.', linewidth=0.7)
+
+    # maximize window
+    figManager = plt.get_current_fig_manager()
+    figManager.window.showMaximized()
 
     plt.show()
-
 
 ################################################################################
 # Main particle_visualizer program
@@ -194,25 +219,15 @@ if __name__ == "__main__":
     if args.input:
         fileName = args.input
     else:
-        message = "Enter the filename of the particle-file"\
-        "(e.g., particles, which  is the default filename), "\
-        "hit <enter> for default:"
-
-        fileName = my_input(message)
-
         # set default filename in case there was no input
-        if (fileName == ""):
-            fileName = 'particles'
+        fileName = 'particles'
 
     fileName = fileName + '.csv'
-    print("filename is %s" % fileName)
 
     try:
         particleData = read_particleFile(fileName)
     except:
-        print("Error, file %s could not be opened." % fileName)
-        exit -1
+        sys.exit("Error, file %s could not be opened." % fileName)
 
     plot_particleData(particleData)
-
     print("Ready.")
