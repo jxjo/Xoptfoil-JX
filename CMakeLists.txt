@@ -24,6 +24,8 @@ else (CMAKE_SYSTEM_NAME MATCHES "UNIX")
   message (STATUS "\n \n Building XFoptfoil-JX Version $ENV{XOPTFOIL_VERSION} for Windows\n\n")
 endif (CMAKE_SYSTEM_NAME MATCHES "UNIX")
 
+unset(CMAKE_SYSTEM_NAME)
+
 cmake_minimum_required(VERSION 2.8.8)
 project(Xoptfoil-JX)
 enable_language(Fortran)
