@@ -4,7 +4,7 @@
 #
 # - switched off Multithreading (OpenMP) 
 # - added -cpp to gfortran to activate precompiler
-# - added precompiler flag for OS - WIn32 or UNIX
+# - added precompiler flag for OS - WIN32 or UNIX
 # - set XOPTFOIL_VERSION in build_windows.bat 
 # - removed xfoil_only and doc files etc
 
@@ -24,6 +24,7 @@ else (CMAKE_SYSTEM_NAME MATCHES "UNIX")
   message (STATUS "\n \n Building XFoptfoil-JX Version $ENV{XOPTFOIL_VERSION} for Windows\n\n")
 endif (CMAKE_SYSTEM_NAME MATCHES "UNIX")
 
+# that's needed to avoid strange make behaviour when installing the exe
 unset(CMAKE_SYSTEM_NAME)
 
 cmake_minimum_required(VERSION 2.8.8)
@@ -41,13 +42,13 @@ message(STATUS "Fortran compiler: " ${CMAKE_Fortran_COMPILER})
 
 # !!! Multithreading switched of !!!!!
 # Option to build with/without OpenMP support
-set(ENABLE_OPENMP FALSE
+set(ENABLE_OPENMP TRUE
     CACHE BOOL "Whether to build with OpenMP support."
 )
 
 # Enable OpenMP by default for Release builds, but disable by default for Debug
 if (CMAKE_BUILD_TYPE MATCHES "Release")
-  set (OPENMP_FLAG "-fopenmp")
+  set (OPENMP_FLAG "-fopenmp -DOPENMP=1")
   if (NOT ENABLE_OPENMP)
     MESSAGE(STATUS "Disabling OpenMP support since ENABLE_OPENMP=FALSE")
     set (OPENMP_FLAG "")
@@ -56,7 +57,7 @@ elseif (CMAKE_BUILD_TYPE MATCHES "Debug")
   set (OPENMP_FLAG "")
   if (ENABLE_OPENMP)
     MESSAGE(STATUS "Enabling OpenMP support for debug build since ENABLE_OPENMP=TRUE")
-    set (OPENMP_FLAG "-fopenmp")
+    set (OPENMP_FLAG "-fopenmp  -DOPENMP=1")
   endif (ENABLE_OPENMP)
 endif (CMAKE_BUILD_TYPE MATCHES "Release")
 

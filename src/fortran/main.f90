@@ -19,6 +19,7 @@ program main
 
 ! Main program for airfoil optimization
 
+  use omp_lib             ! to switch off multi threading
   use vardef
   use input_output,        only : read_inputs, read_clo
   use naca,                only : naca_options_type
@@ -32,8 +33,9 @@ program main
   use input_sanity,        only : check_seed
   use optimization_driver, only : matchfoils_preprocessing, optimize,          &
                                   write_final_design
-! jx-mod polar generation for final airfoil                                 
   use polar_operations,    only : check_and_do_polar_generation
+  use os_util,             only : print_note, print_warning
+
 
   implicit none
 
@@ -44,7 +46,7 @@ program main
   type(airfoil_type) :: buffer_foil
   character(80) :: search_type, global_search, local_search, seed_airfoil,     &
                    airfoil_file, matchfoil_file
-  character(80) :: input_file
+  character(80) :: input_file, text
   type(naca_options_type) :: naca_options
   type(pso_options_type) :: pso_options
   type(ga_options_type) :: ga_options
@@ -130,14 +132,32 @@ program main
     write(*,*)
   end if
 
-! jx-mod Smoothing ---- save original seed surface before smoothing
-!                        ... to show original data later in visualizer 
+! Switch off multi threading when using show_details because the output to the console 
+!   would be corrupted ...
+!   macro OPENMP is set in CMakeLists.txt as _OPENMP is not set by default (..?) 
+#ifdef OPENMP                       
+  if (omp_get_max_threads() > 1) then 
+    if (show_details ) then 
+      call print_warning ("Because of option 'show_details' CPU multi threading will be switched off")
+      write(*,*)
+      call omp_set_num_threads( 1 )
+    else
+      write (text,'(I2,A)') omp_get_max_threads(),' CPU threads will be used during optimization' 
+      call print_note (text)
+      write(*,*)
+    end if 
+  end if 
+#else
+  text = 'dummy' 
+#endif
+
+! Smoothing ---- save original seed surface before smoothing
+!                ... to show original data later in visualizer 
 
   allocate(zseedt_not_smoothed(size(zseedt)))
   allocate(zseedb_not_smoothed(size(zseedb)))
   zseedt_not_smoothed = zseedt
   zseedb_not_smoothed = zseedb
-! jx-mod Smoothing ---- end 
 
   
 ! Make sure seed airfoil passes constraints, and get scaling factors for

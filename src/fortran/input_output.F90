@@ -162,7 +162,7 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
   write_designs = .true.
 
 ! jx-mod Show more infos  / supress echo
-  show_details = .true. 
+  show_details = .false. 
   echo_input_parms = .true.
  
 ! Read main namelist options
