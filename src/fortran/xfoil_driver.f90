@@ -731,7 +731,6 @@ end subroutine xfoil_cleanup
 subroutine xfoil_geometry_info(maxt, xmaxt, maxc, xmaxc)
 
   use xfoil_inc, only : THICKB, XTHICKB, CAMBR, XCAMBR
-
   double precision, intent(out) :: maxt, xmaxt, maxc, xmaxc
 
   maxt = THICKB
@@ -741,6 +740,14 @@ subroutine xfoil_geometry_info(maxt, xmaxt, maxc, xmaxc)
 
 end subroutine xfoil_geometry_info
 
+function xfoil_geometry_amax()
+
+  use xfoil_inc, only : AMAX
+  double precision :: xfoil_geometry_amax
+
+  xfoil_geometry_amax = AMAX
+
+end function xfoil_geometry_amax
 
 !------------------------------------------------------------------------------
 !

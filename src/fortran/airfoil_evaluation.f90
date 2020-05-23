@@ -25,6 +25,7 @@ module airfoil_evaluation
   implicit none
 
   public :: objective_function, objective_function_nopenalty
+
   public :: write_function, write_function_restart_cleanup 
 
   type(xfoil_options_type),      public :: xfoil_options
@@ -60,16 +61,24 @@ module airfoil_evaluation
 ! not.
 !
 !=============================================================================80
-function objective_function(designvars)
+function objective_function(designvars, evaluate_only_geometry)
 
   double precision, dimension(:), intent(in) :: designvars
+  logical, intent(in), optional :: evaluate_only_geometry
+
   double precision :: objective_function
 
   if (match_foils) then
     objective_function = matchfoil_objective_function(designvars)
   else
-    objective_function = aero_objective_function(designvars)
+    if (present(evaluate_only_geometry)) then
+      objective_function = aero_objective_function(designvars, &
+         include_penalty=.true., evaluate_only_geometry=evaluate_only_geometry)
+    else
+      objective_function = aero_objective_function(designvars)
+    end if
   end if
+
 end function objective_function
 
 !=============================================================================80
@@ -92,6 +101,7 @@ function objective_function_nopenalty(designvars)
 
 end function objective_function_nopenalty
 
+
 !=============================================================================80
 !
 !  Objective function
@@ -101,7 +111,7 @@ end function objective_function_nopenalty
 !  Output: objective function value based on airfoil performance
 !
 !=============================================================================80
-function aero_objective_function(designvars, include_penalty)
+function aero_objective_function(designvars, include_penalty, evaluate_only_geometry)
 
   use math_deps,       only : interp_vector, curvature, derv1f1, derv1b1
 
@@ -113,11 +123,11 @@ function aero_objective_function(designvars, include_penalty)
 
   use parametrization, only : top_shape_function, bot_shape_function,          &
                               create_airfoil, create_airfoil_camb_thick
-  use xfoil_driver,    only : run_xfoil
-  use xfoil_inc,       only : AMAX, CAMBR
+  use xfoil_driver,    only : run_xfoil, xfoil_geometry_amax,                  &
+                              xfoil_geometry_info, xfoil_set_airfoil
 
   double precision, dimension(:), intent(in) :: designvars
-  logical, intent(in), optional :: include_penalty
+  logical, intent(in), optional :: include_penalty, evaluate_only_geometry
   double precision :: aero_objective_function
 
   double precision, dimension(max(size(xseedt,1),size(xseedb,1))) :: x_interp, &
@@ -131,6 +141,7 @@ function aero_objective_function(designvars, include_penalty)
              dvbbnd2, nptint
   double precision :: penaltyval
   double precision :: tegap, growth1, growth2, maxgrowth, len1, len2
+  double precision :: maxt, xmaxt, maxc, xmaxc
   double precision :: panang1, panang2, maxpanang, heightfactor, cur_te_curvature
   double precision, dimension(noppoint) :: lift, drag, moment, viscrms, alpha, &
                                            xtrt, xtrb
@@ -142,9 +153,8 @@ function aero_objective_function(designvars, include_penalty)
   double precision, parameter :: epsexit = 1.0D-04
   double precision, parameter :: epsupdate = 1.0D-08
   double precision :: pi
-  logical :: penalize
+  logical :: penalize, only_geo_penalty
 
-  ! jx-mod  
   double precision :: geo_objective_function
   double precision :: ref_value, tar_value, cur_value, slope
   character(100)   :: penalty_info
@@ -152,27 +162,31 @@ function aero_objective_function(designvars, include_penalty)
   type(geo_opt_info_type), dimension (max_op_points) :: geo_opt_info
   double precision :: perturbation_bot, perturbation_top
 
-
-  pi = acos(-1.d0)
-  nmodest = size(top_shape_function,1)
-  nmodesb = size(bot_shape_function,1)
-  nptt = size(xseedt,1)
-  nptb = size(xseedb,1)
-
-  penaltyval   = 0.d0
-  penalty_info = ''                            ! user info on the type of penalities given
-  op_opt_info%obj          = 1d0               
-  op_opt_info%weighting    = 0d0               
-  op_opt_info%change       = -999d0               
-  op_opt_info%penalty_info = ''    
-  geo_objective_function  = 0.d0               ! new geo_objective
-
 ! Enable / disable penalty function
 
   penalize = .true.
   if (present(include_penalty)) then
     if (.not. include_penalty) penalize = .false.
   end if
+
+! Enable / disable penalty function
+
+  if (present(evaluate_only_geometry)) then
+    only_geo_penalty = evaluate_only_geometry
+  else
+    only_geo_penalty = .false.
+  end if
+
+!----------------------------------------------------------------------------------------------------
+! Build airfoil to evaluate out of seed airfoil plus shape functions applied
+!----------------------------------------------------------------------------------------------------
+
+
+  pi = acos(-1.d0)
+  nmodest = size(top_shape_function,1)
+  nmodesb = size(bot_shape_function,1)
+  nptt = size(xseedt,1)
+  nptb = size(xseedb,1)
 
 ! Set modes for top and bottom surfaces
 
@@ -213,56 +227,6 @@ function aero_objective_function(designvars, include_penalty)
   end if
 
 
-! jx-mod Smoothing ---- Start  -----------------------------------------------------------
-
-  if (check_curvature .or. do_smoothing) then
-
-! Check surface for pertubation (ups and downs) and number of reversals
-
-    call assess_surface ('Top', .false., max_curv_reverse_top, xseedt, zt_new, nreversalst, perturbation_top)
-    if ((do_smoothing .and. (perturbation_top > 0.6)) .and. penalize) then    ! do not smooth seed ! (penalize==false) 
-      call smooth_it (xseedt, zt_new)
-      call assess_surface ('Top', .false., max_curv_reverse_top, xseedt, zt_new, nreversalst, perturbation_top)
-    end if
-
-    ! Penality for too many curve_reservals for speed-up reason already here 
-    penaltyval = penaltyval + max(0.d0,dble(nreversalst-max_curv_reverse_top))
-    if (max(0.d0,dble(nreversalst-max_curv_reverse_top)) > 0.d0) penalty_info = trim(penalty_info) // ' maxReversal'
-
-    call assess_surface ('Bot',  .false., max_curv_reverse_bot, xseedb, zb_new, nreversalsb, perturbation_bot)
-    if ((do_smoothing .and. (perturbation_bot > 0.6)) .and. penalize) then     ! do not smooth seed
-      call smooth_it (xseedb, zb_new)
-      call assess_surface ('Bot', .false., max_curv_reverse_bot, xseedb, zb_new, nreversalsb, perturbation_bot)
-    end if
-
-    ! Penality for too many curve_reservals for speed-up reason already here 
-    penaltyval = penaltyval + max(0.d0,dble(nreversalsb-max_curv_reverse_bot))
-    if (max(0.d0,dble(nreversalsb-max_curv_reverse_bot)) > 0.d0) penalty_info = trim(penalty_info) // ' maxReversal'
-
-    ! Calculate geometry objective based on the assessed quality (pertubation)
-    if (do_smoothing) then 
-      ! add a empirical base value - pertubation can be quite volatile
-      geo_objective_function = geo_objective_function +                           &
-        (10.d0 + perturbation_top + perturbation_bot) * weighting_smoothing * scale_pertubation
-    end if 
-
-    ! Speedup - early exit if there are too many reversals 
-    if ( (penaltyval > epsexit) .and. penalize ) then
-      aero_objective_function = penaltyval*1.0D+06
-      return
-    end if
-  end if
-
-! Show surface quality for entertainment and info
-  if (show_details .and. do_smoothing) then
-    write (*,*)
-    call assess_surface ('Top', .true., max_curv_reverse_top, xseedt, zt_new, nreversalst, perturbation_top)
-    call assess_surface ('Bot', .true., max_curv_reverse_bot, xseedb, zb_new, nreversalsb, perturbation_bot)
-  end if
-
-! jx-mod Smoothing ---- End  -----------------------------------------------------------
-
-
 ! Format coordinates in a single loop in derived type. Also remove translation
 ! and scaling to ensure Cm_x=0.25 doesn't change.
 
@@ -276,9 +240,14 @@ function aero_objective_function(designvars, include_penalty)
   end do
 
 
-! Check geometry before running Xfoil: growth rates, LE and TE angles, etc.
+!----------------------------------------------------------------------------------------------------
+! Check geometry contraints  - resulting in penalties added to objective function 
+!----------------------------------------------------------------------------------------------------
 
-!  penaltyval = 0.d0
+
+  penaltyval   = 0.d0
+  penalty_info = ''                            ! user info on the type of penalities given
+
   maxgrowth = 0.d0
 
   len1 = sqrt((curr_foil%x(2)-curr_foil%x(1))**2.d0 +                          &
@@ -453,12 +422,86 @@ function aero_objective_function(designvars, include_penalty)
     dvcounter = dvcounter + 1
   end do
 
-! Exit if geometry and flap angles don't check out
 
-  if ( (penaltyval > epsexit) .and. penalize ) then
-    aero_objective_function = penaltyval*1.0D+06
+! next checks need xfoil geo routines...
+
+  call xfoil_set_airfoil(curr_foil)
+  call xfoil_geometry_info(maxt, xmaxt, maxc, xmaxc)
+  maxpanang = xfoil_geometry_amax()
+
+! Add penalty for too large panel angle
+!     Due to numerical issues (?) it happens, that the final maxpanang ist greater 25.
+
+  if (max(0.0d0,maxpanang-30.d0) > 0.d0) then
+    ! strong penality - will abort 
+    penaltyval = penaltyval + max(0.0d0,maxpanang-30.d0)/5.d0
+  else
+    if ((max(0.0d0,maxpanang-29.5d0) > 0.d0) .and. penalize) then
+      ! do not check if camb-thick - it couldn't be solved...
+      if (trim(shape_functions) /= 'camb-thick') then
+          ! weak penalty to avoid getting too close to cut off at 25.0 
+        penaltyval   = penaltyval + max(0.0d0,maxpanang-29.5d0) * 2.d0  *  epsupdate  ! max 1%
+        penalty_info = trim(penalty_info) // ' MxAng'
+      end if 
+    end if
+  end if
+
+! Add penalty for camber outside of constraints
+
+  penaltyval = penaltyval + max(0.d0,maxc-max_camber)/0.025d0
+  penaltyval = penaltyval + max(0.d0,min_camber-maxc)/0.025d0
+  if (max(0.d0,maxc-max_camber) > 0.d0) penalty_info = trim(penalty_info) // ' MxCmb'
+  if (max(0.d0,min_camber-maxc) > 0.d0) penalty_info = trim(penalty_info) // ' MiCmb'
+
+
+! Exit if penalties are too high (airfoil is already now a looser)
+!   ... or if only geometry constraints should be checjed (for initial designs)
+
+  if (( (penaltyval > epsexit) .and. penalize ) .or. only_geo_penalty) then
+    aero_objective_function = 1d0 + penaltyval*1.0D+06
     return
   end if
+
+!----------------------------------------------------------------------------------------------------
+! Smoothing  - evaluate contribution to gow objective function 
+!----------------------------------------------------------------------------------------------------
+
+  geo_objective_function  = 0.d0                
+
+  if (do_smoothing) then
+
+    if (show_details .and. penalize ) then 
+       write (*,*)
+       call assess_surface ('Top', .true., max_curv_reverse_top, xseedt, zt_new, nreversalst, perturbation_top)
+       call assess_surface ('Bot', .true., max_curv_reverse_bot, xseedb, zb_new, nreversalsb, perturbation_bot)
+    else   
+      ! Check surface for pertubation (ups and downs) and number of reversals
+      call assess_surface ('Top', .false., max_curv_reverse_top, xseedt, zt_new, nreversalst, perturbation_top)
+      call assess_surface ('Bot', .false., max_curv_reverse_bot, xseedb, zb_new, nreversalsb, perturbation_bot)
+    end if 
+
+    ! Calculate geometry objective based on the assessed quality (pertubation)
+      ! add a empirical base value - pertubation can be quite volatile
+    cur_value = (10.d0 + perturbation_top + perturbation_bot)
+    increment = cur_value * scale_pertubation
+    geo_objective_function = geo_objective_function +  increment * weighting_smoothing 
+    if (show_details .and. penalize ) then
+      write (*,'(31x,A,F8.2,A)') 'Contribution of surface assessment: ', (1d0 -increment) * weighting_smoothing * 100d0,'%'
+      write (*,*) 
+    end if 
+  end if
+
+
+!----------------------------------------------------------------------------------------------------
+! Finally evaluate aerodynamic objective function  
+!----------------------------------------------------------------------------------------------------
+
+! Init infos for show_details entertainment 
+
+  op_opt_info%obj          = 1d0               
+  op_opt_info%weighting    = 0d0               
+  op_opt_info%change       = -999d0               
+  op_opt_info%penalty_info = ''    
 
 ! Analyze airfoil at requested operating conditions with Xfoil
 
@@ -469,37 +512,6 @@ function aero_objective_function(designvars, include_penalty)
                  moment, viscrms, alpha, xtrt, xtrb, ncrit_pt)
 
  
-! Add penalty for too large panel angle
-! jx-mod Due to numerical issues (?) it happens, that the final AMAX ist greater 25.
-!        do not check if camb-thick - it couldn't be solved...
-!        ... increased to 30
-  if (max(0.0d0,AMAX-30.d0) > 0.d0) then
-    ! strong penality - will abort 
-    penaltyval = penaltyval + max(0.0d0,AMAX-30.d0)/5.d0
-  else
-    if ((max(0.0d0,AMAX-29.5d0) > 0.d0) .and. penalize) then
-      if (trim(shape_functions) /= 'camb-thick') then
-          ! weak penalty to avoid getting too close to cut off at 25.0 
-        penaltyval   = penaltyval + max(0.0d0,AMAX-29.5d0) * 2.d0  *  epsupdate  ! max 1%
-        penalty_info = trim(penalty_info) // ' MxAng'
-      end if 
-    end if
-  end if
-
-! Add penalty for camber outside of constraints
-
-  penaltyval = penaltyval + max(0.d0,CAMBR-max_camber)/0.025d0
-  penaltyval = penaltyval + max(0.d0,min_camber-CAMBR)/0.025d0
-  if (max(0.d0,CAMBR-max_camber) > 0.d0) penalty_info = trim(penalty_info) // ' MxCmb'
-  if (max(0.d0,min_camber-CAMBR) > 0.d0) penalty_info = trim(penalty_info) // ' MiCmb'
-
-
-! Exit if panel angles and camber constraints don't check out
-
-  if ( (penaltyval > epsexit) .and. penalize ) then
-    aero_objective_function = penaltyval*1.0D+06
-    return
-  end if
 
 ! Determine if op points need to be checked for xfoil consistency
 ! jx-mod --> removed all re-check stuff!
@@ -657,9 +669,11 @@ function aero_objective_function(designvars, include_penalty)
   end do
 
 
-! jx-mod Geo targets - Start --------------------------------------------
+!----------------------------------------------------------------------------------------------------
+! Evaluate geometric objective function  
+!----------------------------------------------------------------------------------------------------
 
-! Evaluate current value of geomtry targets - calculate geo_objective 
+  ! Evaluate current value of geomtry targets 
   do i = 1, ngeo_targets
 
     select case (trim(geo_targets(i)%type))
@@ -670,7 +684,7 @@ function aero_objective_function(designvars, include_penalty)
       case ('Thickness')      ! take foil thickness calculated above
         cur_value = maxthick
       case ('Camber')         ! take foil camber from xfoil above
-        cur_value = CAMBR
+        cur_value = maxc
       case default
         call my_stop("Unknown target_type '"//trim(geo_targets(i)%type))
     end select
@@ -688,30 +702,29 @@ function aero_objective_function(designvars, include_penalty)
 
   end do 
 
-! jx-mod Geo targets - end ------------------------------------------------
-  
-! jx-mod Show surface quality for entertainment and info
-!          about objectives at the end of iteration 
-  if (show_details) then
-    call show_op_point_contributions ( (aero_objective_function+geo_objective_function) , & 
-                                        noppoint,     op_opt_info,                        &
-                                        ngeo_targets, geo_opt_info,                       &
-                                        (penaltyval*1.0D+06), penalty_info )                          
-  end if
 
-! jx-mod Exit wenn flip
 
-  if ( (penaltyval > epsexit) .and. penalize ) then
-    aero_objective_function = penaltyval * 1.0D+06
-    return
-  end if                           
+! Geo objective  - add to aero target for final objective function
 
-! jx-mod Geo targets - add to aero target for final objective function
   aero_objective_function = aero_objective_function + geo_objective_function
 
-! Add all penalties to objective function, and make them very large
-  if (penalize) aero_objective_function =                                      &
-                aero_objective_function + penaltyval*1.0D+06
+  
+! Show surface quality for entertainment and info
+!          about objectives at the end of iteration 
+  if (show_details .and. penalize) then
+    call show_op_point_contributions ( aero_objective_function,                          & 
+                                       noppoint,     op_opt_info,                        &
+                                       ngeo_targets, geo_opt_info,                       &
+                                       (penaltyval*1.0D+06), penalty_info )                          
+  end if
+
+
+! Finally handle penalties - Add all penalties to objective function, and make them very large
+
+  if (penalize ) then
+    aero_objective_function = aero_objective_function + penaltyval*1.0D+06
+  end if                           
+
 
 end function aero_objective_function
 

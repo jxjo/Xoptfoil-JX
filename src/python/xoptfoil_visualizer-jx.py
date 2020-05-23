@@ -38,7 +38,7 @@ plotoptions = dict(show_seed_airfoil = True,
                    save_animation_frames = False,
                    color_for_seed = "blue",
                    color_for_new_designs = "red",
-                   monitor_update_interval = 10)
+                   monitor_update_interval = 5)
 
 ################################################################################
 #
@@ -441,7 +441,7 @@ def plot_airfoil_coordinates(seedfoil, matchfoil, designfoils, plotnum, firsttim
   plot_foil       = not plotoptions["show_seed_airfoil_only"]
 
   show_info       = plotoptions["show_airfoil_info"]
-  show_transition = False                # show transition points 
+  show_transition = True                 # show transition points 
 
   sc = plotoptions["color_for_seed"]
   nc = plotoptions["color_for_new_designs"]
@@ -480,7 +480,7 @@ def plot_airfoil_coordinates(seedfoil, matchfoil, designfoils, plotnum, firsttim
     mirrorax = ax.get_shared_x_axes().get_siblings(ax)[0]
     ax.clear()
     mirrorax.clear()
-    plt.cla()
+    # plt.cla()
 
 
   # Auto plotting bounds
@@ -602,7 +602,8 @@ def plot_airfoil_coordinates(seedfoil, matchfoil, designfoils, plotnum, firsttim
 
   if animation:
     if (firsttime): cfig.show()
-    else: plt.pause(0.0001)
+# jx-test - try without double refresh
+#    else: plt.pause(0.0001)
     cfig.canvas.draw()
 
     # Save animation frames if requested
@@ -629,12 +630,12 @@ def plot_points_of_transition (axes, x, y, xtrs, upperside = True):
       my_marker = 7
       y_text = 7
     else:
-      my_marker = 7
+      my_marker = 6
       y_text = -13
 
     axes.plot([x[i_nearest]], [y[i_nearest]], marker=my_marker, fillstyle='none', markersize=7, color="grey")
     axes.annotate(('{:d}'.format(i+1)), xy = (x[i_nearest], y[i_nearest]), 
-                  xytext = (-3,y_text), textcoords="offset points", fontsize = 9, color="grey")
+                  xytext = (-3,y_text), textcoords="offset points", fontsize = 8, color='dimgrey')
 
 
 
@@ -805,9 +806,11 @@ def plot_polars(seedfoil, designfoils, plotnum, firsttime=True, animation=False,
     # show cd-value or flap anglein graph
     for i in range(len(foil.cl)): 
       if ((len(foil.flapangle) > 0) and (foil.flapangle[i] != 0) and show_flap_angle):
-        axarr[1].annotate(('f {:5.2f}'.format(foil.flapangle[i])), (cdmax - 0.29*cdrng, foil.cl[i]), fontsize = 9)
+        axarr[1].annotate(('f {:5.2f}'.format(foil.flapangle[i])), (cdmax - 0.29*cdrng, foil.cl[i]), 
+                          fontsize = 8,color='dimgrey')
       elif (show_cd_value):
-        axarr[1].annotate(('   cd {:5.4f}'.format(foil.cd[i])), (foil.cd[i], foil.cl[i]), fontsize = 9)
+        axarr[1].annotate(('{:5.4f}'.format(foil.cd[i])), (foil.cd[i], foil.cl[i]),
+                          xytext = (10,-4), textcoords="offset points", fontsize = 8, color='dimgrey')
 
   # set axis 
 
@@ -874,7 +877,8 @@ def plot_polars(seedfoil, designfoils, plotnum, firsttime=True, animation=False,
 
   if animation:
     if (firsttime): pfig.show()
-    else: plt.pause(0.0001)
+# jx-test - try without double refresh
+#    else: plt.pause(0.0001)
     pfig.canvas.draw()
 
     # Save animation frames if requested
@@ -916,9 +920,6 @@ def plot_optimization_history(steps, fmins, relfmins, rads, firsttime=True,
     mirrorax0.clear()
     axarr[1].clear()
 
-  plt.cla()
-
-
   # Plot optimization history
 
   axarr[0].plot(steps, fmins, color='blue')
@@ -940,7 +941,8 @@ def plot_optimization_history(steps, fmins, relfmins, rads, firsttime=True,
 
   if animation:
     if (firsttime): ofig.show()
-    else: plt.pause(0.0001)
+# jx-test - try without double refresh
+#    else: plt.pause(0.0001)
     ofig.canvas.draw()
 
   return 
@@ -967,7 +969,7 @@ def plotting_menu(seedfoil, designfoils):
 
   # Load optimization history data if it's available
 
-  steps, fmins, relfmins, rads, ioerror = read_new_optimization_history()
+  steps, fmins, relfmins, rads = read_new_optimization_history()
 
   numfoils = len(designfoils)
   plotting_complete = False
@@ -1148,7 +1150,7 @@ def read_new_optimization_history(steps=None, fmins=None, relfmins=None,
       relfmins = np.append(relfmins, relfmin)
       rads = np.append(rads, rad)
 
-  return steps, fmins, relfmins, rads, ioerror
+  return steps, fmins, relfmins, rads
 
 ################################################################################
 # Gets boolean input from user
@@ -1381,12 +1383,10 @@ def main_menu(initialchoice, seedfoil, designfoils, prefix):
       # Show history window 
       if plotoptions["plot_optimization_history"]:
 
-        steps, fmins, relfmins, rads, ioerror = read_new_optimization_history()
+        steps, fmins, relfmins, rads = read_new_optimization_history()
 
         plot_optimization_history(steps, fmins, relfmins, rads, 
                   firsttime=True, prefix = prefix, animation=True)
-
-      steps, fmins, relfmins, rads, ioerror = read_new_optimization_history()
 
       for i in range(0, numfoils):
         if (i == 0): init = True
@@ -1411,6 +1411,8 @@ def main_menu(initialchoice, seedfoil, designfoils, prefix):
           plot_polars(seedfoil, designfoils, i+1, 
                              firsttime=init, animation=True, prefix=imagepref) 
 
+        plt.pause(0.1)
+
     # Monitor optimization progress
 
     elif (choice == "3"):
@@ -1431,7 +1433,7 @@ def main_menu(initialchoice, seedfoil, designfoils, prefix):
       if not initialchoice:                       # if choice from command line do not re-read data
         seedfoil, designfoils, ioerror = load_airfoils_from_file(coordfilename, polarfilename)
       
-      steps, fmins, relfmins, rads, ioerror = read_new_optimization_history()
+      steps, fmins, relfmins, rads = read_new_optimization_history()
 
       # Periodically read data and update plot
 
@@ -1448,12 +1450,15 @@ def main_menu(initialchoice, seedfoil, designfoils, prefix):
           if plotoptions["plot_airfoils"]:
             plot_airfoil_coordinates(seedfoil, matchfoil, designfoils, numfoils, 
                                       firsttime=init, animation=True, prefix = prefix)
+            plt.pause(0.01)
           if plotoptions["plot_polars"]:
             plot_polars(seedfoil, designfoils, numfoils,
                                       firsttime=init, animation=True, prefix = prefix)
+            plt.pause(0.01)
           if plotoptions["plot_optimization_history"]:
             plot_optimization_history(steps, fmins, relfmins, rads, 
                                       firsttime=init, prefix = prefix, animation=True)
+            plt.pause(0.01)
 
           init = False
 
@@ -1463,7 +1468,7 @@ def main_menu(initialchoice, seedfoil, designfoils, prefix):
         # Update airfoil and optimization data
         seedfoil, designfoils, ioerror = read_new_airfoil_data(seedfoil,
                                                             designfoils, prefix)
-        steps, fmins, relfmins, rads, ioerror = read_new_optimization_history(
+        steps, fmins, relfmins, rads  = read_new_optimization_history(
                                                    steps, fmins, relfmins, rads)
 
         # Check for stop_monitoring in run_control file

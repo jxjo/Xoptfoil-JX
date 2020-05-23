@@ -111,8 +111,9 @@ subroutine initial_designs(dv, objval, fevals, objfunc, xmin, xmax, use_x0,    &
   integer, intent(in) :: attempts
 
   interface
-    double precision function objfunc(x)
+    double precision function objfunc(x, evaluate_only_geometry)
       double precision, dimension(:), intent(in) :: x
+      logical, intent(in), optional :: evaluate_only_geometry
     end function
   end interface
 
@@ -146,18 +147,18 @@ subroutine initial_designs(dv, objval, fevals, objfunc, xmin, xmax, use_x0,    &
 
   if (use_x0) then
     dv(:,1) = x0
-    objval(1) = objfunc(x0)
+    objval(1) = objfunc(x0, .true.)         ! evaluate only geomtry
 !$omp do
     do i = 2, pop
       dv(:,i) = maxval(xmax - xmin)*dv(:,i) + xmin
-      objval(i) = objfunc(dv(:,i))
+      objval(i) = objfunc(dv(:,i), .true.)  ! evaluate only geomtry
     end do
 !$omp end do
   else
 !$omp do
     do i = 1, pop
       dv(:,i) = maxval(xmax - xmin)*dv(:,i) + xmin
-      objval(i) = objfunc(dv(:,i))
+      objval(i) = objfunc(dv(:,i), .true.)  ! evaluate only geomtry
     end do
 !$omp end do
   end if
@@ -190,7 +191,7 @@ subroutine initial_designs(dv, objval, fevals, objfunc, xmin, xmax, use_x0,    &
                (objval(i) >= feasible_limit))
         call random_number(randvec1)
         dv(:,i) = maxval(xmax - xmin)*randvec1 + xmin
-        objval(i) = objfunc(dv(:,i))
+        objval(i) = objfunc(dv(:,i), .true.)
         if (objval(i) < minstore) then
           minstore = objval(i)
           designstore = dv(:,i)

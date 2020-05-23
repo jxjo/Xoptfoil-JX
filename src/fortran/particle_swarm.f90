@@ -68,15 +68,17 @@ subroutine particleswarm(xopt, fmin, step, fevals, objfunc, x0, xmin, xmax,    &
   use math_deps,         only : norm_2
   use optimization_util, only : init_random_seed, initial_designs,             &
                                 design_radius, write_design, read_run_control
-  use vardef,            only: do_smoothing
+
+  use os_util,           only: COLOR_GOOD, COLOR_NORMAL, print_colored
 
   double precision, dimension(:), intent(inout) :: xopt
   double precision, intent(out) :: fmin
   integer, intent(out) :: step, fevals
 
   interface
-    double precision function objfunc(x)
+    double precision function objfunc(x, evaluate_only_geometry)
       double precision, dimension(:), intent(in) :: x
+      logical, intent(in), optional :: evaluate_only_geometry
     end function
   end interface
   
@@ -108,12 +110,9 @@ subroutine particleswarm(xopt, fmin, step, fevals, objfunc, x0, xmin, xmax,    &
   logical :: use_x0, converged, signal_progress, new_history_file
   character(11) :: stepchar
   character(20) :: fminchar, radchar
-  character(25) :: relfminchar
+  character(25) :: relfminchar, outstring
   character(80), dimension(20) :: commands
   
-! jx-mod Smoothing - save do_smoothing status
-  logical :: save_do_smoothing
-
 
   nconstrained = size(constrained_dvs,1)
 
@@ -167,11 +166,7 @@ subroutine particleswarm(xopt, fmin, step, fevals, objfunc, x0, xmin, xmax,    &
     f0_ref = f0
   end if
 
-! jx-mod Smoothing - switch off smoothing for initial designs 
-  save_do_smoothing = do_smoothing
-  do_smoothing = .false.
-
-  ! Open particle file
+! Open particle file
   call pso_open_particlefile(pso_options%write_particlefile, particleunit)
     
 !$omp parallel default(shared) private(i, j, var)
@@ -269,9 +264,6 @@ subroutine particleswarm(xopt, fmin, step, fevals, objfunc, x0, xmin, xmax,    &
   end if
 
 ! Begin optimization
-
-  ! jx-mod Smoothing - switch back smoothing to original value
-  do_smoothing = save_do_smoothing
 
   restartcounter = 1
   converged = .false.
@@ -371,11 +363,20 @@ subroutine particleswarm(xopt, fmin, step, fevals, objfunc, x0, xmin, xmax,    &
 !   Display progress 
 
     radius = design_radius(dv)
-    write(*,'(A12,I5)')   ' Iteration: ', step
-    write(*,'(A27,F9.6)') '   Objective function:    ', fmin
-    if (pso_options%relative_fmin_report) write(*,'(A27,F9.6,A1)')             &
-                        '   Improvement over seed: ', (f0 - fmin)/f0*100.d0, '%'
-    write(*,'(A27,ES10.3)') '   Design radius:         ', radius
+    write (*,*)
+    write(*,'(1x,A,I5)'   , advance ='no') 'Iteration: ', step
+    write(*,'(A20,ES10.3)', advance ='no') 'Design radius: ', radius
+    write(*,'(A30,F9.6)'  , advance ='no') 'Objective function: ', fmin
+    if (pso_options%relative_fmin_report) then
+      write(*,'(A)', advance ='no') '  --> '
+      write(outstring,'(F9.6,A1)') (f0 - fmin)/f0*100.d0, '%'
+      if (signal_progress) then 
+        call print_colored (COLOR_GOOD,   trim(outstring))
+      else 
+        call print_colored (COLOR_NORMAL, trim(outstring))
+      end if
+    end if 
+    write (*,*)
 
 !   Write design to file if requested
 !   converterfunc is an optional function supplied to convert design variables

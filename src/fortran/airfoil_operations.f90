@@ -745,7 +745,7 @@ subroutine assess_surface (info, show_it, max_curv_reverse, x, y, nreversals2, p
                     + 0.03d0 * max(0.d0,dble(nspikes - max_spikes))
 
   if ( show_it ) then       
-    write (*,'(10x,A,1x,3(I2,A),A)') info//'  ', nreversals2, 'R ', &
+    write (*,'(11x,A,1x,3(I2,A),A)') info//' ', nreversals2, 'R ', &
       nhighlows2, 'HL ', nspikes, 's ', '  '// result_info
   end if
 

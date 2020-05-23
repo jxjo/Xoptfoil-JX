@@ -92,30 +92,26 @@ subroutine check_seed()
 
   if (do_smoothing) then
 
-    call check_surface_and_smooth ('Top', max_curv_reverse_top, nptt, xseedt, zseedt)
-    call check_surface_and_smooth ('Bot', max_curv_reverse_bot, nptb, xseedb, zseedb)
+    call assess_surface ('Top', .true., max_curv_reverse_top, xseedt, zseedt, nreversalst, perturbation_top)
+    call assess_surface ('Bot', .true., max_curv_reverse_bot, xseedb, zseedb, nreversalsb, perturbation_bot)
 
-    call assess_surface ('Top', .false., max_curv_reverse_top, xseedt, zseedt, nreversalst, perturbation_top)
-    call assess_surface ('Bot', .false., max_curv_reverse_bot, xseedb, zseedb, nreversalsb, perturbation_bot)
+    write (*,'(1x,A)') 'Smoothing ...'
 
-    if (trim(shape_functions) == 'camb-thick') then
-      write (*,*)
-      write (*,*) "Info: Because of shape_functions ='camb-thick' smoothing will be switched off during optimization!"
-      write (*,*)
-      do_smoothing = .false.
-    end if
+    call smooth_it (xseedt, zseedt)
+    call smooth_it (xseedb, xseedb)
 
-  end if
+    call assess_surface ('Top', .true., max_curv_reverse_top, xseedt, zseedt, nreversalst, perturbation_top)
+    call assess_surface ('Bot', .true., max_curv_reverse_bot, xseedb, zseedb, nreversalsb, perturbation_bot)
+    write (*,*)
 
-  if (do_smoothing) then
     ! set scaling for pertubation of surface for smoothing being part of geo targets
     ! add a base value because pertubation is quite volatile
     scale_pertubation = 1.d0/(10.d0 + perturbation_top + perturbation_bot)
   else
-    scale_pertubation = 0.d0
-  end if
 
-! jx-mod Smoothig - end  -----------------------------------------------------------------
+    scale_pertubation = 0.d0
+
+  end if
 
 ! Get allowable panel growth rate
 
@@ -681,55 +677,6 @@ subroutine ask_stop(message)
 
 end subroutine ask_stop
 
-!------------------------------------------------------------------------------
-! jx-mod Smoothing - Additional functions - Start
-!------------------------------------------------------------------------------
-
-subroutine check_surface_and_smooth (info, maxreversals, npoints, x, y)
-
-  use math_deps, only : derivation2, derivation3
-  use airfoil_operations, only : smooth_it, assess_surface
-
-  integer, intent(in) :: npoints, maxreversals
-  character(*), intent(in) :: info
-  double precision, dimension(npoints), intent(inout) :: x, y
-
-  integer :: nreversals
-  character (1) :: answer
-  double precision, dimension(npoints) :: deriv2, deriv3, y_sav
-  double precision :: perturbation
-
-  nreversals = 99
-  answer = 'y'
-
-  ! store old value for output file
-  deriv2 = derivation2(npoints, x, y)
-  deriv3 = derivation3(npoints, x, y)
-  y_sav  = y
-
-
-  call assess_surface (info, .true., maxreversals, x, y, nreversals, perturbation)
-
-  if ((nreversals >= maxreversals) .or. (perturbation > 0.5d0)) then 
-    answer = ask_smoothing()
-    if (answer == 'y') then
-      write(*,*)
-
-      call smooth_it (x, y)
-      call assess_surface (info, .true., maxreversals, x, y, nreversals, perturbation)
-      write (*,*)
-
-      if ((nreversals <= maxreversals) .and. (perturbation < 0.5d0)) then 
-        write (*,'(1x,A)') info // ' ... succesfully smoothed'
-        write (*,*)
-      end if
-    end if  
-  end if
-
-  ! write data to a local csv file to visualize in Excel smoothing results 
-  ! call write_deriv_to_file (info, npoints, x, y_sav, deriv2, deriv3, y, derivation2(npoints, x, y), derivation3(npoints, x, y))
-
-end subroutine check_surface_and_smooth
 
 !-----------------------------------------------------------------------------
 ! Write smoothed derivations to file 
@@ -767,45 +714,7 @@ return
 901 write(*,*) "Warning: unable to open "//trim(smoothfile)//". Skipping ..."
   return
 
-
 end subroutine write_deriv_to_file
 
-!-----------------------------------------------------------------------------
-! Asks user for smoothing
-!-----------------------------------------------------------------------------
-function ask_smoothing()
-
-  character :: ask_smoothing
-  logical :: valid_choice
-
-! Get user input
-
-  valid_choice = .false.
-  do while (.not. valid_choice)
-  
-    write(*,*)
-    write(*,'(A)', advance='no') ' Spikes and reversals detected. Try to smooth? (y/n): '
-    read(*,'(A)') ask_smoothing
-
-    if ( (ask_smoothing == 'y') .or.                                  &
-         (ask_smoothing == 'Y') ) then
-      valid_choice = .true.
-      ask_smoothing = 'y'
-    else if ( (ask_smoothing == 'n') .or.                             &
-         (ask_smoothing == 'N') ) then
-      valid_choice = .true.
-      ask_smoothing = 'n'
-    else
-      write(*,'(A)') ' Please enter y or n.'
-      valid_choice = .false.
-    end if
-
-  end do
-
-end function ask_smoothing
-
-!------------------------------------------------------------------------------
-! jx-mod Smoothing - Additional functions - End
-!------------------------------------------------------------------------------
 
 end module input_sanity

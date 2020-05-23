@@ -93,8 +93,9 @@ subroutine geneticalgorithm(xopt, fmin, step, fevals, objfunc, x0, xmin, xmax, &
   integer, intent(out) :: step, fevals
 
   interface
-    double precision function objfunc(x)
+    double precision function objfunc(x, evaluate_only_geometry)
       double precision, dimension(:), intent(in) :: x
+      logical, intent(in), optional :: evaluate_only_geometry
     end function
   end interface
 
