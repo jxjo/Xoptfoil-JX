@@ -31,7 +31,8 @@ program xfoil_worker
 #endif
 
   type(airfoil_type) :: foil
-  character(80)      :: input_file, output_prefix, action, airfoil_filename
+  character(255)     :: input_file, output_prefix, airfoil_filename
+  character(20)      :: action
 
   write(*,'(A)') 
   write(*,'(A)') 'Xfoil_Worker      Version '//trim(PACKAGE_VERSION)//  &
@@ -170,13 +171,13 @@ end subroutine read_worker_clo
 subroutine print_worker_usage()
 
   write(*,'(A)')
-  write(*,'(A)') "Usage: Xfoil_worker -w worker_action [OPTION]"
+  write(*,'(A)') "Usage: Xfoil_worker -w worker_action [Options]"
   write(*,'(A)')
   write(*,'(A)') "  -w worker_action Specify an action e.g. polar"
   write(*,'(A)')
   write(*,'(A)') "Options:"
-  write(*,'(A)') "  -i input_file     Specify a non-default input file"
-  write(*,'(A)') "  -o output_prefix  Specify a non-default output prefix"
+  write(*,'(A)') "  -i input_file     Specify an input file (default: 'inputs.txt')"
+  write(*,'(A)') "  -o output_prefix  Specify an output prefix (default: 'foil')"
   write(*,'(A)') "  -r xxxxxx         Specify a default reynolds number (re_default)"
   write(*,'(A)') "  -a airfoil_file   Specify filename of seed airfoil"
   write(*,'(A)') "  -h, --help        Display usage information and exit"
