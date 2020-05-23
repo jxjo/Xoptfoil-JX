@@ -178,8 +178,21 @@ class inputFile:
 
 
     def writeToFile(self, fileName):
+        # delete 'name'
+        operatingConditions = self.values["operating_conditions"]
+        operatingConditionsBackup = operatingConditions.copy()
+        print operatingConditionsBackup
+        del(operatingConditions['name'])
+        print operatingConditionsBackup
+        self.values["operating_conditions"] = operatingConditions
+
+        # write to file
         print("writing input-file %s..." % fileName)
         f90nml.write(self.values, fileName, True)
+
+        # restore 'name'
+        self.values["operating_conditions"] = operatingConditionsBackup.copy()
+        print operatingConditionsBackup
         print("Done.")
 
 
@@ -438,10 +451,11 @@ class polarData:
         print("plotting polar of airfoil %s at Re = %.0f..."
                        % (self.airfoilname, self.Re))
 
+        # set 'dark' style
         plt.style.use('dark_background')
-        #plt.autoscale(enable=True, axis='both', tight=None)
+
+        # setup subplots
         fig, (upper,lower) = plt.subplots(2,2)
-        #plt.autoscale(enable=True, axis='both', tight=True)
 
         if (self.polarType == 2):
             text = ("Analysis of root-airfoil \"%s\" at ReSqrt(Cl) = %d, Type %d polar" %
@@ -614,13 +628,19 @@ def generate_commandlines(params):
     commandLines.append(commandline)
 
     #copy rootfoil to output-folder
-    commandline = "copy ..\\%s\\%s %s\n" % \
+    commandline = ("copy .." + bs +"%s"+ bs + "%s %s\n") % \
     (params.inputFolder, rootFoilName+'.dat', rootFoilName +'.dat')
     commandLines.append(commandline)
 
     #copy root-airfoil to airfoil-folder
-    commandline = "copy %s %s\\%s\n" % \
+    commandline = ("copy %s %s" + bs + "%s\n") % \
     (rootFoilName+'.dat', params.airfoilFolder, rootFoilName +'.dat')
+    commandLines.append(commandline)
+
+    #copy input-file to output-folder
+    inputfile = params.strakInputFileName
+    commandline = ("copy .." + bs +"%s"+ bs + "%s %s\n") % \
+                             (params.inputFolder, inputfile, inputfile)
     commandLines.append(commandline)
 
     for chord in params.wingData.get('chordLengths'):
@@ -637,8 +657,8 @@ def generate_commandlines(params):
             strakFoilName = get_FoilName(params.wingData, idx)
 
             #set input-file name for Xoptfoil
-            iFile =  '../' + params.inputFolder + '/'
-            iFile =  iFile + params.strakInputFileName
+            #iFile =  '..' + bs + params.inputFolder + bs
+            iFile = params.strakInputFileName
 
             # generate Xoptfoil-commandline
             commandline = "xoptfoil-jx -i %s -r %d -a %s.dat -o %s\n" %\
@@ -648,7 +668,7 @@ def generate_commandlines(params):
             ReList.append(ReSqrtCl)
 
             #copy strak-airfoil to airfoil-folder
-            commandline = "copy %s %s\\%s\n" % \
+            commandline = ("copy %s %s" + bs +"%s\n") % \
             (strakFoilName +'.dat', params.airfoilFolder, strakFoilName +'.dat')
             commandLines.append(commandline)
 

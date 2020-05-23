@@ -12,14 +12,12 @@
 &operating_conditions
     re_default_as_resqrtcl = .true.
     noppoint = 7
-    name = 'speed_neg', 'speed', 'bubble', 'helper', 'maxGlide', 'keepGlide',
-           'alphaClmax'
     op_mode = 'spec-cl', 'spec-cl', 'spec-cl', 'spec-cl', 'spec-cl', 'spec-cl',
               'spec-al'
-    op_point = -0.1, 0.05, 0.15, 0.5765, 0.6265, 0.6765, 0.9866
+    op_point = -0.1, 0.05, 0.15, 0.6659, 0.7159, 0.7659, 1.0878
     optimization_type = 'min-drag', 'min-drag', 'min-drag', 'min-drag',
                         'min-glide-slope', 'target-drag', 'target-lift'
-    target_value = , , , , , -1, 8.5
+    target_value = , , , , , -1, 9.75
     weighting = 0.3, 0.9, 1.1, 0.01, 0.8, 0.9, 0.5
 /
 
