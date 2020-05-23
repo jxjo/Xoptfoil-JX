@@ -1,8 +1,17 @@
 {
- "inputFolder": "ressources",
- "outputFolder": "build",
- "XMLfileName": "plane.xml",
- "ReSqrtCl": "150000",
- "strakInputFileName": "iFX-strak.txt",
- "generateBatchfile": "true",
- "batchfileName": "make_FX_strak.bat"}
+      "strakType": "Acro", 
+      "batchfileName": "make_strak.bat", 
+      "outputFolder": "build", 
+      "strakInputFileName": "istrak.txt", 
+      "seedFoilName": "SD", 
+      "generateBatchfile": "true", 
+      "inputFolder": "ressources", 
+      "ReNumbers": [
+            220000,
+            190000, 
+            160000, 
+            130000, 
+            100000,
+            70500
+      ] 
+}

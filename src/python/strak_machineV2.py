@@ -54,8 +54,16 @@ strakdata = {
             "outputFolder": 'build',
             # name of XFLR5-xml-file
             "XMLfileName": 'wing.xml',
+            # Re-numbers of the strak
+            "ReNumbers": [150000, 130000, 110000, 90000],
+            # list of chord-lenghts
+            "chordlengths": [],
             # ReSqrtCl of root airfoil
             "ReSqrtCl": '150000',
+            # root airfoil name
+            "seedFoilName": 'rg15.dat',
+            # type of the strak that shall be developed
+            "strakType":  'F3F',
              # name of the xoptfoil-inputfile for strak-airfoil(s)
             "strakInputFileName": 'i-strak.txt',
             # generate batchfile for running Xoptfoil
@@ -178,8 +186,18 @@ class inputFile:
 
 
     def writeToFile(self, fileName):
+        # delete 'name'
+        operatingConditions = self.values["operating_conditions"]
+        operatingConditionsBackup = operatingConditions.copy()
+        del(operatingConditions['name'])
+        self.values["operating_conditions"] = operatingConditions
+
+        # write to file
         print("writing input-file %s..." % fileName)
         f90nml.write(self.values, fileName, True)
+
+        # restore 'name'
+        self.values["operating_conditions"] = operatingConditionsBackup.copy()
         print("Done.")
 
 
@@ -196,12 +214,14 @@ class strakData:
         self.xmlFileName = None
         self.strakInputFileName = 'i-strak.txt'
         self.ReSqrtCl = 150000
+        self.ReNumbers = []
         self.useWingPlanform = True
         self.fromRootAirfoil= True
         self.generateBatch = True
         self.batchfileName = 'make_strak.bat'
-        self.wingData = {}
+        self.wingData = None
         self.strakType = "F3F"
+        self.seedFoilName = ""
 
 
 ################################################################################
@@ -338,6 +358,9 @@ class polarData:
         for value in self.CL_Markers:
             self.CD_Markers.append(self.find_CD(value))
 
+        # FIXME remove last marker, it is a lift value
+        self.CL_Markers.pop()
+        self.CD_Markers.pop()
         #print(self.CL_Markers) Debug
         #print(self.CD_Markers) Debug
 
@@ -438,10 +461,11 @@ class polarData:
         print("plotting polar of airfoil %s at Re = %.0f..."
                        % (self.airfoilname, self.Re))
 
+        # set 'dark' style
         plt.style.use('dark_background')
-        #plt.autoscale(enable=True, axis='both', tight=None)
+
+        # setup subplots
         fig, (upper,lower) = plt.subplots(2,2)
-        #plt.autoscale(enable=True, axis='both', tight=True)
 
         if (self.polarType == 2):
             text = ("Analysis of root-airfoil \"%s\" at ReSqrt(Cl) = %d, Type %d polar" %
@@ -576,89 +600,134 @@ def read_planeDataFile(fileName):
 
 ################################################################################
 # function that gets the name of an airfoil
-def get_FoilName(wing, index):
+def get_FoilName(params, index):
 
-    # get airfoil-names from wing-dictionary
-    airfoilNames = wing.get('airfoilNames')
-    foilName = airfoilNames[index]
+    # is there wingdata available ?
+    if (params.wingData <> None):
+        # yes
+        wing = params.wingData
+        # get airfoil-names from wing-dictionary
+        airfoilNames = wing.get('airfoilNames')
+        foilName = airfoilNames[index]
+    else:
+        # compose foilname with seedfoilname and Re-number
+        Re = params.ReNumbers[index]
+        # strip .dat ending
+        foilName = params.seedFoilName.strip('.dat')
+
+        if (index == 0):
+            suffix = '-root'
+        else:
+            suffix = '-strak'
+
+        foilName = (foilName + "%s-%dk.dat") % (suffix,(Re/1000))
 
     return (foilName)
 
+################################################################################
+# function that gets the number of chords
+def get_NumberOfAirfoils(params):
 
+    # is there wingdata available ?
+    if (params.wingData <> None):
+        # get number of chords from wing-data
+        num = len(params.wingData.get('chordLengths'))
+    else:
+        # get number of chords from ReNumbers
+        num = len(params.ReNumbers)
+
+    return num
+
+
+################################################################################
+# function that returns a list of Re-numbers
+def get_ReList(params):
+    list = []
+    # is there wingdata available ?
+    if (params.wingData <> None):
+        # get list of all chord-lengths
+        chordLengths = params.wingData.get('chordLengths')
+        # get Re-number of root-airfoil
+        rootRe = params.ReNumbers[0]
+        # get chord-length of root-airfoil
+        rootChord = chordLengths[0]
+        # calculate list of Re-numbers
+        for chord in chordLengths:
+            Re = (rootRe * chord) / rootChord
+            list.append(Re)
+    else:
+        # get list of ReNumbers from params
+        list = params.ReNumbers
+
+    return list
 
 ################################################################################
 # function that generates commandlines to run Xoptfoil
 def generate_commandlines(params):
 
-    #create an empty list
+    # create an empty list of commandlines
     commandLines = []
-    ReList = []
-
-    # if strak-airfoil is created from root-airfoil, an example looks like THIS
-    # xoptfoil-jx -i iSD-strak.txt -r 190000 -a SD-root-22.dat    -o SD-strak-19
-    # xoptfoil-jx -i iSD-strak.txt -r 160000 -a SD-root-22.dat    -o SD-strak-16
-    # xoptfoil-jx -i iSD-strak.txt -r 130000 -a SD-root-22.dat    -o SD-strak-13
-    # xoptfoil-jx -i iSD-strak.txt -r 100000 -a SD-root-22.dat    -o SD-strak-10
-    # xoptfoil-jx -i iSD-strak.txt -r  70500 -a SD-root-22.dat    -o SD-strak-07
 
     # do some initializations / set local variables
-    rootFoilName = get_FoilName(params.wingData, 0)
-    numChords = len(params.wingData.get('chordLengths'))
-    ReSqrtCl = params.ReSqrtCl
-    prevChord = 0.0
-    ReSqrtCl_old = 0
-    idx = 1
+    seedFoilName = params.seedFoilName.strip('.dat') +'.dat'
+    numFoils = get_NumberOfAirfoils(params)
+    ReList = get_ReList(params)
 
     # change current working dir to output folder
     commandline = "cd %s\n" % params.outputFolder
     commandLines.append(commandline)
 
-    #copy rootfoil to output-folder
-    commandline = "copy ..\\%s\\%s %s\n" % \
-    (params.inputFolder, rootFoilName+'.dat', rootFoilName +'.dat')
+    # make directory for polars of root-airfoil
+    root_polar_dir = "%s_polars" % (get_FoilName(params, 0).strip('.dat'))
+    commandline = ("md %s\n") % root_polar_dir
     commandLines.append(commandline)
 
-    #copy root-airfoil to airfoil-folder
-    commandline = "copy %s %s\\%s\n" % \
-    (rootFoilName+'.dat', params.airfoilFolder, rootFoilName +'.dat')
+    # copy rootfoil polars
+    commandline = ("copy .."+bs+"foil_polars"+bs+"*.* %s"+bs+"*.*\n") %\
+                   root_polar_dir
     commandLines.append(commandline)
 
-    for chord in params.wingData.get('chordLengths'):
-        # skip the root airfoil
-        if (prevChord > 0.0):
-            # calculate new ReSqrtCl
-            ReSqrtCl = ReSqrtCl_old * (chord / prevChord)
+    # copy seedFoil with its original name to output-folder
+    commandline = ("copy .." + bs +"%s"+ bs + "%s %s\n") % \
+    (params.inputFolder, seedFoilName, seedFoilName)
+    commandLines.append(commandline)
 
-            if params.fromRootAirfoil:
-                rootFoilName = get_FoilName(params.wingData, 0)
-            else:
-                rootFoilName = get_FoilName(params.wingData, idx-1)
+    # copy master-input-file to output-folder
+    inputfile = params.strakInputFileName
+    commandline = ("copy .." + bs +"%s"+ bs + "%s %s\n") % \
+                             (params.inputFolder, inputfile, inputfile)
+    commandLines.append(commandline)
 
-            strakFoilName = get_FoilName(params.wingData, idx)
+    # rename seedfoil inside outputfolder
+    commandline = ("change_airfoilname.py -i .." + bs + params.inputFolder
+                + bs +"%s -o %s\n") % (seedFoilName, get_FoilName(params, 0))
+    commandLines.append(commandline)
 
-            #set input-file name for Xoptfoil
-            iFile =  '../' + params.inputFolder + '/'
-            iFile =  iFile + params.strakInputFileName
+    # copy (renamed) seedFoil to airfoil-folder as it can be used
+    # as the root airfoil without optimization
+    commandline = ("copy %s %s" + bs + "%s\n") % \
+    (get_FoilName(params, 0), params.airfoilFolder, get_FoilName(params, 0))
+    commandLines.append(commandline)
 
-            # generate Xoptfoil-commandline
-            commandline = "xoptfoil-jx -i %s -r %d -a %s.dat -o %s\n" %\
-                        (iFile, ReSqrtCl, rootFoilName, strakFoilName)
+    # add command-lines for each strak-airfoil
+    # skip the root airfoil (as it was already copied)
+    for i in range (1, numFoils):
+        # get name of the airfoil
+        strakFoilName = get_FoilName(params, i)
 
-            commandLines.append(commandline)
-            ReList.append(ReSqrtCl)
+        #set input-file name for Xoptfoil
+        iFile = params.strakInputFileName
 
-            #copy strak-airfoil to airfoil-folder
-            commandline = "copy %s %s\\%s\n" % \
-            (strakFoilName +'.dat', params.airfoilFolder, strakFoilName +'.dat')
-            commandLines.append(commandline)
+        # generate Xoptfoil-commandline
+        commandline = "xoptfoil-jx -i %s -r %d -a %s -o %s\n" %\
+                        (iFile, ReList[i], seedFoilName.strip('.dat') + '.dat',
+                         strakFoilName.strip('.dat'))
+        commandLines.append(commandline)
 
-            # set index to next airfoil
-            idx = idx + 1
-
-        # store actual chordLength and ReSqrtCl for calculations of next
-        # strak-airfoil
-        prevChord = chord
-        ReSqrtCl_old = ReSqrtCl
+        #copy strak-airfoil to airfoil-folder
+        commandline = ("copy %s %s" + bs +"%s\n") % \
+            (strakFoilName , params.airfoilFolder, strakFoilName)
+        commandLines.append(commandline)
 
     # change current working dir back
     commandline = "cd..\n"
@@ -749,10 +818,19 @@ def getParameters(dict):
                 % params.strakInputFileName)
 
     try:
-        params.ReSqrtCl = int(dict["ReSqrtCl"])
+        params.ReNumbers = dict["ReNumbers"]
     except:
-        print ('ReSqrtCl not specified, assuming default-value \'%d\'.' % params.ReSqrtCl)
+        print ('ReNumbers not specified, using no list of ReNumbers')
 
+    try:
+        params.seedFoilName = dict["seedFoilName"].strip('.dat')
+    except:
+        print ('seedFoilName not specified')
+
+    try:
+        params.strakType = dict["strakType"]
+    except:
+        print ('strakType not specified')
 
     return params
 
@@ -770,6 +848,22 @@ def getListOfFiles(dirName):
 
     return allFiles
 
+
+def getwingDataFromXML(params):
+
+    xmlFileName = params.inputFolder + '/' + params.xmlFileName
+    try:
+        planeData = read_planeDataFile(xmlFileName)
+    except:
+        print("Error, file \"%s\" could not be opened.") % xmlFileName
+        exit(-1)
+
+    # return data
+    print planeData[0]
+    return planeData[0]
+
+def getwingDataFromParams(params):
+    return
 ################################################################################
 # Main program
 if __name__ == "__main__":
@@ -781,8 +875,10 @@ if __name__ == "__main__":
     pathname = os.path.dirname(sys.argv[0])
     scriptPath = os.path.abspath(pathname)
 
-    #debug
-    #json.dump(strakdata, open("strakdata.txt",'w'))
+##    #debug
+##    out_file = open("strakdata.txt",'w')
+##    json.dump(strakdata, out_file, indent = 6)
+##    out_file.close()
 
     # try to open .json-file
     try:
@@ -806,15 +902,7 @@ if __name__ == "__main__":
 
     # read plane-data from XML-File, if requested //TODO: only wing-data
     if (params.xmlFileName != None):
-        try:
-            xmlFileName = params.inputFolder + '/' + params.xmlFileName
-            planeData = read_planeDataFile(xmlFileName)
-        except:
-            print("Error, file \"%s\" could not be opened.") % xmlFileName
-            exit(-1)
-
-    # add wing-data to params
-    params.wingData = planeData[0]
+        params.wingData = getwingDataFromXML(params)
 
     # compose name of the folder, where the airfoils shall be stored
     params.airfoilFolder = 'airfoils'
@@ -846,14 +934,14 @@ if __name__ == "__main__":
     # strak-Type
     newInputFile = inputFile(scriptPath, params.strakType)
 
-    # generate polar of root-airfoil:
+    # generate polar of seedfoil / root-airfoil:
     # get name of root-airfoil
-    rootfoilName = get_FoilName(params.wingData, 0) + ".dat"
+    seedFoilName = params.seedFoilName.strip('.dat')+ '.dat'
 
-    print("Generating polar for airfoil %s" % rootfoilName)
+    print("Generating polar for airfoil %s" % seedFoilName)
 
     # compose string for system-call of XFOIL-worker
-    airfoilName = workingDir + bs + params.inputFolder + bs + rootfoilName
+    airfoilName = workingDir + bs + params.inputFolder + bs + seedFoilName
     systemString = "xfoil_worker.exe -i %s -w polar -a %s -r %d" % (
            newInputFile.getPresetInputFileName(), airfoilName, ReList[0])
 

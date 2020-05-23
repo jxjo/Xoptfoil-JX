@@ -46,8 +46,8 @@
                     <x_panel_distribution>COSINE</x_panel_distribution>
                     <y_number_of_panels>5</y_number_of_panels>
                     <y_panel_distribution>UNIFORM</y_panel_distribution>
-                    <Left_Side_FoilName>HN-785SR</Left_Side_FoilName>
-                    <Right_Side_FoilName>HN-785SR</Right_Side_FoilName>
+                    <Left_Side_FoilName>rg15_1</Left_Side_FoilName>
+                    <Right_Side_FoilName>rg15_1</Right_Side_FoilName>
                 </Section>
                 <Section>
                     <y_position>  0.676335</y_position>
@@ -59,8 +59,8 @@
                     <x_panel_distribution>COSINE</x_panel_distribution>
                     <y_number_of_panels>5</y_number_of_panels>
                     <y_panel_distribution>UNIFORM</y_panel_distribution>
-                    <Left_Side_FoilName>JX-FXrcn_2</Left_Side_FoilName>
-                    <Right_Side_FoilName>JX-FXrcn_2</Right_Side_FoilName>
+                    <Left_Side_FoilName>rg_15_2</Left_Side_FoilName>
+                    <Right_Side_FoilName>rg_15_2</Right_Side_FoilName>
                 </Section>
                 <Section>
                     <y_position>  0.927399</y_position>
@@ -72,8 +72,8 @@
                     <x_panel_distribution>COSINE</x_panel_distribution>
                     <y_number_of_panels>5</y_number_of_panels>
                     <y_panel_distribution>UNIFORM</y_panel_distribution>
-                    <Left_Side_FoilName>JX-FXrcn_3</Left_Side_FoilName>
-                    <Right_Side_FoilName>JX-FXrcn_3</Right_Side_FoilName>
+                    <Left_Side_FoilName>rg_15_3</Left_Side_FoilName>
+                    <Right_Side_FoilName>rg_15_3</Right_Side_FoilName>
                 </Section>
                 <Section>
                     <y_position>  1.099685</y_position>
@@ -85,8 +85,8 @@
                     <x_panel_distribution>COSINE</x_panel_distribution>
                     <y_number_of_panels>5</y_number_of_panels>
                     <y_panel_distribution>UNIFORM</y_panel_distribution>
-                    <Left_Side_FoilName>JX-FXrcn_4</Left_Side_FoilName>
-                    <Right_Side_FoilName>JX-FXrcn_4</Right_Side_FoilName>
+                    <Left_Side_FoilName>rg_15_4</Left_Side_FoilName>
+                    <Right_Side_FoilName>rg_15_4</Right_Side_FoilName>
                 </Section>
                 <Section>
                     <y_position>  1.226498</y_position>
@@ -98,8 +98,8 @@
                     <x_panel_distribution>COSINE</x_panel_distribution>
                     <y_number_of_panels>5</y_number_of_panels>
                     <y_panel_distribution>UNIFORM</y_panel_distribution>
-                    <Left_Side_FoilName>JX-FXrcn_5</Left_Side_FoilName>
-                    <Right_Side_FoilName>JX-FXrcn_5</Right_Side_FoilName>
+                    <Left_Side_FoilName>rg_15_5</Left_Side_FoilName>
+                    <Right_Side_FoilName>rg_15_5</Right_Side_FoilName>
                 </Section>
                 <Section>
                     <y_position>  1.321928</y_position>
@@ -111,8 +111,8 @@
                     <x_panel_distribution>COSINE</x_panel_distribution>
                     <y_number_of_panels>5</y_number_of_panels>
                     <y_panel_distribution>UNIFORM</y_panel_distribution>
-                    <Left_Side_FoilName>JX-FXrcn_6</Left_Side_FoilName>
-                    <Right_Side_FoilName>JX-FXrcn_6</Right_Side_FoilName>
+                    <Left_Side_FoilName>rg_15_6</Left_Side_FoilName>
+                    <Right_Side_FoilName>rg_15_6</Right_Side_FoilName>
                 </Section>
                 <Section>
                     <y_position>  1.391099</y_position>
@@ -124,8 +124,8 @@
                     <x_panel_distribution>COSINE</x_panel_distribution>
                     <y_number_of_panels>5</y_number_of_panels>
                     <y_panel_distribution>UNIFORM</y_panel_distribution>
-                    <Left_Side_FoilName>JX-FXrcn_7</Left_Side_FoilName>
-                    <Right_Side_FoilName>JX-FXrcn_7</Right_Side_FoilName>
+                    <Left_Side_FoilName>rg_15_7</Left_Side_FoilName>
+                    <Right_Side_FoilName>rg_15_7</Right_Side_FoilName>
                 </Section>
                 <Section>
                     <y_position>  1.438493</y_position>
@@ -137,8 +137,8 @@
                     <x_panel_distribution>COSINE</x_panel_distribution>
                     <y_number_of_panels>5</y_number_of_panels>
                     <y_panel_distribution>UNIFORM</y_panel_distribution>
-                    <Left_Side_FoilName>JX-FXrcn_8</Left_Side_FoilName>
-                    <Right_Side_FoilName>JX-FXrcn_8</Right_Side_FoilName>
+                    <Left_Side_FoilName>rg_15_8</Left_Side_FoilName>
+                    <Right_Side_FoilName>rg_15_8</Right_Side_FoilName>
                 </Section>
                 <Section>
                     <y_position>  1.466033</y_position>
@@ -150,8 +150,8 @@
                     <x_panel_distribution>COSINE</x_panel_distribution>
                     <y_number_of_panels>5</y_number_of_panels>
                     <y_panel_distribution>UNIFORM</y_panel_distribution>
-                    <Left_Side_FoilName>JX-FXrcn_9</Left_Side_FoilName>
-                    <Right_Side_FoilName>JX-FXrcn_9</Right_Side_FoilName>
+                    <Left_Side_FoilName>rg_15_9</Left_Side_FoilName>
+                    <Right_Side_FoilName>rg_15_9</Right_Side_FoilName>
                 </Section>
             </Sections>
         </wing>
