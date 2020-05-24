@@ -31,6 +31,7 @@
   pso_tol = 0.000001
   pso_convergence_profile = 'exhaustive'
   pso_maxit = 700
+  pso_write_particlefile = .true.
 /
 
 

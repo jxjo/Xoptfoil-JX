@@ -168,6 +168,54 @@ class inputFile:
         newMaxGlide = polarData.CL_maxGlide
         self.adaptMaxGlide(newMaxGlide)
 
+    def clearOperatingConditions(self):
+         # get operating-conditions from dictionary
+        operatingConditions = self.values["operating_conditions"]
+        # clear operating conditions
+        operatingConditions["name"] = []
+        operatingConditions["op_mode"] = []
+        operatingConditions["op_point"] = []
+        operatingConditions["optimization_type"] = []
+        operatingConditions["target_value"] = []
+        operatingConditions["weighting"] = []
+        operatingConditions['noppoint'] = 0
+
+
+    def addOppoint(self, name, op_mode, op_point, optimization_type,
+                                            target_value, weighting):
+         # get operating-conditions from dictionary
+        operatingConditions = self.values["operating_conditions"]
+        # append new oppoint
+        operatingConditions["name"].append(name)
+        operatingConditions["op_mode"].append(op_mode)
+        operatingConditions["op_point"].append(op_point)
+        operatingConditions["optimization_type"].append(optimization_type)
+        operatingConditions["target_value"].append(target_value)
+        operatingConditions["weighting"].append(weighting)
+        operatingConditions['noppoint'] = operatingConditions['noppoint'] + 1
+
+
+    # add a "target-drag" oppoint to operating-conditions
+    def addTargetPolarOppoint(self, Cl, Cd):
+        self.addOppoint('target_polar', 'spec-cl', Cl, 'target-drag', Cd, 1.0)
+
+
+    # delete all existing oppoints and set new ones from polar-data
+    def SetOppointsFromPolar(self, polarData, numOppoints):
+        Cl_min = polarData.CL[0]
+        Cl_max = polarData.CL_maxLift
+        Cl_increment = (Cl_max - Cl_min) / numOppoints
+
+        # clear operating conditions
+        self.clearOperatingConditions()
+
+        # add new oppoints
+        for i in range (numOppoints):
+            Cl = round(Cl_min + (i * Cl_increment), 4)
+            Cd = round(polarData.find_CD(Cl), 4)
+            #print "Cl:%f, Cd:%f" % (Cl, Cd) #Debug
+            self.addTargetPolarOppoint(Cl, Cd)
+
 
     def getMarkers(self):
         markers = []
@@ -215,6 +263,7 @@ class strakData:
         self.strakInputFileName = 'i-strak.txt'
         self.ReSqrtCl = 150000
         self.ReNumbers = []
+        self.polarFileNames = []
         self.useWingPlanform = True
         self.fromRootAirfoil= True
         self.generateBatch = True
@@ -222,6 +271,7 @@ class strakData:
         self.wingData = None
         self.strakType = "F3F"
         self.seedFoilName = ""
+        self.polars = []
 
 
 ################################################################################
@@ -347,7 +397,8 @@ class polarData:
 
     def find_CD(self, CL):
         # calculate corresponding CD
-        return np.interp( CL, self.CL, self.CD)
+        CD = np.interp( CL, self.CL, self.CD)
+        return CD
 
 
     def SetMarkers(self, valueList):
@@ -620,7 +671,7 @@ def get_FoilName(params, index):
         else:
             suffix = '-strak'
 
-        foilName = (foilName + "%s-%dk.dat") % (suffix,(Re/1000))
+        foilName = (foilName + "%s-%03dk.dat") % (suffix,(Re/1000))
 
     return (foilName)
 
@@ -934,48 +985,63 @@ if __name__ == "__main__":
     # strak-Type
     newInputFile = inputFile(scriptPath, params.strakType)
 
-    # generate polar of seedfoil / root-airfoil:
+    # generate polars of seedfoil / root-airfoil:
     # get name of root-airfoil
     seedFoilName = params.seedFoilName.strip('.dat')+ '.dat'
 
-    print("Generating polar for airfoil %s" % seedFoilName)
+    print("Generating polars for airfoil %s" % seedFoilName)
 
-    # compose string for system-call of XFOIL-worker
-    airfoilName = workingDir + bs + params.inputFolder + bs + seedFoilName
-    systemString = "xfoil_worker.exe -i %s -w polar -a %s -r %d" % (
-           newInputFile.getPresetInputFileName(), airfoilName, ReList[0])
+    polarDir = workingDir + bs + "foil_polars"
 
-    print systemString #Debug
+    # create list of polar-file-Names from Re-Numbers
+    for Re in params.ReNumbers:
+        # create list of polar-file-Names from Re-Numbers
+        polarFileName = "T2_Re0.%03d_M0.00_N9.0.txt" % (Re/1000)
+        polarFileName = polarDir + bs + polarFileName
+        params.polarFileNames.append(polarFileName)
 
-    # execute xfoil-worker
-    os.system(systemString)
+        # compose string for system-call of XFOIL-worker
+        airfoilName = workingDir + bs + params.inputFolder + bs + seedFoilName
+        systemString = "xfoil_worker.exe -i %s -w polar -a %s -r %d" % (
+           newInputFile.getPresetInputFileName(), airfoilName, Re)
+        print systemString #Debug
+
+        # execute xfoil-worker
+        os.system(systemString)
+
+        # import polar
+        newPolar = polarData()
+        newPolar.importFromFile(polarFileName)
+        newPolar.analyze()
+        params.polars.append(newPolar)
+
     print("Done.")
 
-    # get list of polar-files
-    polarDir = workingDir + bs + "foil_polars"
-    polarFiles = getListOfFiles(polarDir)
+    rootPolar = params.polars[0]
 
-    # import all polars
-    for polarFile in polarFiles:
-        newPolar = polarData()
-        newPolar.importFromFile(polarFile)
-
-        # Analyze polar
-        newPolar.analyze()
-
-    # adapt oppoints of inputfile according to generated polars
-    newInputFile.adaptOppoints(newPolar)
+    # adapt oppoints of inputfile according to generated polar of root airfoil
+    newInputFile.adaptOppoints(rootPolar)
 
     # write new input-file with the given filename
-    newInputFile.writeToFile(params.inputFolder+"/"+params.strakInputFileName)
+    newInputFile.writeToFile(params.inputFolder + bs + params.strakInputFileName)
 
     # Get some Markers to show in the polar-plot from the input-file
-    newPolar.SetMarkers(newInputFile.getMarkers())
+    rootPolar.SetMarkers(newInputFile.getMarkers())
 
     # Get text-description that will be shown in a textbox
-    newPolar.SetTextstring(newInputFile.getOppointText())
+    rootPolar.SetTextstring(newInputFile.getOppointText())
+
+    # TODO SetOppointsFromPolar
+    for i in range(1, len(params.ReNumbers)):
+        filename = params.inputFolder + bs + params.strakInputFileName
+        filename = filename.strip('.txt')
+        filename = filename + ("_%03dk.txt" % (params.ReNumbers[i]/1000))
+        newFile = inputFile(scriptPath, params.strakType)
+        # TODO change polar
+        newFile.SetOppointsFromPolar(params.polars[i], 10)
+        newFile.writeToFile(filename)
 
     # show diagram
-    newPolar.draw(scriptPath)
+    rootPolar.draw(scriptPath)
 
     print("Ready.")
