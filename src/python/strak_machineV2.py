@@ -25,7 +25,7 @@ import sys, os
 from matplotlib import pyplot as plt
 import matplotlib.image as mpimg
 import numpy as np
-import f90nml
+import pip
 
 # paths and separators
 bs = "\\"
@@ -72,6 +72,16 @@ strakdata = {
             "batchfileName" : 'make_strak.bat',
             }
 
+
+def install_and_import(package):
+    import importlib
+    try:
+        importlib.import_module(package)
+    except ImportError:
+        import pip
+        pip.main(['install', package])
+    finally:
+        globals()[package] = importlib.import_module(package)
 
 ################################################################################
 #
@@ -273,6 +283,185 @@ class strakData:
         self.seedFoilName = ""
         self.polars = []
 
+
+################################################################################
+#
+# polarGraph class
+#
+################################################################################
+class polarGraph:
+    def __init__(self):
+        self.polars = []
+
+    def addPolar(self, polarData):
+        self.polars.append(polarData)
+
+
+    def plotLogo(self, ax, scriptDir):
+        image = mpimg.imread(scriptDir + bs + imagesPath + bs + logoName)
+        ax.imshow(image)
+        ax.set_axis_off()
+
+
+    def plotLiftDragPolar(self, ax):
+        # set axes and labels
+        self.setAxesAndLabels(ax, 'Cl, Cd', 'Cd', 'Cl')
+
+        # get polar of root-airfoil
+        rootPolar = self.polars[0]
+
+        # set y-axis manually
+        ax.set_ylim(min(rootPolar.CL) - 0.2, max(rootPolar.CL) + 0.2)
+
+        # all polars
+        for polar in self.polars:
+            # plot CL, CD
+            ax.plot(polar.CD, polar.CL, 'b-')
+
+            # plot max_glide
+            x = polar.CD[polar.maxGlide_idx]
+            y = polar.CL[polar.maxGlide_idx]
+            ax.plot(x, y, 'ro')
+
+            # additonal text for root polar only
+            if (polar == rootPolar):
+                ax.annotate('maxGlide (root) @ Cl = %.2f, Cl/Cd = %.2f' % (y, (y/x)), xy=(x,y),
+                      xytext=(10,0), textcoords='offset points',
+                      fontsize = fs_infotext, color=cl_infotext)
+
+            # plot max lift
+            x = polar.CD[polar.maxLift_idx]
+            y = polar.CL[polar.maxLift_idx]
+            ax.plot(x, y, 'ro')
+
+            # additonal text for root polar only
+            if (polar == rootPolar):
+                ax.annotate('maxLift (root) @ alpha = %.2f, Cl = %.2f' %(polar.alpha_maxLift,
+                    polar.CL_maxLift), xy=(x,y), xytext=(10,10), textcoords='offset points',
+                    fontsize = fs_infotext, color=cl_infotext)
+
+                # plot additional markers for root polar only
+                #ax.plot(polar.CD_Markers, polar.CL_Markers,'ro')
+
+
+    def plotLiftAlphaPolar(self, ax):
+        # set axes and labels
+        self.setAxesAndLabels(ax, 'Cl, alpha', 'alpha', 'Cl')
+
+        # get polar of root-airfoil
+        rootPolar = self.polars[0]
+
+        # set y-axis manually
+        ax.set_ylim(min(rootPolar.CL) - 0.1, max(rootPolar.CL) + 0.2)
+
+        # all polars
+        for polar in self.polars:
+            # plot CL, alpha
+            ax.plot(polar.alpha, polar.CL, 'b-')
+
+            # plot max lift
+            x = polar.alpha[polar.maxLift_idx]
+            y = polar.CL[polar.maxLift_idx]
+            ax.plot(x, y, 'ro')
+
+
+            # additonal text for root polar only
+            if (polar == rootPolar):
+                ax.annotate('maxLift (root) @ alpha = %.2f, Cl = %.2f' %\
+                  (polar.alpha_maxLift, polar.CL_maxLift), xy=(x,y),
+                  xytext=(-80,15), textcoords='offset points',
+                  fontsize = fs_infotext, color=cl_infotext)
+
+
+    def setAxesAndLabels(self, ax, title, xlabel, ylabel):
+
+        # set title of the plot
+        text = (title)
+        #ax.set_title(text, fontsize = 30, color="darkgrey")
+
+        # set axis-labels
+        ax.set_xlabel(xlabel, fontsize = 20, color="darkgrey")
+        ax.set_ylabel(ylabel, fontsize = 20, color="darkgrey")
+
+        # customize grid
+        ax.grid(True, color='darkgrey',  linestyle='-.', linewidth=0.7)
+
+
+    def plotLiftDragAlphaPolar(self, ax):
+        # set axes and labels
+        self.setAxesAndLabels(ax, 'Cl/Cd, alpha', 'alpha', 'Cl/Cd')
+
+        # get polar of root-airfoil
+        rootPolar = self.polars[0]
+
+        # set y-axis manually
+        ax.set_ylim(min(rootPolar.CL_CD) - 10, max(rootPolar.CL_CD) + 10)
+
+        # all polars
+        for polar in self.polars:
+            # plot CL/CD, alpha
+            ax.plot(polar.alpha, polar.CL_CD, 'b-')
+
+            # plot max_glide
+            x = polar.alpha[polar.maxGlide_idx]
+            y = polar.CL_CD[polar.maxGlide_idx]
+            ax.plot(x, y, 'ro')
+
+            # add text for root Polar only
+            if (polar == rootPolar):
+                ax.annotate('maxGlide (root) @ alpha = %.2f, Cl/Cd = %.2f' % (x, y), xy=(x,y),
+                   xytext=(10,10), textcoords='offset points', fontsize = fs_infotext, color=cl_infotext)
+
+
+    def draw(self, scriptDir):
+
+        # get polar of root-airfoil
+        rootPolar = self.polars[0]
+
+        print("plotting polar of airfoil %s at Re = %.0f..."
+                       % (rootPolar.airfoilname, rootPolar.Re))
+
+        # set 'dark' style
+        plt.style.use('dark_background')
+
+        # setup subplots
+        fig, (upper,lower) = plt.subplots(2,2)
+
+        # compose diagram-title
+        text = ("Analysis of airfoil \"%s\" at " % rootPolar.airfoilname)
+
+        if (rootPolar.polarType == 2):
+            text = text + "ReSqrt(Cl) = "
+        else:
+            text = text + "Re = "
+
+        # add Re-numbers
+        for polar in self.polars:
+            text = text + ("%d, " %polar.Re)
+
+        text = text + ("Type %d polars" % rootPolar.polarType)
+
+
+        fig.suptitle(text, fontsize = 20, color="darkgrey", **csfont)
+
+        # first figure, display strak-machine-logo
+        self.plotLogo(upper[0], scriptDir)
+
+        # second figure, display the Lift / Drag-Polar
+        self.plotLiftDragPolar(lower[0])
+
+        # third figure, display the Lift / alpha-Polar
+        self.plotLiftAlphaPolar(upper[1])
+
+        # fourth figure, display the lift/drag /alpha polar
+        self.plotLiftDragAlphaPolar(lower[1])
+
+        # maximize window
+        figManager = plt.get_current_fig_manager()
+        figManager.window.showMaximized()
+
+        # show diagram
+        plt.show()
 
 ################################################################################
 #
@@ -919,6 +1108,8 @@ def getwingDataFromParams(params):
 # Main program
 if __name__ == "__main__":
 
+    # import further libraries, install them first, if missing
+    install_and_import('f90nml')
     # get command-line-arguments or user-input
     strakDataFileName = getArguments()
 
@@ -985,6 +1176,9 @@ if __name__ == "__main__":
     # strak-Type
     newInputFile = inputFile(scriptPath, params.strakType)
 
+    # create an instance of polar graph
+    graph = polarGraph()
+
     # generate polars of seedfoil / root-airfoil:
     # get name of root-airfoil
     seedFoilName = params.seedFoilName.strip('.dat')+ '.dat'
@@ -1004,7 +1198,7 @@ if __name__ == "__main__":
         airfoilName = workingDir + bs + params.inputFolder + bs + seedFoilName
         systemString = "xfoil_worker.exe -i %s -w polar -a %s -r %d" % (
            newInputFile.getPresetInputFileName(), airfoilName, Re)
-        print systemString #Debug
+        #print systemString #Debug
 
         # execute xfoil-worker
         os.system(systemString)
@@ -1013,8 +1207,12 @@ if __name__ == "__main__":
         newPolar = polarData()
         newPolar.importFromFile(polarFileName)
         newPolar.analyze()
+
+        # add polar to params
         params.polars.append(newPolar)
 
+        # also add polar to graph
+        graph.addPolar(newPolar)
     print("Done.")
 
     rootPolar = params.polars[0]
@@ -1042,6 +1240,6 @@ if __name__ == "__main__":
         newFile.writeToFile(filename)
 
     # show diagram
-    rootPolar.draw(scriptPath)
+    graph.draw(scriptPath)
 
     print("Ready.")
