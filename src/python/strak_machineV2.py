@@ -26,6 +26,7 @@ from matplotlib import pyplot as plt
 import matplotlib.image as mpimg
 import numpy as np
 import pip
+from scipy.signal import find_peaks
 
 # paths and separators
 bs = "\\"
@@ -41,6 +42,75 @@ fs_infotext = 10
 
 # colours
 cl_infotext = 'aqua'
+
+
+################################################################################
+#
+# install missing packages
+#
+################################################################################
+def install_and_import(package):
+    import importlib
+    try:
+        importlib.import_module(package)
+    except ImportError:
+        import pip
+        pip.main(['install', package])
+    finally:
+        globals()[package] = importlib.import_module(package)
+
+#TODO improve !! e.g. use linear interpolation etc.
+################################################################################
+#
+# helper function that finds a peak
+#
+################################################################################
+def findPeak(list, height):
+        # init peak-searcher
+        peak_max = 0.0
+        peak_max_idx = 0
+        peak_left_idx = 0
+        peak_right_idx = 0
+        searchLeftBorder = True
+        searchRightBorder = False
+
+        #first: find absolute maximum
+        idx = 0
+        for value in list:
+            if value > peak_max:
+                peak_max = value
+                peak_max_idx = idx
+            idx = idx+1
+
+        peak_limit = peak_max - height
+
+        # second: find left and right border
+        idx = 0
+
+        # walk through the list
+        for value in list:
+            if (searchLeftBorder == True):
+                #searching for peak_left_idx
+                if value >= peak_limit:
+                    peak_left_idx = idx
+                    peak_right_idx = idx
+                    searchLeftBorder = False
+                    searchRightBorder = True
+            if (searchRightBorder == True):
+                #searching for peak_right_idx
+                if value <= peak_limit:
+                    peak_right_idx = idx
+                    searchRightBorder = False
+            idx = idx + 1
+
+         # calculate new maximum idx as the idx in the middle between the borders
+        #print (peak_max_idx) #Debug
+        #peak_max_idx = (peak_right_idx + peak_left_idx)/2 Debug
+        #print (peak_max_idx, peak_left_idx, peak_right_idx) #Debug
+
+        return peak_max_idx
+
+
 
 ################################################################################
 #
@@ -70,18 +140,22 @@ strakdata = {
             "generateBatchfile" : 'true',
             # name of the batchfile
             "batchfileName" : 'make_strak.bat',
+            # operating-mode for strakmachine
+            "operatingMode" : 'targetPolar'
             }
 
+def getPresetInputFileName(strakType):
+    # get real path of the script
+    pathname = os.path.dirname(sys.argv[0])
+    scriptPath = os.path.abspath(pathname)
 
-def install_and_import(package):
-    import importlib
-    try:
-        importlib.import_module(package)
-    except ImportError:
-        import pip
-        pip.main(['install', package])
-    finally:
-        globals()[package] = importlib.import_module(package)
+    # get list of all existing files
+    fileList = getListOfFiles(scriptPath + bs + presetsPath)
+
+    # search the whole list of files for the desired strak-type
+    for name in fileList:
+        if name.find(strakType) >= 0:
+            return name
 
 ################################################################################
 #
@@ -89,10 +163,14 @@ def install_and_import(package):
 #
 ################################################################################
 class inputFile:
-    def __init__(self, libDir, strakType):
+    def __init__(self, strakType):
         self.values = {}
         self.presetInputFileName = ""
-        presetInputFiles = getListOfFiles(libDir + bs + presetsPath)
+
+        # get real path of the script
+        pathname = os.path.dirname(sys.argv[0])
+        scriptPath = os.path.abspath(pathname)
+        presetInputFiles = getListOfFiles(scriptPath + bs + presetsPath)
         self.getInputFileName(presetInputFiles, strakType)
 
         # read input-file as a Fortan namelist
@@ -272,16 +350,19 @@ class strakData:
         self.xmlFileName = None
         self.strakInputFileName = 'i-strak.txt'
         self.ReSqrtCl = 150000
-        self.ReNumbers = []
-        self.polarFileNames = []
         self.useWingPlanform = True
         self.fromRootAirfoil= True
         self.generateBatch = True
         self.batchfileName = 'make_strak.bat'
         self.wingData = None
         self.strakType = "F3F"
+        self.operatingMode = 'default'
         self.seedFoilName = ""
+        self.ReNumbers = []
+        self.polarFileNames = []
+        self.inputFileNames = []
         self.polars = []
+
 
 
 ################################################################################
@@ -463,6 +544,7 @@ class polarGraph:
         # show diagram
         plt.show()
 
+
 ################################################################################
 #
 # polarData class
@@ -545,34 +627,22 @@ class polarData:
 
     def determineMaxGlide(self):
         # determine max-value for Cl/Cd (max glide) and corresponding Cl
-        self.CL_CD_max = 0
-        self.maxGlide_idx = 0
-        self.CL_maxGlide = 0
-        idx = 0
+        peak_height = 2.0
+        self.maxGlide_idx = findPeak(self.CL_CD, peak_height)
+        self.CL_maxGlide = self.CL[self.maxGlide_idx]
+        self.CL_CD_max = self.CL_CD[self.maxGlide_idx]
 
-        for value in self.CL_CD:
-            if value > self.CL_CD_max:
-                self.CL_CD_max = value
-                self.CL_maxGlide = self.CL[idx]
-                self.maxGlide_idx = idx
-            idx = idx+1
         print("max Glide, Cl/Cd = %f @ Cl = %f" %
                                   (self.CL_CD_max, self.CL_maxGlide))
 
 
     def determineMaxLift(self):
         # determine max lift-value and corresponding alpha
-        self.CL_maxLift = 0
-        self.alpha_maxLift = 0
-        self.maxLift_idx = 0
-        idx = 0
+        peak_height = 0.025
+        self.maxLift_idx = findPeak(self.CL, peak_height)
+        self.CL_maxLift = self.CL[self.maxLift_idx]
+        self.alpha_maxLift = self.alpha[self.maxLift_idx]
 
-        for value in self.CL:
-            if value > self.CL_maxLift:
-                self.CL_maxLift = value
-                self.alpha_maxLift = self.alpha[idx]
-                self.maxLift_idx = idx
-            idx = idx+1
         print("max Lift, Cl = %f @ alpha = %f" %
                                   (self.CL_maxLift, self.alpha_maxLift))
 
@@ -932,11 +1002,12 @@ def generate_commandlines(params):
     (params.inputFolder, seedFoilName, seedFoilName)
     commandLines.append(commandline)
 
-    # copy master-input-file to output-folder
-    inputfile = params.strakInputFileName
-    commandline = ("copy .." + bs +"%s"+ bs + "%s %s\n") % \
+    for i in range (1, (numFoils)):
+        # copy input-file to output-folder
+        inputfile = params.inputFileNames[i]
+        commandline = ("copy .." + bs +"%s"+ bs + "%s %s\n") % \
                              (params.inputFolder, inputfile, inputfile)
-    commandLines.append(commandline)
+        commandLines.append(commandline)
 
     # rename seedfoil inside outputfolder
     commandline = ("change_airfoilname.py -i .." + bs + params.inputFolder
@@ -955,8 +1026,8 @@ def generate_commandlines(params):
         # get name of the airfoil
         strakFoilName = get_FoilName(params, i)
 
-        #set input-file name for Xoptfoil
-        iFile = params.strakInputFileName
+        # set input-file name for Xoptfoil
+        iFile = params.inputFileNames[i]
 
         # generate Xoptfoil-commandline
         commandline = "xoptfoil-jx -i %s -r %d -a %s -o %s\n" %\
@@ -1072,6 +1143,11 @@ def getParameters(dict):
     except:
         print ('strakType not specified')
 
+    try:
+        params.operatingMode = dict["operatingMode"]
+    except:
+        print ('operatingMode not specified')
+
     return params
 
 
@@ -1099,7 +1175,6 @@ def getwingDataFromXML(params):
         exit(-1)
 
     # return data
-    print planeData[0]
     return planeData[0]
 
 def getwingDataFromParams(params):
@@ -1160,22 +1235,6 @@ if __name__ == "__main__":
     if not os.path.exists(params.outputFolder + '\\' + params.airfoilFolder):
         os.makedirs(params.outputFolder + '\\' + params.airfoilFolder)
 
-    # generate Xoptfoil command-lines
-    commandlines, ReList = generate_commandlines(params)
-
-    # debug-output
-    for element in commandlines:
-        print element
-
-    # generate batchfile
-    if (params.generateBatch == True):
-        print ('generating batchfile \'%s\'' % params.batchfileName)
-        generate_batchfile(params.batchfileName, commandlines)
-
-    # create instance of new inputfile, automatically get preset-values for
-    # strak-Type
-    newInputFile = inputFile(scriptPath, params.strakType)
-
     # create an instance of polar graph
     graph = polarGraph()
 
@@ -1185,22 +1244,30 @@ if __name__ == "__main__":
 
     print("Generating polars for airfoil %s" % seedFoilName)
 
+    # compose polar-dir
     polarDir = workingDir + bs + "foil_polars"
 
-    # create list of polar-file-Names from Re-Numbers
+    # create polars, polar-file-Names and input-file-names from Re-Numbers
     for Re in params.ReNumbers:
-        # create list of polar-file-Names from Re-Numbers
+        # create polar-file-Name from Re-Number
         polarFileName = "T2_Re0.%03d_M0.00_N9.0.txt" % (Re/1000)
         polarFileName = polarDir + bs + polarFileName
         params.polarFileNames.append(polarFileName)
 
+        # generate inputfilename
+        inputFilename = params.strakInputFileName.strip('.txt')
+        inputFilename = inputFilename + ("_%03dk.txt" % (Re/1000))
+        params.inputFileNames.append(inputFilename)
+
         # compose string for system-call of XFOIL-worker
         airfoilName = workingDir + bs + params.inputFolder + bs + seedFoilName
+        inputFilename = getPresetInputFileName(params.strakType)
+
         systemString = "xfoil_worker.exe -i %s -w polar -a %s -r %d" % (
-           newInputFile.getPresetInputFileName(), airfoilName, Re)
+                        inputFilename, airfoilName, Re)
         #print systemString #Debug
 
-        # execute xfoil-worker
+        # execute xfoil-worker / create polar-file
         os.system(systemString)
 
         # import polar
@@ -1215,31 +1282,44 @@ if __name__ == "__main__":
         graph.addPolar(newPolar)
     print("Done.")
 
-    rootPolar = params.polars[0]
-
-    # adapt oppoints of inputfile according to generated polar of root airfoil
-    newInputFile.adaptOppoints(rootPolar)
-
-    # write new input-file with the given filename
-    newInputFile.writeToFile(params.inputFolder + bs + params.strakInputFileName)
-
-    # Get some Markers to show in the polar-plot from the input-file
-    rootPolar.SetMarkers(newInputFile.getMarkers())
-
-    # Get text-description that will be shown in a textbox
-    rootPolar.SetTextstring(newInputFile.getOppointText())
-
-    # TODO SetOppointsFromPolar
+    # Generate input-Files
+    print("Generating inputfiles...")
     for i in range(1, len(params.ReNumbers)):
-        filename = params.inputFolder + bs + params.strakInputFileName
-        filename = filename.strip('.txt')
-        filename = filename + ("_%03dk.txt" % (params.ReNumbers[i]/1000))
-        newFile = inputFile(scriptPath, params.strakType)
-        # TODO change polar
-        newFile.SetOppointsFromPolar(params.polars[i], 10)
-        newFile.writeToFile(filename)
+        newFile = inputFile(params.strakType)
 
-    # show diagram
+        if (params.operatingMode == 'targetPolar'):
+            # completely exchange oppoints of inputfile
+            newFile.SetOppointsFromPolar(params.polars[i], 10)
+            # Get some Markers to show in the polar-plot from the input-file
+            params.polars[i].SetMarkers(newFile.getMarkers())
+            # Get text-description that will be shown in a textbox
+            params.polars[i].SetTextstring(newFile.getOppointText())
+        else:
+            # only adapt existing oppoints of inputfile according to generated
+            # polar of root airfoil
+            newFile.adaptOppoints(params.polars[i])
+
+        # physically create the file
+        newFile.writeToFile(params.inputFolder + bs + params.inputFileNames[i])
+    print("Done.")
+
+    print("Generating commandlines...")
+    # generate Xoptfoil command-lines
+    commandlines, ReList = generate_commandlines(params)
+
+    # debug-output
+    for element in commandlines:
+        print element
+    print("Done.")
+
+    # generate batchfile
+    print("Generating batchfile...")
+    if (params.generateBatch == True):
+        print ('generating batchfile \'%s\'' % params.batchfileName)
+        generate_batchfile(params.batchfileName, commandlines)
+    print("Done.")
+
+    # show graph
     graph.draw(scriptPath)
 
     print("Ready.")
