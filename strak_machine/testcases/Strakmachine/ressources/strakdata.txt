@@ -6,6 +6,7 @@
       "seedFoilName": "SD", 
       "generateBatchfile": "true", 
       "inputFolder": "ressources", 
+      "operatingMode": "default",
       "ReNumbers": [
             220000,
             190000, 

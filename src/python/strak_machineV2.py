@@ -26,7 +26,7 @@ from matplotlib import pyplot as plt
 import matplotlib.image as mpimg
 import numpy as np
 import pip
-from scipy.signal import find_peaks
+from copy import deepcopy
 
 # paths and separators
 bs = "\\"
@@ -231,8 +231,8 @@ class inputFile:
             idx = idx + 1
 
     def adaptMaxLift(self, newClMaxLift, newAlphaMaxLift):
-        self.changeOpPoint("alphaClmax", newClMaxLift)
-        self.changeTargetValue("alphaClmax", newAlphaMaxLift)
+        self.changeOpPoint("alphaClmax", newAlphaMaxLift)
+        self.changeTargetValue("alphaClmax", newClMaxLift )
 
 
     def adaptMaxGlide(self, NewMaxGlide):
@@ -269,6 +269,12 @@ class inputFile:
         operatingConditions['noppoint'] = 0
 
 
+    def clearGeoTargets(self):
+        if 'geometry_targets' in self.values:
+            del self.values['geometry_targets']
+
+
+
     def addOppoint(self, name, op_mode, op_point, optimization_type,
                                             target_value, weighting):
          # get operating-conditions from dictionary
@@ -296,6 +302,9 @@ class inputFile:
 
         # clear operating conditions
         self.clearOperatingConditions()
+
+        # clear any existing geo-targets
+        self.clearGeoTargets()
 
         # add new oppoints
         for i in range (numOppoints):
@@ -362,6 +371,7 @@ class strakData:
         self.polarFileNames = []
         self.inputFileNames = []
         self.polars = []
+        self.targetPolars = []
 
 
 
@@ -373,6 +383,7 @@ class strakData:
 class polarGraph:
     def __init__(self):
         self.polars = []
+        self.targetPolars = []
 
     def addPolar(self, polarData):
         self.polars.append(polarData)
@@ -424,6 +435,21 @@ class polarGraph:
                 # plot additional markers for root polar only
                 #ax.plot(polar.CD_Markers, polar.CL_Markers,'ro')
 
+        # all target polars
+        for polar in self.targetPolars:
+            # plot CL, CD
+            ax.plot(polar.CD, polar.CL, 'r-')
+
+            # plot max_glide
+            x = polar.CD[polar.maxGlide_idx]
+            y = polar.CL[polar.maxGlide_idx]
+            ax.plot(x, y, 'yo')
+
+            # plot max lift
+            x = polar.CD[polar.maxLift_idx]
+            y = polar.CL[polar.maxLift_idx]
+            ax.plot(x, y, 'yo')
+
 
     def plotLiftAlphaPolar(self, ax):
         # set axes and labels
@@ -452,6 +478,33 @@ class polarGraph:
                   (polar.alpha_maxLift, polar.CL_maxLift), xy=(x,y),
                   xytext=(-80,15), textcoords='offset points',
                   fontsize = fs_infotext, color=cl_infotext)
+
+        # all target polars
+        for polar in self.targetPolars:
+             # plot CL, alpha
+            ax.plot(polar.alpha, polar.CL, 'r-')
+
+            # plot max lift
+            x = polar.alpha[polar.maxLift_idx]
+            y = polar.CL[polar.maxLift_idx]
+            ax.plot(x, y, 'yo')
+
+##    def SetMarkers(self, valueList):
+##        # add list of Cl-markers
+##        self.CL_Markers = valueList
+##        self.CD_Markers = []
+##        # add list of corresponding Cd-Markers
+##        for value in self.CL_Markers:
+##            self.CD_Markers.append(self.find_CD(value))
+##
+##        # FIXME remove last marker, it is a lift value
+##        self.CL_Markers.pop()
+##        self.CD_Markers.pop()
+##        #print(self.CL_Markers) Debug
+##        #print(self.CD_Markers) Debug
+##
+##    def SetTextstring(self, text):
+##        self.textstring = text
 
 
     def setAxesAndLabels(self, ax, title, xlabel, ylabel):
@@ -492,6 +545,16 @@ class polarGraph:
             if (polar == rootPolar):
                 ax.annotate('maxGlide (root) @ alpha = %.2f, Cl/Cd = %.2f' % (x, y), xy=(x,y),
                    xytext=(10,10), textcoords='offset points', fontsize = fs_infotext, color=cl_infotext)
+
+        # all target polars
+        for polar in self.targetPolars:
+            # plot CL/CD, alpha
+            ax.plot(polar.alpha, polar.CL_CD, 'r-')
+
+            # plot max_glide
+            x = polar.alpha[polar.maxGlide_idx]
+            y = polar.CL_CD[polar.maxGlide_idx]
+            ax.plot(x, y, 'yo')
 
 
     def draw(self, scriptDir):
@@ -624,6 +687,45 @@ class polarData:
         fileHandle.close()
         print("done.\n")
 
+    def makeSimilar(self, ideal):
+        print("making similar")
+        # find out differences
+        maxGlide_factor = self.CL_CD_max / ideal.CL_CD_max *0.985
+        maxGlideAlpha = self.alpha[self.maxGlide_idx]
+        idealmaxGlideAlpha = ideal.alpha[ideal.maxGlide_idx]
+        maxGlideAlphaFaktor = maxGlideAlpha / idealmaxGlideAlpha
+        maxLift_factor  = self.CL_maxLift / ideal.CL_maxLift
+        maxAlpha_factor = self.alpha_maxLift / ideal.alpha_maxLift
+        #print factor
+##        for i in range(self.maxGlide_idx):
+##            self.alpha[i] = self.alpha[i] / maxGlideAlphaFaktor
+
+        # clear existing data
+        self.alpha = []
+        self.CL = []
+        self.CD = []
+        self.CL_CD = []
+        self.CDp = []
+        self.Cm = []
+        self.Top_Xtr = []
+        self.Bot_Xtr= []
+
+        # build up new data
+        for i in range(len(ideal.CL)):
+            CL_CD = ideal.CL_CD[i]*maxGlide_factor
+            alpha = ideal.alpha[i]#*maxAlpha_factor
+            CL = ideal.CL[i]
+            CD = CL / CL_CD
+
+            self.CL_CD.append(CL_CD)
+            self.CL.append(CL)
+            self.CD.append(CD)
+            self.alpha.append(alpha)
+
+        #analyze new data
+        self.analyze()
+        # correct CL-values
+        # find out differences
 
     def determineMaxGlide(self):
         # determine max-value for Cl/Cd (max glide) and corresponding Cl
@@ -659,151 +761,6 @@ class polarData:
         CD = np.interp( CL, self.CL, self.CD)
         return CD
 
-
-    def SetMarkers(self, valueList):
-        # add list of Cl-markers
-        self.CL_Markers = valueList
-        self.CD_Markers = []
-        # add list of corresponding Cd-Markers
-        for value in self.CL_Markers:
-            self.CD_Markers.append(self.find_CD(value))
-
-        # FIXME remove last marker, it is a lift value
-        self.CL_Markers.pop()
-        self.CD_Markers.pop()
-        #print(self.CL_Markers) Debug
-        #print(self.CD_Markers) Debug
-
-    def SetTextstring(self, text):
-        self.textstring = text
-
-
-    def plotLogo(self, ax, scriptDir):
-        image = mpimg.imread(scriptDir + bs + imagesPath + bs + logoName)
-        ax.imshow(image)
-        ax.set_axis_off()
-
-
-    def plotLiftDragPolar(self, ax):
-        # set axes and labels
-        self.setAxesAndLabels(ax, 'Cl, Cd', 'Cd', 'Cl')
-
-        # plot CL, CD
-        ax.plot(self.CD, self.CL, 'b-')
-
-        # set y-axis manually
-        ax.set_ylim(min(self.CL) - 0.2, max(self.CL) + 0.2)
-
-        # plot max_glide
-        x = self.CD[self.maxGlide_idx]
-        y = self.CL[self.maxGlide_idx]
-        ax.plot(x, y, 'bo')
-        ax.annotate('maxGlide @ Cl = %.2f, Cl/Cd = %.2f' % (y, (y/x)), xy=(x,y),
-                      xytext=(10,0), textcoords='offset points',
-                      fontsize = fs_infotext, color=cl_infotext)
-
-        # plot max lift
-        x = self.CD[self.maxLift_idx]
-        y = self.CL[self.maxLift_idx]
-        ax.plot(x, y, 'ro')
-        ax.annotate('maxLift @ alpha = %.2f, Cl = %.2f' %(self.alpha_maxLift,
-          self.CL_maxLift), xy=(x,y), xytext=(10,10), textcoords='offset points',
-          fontsize = fs_infotext, color=cl_infotext)
-
-        # plot additional markers
-        ax.plot(self.CD_Markers, self.CL_Markers,'ro')
-
-
-    def plotLiftAlphaPolar(self, ax):
-        # set axes and labels
-        self.setAxesAndLabels(ax, 'Cl, alpha', 'alpha', 'Cl')
-
-        # plot CL, alpha
-        ax.plot(self.alpha, self.CL, 'b-')
-
-        # plot max lift
-        x = self.alpha[self.maxLift_idx]
-        y = self.CL[self.maxLift_idx]
-        ax.plot(x, y, 'ro')
-
-        # set y-axis manually
-        ax.set_ylim(min(self.CL) - 0.1, max(self.CL) + 0.2)
-
-        # additonal text
-        ax.annotate('maxLift @ alpha = %.2f, Cl = %.2f' %(self.alpha_maxLift,
-          self.CL_maxLift), xy=(x,y), xytext=(-80,15), textcoords='offset points',
-          fontsize = fs_infotext, color=cl_infotext)
-
-
-    def setAxesAndLabels(self, ax, title, xlabel, ylabel):
-
-        # set title of the plot
-        text = (title)
-        #ax.set_title(text, fontsize = 30, color="darkgrey")
-
-        # set axis-labels
-        ax.set_xlabel(xlabel, fontsize = 20, color="darkgrey")
-        ax.set_ylabel(ylabel, fontsize = 20, color="darkgrey")
-
-        # customize grid
-        ax.grid(True, color='darkgrey',  linestyle='-.', linewidth=0.7)
-
-
-    def plotLiftDragAlphaPolar(self, ax):
-        # set axes and labels
-        self.setAxesAndLabels(ax, 'Cl/Cd, alpha', 'alpha', 'Cl/Cd')
-
-        # plot CL/CD, alpha
-        ax.plot(self.alpha, self.CL_CD, 'b-')
-
-        # set y-axis manually
-        ax.set_ylim(min(self.CL_CD) - 10, max(self.CL_CD) + 10)
-
-        # plot max_glide
-        x = self.alpha[self.maxGlide_idx]
-        y = self.CL_CD[self.maxGlide_idx]
-        ax.plot(x, y, 'ro')
-        ax.annotate('maxGlide @ alpha = %.2f, Cl/Cd = %.2f' % (x, y), xy=(x,y),
-                      xytext=(10,10), textcoords='offset points', fontsize = fs_infotext, color=cl_infotext)
-
-
-    def draw(self, scriptDir):
-        print("plotting polar of airfoil %s at Re = %.0f..."
-                       % (self.airfoilname, self.Re))
-
-        # set 'dark' style
-        plt.style.use('dark_background')
-
-        # setup subplots
-        fig, (upper,lower) = plt.subplots(2,2)
-
-        if (self.polarType == 2):
-            text = ("Analysis of root-airfoil \"%s\" at ReSqrt(Cl) = %d, Type %d polar" %
-                     (self.airfoilname, self.Re, self.polarType))
-        else:
-            text = ("Analysis of root-airfoil \"%s\" at Re = %d, Type %d polar" %
-                     (self.airfoilname, self.Re, self.polarType))
-
-        fig.suptitle(text, fontsize = 20, color="darkgrey", **csfont)
-
-        # first figure, display strak-machine-logo
-        self.plotLogo(upper[0], scriptDir)
-
-        # second figure, display the Lift / Drag-Polar
-        self.plotLiftDragPolar(lower[0])
-
-        # third figure, display the Lift / alpha-Polar
-        self.plotLiftAlphaPolar(upper[1])
-
-        # fourth figure, display the lift/drag /alpha polar
-        self.plotLiftDragAlphaPolar(lower[1])
-
-        # maximize window
-        figManager = plt.get_current_fig_manager()
-        figManager.window.showMaximized()
-
-        # show diagram
-        plt.show()
 
 ################################################################################
 # Input function that checks python version
@@ -1247,6 +1204,7 @@ if __name__ == "__main__":
     # compose polar-dir
     polarDir = workingDir + bs + "foil_polars"
 
+    idx = 0
     # create polars, polar-file-Names and input-file-names from Re-Numbers
     for Re in params.ReNumbers:
         # create polar-file-Name from Re-Number
@@ -1268,7 +1226,7 @@ if __name__ == "__main__":
         #print systemString #Debug
 
         # execute xfoil-worker / create polar-file
-        os.system(systemString)
+        #os.system(systemString) TODO
 
         # import polar
         newPolar = polarData()
@@ -1280,6 +1238,19 @@ if __name__ == "__main__":
 
         # also add polar to graph
         graph.addPolar(newPolar)
+
+        if (params.operatingMode == 'targetPolar'):
+            # add target polar for all airfoils that are not the root-airfoil
+            if (idx == 0):
+                rootPolar = newPolar
+            else:
+                targetPolar = deepcopy(newPolar)
+                # make target polar "similar" too root polar
+                targetPolar.makeSimilar(rootPolar)
+                params.targetPolars.append(targetPolar)
+                graph.targetPolars.append(targetPolar)
+
+        idx = idx +1
     print("Done.")
 
     # Generate input-Files
@@ -1289,15 +1260,16 @@ if __name__ == "__main__":
 
         if (params.operatingMode == 'targetPolar'):
             # completely exchange oppoints of inputfile
-            newFile.SetOppointsFromPolar(params.polars[i], 10)
-            # Get some Markers to show in the polar-plot from the input-file
-            params.polars[i].SetMarkers(newFile.getMarkers())
-            # Get text-description that will be shown in a textbox
-            params.polars[i].SetTextstring(newFile.getOppointText())
+            newFile.SetOppointsFromPolar(params.targetPolars[(i-1)], 10)#TODO number of oppoints
+
         else:
+            # Get some Markers to show in the polar-plot from the input-file
+            #params.polars[i].SetMarkers(newFile.getMarkers())
+            # Get text-description that will be shown in a textbox
+            #params.polars[i].SetTextstring(newFile.getOppointText())
             # only adapt existing oppoints of inputfile according to generated
             # polar of root airfoil
-            newFile.adaptOppoints(params.polars[i])
+            newFile.adaptOppoints(params.polars[0])
 
         # physically create the file
         newFile.writeToFile(params.inputFolder + bs + params.inputFileNames[i])
