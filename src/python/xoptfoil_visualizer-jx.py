@@ -455,8 +455,8 @@ def plot_airfoil_coordinates(seedfoil, matchfoil, designfoils, plotnum, firsttim
   plot_foil      = plot_foil and (plotnum > 0) 
   if not (plot_seedfoil or plot_foil): return
 
-  plot_2nd_deriv  = plot_foil and plot_2nd_deriv  and (len(seedfoil.deriv2) > 0)  
-  plot_3rd_deriv  = plot_foil and plot_3rd_deriv  and (len(seedfoil.deriv3) > 0) 
+  plot_2nd_deriv  = plot_2nd_deriv  and (len(seedfoil.deriv2) > 0)  
+  plot_3rd_deriv  = plot_3rd_deriv  and (len(seedfoil.deriv3) > 0) 
   plot_matchfoil  = plot_matchfoil and (matchfoil.npt > 0)
   plot_delta_y    = plot_foil and plot_delta_y    and (not plot_matchfoil)          
   show_transition = plot_foil and show_transition and (len(foil.xtrt > 0))        
@@ -476,7 +476,11 @@ def plot_airfoil_coordinates(seedfoil, matchfoil, designfoils, plotnum, firsttim
     mirrorax = ax.twinx()
   else: 
     cfig = plt.figure(num= window_name)
-    ax = cfig.get_axes()[0]
+    if (len(cfig.get_axes()) > 0):                   
+      ax = cfig.get_axes()[0]
+    else:                                       # Window closed by user?
+      exit()
+
     mirrorax = ax.get_shared_x_axes().get_siblings(ax)[0]
     ax.clear()
     mirrorax.clear()
@@ -531,16 +535,19 @@ def plot_airfoil_coordinates(seedfoil, matchfoil, designfoils, plotnum, firsttim
     mirrorax.set_ylim(0.8, -0.8)
     mirrorax.plot(seedfoil.x[0:(iLE-15)],  seedfoil.deriv2[0:(iLE-15)],  color='blue', linewidth=0.5, linestyle='--') #top
     mirrorax.plot(seedfoil.x[(-iLE+15):],  seedfoil.deriv2[(-iLE+15):],  color='blue', linewidth=0.5, linestyle='-.') #bottom
-    mirrorax.plot(foil.x[0:(iLE-15)], foil.deriv2[0:(iLE-15)], color='red', linewidth=0.8, linestyle='--')
-    mirrorax.plot(foil.x[(-iLE+15):], foil.deriv2[(-iLE+15):], color='red', linewidth=0.8, linestyle='-.')
+    if plot_foil:
+      mirrorax.plot(foil.x[0:(iLE-15)], foil.deriv2[0:(iLE-15)], color='red', linewidth=0.8, linestyle='--')
+      mirrorax.plot(foil.x[(-iLE+15):], foil.deriv2[(-iLE+15):], color='red', linewidth=0.8, linestyle='-.')
 
   if plot_3rd_deriv:
     ax.set_ylim([-ymax,ymax])       # achieve ax.plot and mirrorax.plot is aligned in x-axis
-    # mirrorax.set_ylabel('3rd derivative', color='magenta')
-    # mirrorax.plot(seedfoil.x[0:(iLE-15)],  seedfoil.deriv3[0:(iLE-15)],  color='grey', linewidth=0.8, linestyle=':')
-    # mirrorax.plot(seedfoil.x[(-iLE+15):],  seedfoil.deriv3[(-iLE+15):],  color='grey', linewidth=0.8, linestyle=':')
-    mirrorax.plot(foil.x[0:(iLE-15)],  -np.divide(foil.deriv3[0:(iLE-15)],10),  color='magenta', linewidth=0.8, linestyle='--')
-    mirrorax.plot(foil.x[(-iLE+15):],  -np.divide(foil.deriv3[(-iLE+15):],10),  color='magenta', linewidth=0.8, linestyle='-.')
+    mirrorax.set_ylabel('3rd derivative', color='magenta')
+    mirrorax.set_ylim(5, -5)
+    mirrorax.plot(seedfoil.x[0:(iLE-15)],  seedfoil.deriv3[0:(iLE-15)],  color='grey', linewidth=0.8, linestyle=':')
+    mirrorax.plot(seedfoil.x[(-iLE+15):],  seedfoil.deriv3[(-iLE+15):],  color='grey', linewidth=0.8, linestyle=':')
+    if plot_foil:
+      mirrorax.plot(foil.x[0:(iLE-15)],  -np.divide(foil.deriv3[0:(iLE-15)],10),  color='magenta', linewidth=0.8, linestyle='--')
+      mirrorax.plot(foil.x[(-iLE+15):],  -np.divide(foil.deriv3[(-iLE+15):],10),  color='magenta', linewidth=0.8, linestyle='-.')
 
   # Plot delta between seed and current airfoil
   if plot_delta_y:
@@ -602,9 +609,6 @@ def plot_airfoil_coordinates(seedfoil, matchfoil, designfoils, plotnum, firsttim
 
   if animation:
     if (firsttime): cfig.show()
-# jx-test - try without double refresh
-#    else: plt.pause(0.0001)
-    cfig.canvas.draw()
 
     # Save animation frames if requested
 
@@ -615,6 +619,8 @@ def plot_airfoil_coordinates(seedfoil, matchfoil, designfoils, plotnum, firsttim
         imagefname = prefix + '_coordinates.png'
         print("Saving image frame to file " + imagefname + ' ...')
         plt.savefig(imagefname)
+
+  cfig.canvas.draw()
 
 #---------------------------------------------------------------------------------------
 # Plot points of transition xtrs along polyline x,y 
@@ -682,10 +688,12 @@ def plot_polars(seedfoil, designfoils, plotnum, firsttime=True, animation=False,
     pfig = plt.figure(num= window_name)
 
   axarr = pfig.get_axes()
+
+  if (len(axarr) == 0): exit()     # User closed the window - stop
+
   for ax in axarr: 
     ax.clear()
 
-  # plt.cla()
 
   # Select requested airfoil or quit if polars are still not available
 
@@ -877,9 +885,6 @@ def plot_polars(seedfoil, designfoils, plotnum, firsttime=True, animation=False,
 
   if animation:
     if (firsttime): pfig.show()
-# jx-test - try without double refresh
-#    else: plt.pause(0.0001)
-    pfig.canvas.draw()
 
     # Save animation frames if requested
   
@@ -890,6 +895,8 @@ def plot_polars(seedfoil, designfoils, plotnum, firsttime=True, animation=False,
         imagefname = prefix + '_polars.png'
         print("Saving image frame to file " + imagefname + ' ...')
         plt.savefig(imagefname)
+
+  pfig.canvas.draw()
 
   return 
 
@@ -915,6 +922,7 @@ def plot_optimization_history(steps, fmins, relfmins, rads, firsttime=True,
   else:
     ofig  = plt.figure(num= window_name)
     axarr = ofig.get_axes()
+    if (len(axarr) == 0): exit()            # User closed the window - stop
     mirrorax0 = axarr[0].get_shared_x_axes().get_siblings(axarr[0])[0]
     axarr[0].clear()
     mirrorax0.clear()
@@ -941,9 +949,8 @@ def plot_optimization_history(steps, fmins, relfmins, rads, firsttime=True,
 
   if animation:
     if (firsttime): ofig.show()
-# jx-test - try without double refresh
-#    else: plt.pause(0.0001)
-    ofig.canvas.draw()
+
+  ofig.canvas.draw()
 
   return 
 
@@ -1370,6 +1377,9 @@ def main_menu(initialchoice, seedfoil, designfoils, prefix):
     elif (choice == "2"):
       exitchoice = False
 
+      # Close all current windows
+      plt.close('all') 
+
       # Number of digits in design counter string
 
       numfoils = len(designfoils)
@@ -1417,6 +1427,10 @@ def main_menu(initialchoice, seedfoil, designfoils, prefix):
 
     elif (choice == "3"):
       exitchoice = False
+
+      # Close all current windows
+      plt.close('all') 
+
       print ()
       print('Monitoring optimization progress. To stop, enter the command ' +
             '"stop_monitoring" in run_control.')
@@ -1450,15 +1464,12 @@ def main_menu(initialchoice, seedfoil, designfoils, prefix):
           if plotoptions["plot_airfoils"]:
             plot_airfoil_coordinates(seedfoil, matchfoil, designfoils, numfoils, 
                                       firsttime=init, animation=True, prefix = prefix)
-            plt.pause(0.01)
           if plotoptions["plot_polars"]:
             plot_polars(seedfoil, designfoils, numfoils,
                                       firsttime=init, animation=True, prefix = prefix)
-            plt.pause(0.01)
           if plotoptions["plot_optimization_history"]:
             plot_optimization_history(steps, fmins, relfmins, rads, 
                                       firsttime=init, prefix = prefix, animation=True)
-            plt.pause(0.01)
 
           init = False
 
