@@ -1,8 +1,8 @@
 {
       "strakType": "Generic", 
-      "batchfileName": "make_strak.bat", 
+      "batchfileName": "make-strak.bat", 
       "outputFolder": "build", 
-      "strakInputFileName": "istrak.txt", 
+      "strakInputFileName": "i-strak.txt", 
       "seedFoilName": "SD", 
       "generateBatchfile": "true", 
       "inputFolder": "ressources", 

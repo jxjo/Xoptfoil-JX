@@ -238,13 +238,13 @@ class inputFile:
     def adaptMaxGlide(self, NewMaxGlide):
         # calculate difference between old maxGlide and new maxGlide
         diff = NewMaxGlide - self.getOpPoint("maxGlide")
-        newHelper = self.getOpPoint("helper") + diff
-        newKeepGlide = self.getOpPoint("keepGlide") + diff
+        newHelper = self.getOpPoint("helperPreGlide") + diff
+        newKeepGlide = self.getOpPoint("helperKeepGlide") + diff
 
         # set new OpPoints
         self.changeOpPoint("maxGlide", NewMaxGlide)
-        self.changeOpPoint("helper", newHelper)
-        self.changeOpPoint("keepGlide", newKeepGlide)
+        self.changeOpPoint("helperPreGlide", newHelper)
+        self.changeOpPoint("helperKeepGlide", newKeepGlide)
 
 
     # adapt all oppoints to the give polar-data
