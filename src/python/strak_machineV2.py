@@ -1226,7 +1226,7 @@ if __name__ == "__main__":
         #print systemString #Debug
 
         # execute xfoil-worker / create polar-file
-        #os.system(systemString) TODO
+        os.system(systemString)
 
         # import polar
         newPolar = polarData()
