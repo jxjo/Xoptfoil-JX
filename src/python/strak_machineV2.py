@@ -235,16 +235,18 @@ class inputFile:
         self.changeTargetValue("alphaClmax", newClMaxLift )
 
 
-    def adaptMaxGlide(self, NewMaxGlide):
+    def adaptMaxGlide(self, newClMaxGlide, newAlphaMaxGlide):
         # calculate difference between old maxGlide and new maxGlide
-        diff = NewMaxGlide - self.getOpPoint("maxGlide")
-        newHelper = self.getOpPoint("helperPreGlide") + diff
-        newKeepGlide = self.getOpPoint("helperKeepGlide") + diff
+        diff = newClMaxGlide - self.getOpPoint("maxGlide")
+        newClHelper = self.getOpPoint("helperPreGlide") + diff
+        newClKeepGlide = self.getOpPoint("helperKeepGlide") + diff
 
         # set new OpPoints
-        self.changeOpPoint("maxGlide", NewMaxGlide)
-        self.changeOpPoint("helperPreGlide", newHelper)
-        self.changeOpPoint("helperKeepGlide", newKeepGlide)
+        self.changeOpPoint("maxGlide", newClMaxGlide)
+        self.changeOpPoint("alphaMaxGlide", newAlphaMaxGlide)
+        self.changeTargetValue("alphaMaxGlide", newClMaxGlide )
+        self.changeOpPoint("helperPreGlide", newClHelper)
+        self.changeOpPoint("helperKeepGlide", newClKeepGlide)
 
 
     # adapt all oppoints to the give polar-data
@@ -253,8 +255,10 @@ class inputFile:
         alphaMaxLift = polarData.alpha_maxLift
         self.adaptMaxLift(ClMaxLift, alphaMaxLift)
 
-        newMaxGlide = polarData.CL_maxGlide
-        self.adaptMaxGlide(newMaxGlide)
+        newClMaxGlide = polarData.CL_maxGlide
+        newAlphaMaxGlide = polarData.alphaMaxGlide
+        self.adaptMaxGlide(newClMaxGlide, newAlphaMaxGlide)
+
 
     def clearOperatingConditions(self):
          # get operating-conditions from dictionary
@@ -314,16 +318,11 @@ class inputFile:
             self.addTargetPolarOppoint(Cl, Cd)
 
 
-    def getMarkers(self):
-        markers = []
-        # get operating-conditions from dictionary
+    def getOperatingConditions(self):
+         # get operating-conditions from dictionary
         operatingConditions = self.values["operating_conditions"]
-        names = operatingConditions['name']
-        for name in names:
-            opPoint = self.getOpPoint(name)
-            if (opPoint < 2):#TODO verbessern
-                markers.append(opPoint)
-        return markers
+
+        return operatingConditions
 
 
     def getOppointText(self):
@@ -388,7 +387,6 @@ class polarGraph:
     def addPolar(self, polarData):
         self.polars.append(polarData)
 
-
     def plotLogo(self, ax, scriptDir):
         image = mpimg.imread(scriptDir + bs + imagesPath + bs + logoName)
         ax.imshow(image)
@@ -450,8 +448,19 @@ class polarGraph:
             y = polar.CL[polar.maxLift_idx]
             ax.plot(x, y, 'yo')
 
+    def plotLiftOverAlphaOptimizationPoints(self, ax, polar):
+        if (polar.operatingConditions <> None):
+            idx = 0
+            operatingConditions = polar.operatingConditions
+            for optimization_type in operatingConditions["optimization_type"]:
+                if (optimization_type == 'target-lift'):
+                    x = operatingConditions["op_point"][idx]
+                    y = operatingConditions["target_value"][idx]
+                    ax.plot(x, y, 'yo')
+                idx = idx +1
 
-    def plotLiftAlphaPolar(self, ax):
+
+    def plotLiftOverAlphaPolar(self, ax):
         # set axes and labels
         self.setAxesAndLabels(ax, 'Cl, alpha', 'alpha', 'Cl')
 
@@ -471,6 +480,7 @@ class polarGraph:
             y = polar.CL[polar.maxLift_idx]
             ax.plot(x, y, 'ro')
 
+            self.plotLiftOverAlphaOptimizationPoints(ax, polar)
 
             # additonal text for root polar only
             if (polar == rootPolar):
@@ -489,24 +499,6 @@ class polarGraph:
             y = polar.CL[polar.maxLift_idx]
             ax.plot(x, y, 'yo')
 
-##    def SetMarkers(self, valueList):
-##        # add list of Cl-markers
-##        self.CL_Markers = valueList
-##        self.CD_Markers = []
-##        # add list of corresponding Cd-Markers
-##        for value in self.CL_Markers:
-##            self.CD_Markers.append(self.find_CD(value))
-##
-##        # FIXME remove last marker, it is a lift value
-##        self.CL_Markers.pop()
-##        self.CD_Markers.pop()
-##        #print(self.CL_Markers) Debug
-##        #print(self.CD_Markers) Debug
-##
-##    def SetTextstring(self, text):
-##        self.textstring = text
-
-
     def setAxesAndLabels(self, ax, title, xlabel, ylabel):
 
         # set title of the plot
@@ -521,9 +513,28 @@ class polarGraph:
         ax.grid(True, color='darkgrey',  linestyle='-.', linewidth=0.7)
 
 
-    def plotLiftDragAlphaPolar(self, ax):
+    def plotLiftDragOverLiftOptimizationPoints(self, ax, polar):
+        if (polar.operatingConditions <> None):
+            idx = 0
+            operatingConditions = polar.operatingConditions
+            validNames = ['preGlide','helperPreGlide','maxGlide',
+                          'KeepGlide','keepGlide']
+
+            for Name in operatingConditions["name"]:
+                for validName in validNames:
+                    if (Name.find(validName) >= 0):
+                        x = operatingConditions["op_point"][idx]
+                        y = polar.find_CL_CD(x)
+                        if (Name.find('helper') >= 0):
+                            ax.plot(x, y, 'y.')
+                        else:
+                            ax.plot(x, y, 'yo')
+                idx = idx + 1
+
+
+    def plotLiftDragOverLiftPolar(self, ax):
         # set axes and labels
-        self.setAxesAndLabels(ax, 'Cl/Cd, alpha', 'alpha', 'Cl/Cd')
+        self.setAxesAndLabels(ax, 'Cl/Cd, Cl', 'Cl', 'Cl/Cd')
 
         # get polar of root-airfoil
         rootPolar = self.polars[0]
@@ -534,25 +545,28 @@ class polarGraph:
         # all polars
         for polar in self.polars:
             # plot CL/CD, alpha
-            ax.plot(polar.alpha, polar.CL_CD, 'b-')
+            ax.plot(polar.CL, polar.CL_CD, 'b-')
 
             # plot max_glide
-            x = polar.alpha[polar.maxGlide_idx]
+            x = polar.CL[polar.maxGlide_idx]
             y = polar.CL_CD[polar.maxGlide_idx]
             ax.plot(x, y, 'ro')
 
+            # plot optimizationPoints
+            self.plotLiftDragOverLiftOptimizationPoints(ax, polar)
+
             # add text for root Polar only
             if (polar == rootPolar):
-                ax.annotate('maxGlide (root) @ alpha = %.2f, Cl/Cd = %.2f' % (x, y), xy=(x,y),
+                ax.annotate('maxGlide (root) @ Cl = %.2f, Cl/Cd = %.2f' % (x, y), xy=(x,y),
                    xytext=(10,10), textcoords='offset points', fontsize = fs_infotext, color=cl_infotext)
 
         # all target polars
         for polar in self.targetPolars:
             # plot CL/CD, alpha
-            ax.plot(polar.alpha, polar.CL_CD, 'r-')
+            ax.plot(polar.CL, polar.CL_CD, 'r-')
 
             # plot max_glide
-            x = polar.alpha[polar.maxGlide_idx]
+            x = polar.CL[polar.maxGlide_idx]
             y = polar.CL_CD[polar.maxGlide_idx]
             ax.plot(x, y, 'yo')
 
@@ -595,10 +609,10 @@ class polarGraph:
         self.plotLiftDragPolar(lower[0])
 
         # third figure, display the Lift / alpha-Polar
-        self.plotLiftAlphaPolar(upper[1])
+        self.plotLiftOverAlphaPolar(upper[1])
 
-        # fourth figure, display the lift/drag /alpha polar
-        self.plotLiftDragAlphaPolar(lower[1])
+        # fourth figure, display the lift/drag /Lift polar
+        self.plotLiftDragOverLiftPolar(lower[1])
 
         # maximize window
         figManager = plt.get_current_fig_manager()
@@ -627,15 +641,20 @@ class polarData:
         self.Cm = []
         self.Top_Xtr = []
         self.Bot_Xtr= []
-        self.CL_CD_max = 0
+        self.CL_CD_max = 0.0
         self.maxGlide_idx = 0
-        self.CL_maxGlide = 0
-        self.CL_maxLift = 0
-        self.alpha_maxLift = 0
+        self.CL_maxGlide = 0.0
+        self.alphaMaxGlide = 0.0
+        self.CL_maxLift = 0.0
+        self.alpha_maxLift = 0.0
         self.maxLift_idx = 0
         self.CL_Markers = []
         self.CD_Markers = []
         self.textstr = ""
+        self.operatingConditions = None
+
+    def addOperatingConditions(self, opConditions):
+        self.operatingConditions = opConditions.copy()
 
     def importFromFile(self, fileName):
         BeginOfDataSectionTag = "-------"
@@ -732,6 +751,7 @@ class polarData:
         peak_height = 2.0
         self.maxGlide_idx = findPeak(self.CL_CD, peak_height)
         self.CL_maxGlide = self.CL[self.maxGlide_idx]
+        self.alphaMaxGlide = self.alpha[self.maxGlide_idx]
         self.CL_CD_max = self.CL_CD[self.maxGlide_idx]
 
         print("max Glide, Cl/Cd = %f @ Cl = %f" %
@@ -760,6 +780,11 @@ class polarData:
         # calculate corresponding CD
         CD = np.interp( CL, self.CL, self.CD)
         return CD
+
+    def find_CL_CD(self, CL):
+        # calculate corresponding CL_CD
+        CL_CD = np.interp( CL, self.CL, self.CL_CD)
+        return CL_CD
 
 
 ################################################################################
@@ -1270,6 +1295,8 @@ if __name__ == "__main__":
             # only adapt existing oppoints of inputfile according to generated
             # polar of root airfoil
             newFile.adaptOppoints(params.polars[0])
+            opConditions = newFile.getOperatingConditions()
+            params.polars[0].addOperatingConditions(opConditions)
 
         # physically create the file
         newFile.writeToFile(params.inputFolder + bs + params.inputFileNames[i])
