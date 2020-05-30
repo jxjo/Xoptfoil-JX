@@ -291,7 +291,7 @@ class inputFile:
     # adapts Max-Glide and dependend values to polar
     def adaptMaxGlide(self, polarData):
         # get polar values, Cl MaxGlide, alpha Max-Glide
-        AlphaMaxGlide = polarData.alphaMaxGlide
+        AlphaMaxGlide = polarData.alpha_maxGlide
         CL_maxGlide = polarData.CL_maxGlide
 
         # calculate difference (=shift-value)
@@ -362,11 +362,21 @@ class inputFile:
         self.changeTargetValue(opPointName, targetValue)
 
     def transferMaxLift(self, polarData):
+        # get opPoint-values
         CL_maxLift = self.getOpPoint("Clmax")
+        alpha_maxLift = self.getOpPoint("alphaClmax")
+
+        # get polar-values
+        alpha_Polar = polarData.alpha_maxLift
         CL_Polar = polarData.CL_maxLift
-        # new CD is the medium value
+
+        # new value is the medium value
         CL_maxLift = (CL_maxLift + CL_Polar)/2
+        alpha_maxLift = (alpha_maxLift + alpha_Polar)/2
+
         self.changeOpPoint("Clmax", CL_maxLift)
+        self.changeOpPoint("alphaClmax", alpha_maxLift)
+        self.changeTargetValue("alphaClmax", CL_maxLift)
 
     # all target-values will be shifted "downward" according
     # to the difference in CL_CD_MaxGlide
@@ -384,7 +394,7 @@ class inputFile:
         # create List of opPoints to be affected. The target-values of these
         # oppoints will be "shifted", according to the calculated difference
         opPointList = ['preGlide','helperPreGlide', 'maxGlide','helperKeepGlide',
-                       'keepGlide', 'Clmax' ]
+                       'keepGlide']#, 'Clmax' ]
         #self.shiftTargetValues(diff, opPointList)
         self.scaleTargetValues(factor, opPointList)
 
@@ -404,12 +414,13 @@ class inputFile:
         CD_maxSpeed = (CD_maxSpeed + CD_Polar)/2
         self.changeTargetValue("maxSpeed", CD_maxSpeed)
 
+        # set pre speed to polar-value
         CL_preSpeed = self.getOpPoint("preSpeed")
-        CD_preSpeed = self.getTargetValue("preSpeed")
+        #CD_preSpeed = self.getTargetValue("preSpeed")
         CD_Polar = polarData.find_CD(CL_preSpeed)
         # new CD is the medium value
-        CD_preSpeed = (CD_preSpeed + CD_Polar)/2
-        self.changeTargetValue("preSpeed", CD_preSpeed)
+        #CD_preSpeed = (CD_preSpeed + CD_Polar)/2
+        self.changeTargetValue("preSpeed", CD_Polar)#CD_preSpeed)
 
 
     # adapt all oppoints and also the target-values to the given polar-data
@@ -601,26 +612,35 @@ class polarGraph:
             # plot optimization points
             self.plotLiftDragOptimizationPoints(ax, polar)
 
+            # plot max_speeds
+            x = polar.CD[polar.maxSpeed_idx]
+            y = polar.CL[polar.maxSpeed_idx]
+            ax.plot(x, y, 'ro')
+            # additonal text for root polar only
+            if (polar == rootPolar):
+                ax.annotate('maxSpeed (root) @ Cl = %.2f, Cd = %.4f' % (y, x),
+                 xy=(x,y), xytext=(20,0), textcoords='offset points',
+                      fontsize = fs_infotext, color=cl_infotext)
+
+
             # plot max_glide
             x = polar.CD[polar.maxGlide_idx]
             y = polar.CL[polar.maxGlide_idx]
             ax.plot(x, y, 'ro')
-
             # additonal text for root polar only
             if (polar == rootPolar):
-                ax.annotate('maxGlide (root) @ Cl = %.2f, Cl/Cd = %.2f' % (y, (y/x)), xy=(x,y),
-                      xytext=(10,0), textcoords='offset points',
+                ax.annotate('maxGlide (root) @ Cl = %.2f, Cd = %.4f' % (y, x),
+                 xy=(x,y), xytext=(20,0), textcoords='offset points',
                       fontsize = fs_infotext, color=cl_infotext)
 
             # plot max lift
             x = polar.CD[polar.maxLift_idx]
             y = polar.CL[polar.maxLift_idx]
             ax.plot(x, y, 'ro')
-
             # additonal text for root polar only
             if (polar == rootPolar):
-                ax.annotate('maxLift (root) @ alpha = %.2f, Cl = %.2f' %(polar.alpha_maxLift,
-                    polar.CL_maxLift), xy=(x,y), xytext=(10,10), textcoords='offset points',
+                ax.annotate('maxLift (root) @ Cl = %.2f, Cd = %.4f' %(y,x),
+                  xy=(x,y), xytext=(10,10), textcoords='offset points',
                     fontsize = fs_infotext, color=cl_infotext)
 
                 # plot additional markers for root polar only
@@ -668,13 +688,23 @@ class polarGraph:
             # plot CL, alpha
             ax.plot(polar.alpha, polar.CL, 'b-')
 
+            self.plotLiftOverAlphaOptimizationPoints(ax, polar)
+
+            # plot max Glide
+            x = polar.alpha[polar.maxGlide_idx]
+            y = polar.CL[polar.maxGlide_idx]
+            ax.plot(x, y, 'ro')
+            # additonal text for root polar only
+            if (polar == rootPolar):
+                ax.annotate('maxGlide (root) @ alpha = %.2f, Cl = %.2f' %\
+                  (polar.alpha_maxGlide, polar.CL_maxGlide), xy=(x,y),
+                  xytext=(40,0), textcoords='offset points',
+                  fontsize = fs_infotext, color=cl_infotext)
+
             # plot max lift
             x = polar.alpha[polar.maxLift_idx]
             y = polar.CL[polar.maxLift_idx]
             ax.plot(x, y, 'ro')
-
-            self.plotLiftOverAlphaOptimizationPoints(ax, polar)
-
             # additonal text for root polar only
             if (polar == rootPolar):
                 ax.annotate('maxLift (root) @ alpha = %.2f, Cl = %.2f' %\
@@ -747,18 +777,37 @@ class polarGraph:
             # plot CL/CD, alpha
             ax.plot(polar.CL, polar.CL_CD, 'b-')
 
+            # plot max_speed
+            x = polar.CL[polar.maxSpeed_idx]
+            y = polar.CL_CD[polar.maxSpeed_idx]
+            ax.plot(x, y, 'ro')
+            # add text for root Polar only
+            if (polar == rootPolar):
+                ax.annotate('maxSpeed (root) @ Cl = %.2f, Cl/Cd = %.2f' % (x, y), xy=(x,y),
+                   xytext=(20,0), textcoords='offset points', fontsize = fs_infotext, color=cl_infotext)
+
             # plot max_glide
             x = polar.CL[polar.maxGlide_idx]
             y = polar.CL_CD[polar.maxGlide_idx]
             ax.plot(x, y, 'ro')
-
-            # plot optimizationPoints
-            self.plotLiftDragOverLiftOptimizationPoints(ax, polar)
-
             # add text for root Polar only
             if (polar == rootPolar):
                 ax.annotate('maxGlide (root) @ Cl = %.2f, Cl/Cd = %.2f' % (x, y), xy=(x,y),
                    xytext=(10,10), textcoords='offset points', fontsize = fs_infotext, color=cl_infotext)
+
+            # plot max Lift
+            x = polar.CL[polar.maxLift_idx]
+            y = polar.CL_CD[polar.maxLift_idx]
+            ax.plot(x, y, 'ro')
+            # add text for root Polar only
+            if (polar == rootPolar):
+                ax.annotate('maxLift (root) @ Cl = %.2f, Cl/Cd = %.2f' % (x, y), xy=(x,y),
+                   xytext=(10,10), textcoords='offset points', fontsize = fs_infotext, color=cl_infotext)
+
+            # plot optimizationPoints
+            self.plotLiftDragOverLiftOptimizationPoints(ax, polar)
+
+
 
         # all target polars
         for polar in self.targetPolars:
@@ -841,10 +890,13 @@ class polarData:
         self.Cm = []
         self.Top_Xtr = []
         self.Bot_Xtr= []
+        self.CD_maxSpeed = 0.0
+        self.CL_maxSpeed = 0.0
+        self.maxSpeed_idx = 0
         self.CL_CD_max = 0.0
         self.maxGlide_idx = 0
+        self.alpha_maxGlide= 0.0
         self.CL_maxGlide = 0.0
-        self.alphaMaxGlide = 0.0
         self.CL_maxLift = 0.0
         self.alpha_maxLift = 0.0
         self.maxLift_idx = 0
@@ -949,14 +1001,16 @@ class polarData:
     def determineMaxSpeed(self):
         self.CL_maxSpeed = 0.0
         self.CD_maxSpeed = 1000000.0
-        self.maxSpeedIdx = 0
+        self.maxSpeed_idx = 0
 
         # find absolute minimum of Cd
         for idx in range(len(self.CD)):
             if (self.CD[idx] < self.CD_maxSpeed):
                 self.CD_maxSpeed = self.CD[idx]
                 self.CL_maxSpeed = self.CL[idx]
-                self.maxSpeedIdx = idx
+                self.maxSpeed_idx = idx
+        print("max Speed, Cd = %f @ Cl = %f" %
+                                  (self.CD_maxSpeed, self.CL_maxSpeed))
 
 
     def determineMaxGlide(self):
@@ -964,7 +1018,7 @@ class polarData:
         peak_height = 2.0
         self.maxGlide_idx = findPeak(self.CL_CD, peak_height)
         self.CL_maxGlide = self.CL[self.maxGlide_idx]
-        self.alphaMaxGlide = self.alpha[self.maxGlide_idx]
+        self.alpha_maxGlide = self.alpha[self.maxGlide_idx]
         self.CL_CD_max = self.CL_CD[self.maxGlide_idx]
 
         print("max Glide, Cl/Cd = %f @ Cl = %f" %
