@@ -34,8 +34,13 @@ presetsPath = 'ressources' + bs + 'presets'
 imagesPath = 'ressources' + bs + 'images'
 logoName = 'strakmachine.png'
 
-#fonts
+# fonts
 csfont = {'fontname':'Segoe Print'}
+
+# number of decimals in the generated input-files
+Cl_decimals = 3 # lift
+Cd_decimals = 5 # drag
+Al_decimals = 3 # alpha
 
 # fontsizes
 fs_infotext = 10
@@ -141,8 +146,11 @@ strakdata = {
             # name of the batchfile
             "batchfileName" : 'make_strak.bat',
             # operating-mode for strakmachine
-            "operatingMode" : 'targetPolar'
+            "operatingMode" : 'targetPolar',
+            # use always root-airfoil or use predecessing airfoil
+            "useAlwaysRootfoil" : 'false'
             }
+
 
 def getPresetInputFileName(strakType):
     # get real path of the script
@@ -186,6 +194,7 @@ class inputFile:
     def getPresetInputFileName(self):
         return self.presetInputFileName
 
+
     def changeTargetValue(self, keyName, targetValue):
         # get operating-conditions from dictionary
         operatingConditions = self.values["operating_conditions"]
@@ -194,8 +203,20 @@ class inputFile:
         idx = 0
         for key in opPointNames:
             if key == keyName:
+                # get type of op-point
+                opPointType = operatingConditions['op_mode'][idx]
+
+                # limit the number of decimals
+                if (opPointType == 'spec-cl'):
+                    # target-value is drag-value
+                    targetValue = round(targetValue, Cd_decimals)
+                elif (opPointType == 'spec-al'):
+                    # target-value is lift-value
+                    targetValue = round(targetValue, Cl_decimals)
+
                 # change target value
                 operatingConditions['target_value'][idx] = targetValue
+
                 # write-back operatingConditions
                 self.values["operating_conditions"] = operatingConditions
                 return
@@ -210,6 +231,17 @@ class inputFile:
         idx = 0
         for key in opPointNames:
             if key == keyName:
+                # get type of op-point
+                opPointType = operatingConditions['op_mode'][idx]
+
+                # limit the number of decimals
+                if (opPointType == 'spec-cl'):
+                    # opPoint-value is lift-value
+                    op_point = round(op_point, Cl_decimals)
+                elif (opPointType == 'spec-al'):
+                    # opPoint-value is alpha-value
+                    op_point = round(op_point, Al_decimals)
+
                 # change op_point
                 operatingConditions['op_point'][idx] = op_point
                 # write-back operatingConditions
@@ -553,8 +585,8 @@ class inputFile:
 
         # add new oppoints
         for i in range (numOppoints):
-            Cl = round(Cl_min + (i * Cl_increment), 4)
-            Cd = round(polarData.find_CD(Cl), 4)
+            Cl = round(Cl_min + (i * Cl_increment), Cl_decimals)
+            Cd = round(polarData.find_CD(Cl), Cd_decimals)
             #print "Cl:%f, Cd:%f" % (Cl, Cd) #Debug
             self.addTargetPolarOppoint(Cl, Cd)
 
@@ -600,12 +632,12 @@ class strakData:
         self.strakInputFileName = 'i-strak.txt'
         self.ReSqrtCl = 150000
         self.useWingPlanform = True
-        self.fromRootAirfoil= True
         self.generateBatch = True
         self.batchfileName = 'make_strak.bat'
         self.wingData = None
         self.strakType = "F3F"
         self.operatingMode = 'default'
+        self.useAlwaysRootfoil = True#False
         self.seedFoilName = ""
         self.ReNumbers = []
         self.polarFileNames = []
@@ -667,36 +699,45 @@ class polarGraph:
             # plot optimization points
             self.plotLiftDragOptimizationPoints(ax, polar)
 
-            # plot max_speeds
+            # plot max_speed
             x = polar.CD[polar.maxSpeed_idx]
             y = polar.CL[polar.maxSpeed_idx]
-            ax.plot(x, y, 'ro')
+
             # additonal text for root polar only
             if (polar == rootPolar):
+                ax.plot(x, y, marker='o',color=cl_infotext)
                 ax.annotate('maxSpeed (root) @ Cl = %.2f, Cd = %.4f' % (y, x),
                  xy=(x,y), xytext=(20,0), textcoords='offset points',
                       fontsize = fs_infotext, color=cl_infotext)
+            else:
+                ax.plot(x, y, 'ro')
 
 
             # plot max_glide
             x = polar.CD[polar.maxGlide_idx]
             y = polar.CL[polar.maxGlide_idx]
-            ax.plot(x, y, 'ro')
+
             # additonal text for root polar only
             if (polar == rootPolar):
+                ax.plot(x, y, marker='o', color=cl_infotext)
                 ax.annotate('maxGlide (root) @ Cl = %.2f, Cd = %.4f' % (y, x),
                  xy=(x,y), xytext=(20,0), textcoords='offset points',
                       fontsize = fs_infotext, color=cl_infotext)
+            else:
+                ax.plot(x, y, 'ro')
 
             # plot max lift
             x = polar.CD[polar.maxLift_idx]
             y = polar.CL[polar.maxLift_idx]
-            ax.plot(x, y, 'ro')
+
             # additonal text for root polar only
             if (polar == rootPolar):
+                ax.plot(x, y, marker='o', color=cl_infotext)
                 ax.annotate('maxLift (root) @ Cl = %.2f, Cd = %.4f' %(y,x),
                   xy=(x,y), xytext=(10,10), textcoords='offset points',
                     fontsize = fs_infotext, color=cl_infotext)
+            else:
+                ax.plot(x, y, 'ro')
 
                 # plot additional markers for root polar only
                 #ax.plot(polar.CD_Markers, polar.CL_Markers,'ro')
@@ -1340,9 +1381,18 @@ def generate_commandlines(params):
     (get_FoilName(params, 0), params.airfoilFolder, get_FoilName(params, 0))
     commandLines.append(commandline)
 
+    # store seedfoilname
+    strakFoilName = seedFoilName
+    previousFoilname = seedFoilName
+
     # add command-lines for each strak-airfoil
     # skip the root airfoil (as it was already copied)
     for i in range (1, numFoils):
+
+        if (params.useAlwaysRootfoil == False):
+            # store previous airfoil-name
+            previousFoilname = strakFoilName
+
         # get name of the airfoil
         strakFoilName = get_FoilName(params, i)
 
@@ -1351,7 +1401,7 @@ def generate_commandlines(params):
 
         # generate Xoptfoil-commandline
         commandline = "xoptfoil-jx -i %s -r %d -a %s -o %s\n" %\
-                        (iFile, ReList[i], seedFoilName.strip('.dat') + '.dat',
+                        (iFile, ReList[i], previousFoilname.strip('.dat') + '.dat',
                          strakFoilName.strip('.dat'))
         commandLines.append(commandline)
 
@@ -1384,6 +1434,25 @@ def generate_batchfile(batchFileName, commandlines):
     # close the outputfile
     outputfile.close()
 
+
+def generate_visu_batchfiles(params):
+    for i in range(1, len(params.ReNumbers)):
+        visuFileName = "visu_%dk.bat" % (params.ReNumbers[i]/1000)
+        airfoilName = get_FoilName(params, i).strip('.dat')
+
+        try:
+            # create a new file
+            outputfile = open(visuFileName, "w+")
+        except:
+            print ('Error, file %s could not be opened' % visuFileName)
+            return
+
+        # write commandlines
+        outputfile.write("cd build\n")
+        outputfile.write("xoptfoil_visualizer-jx.py -o 3 -c %s\n" % airfoilName)
+
+        # close the outputfile
+        outputfile.close()
 
 ################################################################################
 # function that gets the name of the strak-machine-data-file
@@ -1467,6 +1536,14 @@ def getParameters(dict):
         params.operatingMode = dict["operatingMode"]
     except:
         print ('operatingMode not specified')
+
+    try:
+        if (dict["useAlwaysRootfoil"] == 'true'):
+            params.useAlwaysRootfoil = True
+        else:
+            params.useAlwaysRootfoil = False
+    except:
+        print ('useAlwaysRootfoil not specified')
 
     return params
 
@@ -1657,11 +1734,15 @@ if __name__ == "__main__":
     print("Done.")
 
     # generate batchfile
-    print("Generating batchfile...")
+    print("Generating batchfiles...")
     if (params.generateBatch == True):
         print ('generating batchfile \'%s\'' % params.batchfileName)
         generate_batchfile(params.batchfileName, commandlines)
+        print ('generating visu-batchfiles')
+        generate_visu_batchfiles(params)
     print("Done.")
+
+
 
     # show graph
     graph.draw(scriptPath)
