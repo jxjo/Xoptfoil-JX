@@ -690,6 +690,17 @@ class polarGraph:
 
             self.plotLiftOverAlphaOptimizationPoints(ax, polar)
 
+            # plot max Speed
+            x = polar.alpha[polar.maxSpeed_idx]
+            y = polar.CL[polar.maxSpeed_idx]
+            ax.plot(x, y, 'ro')
+            # additonal text for root polar only
+            if (polar == rootPolar):
+                ax.annotate('maxSpeed (root) @ alpha = %.2f, Cl = %.2f' %\
+                  (x, y), xy=(x,y),
+                  xytext=(40,0), textcoords='offset points',
+                  fontsize = fs_infotext, color=cl_infotext)
+
             # plot max Glide
             x = polar.alpha[polar.maxGlide_idx]
             y = polar.CL[polar.maxGlide_idx]
@@ -697,7 +708,7 @@ class polarGraph:
             # additonal text for root polar only
             if (polar == rootPolar):
                 ax.annotate('maxGlide (root) @ alpha = %.2f, Cl = %.2f' %\
-                  (polar.alpha_maxGlide, polar.CL_maxGlide), xy=(x,y),
+                  (x, y), xy=(x,y),
                   xytext=(40,0), textcoords='offset points',
                   fontsize = fs_infotext, color=cl_infotext)
 
@@ -708,7 +719,7 @@ class polarGraph:
             # additonal text for root polar only
             if (polar == rootPolar):
                 ax.annotate('maxLift (root) @ alpha = %.2f, Cl = %.2f' %\
-                  (polar.alpha_maxLift, polar.CL_maxLift), xy=(x,y),
+                  (x, y), xy=(x,y),
                   xytext=(-80,15), textcoords='offset points',
                   fontsize = fs_infotext, color=cl_infotext)
 
