@@ -260,14 +260,14 @@ class inputFile:
     def adaptMaxLift(self, polarData):
         # get new values from polar
         ClMaxLift = polarData.CL_maxLift
+        CdMaxLift = polarData.CD[polarData.maxLift_idx]
         alphaMaxLift = polarData.alpha_maxLift
 
         # set new values
-        self.changeTargetValue("alphaClmax", ClMaxLift)
         self.changeOpPoint("alphaClmax", alphaMaxLift)
+        self.changeTargetValue("alphaClmax", ClMaxLift)
         self.changeOpPoint("Clmax", ClMaxLift)
-        self.adaptTargetValueToPolar("Clmax", polarData)
-
+        self.changeTargetValue("Clmax", CdMaxLift)
 
     def adaptMaxSpeed(self, polarData):
         # get new values from polar
@@ -285,7 +285,10 @@ class inputFile:
 
         # now adapt target-values of shifted opPoints to polar
         for opPointName in opPointList:
-            self.adaptTargetValueToPolar(opPointName, polarData)
+            try:
+                self.adaptTargetValueToPolar(opPointName, polarData)
+            except:
+                print("opPoint %s was skipped" % opPointName)
 
 
     # adapts Max-Glide and dependend values to polar
@@ -300,14 +303,17 @@ class inputFile:
         # create List of opPoints to be affected. These oppoints will be
         # "shifted", according to the calculated difference
         opPointList = ['helperPreGlide', 'preGlide', 'maxGlide', 'slopeMaxGlide',
-                       'keepGlide', 'helperKeepGlide',]
+                       'keepGlide', 'helperKeepGlide']
 
         # shift all opPoints according to the difference
         self.shiftOpPoints(diff, opPointList)
 
         # now adapt target-values of shifted opPoints to polar
         for opPointName in opPointList:
-            self.adaptTargetValueToPolar(opPointName, polarData)
+            try:
+                self.adaptTargetValueToPolar(opPointName, polarData)
+            except:
+                print("opPoint %s was skipped" % opPointName)
 
         # set new OpPoint / target-value for alphaMaxGlide
         self.changeOpPoint("alphaMaxGlide", AlphaMaxGlide)
@@ -319,27 +325,33 @@ class inputFile:
     def shiftOpPoints(self, diff, opPointList):
          # shift all oppoints in list
         for opPointName in opPointList:
-             opPointValue = self.getOpPoint(opPointName)
-             opPointValue = opPointValue + diff
-             self.changeOpPoint(opPointName, opPointValue)
+            try:
+                opPointValue = self.getOpPoint(opPointName)
+                opPointValue = opPointValue + diff
+                self.changeOpPoint(opPointName, opPointValue)
+            except:
+                print("opPoint %s was skipped" % opPointName)
 
     # scales the target-values of a list of oppoints by a certain factor.
     def scaleTargetValues(self, factor, opPointList):
          # scale all target-values in list
         for opPointName in opPointList:
-             value = self.getTargetValue(opPointName)
-             value = value * factor
-             self.changeTargetValue(opPointName, value)
+            try:
+                value = self.getTargetValue(opPointName)
+                value = value * factor
+                self.changeTargetValue(opPointName, value)
+            except:
+                print("opPoint %s was skipped" % opPointName)
 
     # shifts the target-values of a list of oppoints by a certain difference.
     def shiftTargetValues(self, diff, opPointList):
          # scale all target-values in list
         for opPointName in opPointList:
-             value = self.getTargetValue(opPointName)
-             print value
-             value = round((value - diff) ,4)
-             print value
-             self.changeTargetValue(opPointName, value)
+            try:
+                value = self.getTargetValue(opPointName)
+                self.changeTargetValue(opPointName, value)
+            except:
+                print("opPoint %s was skipped" % opPointName)
 
 
     # the target-value of the given oppoint will be set according to the
@@ -362,21 +374,55 @@ class inputFile:
         self.changeTargetValue(opPointName, targetValue)
 
     def transferMaxLift(self, polarData):
-        # get opPoint-values
-        CL_maxLift = self.getOpPoint("Clmax")
-        alpha_maxLift = self.getOpPoint("alphaClmax")
+        # 40% max-Lift of root-airfoil
+        keepLift = 0.3
 
-        # get polar-values
-        alpha_Polar = polarData.alpha_maxLift
-        CL_Polar = polarData.CL_maxLift
+        try:
+            # Clmax
+            # get opPoint-values
+            CL_maxLift = self.getOpPoint("Clmax")
+            CD_maxLift = self.getTargetValue("Clmax")
 
-        # new value is the medium value
-        CL_maxLift = (CL_maxLift + CL_Polar)/2
-        alpha_maxLift = (alpha_maxLift + alpha_Polar)/2
+            #get polar-values
+            CL_Polar = polarData.CL[polarData.maxLift_idx]
+            CD_Polar = polarData.CD[polarData.maxLift_idx]
 
-        self.changeOpPoint("Clmax", CL_maxLift)
-        self.changeOpPoint("alphaClmax", alpha_maxLift)
-        self.changeTargetValue("alphaClmax", CL_maxLift)
+            # new value is the medium value
+            CL_maxLift = ((CL_maxLift * keepLift) +
+                          (CL_Polar * (1.0-keepLift)))
+
+            CD_maxLift = ((CD_maxLift * keepLift ) +
+                          (CD_Polar * (1.0-keepLift)))
+
+            # set new values
+            self.changeOpPoint("Clmax", CL_maxLift)
+            self.changeTargetValue("Clmax", CD_maxLift)
+        except:
+            print("opPoint Clmax was skipped")
+
+        try:
+            # alphaClmax
+            # get opPoint-values
+            alpha_maxLift = self.getOpPoint("alphaClmax")
+            CL_alpha_maxLift = self.getTargetValue("alphaClmax")
+
+            # get polar-values
+            alpha_maxLift_Polar = polarData.alpha[polarData.maxLift_idx]
+            CL_alpha_maxLift_Polar = polarData.CL[polarData.maxLift_idx]
+
+            # new value is the medium value
+            CL_alpha_maxLift = ((CL_alpha_maxLift * keepLift) +
+                                (CL_alpha_maxLift_Polar * (1.0-keepLift)))
+
+            alpha_maxLift = ((alpha_maxLift * keepLift) +
+                             (alpha_maxLift_Polar * (1.0-keepLift)))
+
+            # set new values
+            self.changeOpPoint("alphaClmax", alpha_maxLift)
+            self.changeTargetValue("alphaClmax", CL_alpha_maxLift)
+        except:
+            print("opPoint alphaClmax was skipped")
+
 
     # all target-values will be shifted "downward" according
     # to the difference in CL_CD_MaxGlide
@@ -400,27 +446,36 @@ class inputFile:
 
 
     def transferMaxSpeed(self, polarData):
-        CL_keepSpeed = self.getOpPoint("keepSpeed")
-        CD_keepSpeed = self.getTargetValue("keepSpeed")
-        CD_Polar = polarData.find_CD(CL_keepSpeed)
-        # new CD is the medium value
-        CD_keepSpeed = (CD_keepSpeed + CD_Polar)/2
-        self.changeTargetValue("keepSpeed", CD_keepSpeed)
+        try:
+            CL_keepSpeed = self.getOpPoint("keepSpeed")
+            CD_keepSpeed = self.getTargetValue("keepSpeed")
+            CD_Polar = polarData.find_CD(CL_keepSpeed)
+            # new CD is the medium value
+            CD_keepSpeed = (CD_keepSpeed + CD_Polar)/2
+            self.changeTargetValue("keepSpeed", CD_keepSpeed)
+        except:
+            print("opPoint keepSpeed was skipped")
 
-        CL_maxSpeed = self.getOpPoint("maxSpeed")
-        CD_maxSpeed = self.getTargetValue("maxSpeed")
-        CD_Polar = polarData.find_CD(CL_maxSpeed)
-        # new CD is the medium value
-        CD_maxSpeed = (CD_maxSpeed + CD_Polar)/2
-        self.changeTargetValue("maxSpeed", CD_maxSpeed)
+        try:
+            CL_maxSpeed = self.getOpPoint("maxSpeed")
+            CD_maxSpeed = self.getTargetValue("maxSpeed")
+            CD_Polar = polarData.find_CD(CL_maxSpeed)
+            # new CD is the medium value
+            CD_maxSpeed = (CD_maxSpeed + CD_Polar)/2
+            self.changeTargetValue("maxSpeed", CD_maxSpeed)
+        except:
+            print("opPoint maxSpeed was skipped")
 
-        # set pre speed to polar-value
-        CL_preSpeed = self.getOpPoint("preSpeed")
-        #CD_preSpeed = self.getTargetValue("preSpeed")
-        CD_Polar = polarData.find_CD(CL_preSpeed)
-        # new CD is the medium value
-        #CD_preSpeed = (CD_preSpeed + CD_Polar)/2
-        self.changeTargetValue("preSpeed", CD_Polar)#CD_preSpeed)
+        try:
+            # set pre speed to polar-value
+            CL_preSpeed = self.getOpPoint("preSpeed")
+            #CD_preSpeed = self.getTargetValue("preSpeed")
+            CD_Polar = polarData.find_CD(CL_preSpeed)
+            # new CD is the medium value
+            #CD_preSpeed = (CD_preSpeed + CD_Polar)/2
+            self.changeTargetValue("preSpeed", CD_Polar)#CD_preSpeed)
+        except:
+            print("opPoint preSpeed was skipped")
 
 
     # adapt all oppoints and also the target-values to the given polar-data
@@ -764,8 +819,7 @@ class polarGraph:
                         Cd = operatingConditions["target_value"][idx]
                         # calculate Cl/Cd
                         y = x/Cd
-                        if Name == 'Clmax':
-                            print Cd,y
+
                         if (Name.find('helper') >= 0):
                             ax.plot(x, y, 'y.')
                         else:
