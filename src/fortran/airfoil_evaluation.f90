@@ -113,18 +113,14 @@ end function objective_function_nopenalty
 !=============================================================================80
 function aero_objective_function(designvars, include_penalty, evaluate_only_geometry)
 
-  use math_deps,       only : interp_vector, curvature, derv1f1, derv1b1
-
-  ! jx-mod 
-  use airfoil_operations, only : assess_surface, smooth_it,        &
-                                 show_camb_thick_of_current
+  use math_deps,          only : interp_vector, curvature, derv1f1, derv1b1
+  use airfoil_operations, only : show_camb_thick_of_current, get_curv_violations
   use airfoil_operations, only : my_stop
   use math_deps,          only : interp_point, derivation_at_point
-
-  use parametrization, only : top_shape_function, bot_shape_function,          &
-                              create_airfoil, create_airfoil_camb_thick
-  use xfoil_driver,    only : run_xfoil, xfoil_geometry_amax,                  &
-                              xfoil_geometry_info, xfoil_set_airfoil
+  use parametrization,    only : top_shape_function, bot_shape_function,          &
+                                 create_airfoil, create_airfoil_camb_thick
+  use xfoil_driver,       only : run_xfoil, xfoil_geometry_amax,                  &
+                                 xfoil_geometry_info, xfoil_set_airfoil
 
   double precision, dimension(:), intent(in) :: designvars
   logical, intent(in), optional :: include_penalty, evaluate_only_geometry
@@ -134,8 +130,6 @@ function aero_objective_function(designvars, include_penalty, evaluate_only_geom
                                                zt_interp, zb_interp, thickness
   double precision, dimension(size(xseedt,1)) :: zt_new
   double precision, dimension(size(xseedb,1)) :: zb_new
-  double precision, dimension(size(xseedt,1)) :: curvt
-  double precision, dimension(size(xseedb,1)) :: curvb
   double precision, dimension(naddthickconst) :: add_thickvec
   integer :: nmodest, nmodesb, nptt, nptb, i, dvtbnd1, dvtbnd2, dvbbnd1,       &
              dvbbnd2, nptint
@@ -146,8 +140,8 @@ function aero_objective_function(designvars, include_penalty, evaluate_only_geom
   double precision, dimension(noppoint) :: lift, drag, moment, viscrms, alpha, &
                                            xtrt, xtrb
   double precision, dimension(noppoint) :: actual_flap_degrees
-  double precision :: increment, curv1, curv2
-  integer :: nreversalst, nreversalsb, ndvs
+  double precision :: increment
+  integer :: nreverse_violations, nhighlow_violations, ndvs
   double precision :: gapallow, maxthick, ffact
   integer :: flap_idx, dvcounter
   double precision, parameter :: epsexit = 1.0D-04
@@ -160,7 +154,6 @@ function aero_objective_function(designvars, include_penalty, evaluate_only_geom
   character(100)   :: penalty_info
   type(op_opt_info_type),  dimension (max_op_points) :: op_opt_info
   type(geo_opt_info_type), dimension (max_op_points) :: geo_opt_info
-  double precision :: perturbation_bot, perturbation_top
 
 ! Enable / disable penalty function
 
@@ -243,7 +236,6 @@ function aero_objective_function(designvars, include_penalty, evaluate_only_geom
 !----------------------------------------------------------------------------------------------------
 ! Check geometry contraints  - resulting in penalties added to objective function 
 !----------------------------------------------------------------------------------------------------
-
 
   penaltyval   = 0.d0
   penalty_info = ''                            ! user info on the type of penalities given
@@ -359,41 +351,42 @@ function aero_objective_function(designvars, include_penalty, evaluate_only_geom
   if (max(0.d0,min_thickness-maxthick)/0.1d0 > 0.d0) penalty_info = trim(penalty_info) // ' minThick'
   if (max(0.d0,maxthick-max_thickness)/0.1d0 > 0.d0) penalty_info = trim(penalty_info) // ' maxThick'
 
-! Check for curvature reversals
+
+! Check for curvature reversals and high lows
 
   if (check_curvature) then
 
-!   Compute curvature on top and bottom
+!   Top side 
 
-    curvt = curvature(nptt, xseedt, zt_new)
-    curvb = curvature(nptb, xseedb, zb_new)
+    call get_curv_violations (xseedt, zt_new, & 
+                              curv_threshold, highlow_treshold, & 
+                              max_curv_reverse_top, max_curv_highlow_top,   &
+                              nreverse_violations, nhighlow_violations)
 
-!   Check number of reversals that exceed the threshold
+    if (nreverse_violations > 0 ) then 
+      penaltyval = penaltyval + nreverse_violations
+      penalty_info = trim(penalty_info) // ' maxReversal'
+    end if 
+    if (nhighlow_violations > 0 ) then 
+      penaltyval = penaltyval + nhighlow_violations
+      penalty_info = trim(penalty_info) // ' maxHighLow'
+    end if 
 
-    nreversalst = 0
-    curv1 = 0.d0
-    do i = 2, nptt - 1
-      if (abs(curvt(i)) >= curv_threshold) then
-        curv2 = curvt(i)
-        if (curv2*curv1 < 0.d0) nreversalst = nreversalst + 1
-        curv1 = curv2
-      end if
-    end do
+!   Bottom side - 
 
-    nreversalsb = 0
-    curv1 = 0.d0
-    do i = 2, nptb - 1
-      if (abs(curvb(i)) >= curv_threshold) then
-        curv2 = curvb(i)
-        if (curv2*curv1 < 0.d0) nreversalsb = nreversalsb + 1
-        curv1 = curv2
-      end if
-    end do
+    call get_curv_violations (xseedb, zb_new, & 
+                              curv_threshold, highlow_treshold, & 
+                              max_curv_reverse_bot, max_curv_highlow_bot,   &
+                              nreverse_violations, nhighlow_violations)
 
-    penaltyval = penaltyval + max(0.d0,dble(nreversalst-max_curv_reverse_top))
-    penaltyval = penaltyval + max(0.d0,dble(nreversalsb-max_curv_reverse_bot))
-    if (max(0.d0,dble(nreversalst-max_curv_reverse_top)) > 0.d0) penalty_info = trim(penalty_info) // ' maxReversal'
-    if (max(0.d0,dble(nreversalsb-max_curv_reverse_bot)) > 0.d0) penalty_info = trim(penalty_info) // ' maxReversal'
+    if (nreverse_violations > 0 ) then 
+      penaltyval = penaltyval + nreverse_violations
+      penalty_info = trim(penalty_info) // ' maxReversal'
+    end if 
+    if (nhighlow_violations > 0 ) then 
+      penaltyval = penaltyval + nhighlow_violations
+      penalty_info = trim(penalty_info) // ' maxHighLow'
+    end if 
 
   end if
 
@@ -462,34 +455,6 @@ function aero_objective_function(designvars, include_penalty, evaluate_only_geom
     return
   end if
 
-!----------------------------------------------------------------------------------------------------
-! Smoothing  - evaluate contribution to gow objective function 
-!----------------------------------------------------------------------------------------------------
-
-  geo_objective_function  = 0.d0                
-
-  if (do_smoothing) then
-
-    if (show_details .and. penalize ) then 
-       write (*,*)
-       call assess_surface ('Top', .true., max_curv_reverse_top, xseedt, zt_new, nreversalst, perturbation_top)
-       call assess_surface ('Bot', .true., max_curv_reverse_bot, xseedb, zb_new, nreversalsb, perturbation_bot)
-    else   
-      ! Check surface for pertubation (ups and downs) and number of reversals
-      call assess_surface ('Top', .false., max_curv_reverse_top, xseedt, zt_new, nreversalst, perturbation_top)
-      call assess_surface ('Bot', .false., max_curv_reverse_bot, xseedb, zb_new, nreversalsb, perturbation_bot)
-    end if 
-
-    ! Calculate geometry objective based on the assessed quality (pertubation)
-      ! add a empirical base value - pertubation can be quite volatile
-    cur_value = (10.d0 + perturbation_top + perturbation_bot)
-    increment = cur_value * scale_pertubation
-    geo_objective_function = geo_objective_function +  increment * weighting_smoothing 
-    if (show_details .and. penalize ) then
-      write (*,'(31x,A,F8.2,A)') 'Contribution of surface assessment: ', (1d0 -increment) * weighting_smoothing * 100d0,'%'
-      write (*,*) 
-    end if 
-  end if
 
 
 !----------------------------------------------------------------------------------------------------
@@ -501,7 +466,9 @@ function aero_objective_function(designvars, include_penalty, evaluate_only_geom
   op_opt_info%obj          = 1d0               
   op_opt_info%weighting    = 0d0               
   op_opt_info%change       = -999d0               
-  op_opt_info%penalty_info = ''    
+  op_opt_info%penalty_info = ''  
+  if (show_details) write (*,*)
+
 
 ! Analyze airfoil at requested operating conditions with Xfoil
 
@@ -672,6 +639,8 @@ function aero_objective_function(designvars, include_penalty, evaluate_only_geom
 !----------------------------------------------------------------------------------------------------
 ! Evaluate geometric objective function  
 !----------------------------------------------------------------------------------------------------
+
+  geo_objective_function  = 0.d0                
 
   ! Evaluate current value of geomtry targets 
   do i = 1, ngeo_targets
@@ -926,13 +895,6 @@ function write_airfoil_optimization_progress(designvars, designcounter)
   end if
 
   
-! jx-mod Smoothing - begin ---------------------------------------------------------
-
-  if (do_smoothing) then 
-    call smooth_it (xseedt, zt_new)
-    call smooth_it (xseedb, zb_new)
-  end if 
-
 ! Format coordinates in a single loop in derived type
 
   do i = 1, nptt
@@ -1028,7 +990,7 @@ function write_airfoil_optimization_progress(designvars, designcounter)
 
 !   Header for polar file
 
-    write(*,*) "Writing polars for seed airfoil to file "//                    &
+    write(*,*) "Writing polars      for seed airfoil to file "//                    &
                trim(polarfile)//" ..."
     open(unit=polarunit, file=polarfile, status='replace')
     write(polarunit,'(A)') 'title="Airfoil polars"'
@@ -1057,7 +1019,7 @@ function write_airfoil_optimization_progress(designvars, designcounter)
 
     ! Open polar file and write zone header
     
-    write(*,*) "  Writing polars for design number "//trim(text)//             &
+    write(*,*) "  Writing polars      for design number "//trim(text)//             &
                " to file "//trim(polarfile)//" ..."
     open(unit=polarunit, file=polarfile, status='old', position='append',      &
          err=901)
@@ -1623,7 +1585,7 @@ subroutine show_op_point_contributions ( obj_func_value,    &
   do i = 1, noppoint
     write (*,'(A6,I02,A1)', advance = 'no') '    op',i,''
   end do 
-  write (*,'(10x)', advance = 'no')
+  write (*,'(5x)', advance = 'no')
   do i = 1, ngeo
     write (*,'(A6,I02,A1)', advance = 'no') '   geo',i,''
   end do 
@@ -1635,7 +1597,7 @@ subroutine show_op_point_contributions ( obj_func_value,    &
   do i = 1, noppoint
     write (*,'(SP, F8.1,A1)', advance = 'no') op_opt_info(i)%change * 100.d0,'%'
   end do 
-  write (*,'(10x)', advance = 'no')
+  write (*,'(5x)', advance = 'no')
   do i = 1, ngeo
     write (*,'(SP, F8.2,A1)', advance = 'no') geo_opt_info(i)%change * 100.d0,'%'
   end do 
@@ -1665,7 +1627,7 @@ subroutine show_op_point_contributions ( obj_func_value,    &
     end if
     call print_colored (outcolor, trim(outstring))
   end do 
-  write (*,'(10x)', advance = 'no')
+  write (*,'(5x)', advance = 'no')
   do i = 1, ngeo
     contribution = (1- geo_opt_info(i)%obj) * geo_opt_info(i)%weighting *100.d0
     write (outstring,'(F8.2,A1)') contribution,'%'
@@ -1691,8 +1653,6 @@ subroutine show_op_point_contributions ( obj_func_value,    &
     write (*,'(A9)', advance = 'no') trim(penalty_info)
     write (*,*)
   end if
-
-  write (*,*)
 
 end subroutine show_op_point_contributions
 

@@ -80,8 +80,11 @@ module vardef
                       min_camber, max_camber
   double precision :: max_te_curvature
 
+  logical :: check_curvature
   double precision :: curv_threshold
   integer :: max_curv_reverse_top, max_curv_reverse_bot
+  integer :: max_curv_highlow_top, max_curv_highlow_bot
+
   character(8), dimension(max_op_points) :: moment_constraint_type
   double precision, dimension(max_op_points) :: min_moment
   character(11) :: shape_functions
@@ -92,7 +95,6 @@ module vardef
   logical :: match_foils
   double precision :: match_foils_scale_factor 
   
-  logical :: check_curvature
   logical :: symmetrical
 
   integer :: nparams_top, nparams_bot
@@ -117,7 +119,6 @@ module vardef
 ! jx-mod Smoothing - parameters for smoothing 
   double precision :: spike_threshold, highlow_treshold
   logical :: do_smoothing
-  double precision :: scale_pertubation, weighting_smoothing
   double precision, dimension(:), allocatable :: zseedt_not_smoothed, zseedb_not_smoothed
   
 !$omp threadprivate(curr_foil)

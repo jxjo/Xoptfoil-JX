@@ -708,48 +708,112 @@ end subroutine show_camb_thick_of_current
 !                       > ... getting worse and worse 
 !------------------------------------------------------------------------------
 
-subroutine assess_surface (info, show_it, max_curv_reverse, x, y, nreversals2, perturbation)
+subroutine assess_surface (info, x, y)
 
   use math_deps, only : find_curvature_reversals, find_curvature_spikes
   use vardef,    only:  curv_threshold, spike_threshold, highlow_treshold
 
   character(*), intent(in) :: info
   double precision, dimension(:), intent(inout) :: x, y
-  double precision, intent(out)  :: perturbation
-  integer, intent(in)   :: max_curv_reverse
-  logical, intent(in)   :: show_it
-  integer, intent(out)  :: nreversals2
 
-  integer :: nhighlows2, nspikes, max_spikes, max_highlows2
+  integer :: nhighlows, nspikes, nreversals
   character (size(x)) :: result_info
 
-  max_spikes    = 0                             ! don't like spikes 
-  max_highlows2 = max(0, max_curv_reverse - 1)  ! also a curve with 1 reversal shouldn't have a high/low
-  
-  nreversals2 = 0
-  nhighlows2  = 0
-  nspikes     = 0
+  nreversals = 0
+  nhighlows  = 0
+  nspikes    = 0
 
   result_info = repeat ('-', size(x) ) 
 
   ! have a look at 3rd derivation ...
-  call find_curvature_spikes   (size(x), 5, spike_threshold, x, y, nspikes, result_info)
+  call find_curvature_spikes (size(x), 1, spike_threshold, x, y, nspikes, result_info)
 
   ! have a look at 2nd derivation ...
-  call find_curvature_reversals(size(x), 5, highlow_treshold, curv_threshold, x, y, &
-                                nhighlows2,nreversals2, result_info)
+  call find_curvature_reversals(size(x), 1, highlow_treshold, curv_threshold, x, y, &
+                                nhighlows, nreversals, result_info)
 
-  ! calculate an overall index for all the reversal, spikes, etc...
-  perturbation    =   1.00d0 * max(0.d0,dble(nreversals2 - max_curv_reverse))    &
-                    + 0.30d0 * max(0.d0,dble(nhighlows2  - max_highlows2))    &
-                    + 0.03d0 * max(0.d0,dble(nspikes - max_spikes))
-
-  if ( show_it ) then       
-    write (*,'(11x,A,1x,3(I2,A),A)') info//' ', nreversals2, 'R ', &
-      nhighlows2, 'HL ', nspikes, 's ', '  '// result_info
-  end if
+  write (*,'(11x,A,1x,3(I2,A),A)') info//' ', nreversals, 'R ', &
+                                   nhighlows, 'HL ', nspikes, 's ', '  '// result_info
 
 end subroutine assess_surface
+
+!------------------------------------------------------------------------------
+! Counts the number of highlows of 2nd derivative (bumps) of polyline (x,y) 
+!
+!   info                Id-String to print for User e.g. 'Top surface'
+!   show_it             Print infos about pertubations  
+!   reversal_threshold  minimum +- of curvature to detect reversal 
+!   highlow_threshold   minimum height of a highlow to detect 
+!   max_curv_reverse    max. allowed curve reversals 
+!   max_curv_highlow    max. allowed curve highlow  
+!
+! Returns
+!    nreverse_violations     number of reversals exceeding max_curv_reverse
+!    nhighlow_violations     number of highlows exceeding max_curv_highlow
+!------------------------------------------------------------------------------
+
+subroutine get_curv_violations (x, y, & 
+                      reversal_threshold, highlow_treshold, & 
+                      max_curv_reverse, max_curv_highlow,   &
+                      nreverse_violations, nhighlow_violations)
+
+  use math_deps, only : find_curvature_reversals, find_curvature_spikes
+
+  double precision, dimension(:), intent(in) :: x, y
+  double precision, intent(in)   :: highlow_treshold, reversal_threshold
+  integer, intent(in)            :: max_curv_reverse, max_curv_highlow
+
+  integer, intent(out) :: nreverse_violations, nhighlow_violations
+
+  character (size(x)) :: result_info
+  integer :: nhighlows, nreversals
+
+  result_info = repeat ('-', size(x) )    ! dummy   
+
+  ! have a look at 2nd derivation ...
+  call find_curvature_reversals(size(x), 5, highlow_treshold, reversal_threshold, x, y, &
+  nhighlows,nreversals, result_info)
+
+  nreverse_violations = max(0,(nreversals-max_curv_reverse))
+  nhighlow_violations = max(0,(nhighlows-max_curv_highlow))
+
+end subroutine get_curv_violations
+
+!------------------------------------------------------------------------------
+! Counts the number of highlows of 2nd derivative (bumps) of polyline (x,y) 
+!
+!   info                Id-String to print for User e.g. 'Top surface'
+!   show_it             Print infos about pertubations  
+!   reversal_threshold  minimum +- of curvature to detect reversal 
+!   highlow_threshold   minimum height of a highlow to detect 
+!
+! Returns
+!    nhighreversals     number of highlows
+!    nhighlows          number of highlows
+!------------------------------------------------------------------------------
+
+  subroutine show_reversals_highlows (info, x, y, & 
+                                     reversal_threshold, highlow_treshold )
+
+  use math_deps, only : find_curvature_reversals, find_curvature_spikes
+
+  character(*), intent(in) :: info
+  double precision, dimension(:), intent(in) :: x, y
+  double precision, intent(in)   :: highlow_treshold, reversal_threshold
+  integer  :: nhighlows, nreversals
+
+  character (size(x)) :: result_info
+
+  result_info = repeat ('-', size(x) )      
+
+  ! have a look at 2nd derivation ...
+  call find_curvature_reversals(size(x), 5, highlow_treshold, reversal_threshold, x, y, &
+                                nhighlows,nreversals, result_info)
+
+  write (*,'(11x,A,1x,2(I2,A),A)') info//' ', nreversals, 'R ', &
+            nhighlows, 'HL ', '  '// result_info
+
+  end subroutine show_reversals_highlows
 
 !-------------------------------------------------------------------------------------
 ! Central entrypoint for smoothing a polyline (x,y) being the top or bottom surface
@@ -767,13 +831,9 @@ end subroutine assess_surface
 !   The outer loop calls Chaikin is until one of the above criteria is reached.
 !
 ! The starting point for smoothing in the polyline is set by i_range_start.
-! Currently LE area is excluded from smoothing because the LE high curvature is a 
-! welcome target to be smoothed...  Special care must be done at the transition point 
-! from non-smoothed to smoothed to avoid jumps in the 1st and 2nd derivation
-! (xfoil doesn't like this ...) (see sub getSmootherChaikin)
 ! 
 ! Be careful in changin the parameters and always take a look at the result 
-!    delta = ysmoothed - yoriginal
+!    delta = y_smoothed - y_original
 !------------------------------------------------------------------------------
 
 subroutine smooth_it (x, y)
@@ -789,9 +849,26 @@ subroutine smooth_it (x, y)
   integer :: i, n_Chaikin_iter, best_nspikes_index, best_nspikes
   double precision :: tension
   character (size(x)) :: result_info
+  
+  double precision, dimension(size(x)) :: x_save
+  double precision :: pi
 
-  i_range_start  = 17             ! smooth polyline from point number - leave nose area
-                                  ! i=17 is approx at x=0.07 (Xoptfoil 200 panelling)  
+  ! Transform the x-Axis with a arccos function so that the leading area will be stretched  
+  ! resulting in lower curvature at LE - and the rear part a little compressed
+  ! This great approach is from Harry Morgan in his smoothing algorithm
+  !    see https://ntrs.nasa.gov/archive/nasa/casi.ntrs.nasa.gov/19850022698.pdf
+  x_save = x
+  pi = acos(-1.d0)
+  do i = 1, size(x)
+    if (x(i) < 0.d0) then         ! sanity check - nowbody knows ...
+      x(i) = 0.d0
+    else
+      x(i) = acos(1.d0 - x(i)) * 2.d0 / pi 
+    end if       
+  end do 
+  ! end transformation of x 
+
+  i_range_start  = 1              ! with transformation will start now at 1
   i_range_end    = size (x)       ! ... and end
                                   ! count the number of current spikes in the polyline
   call find_curvature_spikes(size(x), i_range_start, spike_threshold, x, y, nspikes, result_info)
@@ -821,6 +898,9 @@ subroutine smooth_it (x, y)
     i = i +1
 
   end do
+
+! restore original x values as they were transformed for smoothing
+  x = x_save
 
 end subroutine smooth_it
 

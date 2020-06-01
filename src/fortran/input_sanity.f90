@@ -32,40 +32,29 @@ subroutine check_seed()
 
   use vardef
   use math_deps,          only : interp_vector, curvature, derv1f1, derv1b1, norm_2
+  use math_deps,          only : interp_point, derivation_at_point
   use xfoil_driver,       only : run_xfoil
   use xfoil_inc,          only : AMAX, CAMBR
-  use airfoil_evaluation, only : xfoil_options, xfoil_geom_options
-! jx-mod  
-  use airfoil_operations, only : assess_surface, smooth_it
-  use airfoil_operations, only : my_stop
-  use airfoil_evaluation, only : op_seed_value
+  use airfoil_evaluation, only : xfoil_options, xfoil_geom_options, op_seed_value
+  use airfoil_operations, only : assess_surface, smooth_it, my_stop
+  use airfoil_operations, only : get_curv_violations, show_reversals_highlows
   use os_util,            only : print_note
-
-  use math_deps,          only : interp_point
-
-! jx-mod additional op-types
-  use math_deps,          only : derivation_at_point
-  double precision :: slope
 
 
   double precision, dimension(:), allocatable :: x_interp, thickness
   double precision, dimension(:), allocatable :: zt_interp, zb_interp
-  double precision, dimension(size(xseedt,1)) :: curvt
-  double precision, dimension(size(xseedb,1)) :: curvb
   double precision, dimension(naddthickconst) :: add_thickvec
+  double precision, dimension(noppoint)       :: lift, drag, moment, viscrms, alpha, &
+                                                  xtrt, xtrb
   double precision :: penaltyval, tegap, gapallow, maxthick, heightfactor
-  double precision :: panang1, panang2, maxpanang, curv1, curv2
-  double precision :: checkval, len1, len2, growth1, growth2, xtrans, ztrans
-  double precision, dimension(noppoint) :: lift, drag, moment, viscrms, alpha, &
-                                           xtrt, xtrb
+  double precision :: panang1, panang2, maxpanang, slope
+  double precision :: checkval, len1, len2, growth1, growth2, xtrans
   double precision :: pi
-  integer :: i, nptt, nptb, nreversalst, nreversalsb, nptint
+  integer :: i, nptt, nptb, nptint
   character(100) :: text, text2
   character(15) :: opt_type
   logical :: addthick_violation
-! jx-mod  
   double precision :: ref_value, seed_value, tar_value, match_delta, cur_te_curvature
-  double precision :: perturbation_top , perturbation_bot
 
   penaltyval = 0.d0
   pi = acos(-1.d0)
@@ -92,24 +81,17 @@ subroutine check_seed()
 
   if (do_smoothing) then
 
-    call assess_surface ('Top', .true., max_curv_reverse_top, xseedt, zseedt, nreversalst, perturbation_top)
-    call assess_surface ('Bot', .true., max_curv_reverse_bot, xseedb, zseedb, nreversalsb, perturbation_bot)
-
-    write (*,'(1x,A)') 'Smoothing ...'
+    write (*,'(1x,A)') 'Before smoothing ...'
+    call assess_surface ('Top', xseedt, zseedt)
+    call assess_surface ('Bot', xseedb, zseedb)
 
     call smooth_it (xseedt, zseedt)
-    call smooth_it (xseedb, xseedb)
+    call smooth_it (xseedb, zseedb)
 
-    call assess_surface ('Top', .true., max_curv_reverse_top, xseedt, zseedt, nreversalst, perturbation_top)
-    call assess_surface ('Bot', .true., max_curv_reverse_bot, xseedb, zseedb, nreversalsb, perturbation_bot)
+    write (*,'(1x,A)') 'Ater smoothing ...'
+    call assess_surface ('Top', xseedt, zseedt)
+    call assess_surface ('Bot', xseedb, zseedb)
     write (*,*)
-
-    ! set scaling for pertubation of surface for smoothing being part of geo targets
-    ! add a base value because pertubation is quite volatile
-    scale_pertubation = 1.d0/(10.d0 + perturbation_top + perturbation_bot)
-  else
-
-    scale_pertubation = 0.d0
 
   end if
 
@@ -300,78 +282,21 @@ subroutine check_seed()
     call ask_stop("Seed airfoil violates max_thickness constraint.")
   end if
 
+
 ! Check for curvature reversals
 
   if (check_curvature) then
 
+    call check_handle_curve_violations ('Top surface', xseedt, zseedt, &
+                                        max_curv_reverse_top, max_curv_highlow_top)
+    call check_handle_curve_violations ('Bot surface', xseedb, zseedb, &
+                                        max_curv_reverse_bot, max_curv_highlow_bot)
+  end if 
 
-!   Compute curvature on top and bottom surfaces
-
-    curvt = curvature(nptt, xseedt, zseedt)
-    curvb = curvature(nptb, xseedb, zseedb)
-
-!   Check number of reversals exceeding threshold
-
-    nreversalst = 0
-    curv1 = 0.d0
-    do i = 2, nptt - 1
-      if (abs(curvt(i)) >= curv_threshold) then
-        curv2 = curvt(i)
-        if (curv2*curv1 < 0.d0) then
-          xtrans = xseedt(i)/foilscale - xoffset
-          write(text,'(F8.4)') xtrans
-          text = adjustl(text)
-          ztrans = zseedt(i)/foilscale - zoffset
-          write(text2,'(F8.4)') ztrans
-          text2 = adjustl(text2)
-          write(*,*) "Curvature reversal on top surface near (x, z) = ("//&
-                         trim(text)//", "//trim(text2)//")"
-          write(text,'(F8.4)') (abs(curv2-curv1))
-          text = adjustl(text)
-          write(*,*) "Curvature: "//trim(text)
-          nreversalst = nreversalst + 1
-        end if
-        curv1 = curv2
-      end if
-    end do
-
-    if (nreversalst > max_curv_reverse_top)                                    &
-      call ask_stop("Seed airfoil violates max_curv_reverse_top constraint.")
-
-!   Bottom surface
-
-    nreversalsb = 0
-    curv1 = 0.d0
-    do i = 2, nptb - 1
-        if (abs(curvb(i)) >= curv_threshold) then
-        curv2 = curvb(i)
-        if (curv2*curv1 < 0.d0) then
-          xtrans = xseedb(i)/foilscale - xoffset
-          write(text,'(F8.4)') xtrans
-          text = adjustl(text)
-          ztrans = zseedb(i)/foilscale - zoffset
-          write(text2,'(F8.4)') ztrans
-          text2 = adjustl(text2)
-          write(*,*) "Curvature reversal on bot surface near (x, z) = ("//&
-                         trim(text)//", "//trim(text2)//")"
-          write(text,'(F8.4)') curvb(i)
-          text = adjustl(text)
-          write(*,*) "Curvature: "//trim(text)
-          nreversalsb = nreversalsb + 1
-        end if
-        curv1 = curv2
-      end if
-    end do
-
-    if (nreversalsb > max_curv_reverse_bot)                                    &
-      call ask_stop("Seed airfoil violates max_curv_reverse_bot constraint.")
-
-  end if
 
 ! If mode match_foils end here with checks as it becomes aero specific, calc scale
 
   if (match_foils) then
-    ! jx-test
     match_delta = norm_2(zseedt(2:nptt-1) - zmatcht(2:nptt-1)) + &
                   norm_2(zseedb(2:nptb-1) - zmatchb(2:nptb-1))
     ! Playground: Match foil equals seed foil. Take a dummy objective value to start
@@ -421,8 +346,8 @@ subroutine check_seed()
 
   end do
 
-  ! jx-mod Check for a good value of xfoil vaccel to ensure convergence at hiher cl
-  if (xfoil_options%vaccel >= 0.01d0) then
+  ! jx-mod Check for a good value of xfoil vaccel to ensure convergence at higher cl
+  if (xfoil_options%vaccel > 0.01d0) then
     write(text,'(F8.4)') xfoil_options%vaccel
     text = adjustl(text)
     call print_note ("The xfoil convergence paramter vaccel: "//trim(text)// &
@@ -653,7 +578,8 @@ subroutine ask_stop(message)
   valid_choice = .false.
   do while (.not. valid_choice)
   
-    call print_warning (message)
+    if (len(trim(message)) > 0) call print_warning (message)
+
     write(*,'(/,1x,A)', advance='no') 'Continue anyway? (y/n): '
     read(*,'(A)') choice
 
@@ -676,6 +602,60 @@ subroutine ask_stop(message)
   if (choice == 'n') stop
 
 end subroutine ask_stop
+
+!-----------------------------------------------------------------------------
+! Checks surface x,y for violations of curvature contraints 
+!     reversals > max_curv_reverse
+!     highlows  > max_curv_highlow
+! 
+! and handles user response  
+!-----------------------------------------------------------------------------
+
+subroutine  check_handle_curve_violations (info, x, y, max_curv_reverse, max_curv_highlow)
+
+  use vardef,             only : curv_threshold, highlow_treshold
+  use os_util,            only : print_warning
+  use airfoil_operations, only : show_reversals_highlows, get_curv_violations
+
+
+  character(*),                   intent(in) :: info
+  double precision, dimension(:), intent(in) :: x, y
+  integer,                        intent(in) :: max_curv_reverse, max_curv_highlow
+
+  integer :: n, max, nreverse_violations, nhighlow_violations
+
+  call get_curv_violations (x, y, & 
+                            curv_threshold, highlow_treshold, & 
+                            max_curv_reverse, max_curv_highlow,   &
+                            nreverse_violations, nhighlow_violations)
+
+  ! Exit if everything is ok 
+  if ((nreverse_violations + nhighlow_violations) == 0) return 
+
+  call print_warning ("Curvature violations on " // trim(info))
+  write (*,*)
+
+  if (nreverse_violations > 0) then 
+    n   = nreverse_violations + max_curv_reverse
+    max = max_curv_reverse
+    write (*,'(11x,A,I2,A,I2)')"Found ",n, " Reversal(s) where max_curv_reverse is set to ", max
+  end if 
+
+  if (nhighlow_violations > 0) then 
+    n   = nhighlow_violations + max_curv_highlow
+    max = max_curv_highlow
+    write (*,'(11x,A,I2,A,I2)')"Found ",n, " HighLow(s) where max_curv_highlow is set to ", max
+  end if 
+
+  write (*,*)
+  call show_reversals_highlows ('', x, y, curv_threshold, highlow_treshold )
+  write (*,*)
+  write (*,'(11x,A)') 'The Optimizer may not found a solution with this inital violation.'
+  write (*,'(11x,A)') 'Either increase max_curv_reverse or curv_threshold (not recommended) or'
+  write (*,'(11x,A)') 'choose another seed airfoil. Find details in geometry plot of the viszualizer.'
+  call ask_stop('')
+
+end subroutine check_handle_curve_violations
 
 
 !-----------------------------------------------------------------------------

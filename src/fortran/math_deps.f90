@@ -566,6 +566,9 @@ subroutine smooth_it_Chaikin (i_start, i_end, tension, niterations, x, y)
   ! replace the area to smooth in original polyline with the smoothed result
   call interp_vector(x_in, y_in, x(i_start : i_end), y(i_start : i_end))
 
+  deallocate (x_in)
+  deallocate (y_in)
+
 end subroutine smooth_it_Chaikin
 
 ! Core smoothing function 
@@ -574,7 +577,6 @@ Subroutine getSmootherChaikin(x, y, cuttingDist, x_smooth, y_smooth)
   double precision, dimension(:), intent(in) :: x, y
   double precision, dimension(:), allocatable, intent(out) :: x_smooth, y_smooth
   double precision, intent(in) :: cuttingDist
-  double precision :: local_cuttingDist, delta_cutdist
 
   integer :: i, is, np_smooth, npt
   
@@ -584,13 +586,6 @@ Subroutine getSmootherChaikin(x, y, cuttingDist, x_smooth, y_smooth)
   allocate (x_smooth(np_smooth))
   allocate (y_smooth(np_smooth))
 
-  ! The original Chaikin is modifiied to have a much smaller cutting distance
-  ! at the first points of the smoothed range to achieve a continuos transition
-  ! from non smoothed to smoothed. Especially critical in LE with high curvature!
-  delta_cutdist     = cuttingDist / 25
-  local_cuttingDist = delta_cutdist       ! start value for cutting distance
-                                          ! will grow up to 'cuttingDist'
-
   ! always add the first point - this won't be changed
   x_smooth(1) = x(1)
   y_smooth(1) = y(1)
@@ -599,19 +594,12 @@ Subroutine getSmootherChaikin(x, y, cuttingDist, x_smooth, y_smooth)
   do i = 1, (npt-1)
 
     is = is + 1
-    x_smooth(is) = (1-local_cuttingDist) * x(i) + local_cuttingDist * x(i+1)
-    y_smooth(is) = (1-local_cuttingDist) * y(i) + local_cuttingDist * y(i+1)
+    x_smooth(is) = (1-cuttingDist) * x(i) + cuttingDist * x(i+1)
+    y_smooth(is) = (1-cuttingDist) * y(i) + cuttingDist * y(i+1)
 
     is = is + 1
-    x_smooth(is) = local_cuttingDist * x(i) + (1-local_cuttingDist) * x(i+1)
-    y_smooth(is) = local_cuttingDist * y(i) + (1-local_cuttingDist) * y(i+1)
-
-    if (local_cuttingDist < cuttingDist) then     ! increase cutting distance going backwards from LE
-      local_cuttingDist = local_cuttingDist + delta_cutdist
-      delta_cutdist = delta_cutdist * 1.0d0       ! ramp up cutting_dist smoothly
-    else  
-      local_cuttingDist = cuttingDist
-    end if 
+    x_smooth(is) = cuttingDist * x(i) + (1-cuttingDist) * x(i+1)
+    y_smooth(is) = cuttingDist * y(i) + (1-cuttingDist) * y(i+1)
 
   end do
 
@@ -664,7 +652,9 @@ subroutine find_curvature_reversals(npt, i_start, highlow_treshold, curve_thresh
   prev_highlow = ' '
 
   ! find the highs and lows in 2nd derivation - dist between must be > highlow_treshold 
-  do i = i_firstHighLow, npt
+  !    do not take the last panel at TE into account as PANGEN tends to produce
+  !    a curvature peek for the last panel which could lead to a false highlow...
+  do i = i_firstHighLow, (npt-1)
 
     ! low detect
     if ( deriv2(i) - deriv2(i-1)> 0.d0 ) then             !.. going up now

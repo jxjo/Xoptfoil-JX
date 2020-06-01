@@ -27,8 +27,7 @@ module xfoil_driver
     double precision :: xtript, xtripb !Trip locations
     logical :: viscous_mode                       
     logical :: silent_mode             !Toggle xfoil screen write
-    ! jx-mod new 
-    logical :: auto_smooth             ! = true (default) do re-paneling (PANGEN)
+    logical :: auto_repanel            ! = true (default) do re-paneling (PANGEN)
                                        ! before xfoil is called for aero calcs 
     logical :: show_details            ! show some user entertainment during xfoil loop
     integer :: maxit                   !Iterations for BL calcs
@@ -67,7 +66,7 @@ module xfoil_driver
 ! Subroutine to smooth an airfoil using Xfoil's PANGEN subroutine
 !
 !=============================================================================80
-subroutine smooth_paneling(foilin, npoint, foilout)
+subroutine smooth_paneling(foilin, npoint, foilout, opt_geom_options)
 
   use xfoil_inc
   use vardef, only : airfoil_type
@@ -75,7 +74,8 @@ subroutine smooth_paneling(foilin, npoint, foilout)
   type(airfoil_type), intent(in) :: foilin
   integer, intent(in) :: npoint
   type(airfoil_type), intent(out) :: foilout
-  
+  type(xfoil_geom_options_type), intent(in), optional :: opt_geom_options
+
   type(xfoil_geom_options_type) :: geom_options
   integer :: i
   logical :: needs_cleanup
@@ -114,14 +114,22 @@ subroutine smooth_paneling(foilin, npoint, foilout)
 
 ! Set geometry options for output airfoil
 
-  geom_options%npan = npoint
-  geom_options%cvpar = 1.d0
-  geom_options%cterat = 0.15d0
-  geom_options%ctrrat = 0.2d0
-  geom_options%xsref1 = 1.d0
-  geom_options%xsref2 = 1.d0
-  geom_options%xpref1 = 1.d0
-  geom_options%xpref2 = 1.d0
+  if (.not. present (opt_geom_options)) then 
+    ! set xoptfoil standard values 
+    geom_options%npan = npoint
+    geom_options%cvpar = 1.d0
+  ! jx-mod If set to geom_options%cterat = 0.15d0 the curvature at TE panel
+  !     tends to flip away and have tripple value (bug in xfoil) 
+  !     with a very small value the panel gets wider and the quality better
+    geom_options%cterat = 0.0d0
+    geom_options%ctrrat = 0.2d0
+    geom_options%xsref1 = 1.d0
+    geom_options%xsref2 = 1.d0
+    geom_options%xpref1 = 1.d0
+    geom_options%xpref2 = 1.d0
+  else 
+    geom_options = opt_geom_options
+  end if 
 
 ! Set xfoil airfoil and paneling options
 
@@ -134,10 +142,10 @@ subroutine smooth_paneling(foilin, npoint, foilout)
 
 ! Put smoothed airfoil coordinates into derived type
 
-  foilout%npoint = npoint
-  allocate(foilout%x(npoint))
-  allocate(foilout%z(npoint))
-  do i = 1, npoint
+  foilout%npoint = geom_options%npan
+  allocate(foilout%x(foilout%npoint))
+  allocate(foilout%z(foilout%npoint))
+  do i = 1, foilout%npoint
     foilout%x(i) = X(i)
     foilout%z(i) = Y(i)
   end do
@@ -259,7 +267,7 @@ subroutine run_xfoil(foil, geom_options, operating_points, op_modes,           &
 
 ! jx-mod avoid (eg camb-thick) to always PANGEN as it could have
 !        influence at high cl (TE micro stuff) 
-  if (xfoil_options%auto_smooth) then
+  if (xfoil_options%auto_repanel) then
     call PANGEN(.not. SILENT_MODE)
   end if
 

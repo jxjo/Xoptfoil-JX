@@ -43,7 +43,7 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
   use naca,               only : naca_options_type
   use math_deps,          only : sort_vector
  
-  character(*), intent(in) :: input_file
+  character(*), intent(in) :: input_file 
   character(80), intent(out) :: search_type, global_search, local_search,      &
                                 seed_airfoil, airfoil_file, matchfoil_file
   integer, intent(out) :: nfunctions_top, nfunctions_bot
@@ -107,10 +107,11 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
   namelist /constraints/ min_thickness, max_thickness, moment_constraint_type, &
                          min_moment, min_te_angle, check_curvature,            &
                          max_curv_reverse_top, max_curv_reverse_bot,           &
+                         max_curv_highlow_top, max_curv_highlow_bot,           &
                          curv_threshold, symmetrical, min_flap_degrees,        &
                          max_flap_degrees, min_camber, max_camber,             &
                          naddthickconst, addthick_x, addthick_min, addthick_max, &
-                         max_te_curvature
+                         max_te_curvature, highlow_treshold
   namelist /naca_airfoil/ family, maxt, xmaxt, maxc, xmaxc, design_cl, a,      &
                           leidx, reflexed
   namelist /initialization/ feasible_init, feasible_limit,                     &
@@ -131,8 +132,8 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
   namelist /matchfoil_options/ match_foils, matchfoil_file
 
 ! jx-mod Smoothing - namelist for smoothing options
-  namelist /smoothing_options/ do_smoothing, spike_threshold,  &
-            highlow_treshold, weighting_smoothing
+  namelist /smoothing_options/ do_smoothing, spike_threshold 
+            
 ! jx-mod Geo targets - namelist for geometry targets  (see module vardef)
   namelist /geometry_targets/ ngeo_targets, target_type, x_pos, target_geo,  &
             weighting_geo 
@@ -158,7 +159,7 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
   nfunctions_bot = 4
   initial_perturb = 0.025d0
   restart = .false.
-  restart_write_freq = 20
+  restart_write_freq = 0              ! default: switch off write restart files
   write_designs = .true.
 
 ! jx-mod Show more infos  / supress echo
@@ -216,10 +217,14 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
   min_te_angle = 2.d0
 
   check_curvature = .false.
-  max_te_curvature = 1.d0
-  max_curv_reverse_top = 1
-  max_curv_reverse_bot = 1
-  curv_threshold = 0.30d0
+  max_te_curvature = 10.d0                    ! more or less inactive by default
+  max_curv_reverse_top = 0
+  max_curv_reverse_bot = 0
+  max_curv_highlow_top = 0
+  max_curv_highlow_bot = 0
+  curv_threshold       = 0.10d0
+  highlow_treshold     = 0.05d0
+
 
   symmetrical = .false.
   min_flap_degrees = -5.d0
@@ -292,20 +297,12 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
   
   !Set defaults for smoothing and read namelist 
 
-  highlow_treshold = 0.05d0
   spike_threshold = 0.8d0
   do_smoothing = .false.
-  weighting_smoothing = 1.d0
 
   rewind(iunit)
   read(iunit, iostat=iostat1, nml=smoothing_options)
   call namelist_check('smoothing_options', iostat1, 'warn')
-
-  ! ensure no weighting if set to false 
-  !     for "camb-thick" smoothing will be switched off during optimization
-  if ((.not. do_smoothing) .or. (trim(shape_functions) == 'camb-thick' )) then
-    weighting_smoothing = 0.d0 
-  end if
 
 ! jx-mod Geo targets - start read and weight options---------------------
 
@@ -336,12 +333,10 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
 !          now includis geo targets and smoothing progress
 
   sum_weightings = sum(weighting(1:noppoint))               &
-                 + weighting_smoothing                      &
                  + sum(weighting_geo(1:ngeo_targets))
 
   weighting           = weighting/sum_weightings
   weighting_geo       = weighting_geo/sum_weightings
-  weighting_smoothing = weighting_smoothing/sum_weightings
 
   geo_targets%weighting = weighting_geo
 
@@ -644,14 +639,14 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
 ! jx-mod swtich to avoid PANGEN before each xfoil calculation as 
 !        it could have influence at high cl (TE micro stuff) 
 !        default is "always smooth" before xfoil
-  xfoil_options%auto_smooth  = .true.
+  xfoil_options%auto_repanel  = .true. 
   xfoil_options%show_details = show_details
 
 
   if (trim(shape_functions) == 'camb-thick') then
     ! in case of camb_thick a re-paneling is not needed and
     ! not good for high cl
-    xfoil_options%auto_smooth = .false.
+    xfoil_options%auto_repanel = .false. 
   end if 
  
 
@@ -769,6 +764,9 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
   write(*,*) " check_curvature = ", check_curvature
   write(*,*) " max_curv_reverse_top = ", max_curv_reverse_top
   write(*,*) " max_curv_reverse_bot = ", max_curv_reverse_bot
+  write(*,*) " max_curv_highlow_top = ", max_curv_highlow_top
+  write(*,*) " max_curv_highlow_bot = ", max_curv_highlow_bot
+  write(*,*) " highlow_treshold = ", highlow_treshold
   write(*,*) " curv_threshold = ", curv_threshold
   write(*,*) " symmetrical = ", symmetrical
   write(*,*) " min_flap_degrees = ", min_flap_degrees
@@ -790,9 +788,7 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
 
   write(*,'(A)') " &smoothing_options"
   write(*,*) " do_smoothing = ", do_smoothing
-  write(*,*) " highlow_treshold = ", highlow_treshold
   write(*,*) " spike_threshold = ", spike_threshold
-  write(*,*) " weighting_smoothing = ", weighting_smoothing
   write(*,'(A)') " /"
   write(*,*)
 
@@ -1032,6 +1028,16 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
 
 ! Constraints
 
+  if (check_curvature ) then 
+    if (curv_threshold <= 0.d0)    call my_stop("curv_threshold must be > 0.")
+    if (highlow_treshold < 0.01d0) call my_stop("highlow_treshold must be >= 0.01")
+    if (max_curv_reverse_top < 0)  call my_stop("max_curv_reverse_top must be >= 0.")
+    if (max_curv_reverse_bot < 0)  call my_stop("max_curv_reverse_bot must be >= 0.")
+    if (max_curv_highlow_top < 0)  call my_stop("max_curv_highlow_top must be >= 0.")
+    if (max_curv_highlow_bot < 0)  call my_stop("max_curv_highlow_bot must be >= 0.")
+    if (max_te_curvature < 0.d0)   call my_stop("max_te_curvature must be >= 0.")
+  end if 
+
   if (min_thickness <= 0.d0) call my_stop("min_thickness must be > 0.")
   if (max_thickness <= 0.d0) call my_stop("max_thickness must be > 0.")
   if (min_thickness >= max_thickness)                                          &
@@ -1044,13 +1050,6 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
                  "or 'none'.")
   end do
   if (min_te_angle < 0.d0) call my_stop("min_te_angle must be >= 0.")
-  if (max_te_curvature < 0.d0) call my_stop("max_te_curvature must be >= 0.")
-  if (check_curvature .and. (curv_threshold <= 0.d0))                          &
-    call my_stop("curv_threshold must be > 0.")
-  if (check_curvature .and. (max_curv_reverse_top < 0))                        &
-    call my_stop("max_curv_reverse_top must be >= 0.")
-  if (check_curvature .and. (max_curv_reverse_bot < 0))                        &
-    call my_stop("max_curv_reverse_bot must be >= 0.")
   if (symmetrical)                                                             &
     write(*,*) "Mirroring top half of seed airfoil for symmetrical constraint."
   if (min_flap_degrees >= max_flap_degrees)                                    &
@@ -1077,12 +1076,8 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
 ! jx-mod Smoothing - check options 
 
   if (do_smoothing) then
-    if ( highlow_treshold < 0.01d0 )                                           &
-      call my_stop ("highlow_treshold must be >= 0.01")
     if ( spike_threshold < 0.1d0 )                                             &
       call my_stop ("spike_threshold must be >= 0.1")
-    if (weighting_smoothing < 0.d0)                                           &
-      call my_stop("weighting_smoothing must be >= 0.")
   end if
 
 ! jx-mod Geo targets - check options
@@ -1199,7 +1194,7 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
 
   if (npan < 20) call my_stop("npan must be >= 20.")
   if (cvpar <= 0.d0) call my_stop("cvpar must be > 0.")
-  if (cterat <= 0.d0) call my_stop("cterat must be > 0.")
+  if (cterat < 0.d0) call my_stop("cterat must be >= 0.")
   if (ctrrat <= 0.d0) call my_stop("ctrrat must be > 0.")
   if (xsref1 < 0.d0) call my_stop("xsref1 must be >= 0.")
   if (xsref2 < xsref1) call my_stop("xsref2 must be >= xsref1")

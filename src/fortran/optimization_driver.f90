@@ -448,11 +448,7 @@ subroutine write_final_design(optdesign, f0, fmin, shapetype)
   character(80) :: output_file, aero_file
   character(20) :: flapnote
 
-! jx-mod Smoothing
-  integer :: dummyint
-  double precision :: pertubation_top, pertubation_bot
-
-  
+ 
   nmodest = size(top_shape_function,1)
   nmodesb = size(bot_shape_function,1)
   nptt = size(xseedt,1)
@@ -497,19 +493,6 @@ subroutine write_final_design(optdesign, f0, fmin, shapetype)
                       zt_new, zb_new, shapetype, symmetrical)
   end if
   
-! jx-mod Smoothing - begin ---------------------------------------------------------
-
-  if (do_smoothing) then 
-    call smooth_it (xseedt, zt_new)
-    call assess_surface ('Top final', show_details, max_curv_reverse_top, xseedt, zt_new, dummyint,pertubation_top) 
-    call smooth_it (xseedb, zb_new)
-    call assess_surface ('Bot final', show_details, max_curv_reverse_bot, xseedb, zb_new, dummyint,pertubation_bot)  
-
-  end if 
-
-! jx-mod Smoothing - end ---------------------------------------------------------
-
-
 ! Format coordinates in a single loop (in airfoil_type derived type)
 
   final_airfoil%name   = output_prefix
@@ -591,16 +574,6 @@ subroutine write_final_design(optdesign, f0, fmin, shapetype)
         re(i)%number, ma(i)%number, ncrit_pt(i), trim(flapnote)
 
     end do
-
-! jx-mod Smoothing - write final info about smoothing
-    if (do_smoothing) then
-      write(*,*)
-      write(*,'(A33F6.2)') " Smoothed final surface quality: ",      &
-           (pertubation_top + pertubation_bot) 
-      write(iunit,*)
-      write(iunit,'(A33F6.2)') " Smoothed final surface quality: ",      &
-           (pertubation_top + pertubation_bot) 
-    end if 
 
     write(*,*)
     write(*,'(A43F8.4A1)') " Objective function improvement over seed: ",      &
