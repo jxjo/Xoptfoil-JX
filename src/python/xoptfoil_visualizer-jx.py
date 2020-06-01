@@ -23,6 +23,7 @@ from matplotlib import rcParams
 import numpy as np
 from math import log10, floor
 from sys import version_info
+import time
 
 # Default plottiong options
 
@@ -441,7 +442,7 @@ def plot_airfoil_coordinates(seedfoil, matchfoil, designfoils, plotnum, firsttim
   plot_foil       = not plotoptions["show_seed_airfoil_only"]
 
   show_info       = plotoptions["show_airfoil_info"]
-  show_transition = True                 # show transition points 
+  show_transition = False                 # show transition points 
 
   sc = plotoptions["color_for_seed"]
   nc = plotoptions["color_for_new_designs"]
@@ -457,8 +458,10 @@ def plot_airfoil_coordinates(seedfoil, matchfoil, designfoils, plotnum, firsttim
 
   plot_2nd_deriv  = plot_2nd_deriv  and (len(seedfoil.deriv2) > 0)  
   plot_3rd_deriv  = plot_3rd_deriv  and (len(seedfoil.deriv3) > 0) 
+  plot_3rd_deriv  = plot_3rd_deriv  and (not plot_2nd_deriv) 
   plot_matchfoil  = plot_matchfoil and (matchfoil.npt > 0)
   plot_delta_y    = plot_foil and plot_delta_y    and (not plot_matchfoil)          
+  plot_delta_y    = plot_delta_y and (len(seedfoil.x) == len(foil.x))       
   show_transition = plot_foil and show_transition and (len(foil.xtrt > 0))        
 
   # Set up coordinates plot, create figure and axes
@@ -471,7 +474,7 @@ def plot_airfoil_coordinates(seedfoil, matchfoil, designfoils, plotnum, firsttim
     if plot_matchfoil:                          # in this case bigger window
       plt.get_current_fig_manager().window.setGeometry(600,400,1300,550)
     else:
-      plt.get_current_fig_manager().window.setGeometry(850,600,1000,450)
+      plt.get_current_fig_manager().window.setGeometry(850,630,1000,400)
     ax = plt.subplot(111)
     mirrorax = ax.twinx()
   else: 
@@ -484,8 +487,6 @@ def plot_airfoil_coordinates(seedfoil, matchfoil, designfoils, plotnum, firsttim
     mirrorax = ax.get_shared_x_axes().get_siblings(ax)[0]
     ax.clear()
     mirrorax.clear()
-    # plt.cla()
-
 
   # Auto plotting bounds
 
@@ -515,8 +516,6 @@ def plot_airfoil_coordinates(seedfoil, matchfoil, designfoils, plotnum, firsttim
   ax.set_xlabel('x')
   ax.set_ylabel('y')
   ax.set_xlim([xmin,xmax])
-#  ax.set_ylim([ymin,ymax])
-#  ax.autoscale_view(tight=None, scalex=False, scaley=False)
 
   # Plot airfoil coordinates
 
@@ -527,27 +526,25 @@ def plot_airfoil_coordinates(seedfoil, matchfoil, designfoils, plotnum, firsttim
 
   # Plot specials like delta or derivatives 
 
-  iLE = np.argmin(seedfoil.x)
-
   if plot_2nd_deriv:
     ax.set_ylim([-ymax,ymax])       # achieve ax.plot and mirrorax.plot is aligned in x-axis
     mirrorax.set_ylabel('curvature', color='grey')
     mirrorax.set_ylim(0.8, -0.8)
-    mirrorax.plot(seedfoil.x[0:(iLE-15)],  seedfoil.deriv2[0:(iLE-15)],  color='blue', linewidth=0.5, linestyle='--') #top
-    mirrorax.plot(seedfoil.x[(-iLE+15):],  seedfoil.deriv2[(-iLE+15):],  color='blue', linewidth=0.5, linestyle='-.') #bottom
+    mirrorax.grid (axis='y')
+    if plot_seedfoil:
+      mirrorax.plot(seedfoil.x,  seedfoil.deriv2,  color='blue', linewidth=0.5, linestyle='--') #top
     if plot_foil:
-      mirrorax.plot(foil.x[0:(iLE-15)], foil.deriv2[0:(iLE-15)], color='red', linewidth=0.8, linestyle='--')
-      mirrorax.plot(foil.x[(-iLE+15):], foil.deriv2[(-iLE+15):], color='red', linewidth=0.8, linestyle='-.')
+      mirrorax.plot(foil.x, foil.deriv2, color='red', linewidth=0.8, linestyle='--')
 
   if plot_3rd_deriv:
     ax.set_ylim([-ymax,ymax])       # achieve ax.plot and mirrorax.plot is aligned in x-axis
     mirrorax.set_ylabel('3rd derivative', color='magenta')
-    mirrorax.set_ylim(5, -5)
-    mirrorax.plot(seedfoil.x[0:(iLE-15)],  seedfoil.deriv3[0:(iLE-15)],  color='grey', linewidth=0.8, linestyle=':')
-    mirrorax.plot(seedfoil.x[(-iLE+15):],  seedfoil.deriv3[(-iLE+15):],  color='grey', linewidth=0.8, linestyle=':')
+    mirrorax.set_ylim(-8, 8)
+    mirrorax.grid (axis='y')
+    if plot_seedfoil:
+      mirrorax.plot(seedfoil.x,  seedfoil.deriv3,  color='grey', linewidth=0.8, linestyle=':')
     if plot_foil:
-      mirrorax.plot(foil.x[0:(iLE-15)],  -np.divide(foil.deriv3[0:(iLE-15)],10),  color='magenta', linewidth=0.8, linestyle='--')
-      mirrorax.plot(foil.x[(-iLE+15):],  -np.divide(foil.deriv3[(-iLE+15):],10),  color='magenta', linewidth=0.8, linestyle='-.')
+      mirrorax.plot(foil.x, foil.deriv3,  color='magenta', linewidth=0.8, linestyle='--')
 
   # Plot delta between seed and current airfoil
   if plot_delta_y:
@@ -562,6 +559,7 @@ def plot_airfoil_coordinates(seedfoil, matchfoil, designfoils, plotnum, firsttim
 
   # show points of transition for the operating points 
   if show_transition: 
+    iLE = np.argmin(seedfoil.x)
     plot_points_of_transition (ax, foil.x[0:iLE], foil.y[0:iLE], foil.xtrt, upperside = True)
     plot_points_of_transition (ax, foil.x[-iLE:] , foil.y[-iLE:], foil.xtrb, upperside = False)
 
@@ -573,13 +571,15 @@ def plot_airfoil_coordinates(seedfoil, matchfoil, designfoils, plotnum, firsttim
                 "   at x/c: " + str(seedfoil.xmaxt) + '\n' +
                 "Camber: " + str(seedfoil.maxc) + '\n' +
                 "   at x/c: " + str(seedfoil.xmaxc))
-      ax.text(0.02, 0.02, mytext, color=sc, verticalalignment='bottom', horizontalalignment='left', transform=ax.transAxes)
+      ax.text(0.02, 0.02, mytext, color=sc, verticalalignment='bottom', horizontalalignment='left', 
+              transform=ax.transAxes, fontsize='small')
     if plot_foil:
       mytext = ("Thickness: " + str(foil.maxt) + '\n' +
                 "   at x/c: " + str(foil.xmaxt) + '\n' +
                 "Camber: " + str(foil.maxc) + '\n' +
                 "   at x/c: " + str(foil.xmaxc))
-      ax.text(0.98, 0.02, mytext, color=nc, verticalalignment='bottom', horizontalalignment='right', transform=ax.transAxes)
+      ax.text(0.98, 0.02, mytext, color=nc, verticalalignment='bottom', horizontalalignment='right', 
+              transform=ax.transAxes, fontsize='small')
 
   # Legend for coordinates plot
 
@@ -639,7 +639,7 @@ def plot_points_of_transition (axes, x, y, xtrs, upperside = True):
       my_marker = 6
       y_text = -13
 
-    axes.plot([x[i_nearest]], [y[i_nearest]], marker=my_marker, fillstyle='none', markersize=7, color="grey")
+    axes.plot([x[i_nearest]], [y[i_nearest]], marker=my_marker, markersize=7, color="grey")
     axes.annotate(('{:d}'.format(i+1)), xy = (x[i_nearest], y[i_nearest]), 
                   xytext = (-3,y_text), textcoords="offset points", fontsize = 8, color='dimgrey')
 
@@ -671,7 +671,16 @@ def plot_polars(seedfoil, designfoils, plotnum, firsttime=True, animation=False,
 
   # Sanity check of plot options
 
-  if (plotnum == 0):     plot_polar      = False
+  if (len(seedfoil.alpha) == 0):  plot_seed_polar   = False
+
+  if (plotnum > 0): 
+    foil = designfoils[plotnum-1]
+    if (len(foil.alpha) == 0):  plot_polar   = False
+  else:
+    plot_polar   = False
+
+  if not (plot_seed_polar or plot_polar): return
+
 
   # Set up polars plot. 
 
@@ -1072,7 +1081,20 @@ def read_new_airfoil_data(seedfoil, designfoils, prefix):
   
     alpha, cl, cd, cm, xtrt, xtrb, flapangle, ioerror = read_airfoil_polars(polarfilename,
                                                                       zonetitle)
-    if ( (ioerror == 1) or (ioerror == 2) ):
+
+    # retry - maybe it was a timing problem between Xoptfoil and visualizer
+    if (ioerror == 2):
+      time.sleep (2)
+      print("         Retry Zone labeled " + zonetitle )
+      alpha, cl, cd, cm, xtrt, xtrb, flapangle, ioerror = read_airfoil_polars(polarfilename,
+                                                                      zonetitle)
+
+    if (ioerror == 1):
+      print("Warning: polars will not be available for this design.")
+      ioerror = 3
+      reading = False
+    elif (ioerror == 2):
+      print("         Zone labeled " + zonetitle + " not found in " + polarfilename + ".")
       print("Warning: polars will not be available for this design.")
       ioerror = 3
       reading = False
@@ -1338,6 +1360,7 @@ def main_menu(initialchoice, seedfoil, designfoils, prefix):
 
   exitchoice = False
   rcParams['toolbar'] = 'None'    # Turn on matplotlib toolbar
+  plt.style.use('seaborn-paper')
 
 
   while (not exitchoice):
