@@ -54,20 +54,22 @@ contains
 subroutine check_and_do_polar_generation (input_file, output_prefix, foil)
 
   use vardef,             only : airfoil_type
-  use airfoil_evaluation, only : xfoil_geom_options
-
+  use xfoil_driver,       only : xfoil_geom_options_type, xfoil_options_type
 
   character(*), intent(in)          :: input_file, output_prefix
   type (airfoil_type), intent (in)  :: foil
 
   type (polar_type), dimension (MAXPOLARS) :: polars
+  type (xfoil_geom_options_type) :: xfoil_geom_options
+  type (xfoil_options_type)      :: xfoil_options
   integer  :: npolars
 
   call read_xfoil_paneling_inputs (input_file, xfoil_geom_options)
-  call read_polar_inputs          (input_file, foil%name, npolars, polars)
+  call read_polar_inputs          (input_file, foil%name, npolars, polars, xfoil_options)
 
   if (npolars > 0)                                               &
-    call generate_polar_files (output_prefix, foil, npolars, polars)
+    call generate_polar_files (output_prefix, foil, npolars, polars, &
+                               xfoil_geom_options, xfoil_options)
 
 end subroutine check_and_do_polar_generation
 
@@ -82,15 +84,20 @@ end subroutine check_and_do_polar_generation
 ! The name of the file is aligned to xflr5 polar file naming
 !=============================================================================
 
-subroutine generate_polar_files (output_prefix, foil, npolars, polars)
+subroutine generate_polar_files (output_prefix, foil, npolars, polars, &
+                                xfoil_geom_options, xfoil_options)
 
   use vardef,             only : airfoil_type
   use os_util,            only : make_directory
+  use xfoil_driver,       only : xfoil_geom_options_type, xfoil_options_type
 
   type (polar_type), dimension (MAXPOLARS), intent (inout) :: polars
   type (airfoil_type), intent (in)  :: foil
   integer, intent (in)              :: npolars
   character (*), intent(in)         :: output_prefix
+  type (xfoil_geom_options_type), intent(in) :: xfoil_geom_options
+  type (xfoil_options_type), intent(in)      :: xfoil_options
+
   
   integer :: i
   character (255) :: polars_subdirectory
@@ -106,7 +113,7 @@ subroutine generate_polar_files (output_prefix, foil, npolars, polars)
     write (*,'(A,I1,A, I7,A)') '   Calculating polar Type ',polars(i)%re%type,' Re=',  &
           int(polars(i)%re%number), ' for '// polars(i)%airfoil_name
     call init_polar (polars(i))
-    call calculate_polar (foil, polars(i))
+    call calculate_polar (foil, polars(i), xfoil_geom_options, xfoil_options)
 
     write (*,'(A, F7.0,/)')      '   Writing to '//trim(polars_subdirectory)//'/'//trim(polars(i)%file_name)
     open(unit=13, file= trim(polars_subdirectory)//'/'//trim(polars(i)%file_name), status='replace')
@@ -125,15 +132,16 @@ end subroutine generate_polar_files
 !   (separated from read_inputs to be more modular)
 !=============================================================================
 
-subroutine read_polar_inputs  (input_file, foil_name, npolars, polars)
+subroutine read_polar_inputs  (input_file, foil_name, npolars, polars, xfoil_options)
 
   use airfoil_operations, only : my_stop
-  use airfoil_evaluation, only : xfoil_options
+  use xfoil_driver,       only : xfoil_options_type
   use input_output,       only : read_cl_re_default
 
   type (polar_type), dimension (MAXPOLARS), intent (out) :: polars
   character(*), intent(in) :: input_file, foil_name
   integer , intent(out)    :: npolars
+  type (xfoil_options_type), intent(out) :: xfoil_options
 
   logical         :: generate_polars                         ! .true. .false. 
   integer         :: type_of_polar                           ! 1 or 2 
@@ -219,7 +227,7 @@ subroutine read_polar_inputs  (input_file, foil_name, npolars, polars)
   xfoil_options%fix_unconverged = fix_unconverged
   xfoil_options%reinitialize = reinitialize
   ! suppress a re-paneling of the airfoil as we want the original properties.
-  xfoil_options%auto_repanel = .false. 
+  xfoil_options%auto_repanel = .false.  
   xfoil_options%show_details = .true.
 
   
@@ -264,14 +272,14 @@ subroutine read_xfoil_paneling_inputs  (input_file, geom_options)
   double precision :: cvpar, cterat, ctrrat, xsref1, xsref2, xpref1, xpref2
 
   integer :: npan
-  integer :: istat, iunit, i
+  integer :: istat, iunit
 
   namelist /xfoil_paneling_options/ npan, cvpar, cterat, ctrrat, xsref1,       &
             xsref2, xpref1, xpref2
 
   ! Init default values for xfoil options
 
-  npan   = 200              ! default adapted to xoptfoils internal 200 panels
+  npan   = 201              ! default adapted to xoptfoils internal 200 panels
                             !   ... to have run_xfoil results equal airfoil external results
   cvpar  = 1.d0
   cterat = 0.d0             ! normally 0.15 - reduce curvature peek at TE with PANGEN
@@ -318,8 +326,7 @@ subroutine read_smoothing_inputs  (input_file, do_smoothing, spike_threshold, &
   logical, intent(out)          :: do_smoothing
   double precision , intent(out):: highlow_treshold, curv_threshold, spike_threshold
 
-  integer :: npan
-  integer :: istat, iunit, i
+  integer :: istat, iunit
 
   namelist /smoothing_options/ do_smoothing, spike_threshold 
   namelist /constraints/ highlow_treshold, curv_threshold
@@ -394,14 +401,16 @@ end subroutine init_polar
 ! Calculate polar for airfoil
 !=============================================================================
 
-subroutine calculate_polar (foil, polar)
+subroutine calculate_polar (foil, polar, xfoil_geom_options, xfoil_options)
 
   use vardef,             only : airfoil_type
   use xfoil_driver,       only : run_xfoil, xfoil_driver_reset
-  use airfoil_evaluation, only : xfoil_options, xfoil_geom_options
+  use xfoil_driver,       only : xfoil_geom_options_type, xfoil_options_type
 
   type (polar_type), intent (inout) :: polar
   type (airfoil_type), intent (in)  :: foil
+  type (xfoil_geom_options_type), intent(in) :: xfoil_geom_options
+  type (xfoil_options_type), intent(in)      :: xfoil_options
 
   character(7),     dimension(polar%n_op_points) :: op_modes
   type(re_type)   , dimension(polar%n_op_points) :: ma, re

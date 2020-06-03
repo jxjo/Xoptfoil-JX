@@ -32,16 +32,19 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
                        seed_airfoil, airfoil_file, nfunctions_top,             &
                        nfunctions_bot, restart, restart_write_freq,            &
                        constrained_dvs, naca_options, pso_options, ga_options, &
-                       ds_options, matchfoil_file)
+                       ds_options, matchfoil_file,                             &
+                       xfoil_geom_options, xfoil_options)
 
   use vardef
   use particle_swarm,     only : pso_options_type
   use genetic_algorithm,  only : ga_options_type
   use simplex_search,     only : ds_options_type
   use airfoil_operations, only : my_stop
-  use airfoil_evaluation, only : xfoil_options, xfoil_geom_options
+  use xfoil_driver,       only : xfoil_geom_options_type, xfoil_options_type
   use naca,               only : naca_options_type
   use math_deps,          only : sort_vector
+
+
  
   character(*), intent(in) :: input_file 
   character(80), intent(out) :: search_type, global_search, local_search,      &
@@ -54,6 +57,9 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
   type(pso_options_type), intent(out) :: pso_options
   type(ga_options_type), intent(out) :: ga_options
   type(ds_options_type), intent(out) :: ds_options
+  type (xfoil_geom_options_type), intent(out) :: xfoil_geom_options
+  type (xfoil_options_type), intent(out)      :: xfoil_options
+
 
   logical :: viscous_mode, silent_mode, fix_unconverged, feasible_init,        &
              reinitialize, restart, write_designs, reflexed,                   &
@@ -591,7 +597,9 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
   fix_unconverged = .true.
   reinitialize = .true.
 
-  npan   = 201              ! default adapted to xoptfoils internal 201 panels
+  npan   = 201              ! For the seed airfoil 200 panel points are used.
+                            ! When the airfoil will be split in top & bot and then rebuild
+                            ! the design airfoil will have 200+1 (npan default value) points...
                             !   ... to have run_xfoil results equal airfoil external results
   cvpar = 1.d0
   cterat = 0.15d0

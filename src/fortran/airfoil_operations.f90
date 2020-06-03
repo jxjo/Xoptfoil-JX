@@ -68,6 +68,9 @@ subroutine get_seed_airfoil(seed_airfoil, airfoil_file, naca_options, foil,    &
 
   end if
 ! Use Xfoil to smooth airfoil paneling
+!      For the seed airfoil 200 panel points are used.
+!      When the airfoil will be split in top & bot and then rebuild
+!      the design airfoil will have 200+1 (npan default value) points...
   call smooth_paneling(tempfoil, 200, foil)
 
 ! Calculate leading edge information

@@ -26,6 +26,7 @@ program main
   use particle_swarm,      only : pso_options_type
   use genetic_algorithm,   only : ga_options_type
   use simplex_search,      only : ds_options_type
+  use airfoil_evaluation,  only : xfoil_geom_options, xfoil_options
   use airfoil_operations,  only : get_seed_airfoil, get_split_points,          &
                                   split_airfoil
   use memory_util,         only : deallocate_airfoil, allocate_airfoil_data,   &
@@ -78,7 +79,8 @@ program main
   call read_inputs(input_file, search_type, global_search, local_search,       &
                    seed_airfoil, airfoil_file, nparams_top, nparams_bot,       &
                    restart, restart_write_freq, constrained_dvs, naca_options, &
-                   pso_options, ga_options, ds_options, matchfoil_file)
+                   pso_options, ga_options, ds_options, matchfoil_file,        &
+                   xfoil_geom_options, xfoil_options)
 
 ! Load seed airfoil into memory, including transformations and smoothing
 
