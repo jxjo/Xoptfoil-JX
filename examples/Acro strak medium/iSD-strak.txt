@@ -8,7 +8,6 @@
 ! airfoil_file     = '... dat'                              ! strak: get airfoil file  from command line 
   shape_functions  = 'camb-thick'                           ! easy going optimization 
   initial_perturb  = 0.01
-  write_designs    = .true.
   show_details     = .true.                                 ! some entertainment - have a look at operating point contribution!
   echo_input_parms = .false.
 /  
@@ -39,10 +38,7 @@
   weighting_geo   = 0.2                                     ! strak: keep camber  - light weighted
 /  
 
-&constraints
-  min_te_angle    = 3
-/
- 
+
 &particle_swarm_options
   pso_pop         = 30                                      ! 30 particles are fine
   pso_tol         = 0.0015                                  ! slightly increased for faster convergence
