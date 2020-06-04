@@ -22,10 +22,6 @@
   matchfoil_file = 'JX-Seed.dat'
 /
 
-&constraints
-  max_te_curvature = 0.5
-/
-
 &particle_swarm_options
   pso_pop = 40
   pso_tol = 0.000001
