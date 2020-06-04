@@ -113,14 +113,13 @@ subroutine repanel_smooth (input_file, output_prefix, seed_foil)
   use vardef,             only : spike_threshold, highlow_treshold, curv_threshold
   use xfoil_driver,       only : xfoil_geom_options_type, smooth_paneling
   use airfoil_operations, only : airfoil_write, le_find, transform_airfoil, get_split_points
-  use airfoil_operations, only : split_airfoil, assess_surface, smooth_it
+  use airfoil_operations, only : split_airfoil, assess_surface, smooth_it, rebuild_airfoil
   use polar_operations,   only : read_xfoil_paneling_inputs, read_smoothing_inputs
 
 
   character(*), intent(in)          :: input_file, output_prefix
   type (airfoil_type), intent (in)  :: seed_foil
 
-  double precision    :: xoffset, zoffset, foilscale 
   integer             :: pointst, pointsb
   double precision, dimension(:), allocatable :: xt, xb, zt, zb, zt_smoothed, zb_smoothed
   type (airfoil_type) :: foil_smoothed, foil
@@ -139,37 +138,16 @@ subroutine repanel_smooth (input_file, output_prefix, seed_foil)
 
   call le_find(foil%x, foil%z, foil%leclose,                        &
                foil%xle, foil%zle, foil%addpoint_loc)
+               
 ! Translate and scale
 
-  call transform_airfoil(foil, xoffset, zoffset, foilscale)
+  call transform_airfoil(foil)
 
 ! Split up seed airfoil into upper and lower surfaces
+!   and rebuild to get the final seed +1 points 
 
-  call get_split_points(foil, pointst, pointsb, .false.)
-  allocate(xt(pointst))
-  allocate(zt(pointst))
-  allocate(xb(pointsb))
-  allocate(zb(pointsb))
-  allocate(zt_smoothed(pointst))
-  allocate(zb_smoothed(pointsb))
-  call split_airfoil(foil, xt, xb, zt, zb, .false.)
-
-! Rebuid foil - with spitting npoints are increased by one
-
-  foil%npoint = pointst + pointsb - 1
-  deallocate(foil%x)
-  deallocate(foil%z)
-  allocate(foil%x(foil%npoint))
-  allocate(foil%z(foil%npoint))
-
-  do i = 1, pointst
-    foil%x(i) = xt(pointst-i+1)/foilscale - xoffset
-    foil%z(i) = zt(pointst-i+1)/foilscale - zoffset
-  end do
-  do i = 1, pointsb-1
-    foil%x(i+pointst) = xb(i+1)/foilscale - xoffset
-    foil%z(i+pointst) = zb(i+1)/foilscale - zoffset
-  end do
+  call split_airfoil   (foil, xt, xb, zt, zb, .false.)
+  call rebuild_airfoil (xt, xb, zt, zb, foil)
 
 ! Smooth it ?
 
@@ -188,27 +166,17 @@ subroutine repanel_smooth (input_file, output_prefix, seed_foil)
 
     call smooth_it (xt, zt_smoothed) 
     call smooth_it (xb, zb_smoothed)
+    ! for testing: call write_polyline ('Top', size(xt), xt, zt)
+    ! for testing: call write_polyline ('Bot', size(xb), xb, zb)
 
-    write (*,'(1x,A)') 'Ater smoothing ...'
+    write (*,'(1x,A)') 'After smoothing ...'
     call assess_surface ('Top', xt, zt_smoothed)
     call assess_surface ('Bot', xb, zb_smoothed)
 
-  ! Format coordinates in a single loop in derived type
+  ! Rebuild foil and write to file
 
-    foil_smoothed%npoint = pointst + pointsb - 1
-    allocate(foil_smoothed%x(foil_smoothed%npoint))
-    allocate(foil_smoothed%z(foil_smoothed%npoint))
-
-    do i = 1, pointst
-      foil_smoothed%x(i) = xt(pointst-i+1)/foilscale - xoffset
-      foil_smoothed%z(i) = zt_smoothed(pointst-i+1)/foilscale - zoffset
-    end do
-    do i = 1, pointsb-1
-      foil_smoothed%x(i+pointst) = xb(i+1)/foilscale - xoffset
-      foil_smoothed%z(i+pointst) = zb_smoothed(i+1)/foilscale - zoffset
-    end do
-
-    call airfoil_write (trim(output_prefix)//'.dat', output_prefix, foil_smoothed)
+    call rebuild_airfoil (xt, xb, zt_smoothed, zb_smoothed, foil_smoothed)
+    call airfoil_write   (trim(output_prefix)//'.dat', output_prefix, foil_smoothed)
 
   else                        ! no smoothing write repaneld foil 
 
@@ -480,4 +448,82 @@ subroutine test_set_LE_radius (foil)
   end do 
 
 end subroutine test_set_LE_radius
+
+!-----------------------------------------------------------------------------
+! Write a single polyline with its derivatives  to file 
+!       - for testing - 
+!-----------------------------------------------------------------------------
+subroutine write_polyline (info, npoints, x, y)
+
+  use math_deps,       only : derivation2, derivation3 
+
+
+  integer, intent(in) :: npoints
+  character(*), intent(in) :: info
+  double precision, dimension(npoints), intent(in) :: x, y
+  double precision, dimension(npoints) :: deriv2, deriv3
+
+  integer :: iunit, i
+  character(100) :: smoothfile
+
+  deriv2 = derivation2 (size(x), x, y)
+  deriv3 = derivation3 (size(x), x, y)
+
+
+  iunit = 21 
+  smoothfile = trim(info)//'_derivatives.dat'
+
+  open(unit=iunit, file=smoothfile, status='replace', err=901)
+
+  write(iunit,*) 'x, y, 2nd_deriv, 3rd_deriv'
+  do i = 1, npoints
+    write(iunit,'(2F12.7,2G17.7)')  x(i), y(i), deriv2(i), deriv3(i)
+  end do
+
+  close (iunit)
+  return
+
+  901 write(*,*) "Warning: unable to open "//trim(smoothfile)//". Skipping ..."
+  return
+
+end subroutine write_polyline
+
+
+!-----------------------------------------------------------------------------
+! Write smoothed derivations to file 
+!       local csv file to visualize in Excel smoothing results 
+!-----------------------------------------------------------------------------
+subroutine write_deriv_to_file (info, npoints, x, y, deriv2, deriv3, & 
+  y_smoothed, deriv2_smoothed, deriv3_smoothed)
+
+  use math_deps, only : curvature
+
+  integer, intent(in) :: npoints
+  character(*), intent(in) :: info
+  double precision, dimension(npoints), intent(in) :: x, y, deriv2, deriv3
+  double precision, dimension(npoints), intent(in) :: y_smoothed, deriv2_smoothed, deriv3_smoothed
+
+  integer :: smoothunit, i
+  character(100) :: smoothfile
+
+  smoothunit = 21 
+  smoothfile = trim(info)//'_smoothed_derivations.csv'
+
+  !write(*,*) "  Writing smoothed derivations for "//trim(info)//             &
+  !" to file "//trim(smoothfile)//" ..."
+  open(unit=smoothunit, file=smoothfile, status='replace', err=901)
+
+  write(smoothunit,*) 'x, y, y 2nd deriv, y 3rd deriv,'                                 //  &
+            'y_smooth, y_smooth-y ,  y_smooth 2nd deriv, y_smooth 3rd deriv'
+  do i = 1, npoints
+  write(smoothunit, '(7(G16.8, A),G16.8)') x(i),', ', y(i), ', ', deriv2(i),', ',deriv3(i),', ', &
+            y_smoothed(i), ', ', (y_smoothed(i)-y(i)),', ',deriv2_smoothed(i),', ',deriv3_smoothed(i)
+  end do
+  close (smoothunit)
+  return
+
+  901 write(*,*) "Warning: unable to open "//trim(smoothfile)//". Skipping ..."
+  return
+
+end subroutine write_deriv_to_file
 

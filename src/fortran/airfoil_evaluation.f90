@@ -115,7 +115,7 @@ function aero_objective_function(designvars, include_penalty, evaluate_only_geom
 
   use math_deps,          only : interp_vector, curvature, derv1f1, derv1b1
   use airfoil_operations, only : show_camb_thick_of_current, get_curv_violations
-  use airfoil_operations, only : my_stop
+  use airfoil_operations, only : my_stop, rebuild_airfoil
   use math_deps,          only : interp_point, derivation_at_point
   use parametrization,    only : top_shape_function, bot_shape_function,          &
                                  create_airfoil, create_airfoil_camb_thick
@@ -219,18 +219,9 @@ function aero_objective_function(designvars, include_penalty, evaluate_only_geom
                       zt_new, zb_new, shape_functions, symmetrical)
   end if
 
+! Rebuild airfoil out of new top and bottom surface
 
-! Format coordinates in a single loop in derived type. Also remove translation
-! and scaling to ensure Cm_x=0.25 doesn't change.
-
-  do i = 1, nptt
-    curr_foil%x(i) = xseedt(nptt-i+1)/foilscale - xoffset
-    curr_foil%z(i) = zt_new(nptt-i+1)/foilscale - zoffset
-  end do
-  do i = 1, nptb-1
-    curr_foil%x(i+nptt) = xseedb(i+1)/foilscale - xoffset
-    curr_foil%z(i+nptt) = zb_new(i+1)/foilscale - zoffset
-  end do
+  call rebuild_airfoil (xseedt, xseedb, zt_new, zb_new, curr_foil)
 
 
 !----------------------------------------------------------------------------------------------------
@@ -720,11 +711,7 @@ function matchfoil_objective_function(designvars)
   double precision, dimension(size(xseedb,1)) :: zb_new
   integer :: nmodest, nmodesb, nptt, nptb, dvtbnd, dvbbnd
 
-  double precision :: penaltyval, match_delta, cur_te_curvature
-  character (80) :: penalty_info
-
-  penaltyval   = 0d0
-  penalty_info = ''
+  double precision :: match_delta
 
   nmodest = size(top_shape_function,1)
   nmodesb = size(bot_shape_function,1)
@@ -742,8 +729,6 @@ function matchfoil_objective_function(designvars)
     dvbbnd = nmodest*3 + nmodesb*3
   end if
 
-
-
   if (trim(shape_functions) == 'camb-thick') then
     ! Create new airfoil by changing camber and thickness of seed airfoil
     call create_airfoil_camb_thick(xseedt, zseedt, xseedb, zseedb,             &
@@ -755,41 +740,15 @@ function matchfoil_objective_function(designvars)
                         shape_functions, .false.)
   end if
 
-! Penalty for TE panel problem 
-!    In the current Hicks Henne shape functions implementation, the last panel is
-!    forced to become TE which can lead to a thick TE area with steep last panel
-!       (see create_shape ... do j = 2, npt-1 ...)
-!    so the curvature (2nd derivative) at the last 10 panels is checked
-
-  if (check_curvature) then
-    cur_te_curvature = maxval (abs(curvature(11, xseedt(nptt-10:nptt), zt_new(nptt-10:nptt))))
-    if (cur_te_curvature  > max_te_curvature) then 
-      penalty_info = trim(penalty_info) // ' TEat'
-      penaltyval = penaltyval + cur_te_curvature
-    end if 
-
-    cur_te_curvature = maxval (abs(curvature(11, xseedb(nptb-10:nptb), zb_new(nptb-10:nptb))))
-    if (cur_te_curvature  > max_te_curvature) then 
-      penalty_info = trim(penalty_info) // ' TEab'
-      penaltyval = penaltyval + cur_te_curvature
-    end if 
-  end if 
-
-  if (penaltyval > 0d0) then 
-    matchfoil_objective_function = max (penaltyval, 2.d0)
-    ! write (*,*) 'Penalty ', trim(penalty_info)
-  else
 
 ! Evaluate the new airfoil, (not-> changed)  counting fixed LE and TE points
 
-    match_delta = norm_2(zt_new(2:nptt-1) - zmatcht(2:nptt-1)) + &
-                  norm_2(zb_new(2:nptb-1) - zmatchb(2:nptb-1))
-    if (match_delta < 1d-20)  match_delta = 1d-1 
+  match_delta = norm_2(zt_new(2:nptt-1) - zmatcht(2:nptt-1)) + &
+                norm_2(zb_new(2:nptb-1) - zmatchb(2:nptb-1))
+  if (match_delta < 1d-20)  match_delta = 1d-1 
 
-    ! Scale result to initial value 1.
-    matchfoil_objective_function = match_delta * match_foils_scale_factor
-
-  end if
+  ! Scale result to initial value 1.
+  matchfoil_objective_function = match_delta * match_foils_scale_factor
 
 end function matchfoil_objective_function
 
@@ -824,7 +783,7 @@ end function write_function
 function write_airfoil_optimization_progress(designvars, designcounter)
 
   use math_deps,          only : interp_vector 
-  use airfoil_operations, only : smooth_it
+  use airfoil_operations, only : smooth_it, rebuild_airfoil
   use airfoil_operations, only : airfoil_write_to_unit
 
 
@@ -894,29 +853,14 @@ function write_airfoil_optimization_progress(designvars, designcounter)
                         zt_new, zb_new, shape_functions, symmetrical)
   end if
 
-  
-! Format coordinates in a single loop in derived type
-
-  do i = 1, nptt
-    curr_foil%x(i) = xseedt(nptt-i+1)/foilscale - xoffset
-    curr_foil%z(i) = zt_new(nptt-i+1)/foilscale - zoffset
-  end do
-  do i = 1, nptb-1
-    curr_foil%x(i+nptt) = xseedb(i+1)/foilscale - xoffset
-    curr_foil%z(i+nptt) = zb_new(i+1)/foilscale - zoffset
-  end do
-
-! jx-mod Smoothing
-!        Restore the original, not smoothed seed airfoil to
-!        ...design_coordinates.dat to show it in visualizer
+! Rebuild airfoil out of new top and bottom surface
+!     Smoothing - Restore the original, not smoothed seed airfoil to
+!                 ...design_coordinates.dat to show it in visualizer
 
   if (designcounter == 0) then
-    do i = 1, nptt
-      curr_foil%z(i)      = zseedt_not_smoothed(nptt-i+1)/foilscale - zoffset
-    end do
-    do i = 1, nptb-1
-      curr_foil%z(i+nptt) = zseedb_not_smoothed(i+1)/foilscale - zoffset
-    end do
+    call rebuild_airfoil (xseedt, xseedb, zseedt_not_smoothed, zseedb_not_smoothed, curr_foil)
+  else 
+    call rebuild_airfoil (xseedt, xseedb, zt_new, zb_new, curr_foil)
   end if
 
 
@@ -1075,7 +1019,7 @@ function write_matchfoil_optimization_progress(designvars, designcounter)
   use parametrization,    only : top_shape_function, bot_shape_function,          &
                                 create_airfoil, create_airfoil_camb_thick
   use xfoil_driver,       only : xfoil_set_airfoil, xfoil_geometry_info
-  use airfoil_operations, only : airfoil_write_to_unit
+  use airfoil_operations, only : airfoil_write_to_unit, rebuild_airfoil
 
   double precision, dimension(:), intent(in) :: designvars
   integer, intent(in) :: designcounter
@@ -1083,7 +1027,7 @@ function write_matchfoil_optimization_progress(designvars, designcounter)
 
   double precision, dimension(size(xseedt,1)) :: zt_new
   double precision, dimension(size(xseedb,1)) :: zb_new
-  integer :: i, nmodest, nmodesb, nptt, nptb, dvtbnd, dvbbnd
+  integer :: nmodest, nmodesb, nptt, nptb, dvtbnd, dvbbnd
   double precision :: maxt, xmaxt, maxc, xmaxc
   character(8) :: maxtchar, xmaxtchar, maxcchar, xmaxcchar
 
@@ -1127,17 +1071,9 @@ function write_matchfoil_optimization_progress(designvars, designcounter)
     end if
   end if 
 
+! Rebuild foil out of top and bot 
 
-  ! do *not* Format coordinates in a single loop in derived type
-  !     to have the real working foil in visualizer
-  do i = 1, nptt
-    curr_foil%x(i) = xseedt(nptt-i+1)!/foilscale - xoffset
-    curr_foil%z(i) = zt_new(nptt-i+1)!/foilscale - zoffset
-  end do
-  do i = 1, nptb-1
-    curr_foil%x(i+nptt) = xseedb(i+1)!/foilscale - xoffset
-    curr_foil%z(i+nptt) = zb_new(i+1)!/foilscale - zoffset
-  end do
+  call rebuild_airfoil (xseedt, xseedb, zt_new, zb_new, curr_foil)
 
   call xfoil_set_airfoil(curr_foil)
   call xfoil_geometry_info(maxt, xmaxt, maxc, xmaxc)

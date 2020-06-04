@@ -32,6 +32,13 @@ module vardef
                                                         !  after leclose
   end type airfoil_type
 
+! info about the transfomration of seed
+  type foil_transform_type                              
+    double precision :: xoffset, zoffset                ! x,z shift in space
+    double precision :: scale                           ! scale factor
+    double precision :: angle                           ! rotation angle
+  end type foil_transform_type
+
 ! jx-mod Geo targets - type
   type geo_target_type
     character(10) :: type                               ! eg 'zBot' zTop'
@@ -49,6 +56,7 @@ module vardef
     double precision :: number                           ! Reynolds Number
     integer          :: type                             ! Type 
   end type re_type
+
 
 ! Global variables (mainly needed to preserve generality of optimization
 ! routines)
@@ -72,7 +80,8 @@ module vardef
   integer :: nflap_optimize          ! Number of operating points where flap 
                                      !   setting will be optimized
   integer, dimension(max_op_points) :: flap_optimize_points
-  double precision :: xoffset, zoffset, foilscale
+
+  type (foil_transform_type) :: foil_transform
 
   type(airfoil_type) :: curr_foil
   double precision :: min_thickness, max_thickness, min_te_angle,              &

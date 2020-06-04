@@ -27,8 +27,7 @@ program main
   use genetic_algorithm,   only : ga_options_type
   use simplex_search,      only : ds_options_type
   use airfoil_evaluation,  only : xfoil_geom_options, xfoil_options
-  use airfoil_operations,  only : get_seed_airfoil, get_split_points,          &
-                                  split_airfoil
+  use airfoil_operations,  only : get_seed_airfoil, split_airfoil
   use memory_util,         only : deallocate_airfoil, allocate_airfoil_data,   &
                                   deallocate_airfoil_data
   use input_sanity,        only : check_seed
@@ -52,7 +51,7 @@ program main
   type(pso_options_type) :: pso_options
   type(ga_options_type) :: ga_options
   type(ds_options_type) :: ds_options
-  integer :: pointst, pointsb, steps, fevals, nshapedvtop, nshapedvbot,        &
+  integer :: steps, fevals, nshapedvtop, nshapedvbot,        &
              restart_write_freq 
   double precision, dimension(:), allocatable :: optdesign
   integer, dimension(:), allocatable :: constrained_dvs
@@ -84,16 +83,10 @@ program main
 
 ! Load seed airfoil into memory, including transformations and smoothing
 
-  call get_seed_airfoil(seed_airfoil, airfoil_file, naca_options, buffer_foil, &
-                        xoffset, zoffset, foilscale)
+  call get_seed_airfoil(seed_airfoil, airfoil_file, naca_options, buffer_foil)
 
 ! Split up seed airfoil into upper and lower surfaces
 
-  call get_split_points(buffer_foil, pointst, pointsb, symmetrical)
-  allocate(xseedt(pointst))
-  allocate(zseedt(pointst))
-  allocate(xseedb(pointsb))
-  allocate(zseedb(pointsb))
   call split_airfoil(buffer_foil, xseedt, xseedb, zseedt, zseedb, symmetrical)
 
 ! Deallocate the buffer airfoil (no longer needed)

@@ -36,7 +36,7 @@ subroutine check_seed()
   use xfoil_driver,       only : run_xfoil
   use xfoil_inc,          only : AMAX, CAMBR
   use airfoil_evaluation, only : xfoil_options, xfoil_geom_options, op_seed_value
-  use airfoil_operations, only : assess_surface, smooth_it, my_stop
+  use airfoil_operations, only : assess_surface, smooth_it, my_stop, rebuild_airfoil
   use airfoil_operations, only : get_curv_violations, show_reversals_highlows
   use os_util,            only : print_note
 
@@ -88,7 +88,7 @@ subroutine check_seed()
     call smooth_it (xseedt, zseedt)
     call smooth_it (xseedb, zseedb)
 
-    write (*,'(1x,A)') 'Ater smoothing ...'
+    write (*,'(1x,A)') 'After smoothing ...'
     call assess_surface ('Top', xseedt, zseedt)
     call assess_surface ('Bot', xseedb, zseedb)
     write (*,*)
@@ -123,20 +123,12 @@ subroutine check_seed()
     len1 = len2
   end do
 
-! Format coordinates in a single loop in derived type. Also remove translation
-! and scaling to ensure Cm_x=0.25 doesn't change.
+! Rebuild foil out of top and bot
 
-  do i = 1, nptt
-    curr_foil%x(i) = xseedt(nptt-i+1)/foilscale - xoffset
-    curr_foil%z(i) = zseedt(nptt-i+1)/foilscale - zoffset
-  end do
-  do i = 1, nptb-1
-    curr_foil%x(i+nptt) = xseedb(i+1)/foilscale - xoffset
-    curr_foil%z(i+nptt) = zseedb(i+1)/foilscale - zoffset
-  end do
+  call rebuild_airfoil (xseedt, xseedb, zseedt, zseedb, curr_foil)
+
   
 ! Too blunt or sharp leading edge
-
 
   panang1 = atan((zseedt(2)-zseedt(1))/(xseedt(2)-xseedt(1))) *                &
             180.d0/acos(-1.d0)
@@ -223,7 +215,9 @@ subroutine check_seed()
       gapallow = tegap + 2.d0 * heightfactor * (x_interp(nptint) -             &
                                                 x_interp(i))
       if (thickness(i) < gapallow) then
-        xtrans = x_interp(i)/foilscale - xoffset
+        ! jx-mod removed scale and xoffset
+        ! xtrans = x_interp(i)/foilscale - xoffset
+        xtrans = x_interp(i)
         write(text,'(F8.4)') xtrans
         text = adjustl(text)
         write(*,*) "Detected too thin at x = "//trim(text)
@@ -657,44 +651,6 @@ subroutine  check_handle_curve_violations (info, x, y, max_curv_reverse, max_cur
 
 end subroutine check_handle_curve_violations
 
-
-!-----------------------------------------------------------------------------
-! Write smoothed derivations to file 
-!       local csv file to visualize in Excel smoothing results 
-!-----------------------------------------------------------------------------
-subroutine write_deriv_to_file (info, npoints, x, y, deriv2, deriv3, & 
-           y_smoothed, deriv2_smoothed, deriv3_smoothed)
-
-use math_deps, only : curvature
-
-integer, intent(in) :: npoints
-character(*), intent(in) :: info
-double precision, dimension(npoints), intent(in) :: x, y, deriv2, deriv3
-double precision, dimension(npoints), intent(in) :: y_smoothed, deriv2_smoothed, deriv3_smoothed
-
-integer :: smoothunit, i
-character(100) :: smoothfile
-
-smoothunit = 21 
-smoothfile = trim(info)//'_smoothed_derivations.csv'
-
-!write(*,*) "  Writing smoothed derivations for "//trim(info)//             &
-!" to file "//trim(smoothfile)//" ..."
-open(unit=smoothunit, file=smoothfile, status='replace', err=901)
-
-write(smoothunit,*) 'x, y, y 2nd deriv, y 3rd deriv,'                                 //  &
-                    'y_smooth, y_smooth-y ,  y_smooth 2nd deriv, y_smooth 3rd deriv'
-do i = 1, npoints
-  write(smoothunit, '(7(G16.8, A),G16.8)') x(i),', ', y(i), ', ', deriv2(i),', ',deriv3(i),', ', &
-                    y_smoothed(i), ', ', (y_smoothed(i)-y(i)),', ',deriv2_smoothed(i),', ',deriv3_smoothed(i)
-end do
-close (smoothunit)
-return
-
-901 write(*,*) "Warning: unable to open "//trim(smoothfile)//". Skipping ..."
-  return
-
-end subroutine write_deriv_to_file
 
 
 end module input_sanity

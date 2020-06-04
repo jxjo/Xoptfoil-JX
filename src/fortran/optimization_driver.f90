@@ -60,16 +60,10 @@ subroutine matchfoils_preprocessing(matchfoil_file)
 
 ! Load airfoil to match
 
-  call get_seed_airfoil('from_file', matchfoil_file, dummy_naca_options,       &
-                        match_foil, xoffmatch, zoffmatch, scale_match)
+  call get_seed_airfoil('from_file', matchfoil_file, dummy_naca_options, match_foil)
 
 ! Split match_foil into upper and lower halves
 
-  call get_split_points(match_foil, pointst, pointsb, .false.)
-  allocate(xmatcht(pointst))
-  allocate(zmatcht(pointst))
-  allocate(xmatchb(pointsb))
-  allocate(zmatchb(pointsb))
   call split_airfoil(match_foil, xmatcht, xmatchb, zmatcht, zmatchb, .false.)
 
 ! Deallocate derived type version of airfoil being matched
@@ -422,7 +416,7 @@ subroutine write_final_design(optdesign, f0, fmin, shapetype)
 
   use vardef
   use memory_util,        only : allocate_airfoil, deallocate_airfoil
-  use airfoil_operations, only : airfoil_write
+  use airfoil_operations, only : airfoil_write, rebuild_airfoil
 
 ! jx-mod Smoothing
   use airfoil_operations, only : assess_surface, smooth_it
@@ -493,20 +487,11 @@ subroutine write_final_design(optdesign, f0, fmin, shapetype)
                       zt_new, zb_new, shapetype, symmetrical)
   end if
   
-! Format coordinates in a single loop (in airfoil_type derived type)
+! Rebuild foil out of top and bot 
+
+  call rebuild_airfoil (xseedt, xseedb, zt_new, zb_new, final_airfoil)
 
   final_airfoil%name   = output_prefix
-  final_airfoil%npoint = nptt + nptb - 1
-
-  call allocate_airfoil(final_airfoil)
-  do i = 1, nptt
-    final_airfoil%x(i) = xseedt(nptt-i+1)/foilscale - xoffset
-    final_airfoil%z(i) = zt_new(nptt-i+1)/foilscale - zoffset
-  end do
-  do i = 1, nptb - 1
-   final_airfoil%x(i+nptt) = xseedb(i+1)/foilscale - xoffset
-   final_airfoil%z(i+nptt) = zb_new(i+1)/foilscale - zoffset
-  end do
 
 ! Use Xfoil to analyze final design
 

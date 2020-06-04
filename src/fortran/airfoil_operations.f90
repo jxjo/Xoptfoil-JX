@@ -32,8 +32,7 @@ module airfoil_operations
 ! Driver subroutine to read or create a seed airfoil
 !
 !=============================================================================80
-subroutine get_seed_airfoil(seed_airfoil, airfoil_file, naca_options, foil,    &
-                            xoffset, zoffset, foilscale)
+subroutine get_seed_airfoil (seed_airfoil, airfoil_file, naca_options, foil )
 
   use vardef,       only : airfoil_type
   use xfoil_driver, only : smooth_paneling
@@ -42,7 +41,6 @@ subroutine get_seed_airfoil(seed_airfoil, airfoil_file, naca_options, foil,    &
   character(*), intent(in) :: seed_airfoil, airfoil_file
   type(naca_options_type), intent(in) :: naca_options
   type(airfoil_type), intent(out) :: foil
-  double precision, intent(out) :: xoffset, zoffset, foilscale
 
   type(airfoil_type) :: tempfoil
   integer :: pointsmcl
@@ -79,7 +77,7 @@ subroutine get_seed_airfoil(seed_airfoil, airfoil_file, naca_options, foil,    &
                foil%addpoint_loc)
 ! Translate and scale
 
-  call transform_airfoil(foil, xoffset, zoffset, foilscale)
+  call transform_airfoil(foil)
 
 end subroutine get_seed_airfoil
 
@@ -384,18 +382,22 @@ subroutine le_find(x, z, le, xle, zle, addpoint_loc)
 
 end subroutine le_find
 
-!=============================================================================80
+!-----------------------------------------------------------------------------
 !
-! Translates and scales an airfoil such that it has a length of 1 and the 
-! leading edge is at the origin. Also outputs transformations performed.
+! Translates and scales an airfoil such that it has a 
+!    length of 1 
+!    leading edge is at the origin
+!    chord is parallel to x-axis
 !
-!=============================================================================80
-subroutine transform_airfoil(foil, xoffset, zoffset, foilscale)
+!-----------------------------------------------------------------------------
+subroutine transform_airfoil (foil)
 
-  use vardef, only : airfoil_type
+  use vardef, only : airfoil_type, foil_transform
 
   type(airfoil_type), intent(inout) :: foil
-  double precision, intent(out) :: xoffset, zoffset, foilscale
+
+  double precision :: xoffset, zoffset, foilscale
+  double precision :: angle, cosa, sina
 
   integer :: npoints, i
 
@@ -412,6 +414,17 @@ subroutine transform_airfoil(foil, xoffset, zoffset, foilscale)
   foil%xle = 0.d0
   foil%zle = 0.d0
 
+! Rotate the airfoil so chord is on x-axis 
+
+  angle = atan2 ((foil%z(1)+foil%z(npoints))/2.d0,(foil%x(1)+foil%x(npoints))/2.d0)
+  cosa  = cos (-angle) 
+  sina  = sin (-angle) 
+  do i = 1, npoints
+    foil%x(i) = foil%x(i) * cosa - foil%z(i) * sina
+    foil%z(i) = foil%x(i) * sina + foil%z(i) * cosa
+  end do
+
+
 ! Scale airfoil so that it has a length of 1
 
   foilscale = 1.d0 / maxval(foil%x)
@@ -419,6 +432,13 @@ subroutine transform_airfoil(foil, xoffset, zoffset, foilscale)
     foil%x(i) = foil%x(i)*foilscale
     foil%z(i) = foil%z(i)*foilscale
   end do
+
+! Switch off later transformation to original "false" position  
+
+  foil_transform%xoffset = 0.d0
+  foil_transform%zoffset = 0.d0
+  foil_transform%scale   = 1.d0
+  foil_transform%angle   = 0.d0 
 
 end subroutine transform_airfoil
 
@@ -453,26 +473,27 @@ subroutine get_split_points(foil, pointst, pointsb, symmetrical)
 
 end subroutine get_split_points
 
-!=============================================================================80
+!-----------------------------------------------------------------------------
 !
-! Subroutine to split an airfoil into top and bottom surfaces
+! Split an airfoil into top (xt,zt) and bottom surface (xb,zb) polyline
 !
-!=============================================================================80
-subroutine split_airfoil(foil, xseedt, xseedb, zseedt, zseedb, symmetrical)
+!-----------------------------------------------------------------------------
+subroutine split_airfoil(foil, xt, xb, zt, zb, symmetrical)
 
-  use vardef, only : airfoil_type, match_foils
+  use vardef, only : airfoil_type
 
   type(airfoil_type), intent(in) :: foil
-  double precision, dimension(:), intent(inout) :: xseedt, xseedb, zseedt,     &
-                                                   zseedb
+  double precision, dimension(:), allocatable, intent(out) :: xt, xb, zt, zb
   logical, intent(in) :: symmetrical
   
   integer i, boundst, boundsb, pointst, pointsb
-  double precision :: angle, cosa, sina
 
+  ! In le_find the "virtual" leading edge was determined 
+  !    and checked if an additional le point has to be inserted to reflect the le
+  !    dpeending on foil%addpoint_loc a new point will be inserted to 
+  !    become the starting point (0,0) for top and bottom surface
 
-  pointst = size(xseedt,1)
-  pointsb = size(xseedb,1)
+  call get_split_points(foil, pointst, pointsb, symmetrical)
 
   if (foil%addpoint_loc == 0) then
     boundst = foil%leclose - 1
@@ -487,58 +508,91 @@ subroutine split_airfoil(foil, xseedt, xseedb, zseedt, zseedb, symmetrical)
 
 ! Copy points for the top surface
 
-  xseedt(1) = foil%xle
-  zseedt(1) = foil%zle
+  allocate(xt(pointst))
+  allocate(zt(pointst))
+  allocate(xb(pointsb))
+  allocate(zb(pointsb))
+
+  xt(1) = foil%xle
+  zt(1) = foil%zle
   do i = 1, pointst - 1
-    xseedt(i+1) = foil%x(boundst-i+1)
-    zseedt(i+1) = foil%z(boundst-i+1)
+    xt(i+1) = foil%x(boundst-i+1)
+    zt(i+1) = foil%z(boundst-i+1)
   end do
-
-! In matchfoil mode rotate polyline to make sure both seed and match foil are "horizontal" 
-  if (match_foils) then
-    ! at TE take the mean value of upper and lower side (open TE) to get chord angle
-    angle = atan2 (zseedt(pointst),xseedt(pointst))
-    cosa  = cos (-angle) 
-    sina  = sin (-angle) 
-    do i = 1, pointst
-      ! do only chnage z value to reduce artefacts
-      !xseedt(i) = xseedt(i) * cosa - zseedt(i) * sina
-      zseedt(i) = xseedt(i) * sina + zseedt(i) * cosa
-    end do
-  end if
-
 
 ! Copy points for the bottom surface
 
-  xseedb(1) = foil%xle
-  zseedb(1) = foil%zle
+  xb(1) = foil%xle
+  zb(1) = foil%zle
   if (.not. symmetrical) then
     do i = 1, pointsb - 1
-      xseedb(i+1) = foil%x(boundsb+i-1)
-      zseedb(i+1) = foil%z(boundsb+i-1)
+      xb(i+1) = foil%x(boundsb+i-1)
+      zb(i+1) = foil%z(boundsb+i-1)
     end do
   else
     do i = 1, pointsb - 1
-      xseedb(i+1) = xseedt(i+1)
-      zseedb(i+1) = -zseedt(i+1)
+      xb(i+1) =  xt(i+1)
+      zb(i+1) = -zt(i+1)
     end do
   end if
-
-! In matchfoil mode rotate polyline to make sure both seed and match foil are "horizontal" 
-  if (match_foils) then
-    ! at TE take the mean value of upper and lower side (open TE) to get chord angle
-    angle = atan2 (zseedb(pointsb),xseedb(pointsb))
-    cosa  = cos (-angle) 
-    sina  = sin (-angle) 
-    do i = 1, pointsb
-      ! do only chnage z value to reduce artefacts
-      !xseedb(i) = xseedb(i) * cosa - zseedb(i) * sina
-      zseedb(i) = xseedb(i) * sina + zseedb(i) * cosa
-    end do
-  end if
-
 
 end subroutine split_airfoil
+
+!------------------------------------------------------------------------------
+!
+! Rebuild airfoil out of top and bottom surfaces
+!     The foil will be optionally transformed by scale, offset and angle
+! 
+!------------------------------------------------------------------------------
+
+subroutine rebuild_airfoil(xt, xb, zt, zb, foil)
+
+  use vardef, only : airfoil_type
+  use vardef, only : foil_transform
+
+  type(airfoil_type), intent(inout) :: foil
+  double precision, dimension(:), intent(in) :: xt, xb, zt, zb
+  
+  integer i, pointst, pointsb
+  double precision :: cosa, sina
+  double precision :: scale, xoffset, zoffset, angle
+
+  ! prepare datastructures
+
+  if (allocated(foil%x)) deallocate(foil%x)
+  if (allocated(foil%z)) deallocate(foil%z)
+
+  pointst = size(xt,1)
+  pointsb = size(xb,1)
+  foil%npoint = pointst + pointsb - 1
+  allocate(foil%x(foil%npoint))
+  allocate(foil%z(foil%npoint))
+
+  ! now do transformation
+
+  xoffset = foil_transform%xoffset
+  zoffset = foil_transform%zoffset
+  scale   = foil_transform%scale
+  angle   = foil_transform%angle
+
+  do i = 1, pointst
+    foil%x(i) = xt(pointst-i+1)/scale - xoffset
+    foil%z(i) = zt(pointst-i+1)/scale - zoffset
+  end do
+  do i = 1, pointsb-1
+    foil%x(i+pointst) = xb(i+1)/scale - xoffset
+    foil%z(i+pointst) = zb(i+1)/scale - zoffset
+  end do
+
+  cosa  = cos (angle) 
+  sina  = sin (angle) 
+  do i = 1, foil%npoint
+    foil%x(i) = foil%x(i) * cosa - foil%z(i) * sina
+    foil%z(i) = foil%x(i) * sina + foil%z(i) * cosa
+  end do
+
+
+end subroutine rebuild_airfoil
 
 !=============================================================================80
 !
@@ -698,17 +752,7 @@ end subroutine show_camb_thick_of_current
 
 !------------------------------------------------------------------------------
 ! Assess polyline (x,y) on surface quality (curves of2nd and 3rd derivation)
-!   info                Id-String to print for User e.g. 'Top surface'
-!   show_it             Print infos about pertubations  
-!   max_curv_reverse    Max number of reversal as defined by xoptfoil
-!
-! Returns
-!    nreversal2         as defined by xoptfoil (2nd derivative reversals)
-!    perturbation       as an indicator of perturbation of the surface which is
-!                       the sum of 2nd and 3rd derivative reversals and highlows
-!                       = 0.  - super - no indications 
-!                       < 1. not too bad
-!                       > ... getting worse and worse 
+!    and print an info string like this '-----R---H--sss--'
 !------------------------------------------------------------------------------
 
 subroutine assess_surface (info, x, y)
@@ -728,11 +772,11 @@ subroutine assess_surface (info, x, y)
 
   result_info = repeat ('-', size(x) ) 
 
-  ! have a look at 3rd derivation ...
-  call find_curvature_spikes (size(x), 1, spike_threshold, x, y, nspikes, result_info)
+  ! have a look at 3rd derivation ... skip first 5 points at LE (too special there) 
+  call find_curvature_spikes (size(x), 5, spike_threshold, x, y, nspikes, result_info)
 
-  ! have a look at 2nd derivation ...
-  call find_curvature_reversals(size(x), 1, highlow_treshold, curv_threshold, x, y, &
+  ! have a look at 2nd derivation ... skip first 5 points at LE (too special there) 
+  call find_curvature_reversals(size(x), 5, highlow_treshold, curv_threshold, x, y, &
                                 nhighlows, nreversals, result_info)
 
   write (*,'(11x,A,1x,3(I2,A),A)') info//' ', nreversals, 'R ', &
@@ -743,8 +787,6 @@ end subroutine assess_surface
 !------------------------------------------------------------------------------
 ! Counts the number of highlows of 2nd derivative (bumps) of polyline (x,y) 
 !
-!   info                Id-String to print for User e.g. 'Top surface'
-!   show_it             Print infos about pertubations  
 !   reversal_threshold  minimum +- of curvature to detect reversal 
 !   highlow_threshold   minimum height of a highlow to detect 
 !   max_curv_reverse    max. allowed curve reversals 
@@ -773,7 +815,7 @@ subroutine get_curv_violations (x, y, &
 
   result_info = repeat ('-', size(x) )    ! dummy   
 
-  ! have a look at 2nd derivation ...
+  ! have a look at 2nd derivation ... skip first 5 points at LE (too special there) 
   call find_curvature_reversals(size(x), 5, highlow_treshold, reversal_threshold, x, y, &
   nhighlows,nreversals, result_info)
 
@@ -783,16 +825,13 @@ subroutine get_curv_violations (x, y, &
 end subroutine get_curv_violations
 
 !------------------------------------------------------------------------------
-! Counts the number of highlows of 2nd derivative (bumps) of polyline (x,y) 
+! Assess polyline (x,y) for reversals and HighLows
+!    and print an info string like this '-----R---H--sss--'
 !
 !   info                Id-String to print for User e.g. 'Top surface'
-!   show_it             Print infos about pertubations  
 !   reversal_threshold  minimum +- of curvature to detect reversal 
 !   highlow_threshold   minimum height of a highlow to detect 
 !
-! Returns
-!    nhighreversals     number of highlows
-!    nhighlows          number of highlows
 !------------------------------------------------------------------------------
 
   subroutine show_reversals_highlows (info, x, y, & 
@@ -874,7 +913,9 @@ subroutine smooth_it (x, y)
   i_range_start  = 1              ! with transformation will start now at 1
   i_range_end    = size (x)       ! ... and end
                                   ! count the number of current spikes in the polyline
-  call find_curvature_spikes(size(x), i_range_start, spike_threshold, x, y, nspikes, result_info)
+  !jx-test zähle erst ab 5
+  !call find_curvature_spikes(size(x), i_range_start, spike_threshold, x, y, nspikes, result_info)
+  call find_curvature_spikes(size(x), 5, spike_threshold, x, y, nspikes, result_info)
 
   nspikes_target = int(nspikes/5) ! how many curve spikes should be at the end?
                                   !   Reduce by factor 5 --> not too much as smoothing become critical for surface
