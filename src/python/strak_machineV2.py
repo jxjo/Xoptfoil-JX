@@ -190,13 +190,21 @@ class inputFile:
 
     # removes an op-Point if weighting is beyond a certain limit
     def removeDeactivatedOpPoints(self):
+        # get operating-conditions
         operatingConditions = self.values["operating_conditions"]
-        newOperatingConditions = {"name": [], "op_mode": [], "op_point": [],
-         "optimization_type" : [], "target_value": [], "weighting":[], 'noppoint' : 0}
 
-        # get OpPoint-weight
+        # make a copy
+        newOperatingConditions = operatingConditions.copy()
+
+        # clear all opPoints of the copy
+        self.deleteAllOpPoints(newOperatingConditions)
+
+       # walk through the opPoints
         for idx in range(len(operatingConditions["weighting"])):
+            # get OpPoint-weight
+
             if (operatingConditions["weighting"][idx] >= 0.001):
+                # copy this opPoint to the new operating-conditions
                 newOperatingConditions["name"].append(operatingConditions["name"][idx])
                 newOperatingConditions["op_mode"].append(operatingConditions["op_mode"][idx])
                 newOperatingConditions["op_point"].append(operatingConditions["op_point"][idx])
@@ -567,9 +575,7 @@ class inputFile:
         self.transferMaxSpeed(params, polarData)
 
 
-    def clearOperatingConditions(self):
-         # get operating-conditions from dictionary
-        operatingConditions = self.values["operating_conditions"]
+    def deleteAllOpPoints(self, operatingConditions):
         # clear operating conditions
         operatingConditions["name"] = []
         operatingConditions["op_mode"] = []
@@ -612,7 +618,7 @@ class inputFile:
         Cl_increment = (Cl_max - Cl_min) / numOppoints
 
         # clear operating conditions
-        self.clearOperatingConditions()
+        self.deleteAllOpPoints(self.values["operating_conditions"])
 
         # clear any existing geo-targets
         self.clearGeoTargets()
