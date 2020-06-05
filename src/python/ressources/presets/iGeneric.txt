@@ -28,7 +28,7 @@
   generate_polars  = .true.                                 ! get re number from command line
   type_of_polar    = 2 
   op_mode          = 'spec-al'
-  op_point_range   =  -3.0, 12.5, 0.25
+  op_point_range   =  -4.5, 12.5, 0.05
 /
 
 

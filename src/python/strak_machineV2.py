@@ -443,24 +443,33 @@ class inputFile:
         # set new target-value of oppoint
         self.changeTargetValue(opPointName, targetValue)
 
+    # All "maxlift"-dependend opPoints in the inputfile will be "transferred"
+    # according to the polar of the strak-airfoil in polardata. The oppoints in
+    # the inputfile exactly match the polar of the root-airfoil. For physical
+    # reasons (lower Re-number) it is not possible to completely restore the
+    # polar of the root-airfoil at the Re-number of the strak-airfoil. But the
+    # polar should come as close as possible to the polar of the root-airfoil in
+    # some specified points. So the target opPoints for the strak-airfoil, that
+    # will be calculated here are a mixture between the polar of the root-
+    # airfoil and the polar of the not optimized strak-airfoil.
     def transferMaxLift(self, params, polarData):
         try:
             # Clmax
-            # get opPoint-values
+            # get opPoint-values (polar of root-airfoil)
             CL_maxLift = self.getOpPoint("Clmax")
             CD_maxLift = self.getTargetValue("Clmax")
 
-            # get polar-values
+            # get polar-values (polar of strak-airfoil, not optimized yet)
             CL_Polar = polarData.CL[polarData.maxLift_idx]
             CD_Polar = polarData.CD[polarData.maxLift_idx]
 
-            # determine new value from gain, it's a mixture of root polar and
-            # strak polar
-            CL_maxLift = ((CL_maxLift * params.maxLiftGain) +
-                          (CL_Polar * (1.0 - params.maxLiftGain)))
+            # determine new value from "gain" (=improvement), a mixture of root
+            # polar and strak polar.
+            CL_maxLift = ((CL_maxLift * params.maxLiftGain) + # part coming from root-airfoil
+                          (CL_Polar * (1.0 - params.maxLiftGain)))# part coming from not optimized strak-airfoil
 
-            CD_maxLift = ((CD_maxLift * params.maxLiftGain ) +
-                          (CD_Polar * (1.0 - params.maxLiftGain)))
+            CD_maxLift = ((CD_maxLift * params.maxLiftGain ) + # part coming from root-airfoil
+                          (CD_Polar * (1.0 - params.maxLiftGain))) # part coming from not optimized strak-airfoil
 
             # set new values
             self.changeOpPoint("Clmax", CL_maxLift)
@@ -516,16 +525,15 @@ class inputFile:
 
     def transferMaxSpeed(self, params, polarData):
         try:
+            # get polar-values of root-airfoil
             CL_keepSpeed = self.getOpPoint("keepSpeed")
             CD_keepSpeed = self.getTargetValue("keepSpeed")
             CD_Polar = polarData.find_CD(CL_keepSpeed)
 
             # new target-value is value between root-polar and strak polar
-            CD_keepSpeed = ((CD_keepSpeed * params.maxSpeedGain) +
-                            (CD_Polar * (1.0 - params.maxSpeddGain)))
+            CD_keepSpeed = ((CD_keepSpeed * params.maxSpeedGain) + # part coming from root-airfoil
+                            (CD_Polar * (1.0 - params.maxSpeedGain)))# part coming from not optimized strak-airfoil
 
-
-            CD_keepSpeed = (CD_keepSpeed + CD_Polar)/2
             self.changeTargetValue("keepSpeed", CD_keepSpeed)
         except:
             print("opPoint keepSpeed was skipped")
@@ -537,7 +545,7 @@ class inputFile:
 
             # new target-value is value between root-polar and strak polar
             CD_maxSpeed = ((CD_maxSpeed * params.maxSpeedGain) +
-                           (CD_Polar * (1.0 - params.maxSpeddGain)))
+                           (CD_Polar * (1.0 - params.maxSpeedGain)))
 
             self.changeTargetValue("maxSpeed", CD_maxSpeed)
         except:
