@@ -3,7 +3,7 @@
       "batchfileName": "make_strak.bat", 
       "outputFolder": "build", 
       "strakInputFileName": "istrak.txt", 
-      "seedFoilName": "SD", 
+      "seedFoilName": "rg15", 
       "generateBatchfile": "true", 
       "inputFolder": "ressources", 
       "operatingMode": "default",

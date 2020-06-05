@@ -26,6 +26,7 @@ from matplotlib import pyplot as plt
 import matplotlib.image as mpimg
 import numpy as np
 import pip
+import f90nml
 from copy import deepcopy
 
 # paths and separators
@@ -666,7 +667,7 @@ class polarGraph:
         ax.set_axis_off()
 
     def plotLiftDragOptimizationPoints(self, ax, polar):
-        if (polar.operatingConditions <> None):
+        if (polar.operatingConditions != None):
             idx = 0
             operatingConditions = polar.operatingConditions
             validNames = ['preSpeed', 'maxSpeed', 'keepSpeed']
@@ -758,7 +759,7 @@ class polarGraph:
             ax.plot(x, y, 'yo')
 
     def plotLiftOverAlphaOptimizationPoints(self, ax, polar):
-        if (polar.operatingConditions <> None):
+        if (polar.operatingConditions != None):
             idx = 0
             operatingConditions = polar.operatingConditions
             for optimization_type in operatingConditions["optimization_type"]:
@@ -844,7 +845,7 @@ class polarGraph:
 
 
     def plotLiftDragOverLiftOptimizationPoints(self, ax, polar):
-        if (polar.operatingConditions <> None):
+        if (polar.operatingConditions != None):
             idx = 0
             operatingConditions = polar.operatingConditions
             validNames = ['preSpeed','maxSpeed', 'keepSpeed', 'preGlide',
@@ -1274,7 +1275,7 @@ def read_planeDataFile(fileName):
 def get_FoilName(params, index):
 
     # is there wingdata available ?
-    if (params.wingData <> None):
+    if (params.wingData != None):
         # yes
         wing = params.wingData
         # get airfoil-names from wing-dictionary
@@ -1300,7 +1301,7 @@ def get_FoilName(params, index):
 def get_NumberOfAirfoils(params):
 
     # is there wingdata available ?
-    if (params.wingData <> None):
+    if (params.wingData != None):
         # get number of chords from wing-data
         num = len(params.wingData.get('chordLengths'))
     else:
@@ -1315,7 +1316,7 @@ def get_NumberOfAirfoils(params):
 def get_ReList(params):
     list = []
     # is there wingdata available ?
-    if (params.wingData <> None):
+    if (params.wingData != None):
         # get list of all chord-lengths
         chordLengths = params.wingData.get('chordLengths')
         # get Re-number of root-airfoil
@@ -1580,8 +1581,6 @@ def getwingDataFromParams(params):
 # Main program
 if __name__ == "__main__":
 
-    # import further libraries, install them first, if missing
-    install_and_import('f90nml')
     # get command-line-arguments or user-input
     strakDataFileName = getArguments()
 
@@ -1730,7 +1729,7 @@ if __name__ == "__main__":
 
     # debug-output
     for element in commandlines:
-        print element
+        print (element)
     print("Done.")
 
     # generate batchfile
