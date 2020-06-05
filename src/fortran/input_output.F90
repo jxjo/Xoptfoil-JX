@@ -168,9 +168,9 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
   restart_write_freq = 0              ! default: switch off write restart files
   write_designs = .true.
 
-! jx-mod Show more infos  / supress echo
+! Show more infos  / supress echo
   show_details = .false. 
-  echo_input_parms = .true.
+  echo_input_parms = .false.
  
 ! Read main namelist options
 

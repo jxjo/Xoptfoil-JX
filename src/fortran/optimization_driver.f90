@@ -33,7 +33,6 @@ subroutine matchfoils_preprocessing(matchfoil_file)
 
   use vardef,             only : airfoil_type, xmatcht, xmatchb, zmatcht,      &
                                  zmatchb, xseedt, xseedb, symmetrical
-  use vardef,             only : xoffmatch, zoffmatch, scale_match
   use memory_util,        only : deallocate_airfoil
   use airfoil_operations, only : get_seed_airfoil, get_split_points,           &
                                  split_airfoil, my_stop

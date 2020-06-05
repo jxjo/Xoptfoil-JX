@@ -460,7 +460,7 @@ def plot_airfoil_coordinates(seedfoil, matchfoil, designfoils, plotnum, firsttim
   plot_3rd_deriv  = plot_3rd_deriv  and (len(seedfoil.deriv3) > 0) 
   plot_3rd_deriv  = plot_3rd_deriv  and (not plot_2nd_deriv) 
   plot_matchfoil  = plot_matchfoil and (matchfoil.npt > 0)
-  plot_delta_y    = plot_foil and plot_delta_y    and (not plot_matchfoil)          
+  plot_delta_y    = plot_foil and plot_delta_y and plot_seedfoil and (not plot_matchfoil)          
   plot_delta_y    = plot_delta_y and (len(seedfoil.x) == len(foil.x))       
   show_transition = plot_foil and show_transition and (len(foil.xtrt > 0))        
 

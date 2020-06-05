@@ -120,7 +120,6 @@ subroutine repanel_smooth (input_file, output_prefix, seed_foil)
   character(*), intent(in)          :: input_file, output_prefix
   type (airfoil_type), intent (in)  :: seed_foil
 
-  integer             :: pointst, pointsb
   double precision, dimension(:), allocatable :: xt, xb, zt, zb, zt_smoothed, zb_smoothed
   type (airfoil_type) :: foil_smoothed, foil
   type (xfoil_geom_options_type) :: geom_options
@@ -189,12 +188,14 @@ subroutine repanel_smooth (input_file, output_prefix, seed_foil)
 ! Write all airfoils to _design_coordinates using XOptfoil format for visualizer
   
   call write_design_coordinates (output_prefix, 0, seed_foil)
+
   foil%name = trim (seed_foil%name) // '-repaneled'
   call write_design_coordinates (output_prefix, 1, foil)
 
-  if (do_smoothing) &
+  if (do_smoothing) then
     foil_smoothed%name = trim (seed_foil%name) // '-smoothed'
     call write_design_coordinates (output_prefix, 2, foil_smoothed)
+  end if 
 
 end subroutine repanel_smooth
 
