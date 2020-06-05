@@ -185,6 +185,30 @@ class inputFile:
         # read input-file as a Fortan namelist
         self.values = f90nml.read(self.presetInputFileName)
 
+        # clean-up file
+        self.removeDeactivatedOpPoints()
+
+    # removes an op-Point if weighting is beyond a certain limit
+    def removeDeactivatedOpPoints(self):
+        operatingConditions = self.values["operating_conditions"]
+        newOperatingConditions = {"name": [], "op_mode": [], "op_point": [],
+         "optimization_type" : [], "target_value": [], "weighting":[], 'noppoint' : 0}
+
+        # get OpPoint-weight
+        for idx in range(len(operatingConditions["weighting"])):
+            if (operatingConditions["weighting"][idx] >= 0.001):
+                newOperatingConditions["name"].append(operatingConditions["name"][idx])
+                newOperatingConditions["op_mode"].append(operatingConditions["op_mode"][idx])
+                newOperatingConditions["op_point"].append(operatingConditions["op_point"][idx])
+                newOperatingConditions["optimization_type"].append(operatingConditions["optimization_type"][idx])
+                newOperatingConditions["target_value"].append(operatingConditions["target_value"][idx])
+                newOperatingConditions["weighting"].append(operatingConditions["weighting"][idx])
+                newOperatingConditions['noppoint'] = newOperatingConditions['noppoint'] + 1
+
+        # write-back operatingConditions
+        self.values["operating_conditions"] = newOperatingConditions
+
+
     def getInputFileName(self, fileList, strakType):
         # search the whole list of files for the desired strak-type
         for name in fileList:
@@ -336,7 +360,7 @@ class inputFile:
         # create List of opPoints to be affected. These oppoints will be
         # "shifted", according to the calculated difference
         opPointList = ['helperPreGlide', 'preGlide', 'maxGlide', 'slopeMaxGlide',
-                       'keepGlide', 'helperKeepGlide']
+                       'helperKeepGlide']
 
         # shift all opPoints according to the difference
         self.shiftOpPoints(diff, opPointList)
@@ -347,6 +371,11 @@ class inputFile:
                 self.adaptTargetValueToPolar(opPointName, polarData)
             except:
                 print("opPoint %s was skipped" % opPointName)
+        try:
+            # do not shift the "keep glide" oppoint, but adapt to polar
+            self.adaptTargetValueToPolar('keepGlide', polarData)
+        except:
+                print("opPoint \"keepGlide\" was skipped")
 
         # set new OpPoint / target-value for alphaMaxGlide
         self.changeOpPoint("alphaMaxGlide", AlphaMaxGlide)
@@ -406,26 +435,24 @@ class inputFile:
         # set new target-value of oppoint
         self.changeTargetValue(opPointName, targetValue)
 
-    def transferMaxLift(self, polarData):
-        # 40% max-Lift of root-airfoil
-        keepLift = 0.3
-
+    def transferMaxLift(self, params, polarData):
         try:
             # Clmax
             # get opPoint-values
             CL_maxLift = self.getOpPoint("Clmax")
             CD_maxLift = self.getTargetValue("Clmax")
 
-            #get polar-values
+            # get polar-values
             CL_Polar = polarData.CL[polarData.maxLift_idx]
             CD_Polar = polarData.CD[polarData.maxLift_idx]
 
-            # new value is the medium value
-            CL_maxLift = ((CL_maxLift * keepLift) +
-                          (CL_Polar * (1.0-keepLift)))
+            # determine new value from gain, it's a mixture of root polar and
+            # strak polar
+            CL_maxLift = ((CL_maxLift * params.maxLiftGain) +
+                          (CL_Polar * (1.0 - params.maxLiftGain)))
 
-            CD_maxLift = ((CD_maxLift * keepLift ) +
-                          (CD_Polar * (1.0-keepLift)))
+            CD_maxLift = ((CD_maxLift * params.maxLiftGain ) +
+                          (CD_Polar * (1.0 - params.maxLiftGain)))
 
             # set new values
             self.changeOpPoint("Clmax", CL_maxLift)
@@ -443,12 +470,12 @@ class inputFile:
             alpha_maxLift_Polar = polarData.alpha[polarData.maxLift_idx]
             CL_alpha_maxLift_Polar = polarData.CL[polarData.maxLift_idx]
 
-            # new value is the medium value
-            CL_alpha_maxLift = ((CL_alpha_maxLift * keepLift) +
-                                (CL_alpha_maxLift_Polar * (1.0-keepLift)))
+            # new value is value between root-polar and strak polar
+            CL_alpha_maxLift = ((CL_alpha_maxLift * params.maxLiftGain) +
+                                (CL_alpha_maxLift_Polar * (1.0 - params.maxLiftGain)))
 
-            alpha_maxLift = ((alpha_maxLift * keepLift) +
-                             (alpha_maxLift_Polar * (1.0-keepLift)))
+            alpha_maxLift = ((alpha_maxLift * params.maxLiftGain) +
+                             (alpha_maxLift_Polar * (1.0 - params.maxLiftGain)))
 
             # set new values
             self.changeOpPoint("alphaClmax", alpha_maxLift)
@@ -459,12 +486,13 @@ class inputFile:
 
     # all target-values will be shifted "downward" according
     # to the difference in CL_CD_MaxGlide
-    def transferMaxGlide(self, polarData):
+    def transferMaxGlide(self, params, polarData):
         # calculate difference between oppoint maxGlide and polar maxGlide
         CL_maxGlide = self.getOpPoint("maxGlide")
         CD_maxGlide = self.getTargetValue("maxGlide")
+
         CL_CD_maxGlide = CL_maxGlide / CD_maxGlide
-        factor = (CL_CD_maxGlide) / (polarData.CL_CD_max*0.992)
+        factor = (CL_CD_maxGlide) / (polarData.CL_CD_max * (1.00 - params.maxGlideLoss))
 
         # Calculate CD-Difference
         CD_PolarMaxGlide = factor * CD_maxGlide
@@ -478,12 +506,17 @@ class inputFile:
         self.scaleTargetValues(factor, opPointList)
 
 
-    def transferMaxSpeed(self, polarData):
+    def transferMaxSpeed(self, params, polarData):
         try:
             CL_keepSpeed = self.getOpPoint("keepSpeed")
             CD_keepSpeed = self.getTargetValue("keepSpeed")
             CD_Polar = polarData.find_CD(CL_keepSpeed)
-            # new CD is the medium value
+
+            # new target-value is value between root-polar and strak polar
+            CD_keepSpeed = ((CD_keepSpeed * params.maxSpeedGain) +
+                            (CD_Polar * (1.0 - params.maxSpeddGain)))
+
+
             CD_keepSpeed = (CD_keepSpeed + CD_Polar)/2
             self.changeTargetValue("keepSpeed", CD_keepSpeed)
         except:
@@ -493,8 +526,11 @@ class inputFile:
             CL_maxSpeed = self.getOpPoint("maxSpeed")
             CD_maxSpeed = self.getTargetValue("maxSpeed")
             CD_Polar = polarData.find_CD(CL_maxSpeed)
-            # new CD is the medium value
-            CD_maxSpeed = (CD_maxSpeed + CD_Polar)/2
+
+            # new target-value is value between root-polar and strak polar
+            CD_maxSpeed = ((CD_maxSpeed * params.maxSpeedGain) +
+                           (CD_Polar * (1.0 - params.maxSpeddGain)))
+
             self.changeTargetValue("maxSpeed", CD_maxSpeed)
         except:
             print("opPoint maxSpeed was skipped")
@@ -502,11 +538,8 @@ class inputFile:
         try:
             # set pre speed to polar-value
             CL_preSpeed = self.getOpPoint("preSpeed")
-            #CD_preSpeed = self.getTargetValue("preSpeed")
             CD_Polar = polarData.find_CD(CL_preSpeed)
-            # new CD is the medium value
-            #CD_preSpeed = (CD_preSpeed + CD_Polar)/2
-            self.changeTargetValue("preSpeed", CD_Polar)#CD_preSpeed)
+            self.changeTargetValue("preSpeed", CD_Polar)
         except:
             print("opPoint preSpeed was skipped")
 
@@ -523,15 +556,15 @@ class inputFile:
 
     # transfer oppoints to a new polar, keeping the shape of the original polar/
     # oppoints
-    def transferOppointsKeepShape(self, polarData):
+    def transferOppointsKeepShape(self, params, polarData):
         # transfer maxLift-values
-        self.transferMaxLift(polarData)
+        self.transferMaxLift(params, polarData)
 
         # transfer maxGlide-values
-        self.transferMaxGlide(polarData)
+        self.transferMaxGlide(params, polarData)
 
         # transfer maxSpeed-values
-        self.transferMaxSpeed(polarData)
+        self.transferMaxSpeed(params, polarData)
 
 
     def clearOperatingConditions(self):
@@ -645,6 +678,9 @@ class strakData:
         self.inputFileNames = []
         self.polars = []
         self.targetPolars = []
+        self.maxGlideLoss = 0.008
+        self.maxSpeedGain = 0.5
+        self.maxLiftGain = 0.3
 
 
 
@@ -1546,6 +1582,21 @@ def getParameters(dict):
     except:
         print ('useAlwaysRootfoil not specified')
 
+    try:
+        params.maxGlideLoss = dict["maxGlideLoss"]
+    except:
+        print ('maxGlideLoss not specified')
+
+    try:
+        params.maxSpeedGain = dict["maxSpeedGain"]
+    except:
+        print ('maxSpeedGain not specified')
+
+    try:
+        params.maxLiftGain = dict["maxLiftGain"]
+    except:
+        print ('maxLiftGain not specified')
+
     return params
 
 
@@ -1705,7 +1756,7 @@ if __name__ == "__main__":
         # as a second step,change oppoints again, but only "shift" them
         # matching the polar of the strak-airfoil
         if (i>0):
-            newFile.transferOppointsKeepShape(params.polars[i])
+            newFile.transferOppointsKeepShape(params, params.polars[i])
 
         # copy operating-conditions to polar, so they can be plotted in the graph
         opConditions = newFile.getOperatingConditions()

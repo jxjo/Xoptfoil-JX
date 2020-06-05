@@ -7,6 +7,9 @@
       "generateBatchfile": "true", 
       "inputFolder": "ressources", 
       "operatingMode": "default",
+      "maxGlideLoss": 0.008,
+      "maxSpeedGain": 0.3,
+      "maxLiftGain": 0.3,
       "ReNumbers": [
             220000,
             190000, 
