@@ -112,7 +112,7 @@ subroutine smooth_paneling(foilin, npoint, foilout, opt_geom_options)
   GAMTE_A = 0.d0
   SILENT_MODE = .TRUE.
 
-! Set geometry options for output airfoil
+  ! Set geometry options for output airfoil
 
   if (.not. present (opt_geom_options)) then 
     ! set xoptfoil standard values 
@@ -129,6 +129,8 @@ subroutine smooth_paneling(foilin, npoint, foilout, opt_geom_options)
     geom_options%xpref2 = 1.d0
   else 
     geom_options = opt_geom_options
+    ! npoint overwrites if set 
+    if (npoint > 0) geom_options%npan = npoint
   end if 
 
 ! Set xfoil airfoil and paneling options
@@ -648,20 +650,25 @@ end subroutine xfoil_defaults
 !=============================================================================80
 subroutine xfoil_set_airfoil(foil)
 
-  use xfoil_inc, only : XB, YB, NB
+  use xfoil_inc, only : XB, YB, NB, SB, XBP, YBP 
   use vardef,    only : airfoil_type
-
   type(airfoil_type), intent(in) :: foil
 
+! Set foil into xfoil buffer foil
   NB = foil%npoint
   XB(1:NB) = foil%x
   YB(1:NB) = foil%z
 
-! jx-mod Also copy buffer airfoil to current. This is also made in PANGEN -
+  CALL SCALC(XB,YB,SB,NB)
+  CALL SEGSPL(XB,XBP,SB,NB)
+  CALL SEGSPL(YB,YBP,SB,NB)
+
+! Also copy buffer airfoil to xfoil current foil. This is also made in PANGEN -
 !        ... but PANGEN shouldn't always be called before xfoil calculations
   call ABCOPY (.true.)
 
 end subroutine xfoil_set_airfoil
+
 
 !=============================================================================80
 !
@@ -731,22 +738,17 @@ subroutine xfoil_cleanup()
 
 end subroutine xfoil_cleanup
 
-!=============================================================================80
+
+!------------------------------------------------------------------------------
 !
-! Gets thickness and camber information for the current airfoil
+! jx-mod xfoil extensions
 !
-!=============================================================================80
-subroutine xfoil_geometry_info(maxt, xmaxt, maxc, xmaxc)
+!------------------------------------------------------------------------------
 
-  use xfoil_inc, only : THICKB, XTHICKB, CAMBR, XCAMBR
-  double precision, intent(out) :: maxt, xmaxt, maxc, xmaxc
-
-  maxt = THICKB
-  xmaxt = XTHICKB
-  maxc = CAMBR
-  xmaxc = XCAMBR 
-
-end subroutine xfoil_geometry_info
+!------------------------------------------------------------------------------
+! Retrieve AMAX from Xfoil  
+!     PANGEN or ABCOPY has to be done first to have the value calculated
+!------------------------------------------------------------------------------
 
 function xfoil_geometry_amax()
 
@@ -758,15 +760,7 @@ function xfoil_geometry_amax()
 end function xfoil_geometry_amax
 
 !------------------------------------------------------------------------------
-!
-! jx-mod xfoil extensions
-!
-!------------------------------------------------------------------------------
-
-!------------------------------------------------------------------------------
-!
 ! Reset xfoil_driver e.g. for an new polar 
-!
 !------------------------------------------------------------------------------
 subroutine xfoil_driver_reset ()
 
@@ -808,7 +802,7 @@ subroutine xfoil_scale_thickness_camber (infoil, f_thick, d_xthick, f_camb, d_xc
     stop
   end if
 ! Set xfoil airfoil and prepare globals, get current thickness
-  call xfoil_set_buffer_airfoil (infoil)
+  call xfoil_set_airfoil (infoil)
   call xfoil_get_geometry_info  (thick, xthick, camb, xcamb) 
 
 
@@ -861,7 +855,7 @@ subroutine xfoil_set_thickness_camber (infoil, maxt, xmaxt, maxc, xmaxc, outfoil
   end if
 
 ! Set xfoil airfoil and prepare globals, get current thickness
-  call xfoil_set_buffer_airfoil (infoil)
+  call xfoil_set_airfoil (infoil)
   call xfoil_get_geometry_info  (thick, xthick, camb, xcamb) 
 
 ! Run xfoil to change thickness and camber 
@@ -917,7 +911,7 @@ subroutine xfoil_scale_LE_radius (infoil, f_radius, x_blend, outfoil)
   end if
 
 ! Set xfoil airfoil and prepare globals, get current thickness
-  call xfoil_set_buffer_airfoil (infoil)
+  call xfoil_set_airfoil (infoil)
 
 ! Run xfoil to change thickness and camber and positions
   IF ((f_radius /= 1.d0))  call LERAD (f_radius,x_blend, new_radius) 
@@ -928,40 +922,6 @@ subroutine xfoil_scale_LE_radius (infoil, f_radius, x_blend, outfoil)
   call xfoil_reload_airfoil(outfoil)
 
 end subroutine xfoil_scale_LE_radius
-
-!-------------------------------------------------------------------------
-! get buffer airfoil LE Radius 
-! ! xfoil_scale_LE_radius has to be called before !
-!-------------------------------------------------------------------------
-function xfoil_get_LE_radius ()
-
-use xfoil_inc, only : RADBLE
-
-double precision :: xfoil_get_LE_radius
-
-xfoil_get_LE_radius = RADBLE
-
-end function xfoil_get_LE_radius
-
-!-------------------------------------------------------------------------
-! Sets buffer airfoil for xfoil - initalize segments etc...
-!-------------------------------------------------------------------------
-subroutine xfoil_set_buffer_airfoil (foil)
-
-  use xfoil_inc, only : XB, YB, NB, SB, XBP, YBP 
-  use vardef,    only : airfoil_type
-  type(airfoil_type), intent(in) :: foil
-
-  NB = foil%npoint
-  XB(1:NB) = foil%x
-  YB(1:NB) = foil%z
-
-  CALL SCALC(XB,YB,SB,NB)
-  CALL SEGSPL(XB,XBP,SB,NB)
-  CALL SEGSPL(YB,YBP,SB,NB)
-
-end subroutine xfoil_set_buffer_airfoil
-
 
 
 !-------------------------------------------------------------------------

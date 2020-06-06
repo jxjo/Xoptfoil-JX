@@ -24,7 +24,7 @@ program xfoil_worker
   use memory_util,        only : deallocate_airfoil
   use airfoil_operations, only : load_airfoil, my_stop, airfoil_write
   use xfoil_driver,       only : xfoil_init, xfoil_cleanup 
-  use xfoil_driver,       only : xfoil_set_buffer_airfoil, xfoil_reload_airfoil
+  use xfoil_driver,       only : xfoil_set_airfoil, xfoil_reload_airfoil
   use polar_operations,   only : check_and_do_polar_generation
 
   implicit none
@@ -87,7 +87,7 @@ program xfoil_worker
       output_prefix = 'FX-thick-test'
       call load_airfoil(airfoil_filename, foil)
       call xfoil_init()
-      call xfoil_set_buffer_airfoil (foil)
+      call xfoil_set_airfoil (foil)
       call HIPNT (0.3d0, 0.25d0)
       call xfoil_reload_airfoil(foil)
       call airfoil_write (trim(output_prefix)//'.dat', output_prefix, foil)
@@ -121,6 +121,7 @@ subroutine repanel_smooth (input_file, output_prefix, seed_foil)
   type (airfoil_type), intent (in)  :: seed_foil
 
   double precision, dimension(:), allocatable :: xt, xb, zt, zb, zt_smoothed, zb_smoothed
+  integer :: npoint_paneling
   type (airfoil_type) :: foil_smoothed, foil
   type (xfoil_geom_options_type) :: geom_options
 
@@ -130,23 +131,17 @@ subroutine repanel_smooth (input_file, output_prefix, seed_foil)
 
 ! Repanel seed airfoil with xfoil PANGEN 
 
-  write (*,'(1x, A,A,A,I3,A)') 'Repaneling ',trim(seed_foil%name), ' with ',geom_options%npan,' Points'
-  call smooth_paneling(seed_foil, npoint, foil, geom_options)
+  npoint_paneling = geom_options%npan -1      ! one point will be added at normalize
+  write (*,'(1x, A,A,A,I3,A)') 'Repaneling ',trim(seed_foil%name), ' with ',npoint_paneling,' Points'
+  call smooth_paneling(seed_foil, npoint_paneling, foil, geom_options)
 
-! Calculate leading edge information
+! Normalize airfoil - transform, split, add LE point, rebuild 
 
-  call le_find(foil%x, foil%z, foil%leclose,                        &
-               foil%xle, foil%zle, foil%addpoint_loc)
-               
-! Translate and scale
-
+  call le_find(foil%x, foil%z, foil%leclose, foil%xle, foil%zle, foil%addpoint_loc)
   call transform_airfoil(foil)
-
-! Split up seed airfoil into upper and lower surfaces
-!   and rebuild to get the final seed +1 points 
-
   call split_airfoil   (foil, xt, xb, zt, zb, .false.)
   call rebuild_airfoil (xt, xb, zt, zb, foil)
+  write (*,'(1x, A,A,A,I3,A)') 'Normalize  ',trim(seed_foil%name), ' having now ',foil%npoint,' Points'
 
 ! Smooth it ?
 
@@ -208,7 +203,7 @@ subroutine write_design_coordinates (output_prefix, designcounter, curr_foil)
 
   use vardef,             only : airfoil_type
   use airfoil_operations, only : airfoil_write_to_unit
-  use xfoil_driver,    only : xfoil_geometry_info, xfoil_set_airfoil
+  use xfoil_driver,       only : xfoil_set_airfoil, xfoil_get_geometry_info
 
   character(*), intent(in)          :: output_prefix
   integer, intent(in)               :: designcounter
@@ -221,8 +216,9 @@ subroutine write_design_coordinates (output_prefix, designcounter, curr_foil)
              
 ! Get geometry info
 
-  call xfoil_set_airfoil(curr_foil)
-  call xfoil_geometry_info(maxt, xmaxt, maxc, xmaxc)
+  call xfoil_set_airfoil (curr_foil)
+  call xfoil_get_geometry_info(maxt, xmaxt, maxc, xmaxc)
+
   write(maxtchar,'(F8.5)') maxt
   maxtchar = adjustl(maxtchar)
   write(xmaxtchar,'(F8.5)') xmaxt

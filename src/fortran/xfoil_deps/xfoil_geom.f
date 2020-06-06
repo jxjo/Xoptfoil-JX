@@ -3043,7 +3043,8 @@ C
         SLE = SLE + DSLE
         IF(ABS(DSLE) .LT. DSEPS) RETURN
    20 CONTINUE
-      WRITE(*,*) 'XLFIND:  Left point not found.  Continuing...'
+C JX-mod Suppress warning - bad shaped foils can happen during optimization
+C     WRITE(*,*) 'XLFIND:  Left point not found.  Continuing...'
       SLE = S(I)
       RETURN
       END ! XLFIND

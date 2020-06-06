@@ -114,13 +114,13 @@ end function objective_function_nopenalty
 function aero_objective_function(designvars, include_penalty, evaluate_only_geometry)
 
   use math_deps,          only : interp_vector, curvature, derv1f1, derv1b1
-  use airfoil_operations, only : show_camb_thick_of_current, get_curv_violations
+  use airfoil_operations, only : get_curv_violations
   use airfoil_operations, only : my_stop, rebuild_airfoil
   use math_deps,          only : interp_point, derivation_at_point
   use parametrization,    only : top_shape_function, bot_shape_function,          &
                                  create_airfoil, create_airfoil_camb_thick
-  use xfoil_driver,       only : run_xfoil, xfoil_geometry_amax,                  &
-                                 xfoil_geometry_info, xfoil_set_airfoil
+  use xfoil_driver,       only : run_xfoil, xfoil_geometry_amax, xfoil_set_airfoil, &
+                                 xfoil_get_geometry_info
 
   double precision, dimension(:), intent(in) :: designvars
   logical, intent(in), optional :: include_penalty, evaluate_only_geometry
@@ -409,9 +409,9 @@ function aero_objective_function(designvars, include_penalty, evaluate_only_geom
 
 ! next checks need xfoil geo routines...
 
-  call xfoil_set_airfoil(curr_foil)
-  call xfoil_geometry_info(maxt, xmaxt, maxc, xmaxc)
-  maxpanang = xfoil_geometry_amax()
+  call xfoil_set_airfoil (curr_foil)        ! Xfoil_set calcs amax...
+  call xfoil_get_geometry_info (maxt, xmaxt, maxc, xmaxc)
+  maxpanang = xfoil_geometry_amax() 
 
 ! Add penalty for too large panel angle
 !     Due to numerical issues (?) it happens, that the final maxpanang ist greater 25.
@@ -789,7 +789,8 @@ function write_airfoil_optimization_progress(designvars, designcounter)
 
   use parametrization, only : top_shape_function, bot_shape_function,          &
                               create_airfoil, create_airfoil_camb_thick
-  use xfoil_driver,    only : run_xfoil, xfoil_geometry_info
+  use xfoil_driver,    only : run_xfoil
+  use xfoil_driver,    only : xfoil_get_geometry_info
 
   double precision, dimension(:), intent(in) :: designvars
   integer, intent(in) :: designcounter
@@ -893,9 +894,9 @@ function write_airfoil_optimization_progress(designvars, designcounter)
                  moment, viscrms, alpha, xtrt, xtrb, ncrit_pt)
 
              
-! Get geometry info
-
-  call xfoil_geometry_info(maxt, xmaxt, maxc, xmaxc)
+! Get geometry info - foil was set in run_xfoil
+  call xfoil_get_geometry_info(maxt, xmaxt, maxc, xmaxc)
+               
   write(maxtchar,'(F8.5)') maxt
   maxtchar = adjustl(maxtchar)
   write(xmaxtchar,'(F8.5)') xmaxt
@@ -1018,7 +1019,7 @@ function write_matchfoil_optimization_progress(designvars, designcounter)
 
   use parametrization,    only : top_shape_function, bot_shape_function,          &
                                 create_airfoil, create_airfoil_camb_thick
-  use xfoil_driver,       only : xfoil_set_airfoil, xfoil_geometry_info
+  use xfoil_driver,       only : xfoil_set_airfoil, xfoil_get_geometry_info
   use airfoil_operations, only : airfoil_write_to_unit, rebuild_airfoil
 
   double precision, dimension(:), intent(in) :: designvars
@@ -1075,9 +1076,8 @@ function write_matchfoil_optimization_progress(designvars, designcounter)
 
   call rebuild_airfoil (xseedt, xseedb, zt_new, zb_new, curr_foil)
 
-  call xfoil_set_airfoil(curr_foil)
-  call xfoil_geometry_info(maxt, xmaxt, maxc, xmaxc)
-
+  call xfoil_set_airfoil (curr_foil)
+  call xfoil_get_geometry_info(maxt, xmaxt, maxc, xmaxc)
   write(maxtchar,'(F8.5)') maxt
   maxtchar = adjustl(maxtchar)
   write(xmaxtchar,'(F8.5)') xmaxt

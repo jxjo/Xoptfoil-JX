@@ -280,7 +280,7 @@ subroutine read_xfoil_paneling_inputs  (input_file, geom_options)
   ! Init default values for xfoil options
 
   npan   = 201              ! default adapted to xoptfoils internal 200 panels
-                            !   ... to have run_xfoil results equal airfoil external results
+                            !   ... will have 201 after split and rebuild (normalize)
   cvpar  = 1.d0
   cterat = 0.d0             ! normally 0.15 - reduce curvature peek at TE with PANGEN
   ctrrat = 0.2d0
