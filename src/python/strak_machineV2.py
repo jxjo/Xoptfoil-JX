@@ -321,6 +321,23 @@ class inputFile:
                 return operatingConditions['op_mode'][idx]
             idx = idx + 1
 
+    def setInitialPerturb(self, ReDiff):
+        ReDiffList =  [(150000/5), 150000]
+        perturbList = [(0.01/5), 0.01]
+        pso_tolList = [(0.0015/5), 0.0015]
+
+        # calculate corresponding perturb
+        perturb = np.interp(ReDiff, ReDiffList, perturbList)
+        optimization_options = self.values["optimization_options"]
+        optimization_options['initial_perturb'] = perturb
+
+        # also adapt pso_tol!!!
+        pso_tol = round(np.interp(ReDiff, ReDiffList, pso_tolList),6)
+        particle_swarm_options = self.values["particle_swarm_options"]
+        particle_swarm_options['pso_tol'] = pso_tol
+        print("Re-Diff is %d, setting initial_perturb to %.4f and pso_tol to %.5f" %\
+         (ReDiff, perturb, pso_tol))
+
 
     def adaptMaxLift(self, polarData):
         # get new values from polar
@@ -546,8 +563,8 @@ class inputFile:
             # new target-value is value between root-polar and strak polar
             CD_maxSpeed = ((CD_maxSpeed * params.maxSpeedGain) +
                            (CD_Polar * (1.0 - params.maxSpeedGain)))
-
-            self.changeTargetValue("maxSpeed", CD_maxSpeed)
+# TODO Test
+            self.changeTargetValue("maxSpeed", -1)#CD_maxSpeed)
         except:
             print("opPoint maxSpeed was skipped")
 
@@ -555,7 +572,7 @@ class inputFile:
             # set pre speed to polar-value
             CL_preSpeed = self.getOpPoint("preSpeed")
             CD_Polar = polarData.find_CD(CL_preSpeed)
-            self.changeTargetValue("preSpeed", CD_Polar)
+            self.changeTargetValue("preSpeed", -1)#CD_Polar)
         except:
             print("opPoint preSpeed was skipped")
 
@@ -685,7 +702,8 @@ class strakData:
         self.wingData = None
         self.strakType = "F3F"
         self.operatingMode = 'default'
-        self.useAlwaysRootfoil = True#False
+        self.useAlwaysRootfoil = False
+        self.adaptInitialPerturb = True
         self.seedFoilName = ""
         self.ReNumbers = []
         self.polarFileNames = []
@@ -1597,6 +1615,14 @@ def getParameters(dict):
         print ('useAlwaysRootfoil not specified')
 
     try:
+        if (dict["adaptInitialPerturb"] == 'true'):
+            params.adaptInitialPerturb = True
+        else:
+            params.adaptInitialPerturb = False
+    except:
+        print ('adaptInitialPerturb not specified')
+
+    try:
         params.maxGlideLoss = dict["maxGlideLoss"]
     except:
         print ('maxGlideLoss not specified')
@@ -1771,6 +1797,18 @@ if __name__ == "__main__":
         # matching the polar of the strak-airfoil
         if (i>0):
             newFile.transferOppointsKeepShape(params, params.polars[i])
+
+            if params.adaptInitialPerturb:
+                # also adapt the initial perturb according to the change in
+                # Re-number
+                if (params.useAlwaysRootfoil):
+                    # difference always calculated to Re-number of root-airfoil
+                    ReDiff = params.ReNumbers[0] - params.ReNumbers[i]
+                else:
+                    # difference calculated to Re-number of previous-airfoil
+                    ReDiff = params.ReNumbers[i-1] - params.ReNumbers[i]
+
+                newFile.setInitialPerturb(ReDiff)
 
         # copy operating-conditions to polar, so they can be plotted in the graph
         opConditions = newFile.getOperatingConditions()
