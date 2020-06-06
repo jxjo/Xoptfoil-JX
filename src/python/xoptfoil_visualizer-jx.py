@@ -461,7 +461,7 @@ def plot_airfoil_coordinates(seedfoil, matchfoil, designfoils, plotnum, firsttim
   plot_3rd_deriv  = plot_3rd_deriv  and (not plot_2nd_deriv) 
   plot_matchfoil  = plot_matchfoil and (matchfoil.npt > 0)
   plot_delta_y    = plot_foil and plot_delta_y and plot_seedfoil and (not plot_matchfoil)          
-  plot_delta_y    = plot_delta_y and (len(seedfoil.x) == len(foil.x))       
+  plot_delta_y    = plot_delta_y and (np.array_equal(seedfoil.x, foil.x))       
   show_transition = plot_foil and show_transition and (len(foil.xtrt > 0))        
 
   # Set up coordinates plot, create figure and axes
@@ -692,16 +692,17 @@ def plot_polars(seedfoil, designfoils, plotnum, firsttime=True, animation=False,
     pfig.subplots_adjust(hspace=0.3, wspace=0.3)
     pfig.set_size_inches(11, 8, forward=True)
     plt.get_current_fig_manager().window.setGeometry(100,30,1300,550)
-
   else:
     pfig = plt.figure(num= window_name)
+    if (len(pfig.get_axes()) == 0): exit()     # User closed the window - stop
+    pfig.clear()
+    pfig.subplots (2,3)
+
+
+#  for ax in axarr: 
+#    ax.clear()
 
   axarr = pfig.get_axes()
-
-  if (len(axarr) == 0): exit()     # User closed the window - stop
-
-  for ax in axarr: 
-    ax.clear()
 
 
   # Select requested airfoil or quit if polars are still not available
@@ -886,7 +887,6 @@ def plot_polars(seedfoil, designfoils, plotnum, firsttime=True, animation=False,
   
   bbox_loc = (0.5, 1.00)
   labels = [l.get_label() for l in lines]
-  # if legend: legend.remove()
   pfig.legend(lines, labels, loc="upper center", 
               bbox_to_anchor=bbox_loc, numpoints=1)
 
