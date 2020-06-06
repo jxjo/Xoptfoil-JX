@@ -26,6 +26,7 @@ from matplotlib import pyplot as plt
 import matplotlib.image as mpimg
 import numpy as np
 import pip
+import f90nml
 from copy import deepcopy
 
 # paths and separators
@@ -184,6 +185,38 @@ class inputFile:
         # read input-file as a Fortan namelist
         self.values = f90nml.read(self.presetInputFileName)
 
+        # clean-up file
+        self.removeDeactivatedOpPoints()
+
+    # removes an op-Point if weighting is beyond a certain limit
+    def removeDeactivatedOpPoints(self):
+        # get operating-conditions
+        operatingConditions = self.values["operating_conditions"]
+
+        # make a copy
+        newOperatingConditions = operatingConditions.copy()
+
+        # clear all opPoints of the copy
+        self.deleteAllOpPoints(newOperatingConditions)
+
+       # walk through the opPoints
+        for idx in range(len(operatingConditions["weighting"])):
+            # get OpPoint-weight
+
+            if (operatingConditions["weighting"][idx] >= 0.001):
+                # copy this opPoint to the new operating-conditions
+                newOperatingConditions["name"].append(operatingConditions["name"][idx])
+                newOperatingConditions["op_mode"].append(operatingConditions["op_mode"][idx])
+                newOperatingConditions["op_point"].append(operatingConditions["op_point"][idx])
+                newOperatingConditions["optimization_type"].append(operatingConditions["optimization_type"][idx])
+                newOperatingConditions["target_value"].append(operatingConditions["target_value"][idx])
+                newOperatingConditions["weighting"].append(operatingConditions["weighting"][idx])
+                newOperatingConditions['noppoint'] = newOperatingConditions['noppoint'] + 1
+
+        # write-back operatingConditions
+        self.values["operating_conditions"] = newOperatingConditions
+
+
     def getInputFileName(self, fileList, strakType):
         # search the whole list of files for the desired strak-type
         for name in fileList:
@@ -288,6 +321,23 @@ class inputFile:
                 return operatingConditions['op_mode'][idx]
             idx = idx + 1
 
+    def setInitialPerturb(self, ReDiff):
+        ReDiffList =  [(150000/5), 150000]
+        perturbList = [(0.01/5), 0.01]
+        pso_tolList = [(0.0015/5), 0.0015]
+
+        # calculate corresponding perturb
+        perturb = np.interp(ReDiff, ReDiffList, perturbList)
+        optimization_options = self.values["optimization_options"]
+        optimization_options['initial_perturb'] = perturb
+
+        # also adapt pso_tol!!!
+        pso_tol = round(np.interp(ReDiff, ReDiffList, pso_tolList),6)
+        particle_swarm_options = self.values["particle_swarm_options"]
+        particle_swarm_options['pso_tol'] = pso_tol
+        print("Re-Diff is %d, setting initial_perturb to %.4f and pso_tol to %.5f" %\
+         (ReDiff, perturb, pso_tol))
+
 
     def adaptMaxLift(self, polarData):
         # get new values from polar
@@ -335,7 +385,7 @@ class inputFile:
         # create List of opPoints to be affected. These oppoints will be
         # "shifted", according to the calculated difference
         opPointList = ['helperPreGlide', 'preGlide', 'maxGlide', 'slopeMaxGlide',
-                       'keepGlide', 'helperKeepGlide']
+                       'helperKeepGlide']
 
         # shift all opPoints according to the difference
         self.shiftOpPoints(diff, opPointList)
@@ -346,6 +396,11 @@ class inputFile:
                 self.adaptTargetValueToPolar(opPointName, polarData)
             except:
                 print("opPoint %s was skipped" % opPointName)
+        try:
+            # do not shift the "keep glide" oppoint, but adapt to polar
+            self.adaptTargetValueToPolar('keepGlide', polarData)
+        except:
+                print("opPoint \"keepGlide\" was skipped")
 
         # set new OpPoint / target-value for alphaMaxGlide
         self.changeOpPoint("alphaMaxGlide", AlphaMaxGlide)
@@ -405,26 +460,33 @@ class inputFile:
         # set new target-value of oppoint
         self.changeTargetValue(opPointName, targetValue)
 
-    def transferMaxLift(self, polarData):
-        # 40% max-Lift of root-airfoil
-        keepLift = 0.3
-
+    # All "maxlift"-dependend opPoints in the inputfile will be "transferred"
+    # according to the polar of the strak-airfoil in polardata. The oppoints in
+    # the inputfile exactly match the polar of the root-airfoil. For physical
+    # reasons (lower Re-number) it is not possible to completely restore the
+    # polar of the root-airfoil at the Re-number of the strak-airfoil. But the
+    # polar should come as close as possible to the polar of the root-airfoil in
+    # some specified points. So the target opPoints for the strak-airfoil, that
+    # will be calculated here are a mixture between the polar of the root-
+    # airfoil and the polar of the not optimized strak-airfoil.
+    def transferMaxLift(self, params, polarData):
         try:
             # Clmax
-            # get opPoint-values
+            # get opPoint-values (polar of root-airfoil)
             CL_maxLift = self.getOpPoint("Clmax")
             CD_maxLift = self.getTargetValue("Clmax")
 
-            #get polar-values
+            # get polar-values (polar of strak-airfoil, not optimized yet)
             CL_Polar = polarData.CL[polarData.maxLift_idx]
             CD_Polar = polarData.CD[polarData.maxLift_idx]
 
-            # new value is the medium value
-            CL_maxLift = ((CL_maxLift * keepLift) +
-                          (CL_Polar * (1.0-keepLift)))
+            # determine new value from "gain" (=improvement), a mixture of root
+            # polar and strak polar.
+            CL_maxLift = ((CL_maxLift * params.maxLiftGain) + # part coming from root-airfoil
+                          (CL_Polar * (1.0 - params.maxLiftGain)))# part coming from not optimized strak-airfoil
 
-            CD_maxLift = ((CD_maxLift * keepLift ) +
-                          (CD_Polar * (1.0-keepLift)))
+            CD_maxLift = ((CD_maxLift * params.maxLiftGain ) + # part coming from root-airfoil
+                          (CD_Polar * (1.0 - params.maxLiftGain))) # part coming from not optimized strak-airfoil
 
             # set new values
             self.changeOpPoint("Clmax", CL_maxLift)
@@ -442,12 +504,12 @@ class inputFile:
             alpha_maxLift_Polar = polarData.alpha[polarData.maxLift_idx]
             CL_alpha_maxLift_Polar = polarData.CL[polarData.maxLift_idx]
 
-            # new value is the medium value
-            CL_alpha_maxLift = ((CL_alpha_maxLift * keepLift) +
-                                (CL_alpha_maxLift_Polar * (1.0-keepLift)))
+            # new value is value between root-polar and strak polar
+            CL_alpha_maxLift = ((CL_alpha_maxLift * params.maxLiftGain) +
+                                (CL_alpha_maxLift_Polar * (1.0 - params.maxLiftGain)))
 
-            alpha_maxLift = ((alpha_maxLift * keepLift) +
-                             (alpha_maxLift_Polar * (1.0-keepLift)))
+            alpha_maxLift = ((alpha_maxLift * params.maxLiftGain) +
+                             (alpha_maxLift_Polar * (1.0 - params.maxLiftGain)))
 
             # set new values
             self.changeOpPoint("alphaClmax", alpha_maxLift)
@@ -458,12 +520,13 @@ class inputFile:
 
     # all target-values will be shifted "downward" according
     # to the difference in CL_CD_MaxGlide
-    def transferMaxGlide(self, polarData):
+    def transferMaxGlide(self, params, polarData):
         # calculate difference between oppoint maxGlide and polar maxGlide
         CL_maxGlide = self.getOpPoint("maxGlide")
         CD_maxGlide = self.getTargetValue("maxGlide")
+
         CL_CD_maxGlide = CL_maxGlide / CD_maxGlide
-        factor = (CL_CD_maxGlide) / (polarData.CL_CD_max*0.992)
+        factor = (CL_CD_maxGlide) / (polarData.CL_CD_max * (1.00 - params.maxGlideLoss))
 
         # Calculate CD-Difference
         CD_PolarMaxGlide = factor * CD_maxGlide
@@ -477,13 +540,17 @@ class inputFile:
         self.scaleTargetValues(factor, opPointList)
 
 
-    def transferMaxSpeed(self, polarData):
+    def transferMaxSpeed(self, params, polarData):
         try:
+            # get polar-values of root-airfoil
             CL_keepSpeed = self.getOpPoint("keepSpeed")
             CD_keepSpeed = self.getTargetValue("keepSpeed")
             CD_Polar = polarData.find_CD(CL_keepSpeed)
-            # new CD is the medium value
-            CD_keepSpeed = (CD_keepSpeed + CD_Polar)/2
+
+            # new target-value is value between root-polar and strak polar
+            CD_keepSpeed = ((CD_keepSpeed * params.maxSpeedGain) + # part coming from root-airfoil
+                            (CD_Polar * (1.0 - params.maxSpeedGain)))# part coming from not optimized strak-airfoil
+
             self.changeTargetValue("keepSpeed", CD_keepSpeed)
         except:
             print("opPoint keepSpeed was skipped")
@@ -492,20 +559,20 @@ class inputFile:
             CL_maxSpeed = self.getOpPoint("maxSpeed")
             CD_maxSpeed = self.getTargetValue("maxSpeed")
             CD_Polar = polarData.find_CD(CL_maxSpeed)
-            # new CD is the medium value
-            CD_maxSpeed = (CD_maxSpeed + CD_Polar)/2
-            self.changeTargetValue("maxSpeed", CD_maxSpeed)
+
+            # new target-value is value between root-polar and strak polar
+            CD_maxSpeed = ((CD_maxSpeed * params.maxSpeedGain) +
+                           (CD_Polar * (1.0 - params.maxSpeedGain)))
+# TODO Test
+            self.changeTargetValue("maxSpeed", -1)#CD_maxSpeed)
         except:
             print("opPoint maxSpeed was skipped")
 
         try:
             # set pre speed to polar-value
             CL_preSpeed = self.getOpPoint("preSpeed")
-            #CD_preSpeed = self.getTargetValue("preSpeed")
             CD_Polar = polarData.find_CD(CL_preSpeed)
-            # new CD is the medium value
-            #CD_preSpeed = (CD_preSpeed + CD_Polar)/2
-            self.changeTargetValue("preSpeed", CD_Polar)#CD_preSpeed)
+            self.changeTargetValue("preSpeed", -1)#CD_Polar)
         except:
             print("opPoint preSpeed was skipped")
 
@@ -522,20 +589,18 @@ class inputFile:
 
     # transfer oppoints to a new polar, keeping the shape of the original polar/
     # oppoints
-    def transferOppointsKeepShape(self, polarData):
+    def transferOppointsKeepShape(self, params, polarData):
         # transfer maxLift-values
-        self.transferMaxLift(polarData)
+        self.transferMaxLift(params, polarData)
 
         # transfer maxGlide-values
-        self.transferMaxGlide(polarData)
+        self.transferMaxGlide(params, polarData)
 
         # transfer maxSpeed-values
-        self.transferMaxSpeed(polarData)
+        self.transferMaxSpeed(params, polarData)
 
 
-    def clearOperatingConditions(self):
-         # get operating-conditions from dictionary
-        operatingConditions = self.values["operating_conditions"]
+    def deleteAllOpPoints(self, operatingConditions):
         # clear operating conditions
         operatingConditions["name"] = []
         operatingConditions["op_mode"] = []
@@ -578,7 +643,7 @@ class inputFile:
         Cl_increment = (Cl_max - Cl_min) / numOppoints
 
         # clear operating conditions
-        self.clearOperatingConditions()
+        self.deleteAllOpPoints(self.values["operating_conditions"])
 
         # clear any existing geo-targets
         self.clearGeoTargets()
@@ -637,13 +702,17 @@ class strakData:
         self.wingData = None
         self.strakType = "F3F"
         self.operatingMode = 'default'
-        self.useAlwaysRootfoil = True#False
+        self.useAlwaysRootfoil = False
+        self.adaptInitialPerturb = True
         self.seedFoilName = ""
         self.ReNumbers = []
         self.polarFileNames = []
         self.inputFileNames = []
         self.polars = []
         self.targetPolars = []
+        self.maxGlideLoss = 0.008
+        self.maxSpeedGain = 0.5
+        self.maxLiftGain = 0.3
 
 
 
@@ -666,7 +735,7 @@ class polarGraph:
         ax.set_axis_off()
 
     def plotLiftDragOptimizationPoints(self, ax, polar):
-        if (polar.operatingConditions <> None):
+        if (polar.operatingConditions != None):
             idx = 0
             operatingConditions = polar.operatingConditions
             validNames = ['preSpeed', 'maxSpeed', 'keepSpeed']
@@ -758,7 +827,7 @@ class polarGraph:
             ax.plot(x, y, 'yo')
 
     def plotLiftOverAlphaOptimizationPoints(self, ax, polar):
-        if (polar.operatingConditions <> None):
+        if (polar.operatingConditions != None):
             idx = 0
             operatingConditions = polar.operatingConditions
             for optimization_type in operatingConditions["optimization_type"]:
@@ -844,7 +913,7 @@ class polarGraph:
 
 
     def plotLiftDragOverLiftOptimizationPoints(self, ax, polar):
-        if (polar.operatingConditions <> None):
+        if (polar.operatingConditions != None):
             idx = 0
             operatingConditions = polar.operatingConditions
             validNames = ['preSpeed','maxSpeed', 'keepSpeed', 'preGlide',
@@ -1274,7 +1343,7 @@ def read_planeDataFile(fileName):
 def get_FoilName(params, index):
 
     # is there wingdata available ?
-    if (params.wingData <> None):
+    if (params.wingData != None):
         # yes
         wing = params.wingData
         # get airfoil-names from wing-dictionary
@@ -1300,7 +1369,7 @@ def get_FoilName(params, index):
 def get_NumberOfAirfoils(params):
 
     # is there wingdata available ?
-    if (params.wingData <> None):
+    if (params.wingData != None):
         # get number of chords from wing-data
         num = len(params.wingData.get('chordLengths'))
     else:
@@ -1315,7 +1384,7 @@ def get_NumberOfAirfoils(params):
 def get_ReList(params):
     list = []
     # is there wingdata available ?
-    if (params.wingData <> None):
+    if (params.wingData != None):
         # get list of all chord-lengths
         chordLengths = params.wingData.get('chordLengths')
         # get Re-number of root-airfoil
@@ -1545,6 +1614,29 @@ def getParameters(dict):
     except:
         print ('useAlwaysRootfoil not specified')
 
+    try:
+        if (dict["adaptInitialPerturb"] == 'true'):
+            params.adaptInitialPerturb = True
+        else:
+            params.adaptInitialPerturb = False
+    except:
+        print ('adaptInitialPerturb not specified')
+
+    try:
+        params.maxGlideLoss = dict["maxGlideLoss"]
+    except:
+        print ('maxGlideLoss not specified')
+
+    try:
+        params.maxSpeedGain = dict["maxSpeedGain"]
+    except:
+        print ('maxSpeedGain not specified')
+
+    try:
+        params.maxLiftGain = dict["maxLiftGain"]
+    except:
+        print ('maxLiftGain not specified')
+
     return params
 
 
@@ -1580,8 +1672,6 @@ def getwingDataFromParams(params):
 # Main program
 if __name__ == "__main__":
 
-    # import further libraries, install them first, if missing
-    install_and_import('f90nml')
     # get command-line-arguments or user-input
     strakDataFileName = getArguments()
 
@@ -1706,7 +1796,19 @@ if __name__ == "__main__":
         # as a second step,change oppoints again, but only "shift" them
         # matching the polar of the strak-airfoil
         if (i>0):
-            newFile.transferOppointsKeepShape(params.polars[i])
+            newFile.transferOppointsKeepShape(params, params.polars[i])
+
+            if params.adaptInitialPerturb:
+                # also adapt the initial perturb according to the change in
+                # Re-number
+                if (params.useAlwaysRootfoil):
+                    # difference always calculated to Re-number of root-airfoil
+                    ReDiff = params.ReNumbers[0] - params.ReNumbers[i]
+                else:
+                    # difference calculated to Re-number of previous-airfoil
+                    ReDiff = params.ReNumbers[i-1] - params.ReNumbers[i]
+
+                newFile.setInitialPerturb(ReDiff)
 
         # copy operating-conditions to polar, so they can be plotted in the graph
         opConditions = newFile.getOperatingConditions()
@@ -1730,7 +1832,7 @@ if __name__ == "__main__":
 
     # debug-output
     for element in commandlines:
-        print element
+        print (element)
     print("Done.")
 
     # generate batchfile
