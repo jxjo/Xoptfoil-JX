@@ -7,6 +7,7 @@
 # - added precompiler flag for OS - WIN32 or UNIX
 # - set XOPTFOIL_VERSION in build_windows.bat 
 # - removed xfoil_only and doc files etc
+# - added static linking of libs so no runtime libs are needed
 
 # Variables from build_windows / build_linux
 #
@@ -18,9 +19,13 @@ set(CMAKE_SYSTEM_NAME $ENV{TARGET_OS})
 
 if(CMAKE_SYSTEM_NAME MATCHES "UNIX")
   set (OS_FLAG "-DUNIX=1")
+  # under Unix do dynamic linking so additional libs are required at runtime 
+  set (STATIC_FLAG "")
   message (STATUS "\n \n Building XFoptfoil-JX Version $ENV{XOPTFOIL_VERSION} for UNIX\n\n")
 else (CMAKE_SYSTEM_NAME MATCHES "UNIX")
   set (OS_FLAG "-DWIN32=1")
+  # under Window do static linking so no additional libs are required at runtime 
+  set (STATIC_FLAG "-static")
   message (STATUS "\n \n Building XFoptfoil-JX Version $ENV{XOPTFOIL_VERSION} for Windows\n\n")
 endif (CMAKE_SYSTEM_NAME MATCHES "UNIX")
 
@@ -40,7 +45,6 @@ set(DATADIR ${CMAKE_INSTALL_PREFIX}/share
 get_filename_component(Fortran_COMPILER_NAME ${CMAKE_Fortran_COMPILER} NAME)
 message(STATUS "Fortran compiler: " ${CMAKE_Fortran_COMPILER})
 
-# !!! Multithreading switched of !!!!!
 # Option to build with/without OpenMP support
 set(ENABLE_OPENMP TRUE
     CACHE BOOL "Whether to build with OpenMP support."
@@ -63,8 +67,8 @@ endif (CMAKE_BUILD_TYPE MATCHES "Release")
 
 # Default compiler flags
 if (Fortran_COMPILER_NAME MATCHES "gfortran")
-  set (CMAKE_Fortran_FLAGS_RELEASE "-O3 ${OPENMP_FLAG} -cpp ${OS_FLAG}")
-  set (CMAKE_Fortran_FLAGS_DEBUG "-g -fdump-core -fcheck=all -fbacktrace -ffpe-trap=invalid,zero,overflow -Wall ${OPENMP_FLAG} -cpp ${OS_FLAG}")
+  set (CMAKE_Fortran_FLAGS_RELEASE "-O3 ${OPENMP_FLAG} -cpp ${OS_FLAG} ${STATIC_FLAG}")
+  set (CMAKE_Fortran_FLAGS_DEBUG "-g -fdump-core -fcheck=all -fbacktrace -ffpe-trap=invalid,zero,overflow -Wall ${OPENMP_FLAG} -cpp ${OS_FLAG} ${STATIC_FLAG}")
   set (Fortran_REAL8_FLAG "-fdefault-real-8")
 elseif (Fortran_COMPILER_NAME MATCHES "ifort")
   set (CMAKE_Fortran_FLAGS_RELEASE "-O3 ${OPENMP_FLAG}")
