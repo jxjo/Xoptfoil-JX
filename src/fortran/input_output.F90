@@ -602,7 +602,10 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
                             ! the design airfoil will have 200+1 (npan default value) points...
                             !   ... to have run_xfoil results equal airfoil external results
   cvpar = 1.d0
-  cterat = 0.15d0
+  ! jx-mod If set to geom_options%cterat = 0.15d0 the curvature at TE panel
+  !     tends to flip away and have tripple value (bug in xfoil) 
+  !     with a very small value the panel gets wider and the quality better
+  cterat = 0.d0
   ctrrat = 0.2d0
   xsref1 = 1.d0
   xsref2 = 1.d0
