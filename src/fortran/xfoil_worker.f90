@@ -44,7 +44,7 @@ program xfoil_worker
 ! Set default names and read command line arguments
 
   input_file        = 'inputs.txt'
-  output_prefix     = 'foil'
+  output_prefix     = ''
   action            = ''
   airfoil_filename  = ''
   call read_worker_clo(input_file, output_prefix, airfoil_filename, action)
@@ -56,6 +56,11 @@ program xfoil_worker
 
 ! Load airfoil defined in command line 
   call load_airfoil(airfoil_filename, foil)
+
+! If output airfoil name omitted built name from input file 
+  if (trim(output_prefix) == '') & 
+    output_prefix = airfoil_filename (1: (index (airfoil_filename,'.') - 1)) //'-smoothed'
+
 ! Allocate xfoil variables
   call xfoil_init()
 

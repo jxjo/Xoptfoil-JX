@@ -91,6 +91,8 @@ subroutine load_airfoil(filename, foil)
 
   use vardef,      only : airfoil_type
   use memory_util, only : allocate_airfoil
+  use os_util,     only : print_error
+
 
   character(*), intent(in) :: filename
   type(airfoil_type), intent(out) :: foil
@@ -100,8 +102,8 @@ subroutine load_airfoil(filename, foil)
   ! jx-mod additional check
   if (trim(filename) == '') then
     write (*,*) 
-    write (*,*) 'Error: No airfoil file defined either in input file nor as command line argument'
-    write (*,*) 
+    call print_error ('Error: No airfoil file defined either in input file nor as command line argument')
+    write(*,*)
     stop
   end if 
 

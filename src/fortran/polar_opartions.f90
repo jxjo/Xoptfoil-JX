@@ -197,7 +197,7 @@ subroutine read_polar_inputs  (input_file, foil_name, npolars, polars, xfoil_opt
     close (iunit)
   end if
   
-  call namelist_check('polar_generation', istat, 'error')
+  call namelist_check('polar_generation', istat, 'warn')
 
 ! if there are no re numbers in input file take from command line
   if (polar_reynolds(1) == 0d0) then
