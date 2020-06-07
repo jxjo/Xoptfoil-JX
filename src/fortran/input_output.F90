@@ -1239,6 +1239,13 @@ subroutine namelist_check(nmlname, errcode, action_missing_nml)
       call my_stop ('Error: namelist '//trim(nmlname)//&
                      ' is required and was not found in input file.')
     end if
+  else if (errcode == 2) then
+    if (trim(action_missing_nml) == 'warn') then
+      call print_note ('No input file. Using default values for namelist '// trim(nmlname))
+    else
+      call my_stop ('Error: No input file. Namelist '//trim(nmlname)//&
+                     ' is required for operation.')
+    end if
   else if (errcode > 0) then
     call my_stop ('Error: unrecognized variable in namelist '//trim(nmlname)//&
                    '. See User Guide for correct variable names.')
