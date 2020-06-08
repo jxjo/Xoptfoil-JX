@@ -341,9 +341,9 @@ class inputFile:
 
     def adaptMaxLift(self, polarData):
         # get new values from polar
-        ClMaxLift = polarData.CL_maxLift
-        CdMaxLift = polarData.CD[polarData.maxLift_idx]
-        alphaMaxLift = polarData.alpha_maxLift
+        ClMaxLift = polarData.pre_CL_maxLift
+        CdMaxLift = polarData.CD[polarData.pre_maxLift_idx]
+        alphaMaxLift = polarData.pre_alpha_maxLift
 
         # set new values
         self.changeOpPoint("alphaClmax", alphaMaxLift)
@@ -373,7 +373,7 @@ class inputFile:
                 print("opPoint %s was skipped" % opPointName)
 
 
-    # adapts Max-Glide and dependend values to polar
+    # adapts Max-Glide and dependend values to given polar
     def adaptMaxGlide(self, polarData):
         # get polar values, Cl MaxGlide, alpha Max-Glide
         AlphaMaxGlide = polarData.alpha_maxGlide
@@ -384,7 +384,7 @@ class inputFile:
 
         # create List of opPoints to be affected. These oppoints will be
         # "shifted", according to the calculated difference
-        opPointList = ['helperPreGlide', 'preGlide', 'maxGlide', 'slopeMaxGlide',
+        opPointList = ['helperPreGlide', 'maxGlide', 'slopeMaxGlide',
                        'helperKeepGlide']
 
         # shift all opPoints according to the difference
@@ -396,8 +396,19 @@ class inputFile:
                 self.adaptTargetValueToPolar(opPointName, polarData)
             except:
                 print("opPoint %s was skipped" % opPointName)
+
         try:
-            # do not shift the "keep glide" oppoint, but adapt to polar
+            # shift the "pre glide" oppoint and adapt to polar
+            newPreGlide = (polarData.CL_maxSpeed/3) + ((2*polarData.CL_maxGlide)/3)
+            self.changeOpPoint('preGlide', newPreGlide)
+            self.adaptTargetValueToPolar('preGlide', polarData)
+        except:
+                print("opPoint \"preGlide\" was skipped")
+
+        try:
+            # also shift the "keep glide" oppoint and adapt to polar
+            newKeepGlide = (polarData.CL_maxGlide + polarData.pre_CL_maxLift)/2
+            self.changeOpPoint('keepGlide', newKeepGlide)
             self.adaptTargetValueToPolar('keepGlide', polarData)
         except:
                 print("opPoint \"keepGlide\" was skipped")
@@ -471,56 +482,69 @@ class inputFile:
     # airfoil and the polar of the not optimized strak-airfoil.
     def transferMaxLift(self, params, polarData):
         try:
-            # Clmax
-            # get opPoint-values (polar of root-airfoil)
-            CL_maxLift = self.getOpPoint("Clmax")
-            CD_maxLift = self.getTargetValue("Clmax")
+            # assign the polars to local variables
+            root_polar = params.polars[0]
+            strak_polar = polarData
 
-            # get polar-values (polar of strak-airfoil, not optimized yet)
-            CL_Polar = polarData.CL[polarData.maxLift_idx]
-            CD_Polar = polarData.CD[polarData.maxLift_idx]
+            # get Clmax-values of polars of root and strak-airfoil (in this case
+            # we take the "pre-" Cl-max values)
+            CL_maxLift_root = root_polar.pre_CL_maxLift
+            CL_maxLift_strak = strak_polar.pre_CL_maxLift #TODO remove !!! Test, only
 
-            # determine new value from "gain" (=improvement), a mixture of root
+               # determine new value from "gain" (=improvement), a mixture of root
             # polar and strak polar.
-            CL_maxLift = ((CL_maxLift * params.maxLiftGain) + # part coming from root-airfoil
-                          (CL_Polar * (1.0 - params.maxLiftGain)))# part coming from not optimized strak-airfoil
+            CL_maxLift_target = ((CL_maxLift_root * params.maxLiftGain) + # part coming from root-airfoil
+                          (CL_maxLift_strak * (1.0 - params.maxLiftGain)))# part coming from not optimized strak-airfoil
 
-            CD_maxLift = ((CD_maxLift * params.maxLiftGain ) + # part coming from root-airfoil
-                          (CD_Polar * (1.0 - params.maxLiftGain))) # part coming from not optimized strak-airfoil
+            # now get the corresponding CL/Cd-value of root-airfoil for the new CL_maxLift
+            CL_CD_maxLift_target_root = root_polar.find_CL_CD(CL_maxLift_target)
 
-            # set new values
-            self.changeOpPoint("Clmax", CL_maxLift)
-            self.changeTargetValue("Clmax", CD_maxLift)
+            # determine difference between root and strak airfoil (in CL/CD-graph)
+            CL_CD_maxLift_strak = strak_polar.find_CL_CD(CL_maxLift_strak)
+            CL_CD_root = root_polar.find_CL_CD(CL_maxLift_strak)
+            diff = CL_CD_root - CL_CD_maxLift_strak
+
+            # determine new CD_maxlift-target value
+            CL_CD_maxLift_target = CL_CD_maxLift_target_root - diff
+            CD_maxLift_target = CL_maxLift_target / CL_CD_maxLift_target
+
+            # set new oppoint in the inputfile
+            self.changeOpPoint("Clmax", CL_maxLift_target)
+            self.changeTargetValue("Clmax", CD_maxLift_target)
         except:
             print("opPoint Clmax was skipped")
 
-        try:
-            # alphaClmax
-            # get opPoint-values
-            alpha_maxLift = self.getOpPoint("alphaClmax")
-            CL_alpha_maxLift = self.getTargetValue("alphaClmax")
-
-            # get polar-values
-            alpha_maxLift_Polar = polarData.alpha[polarData.maxLift_idx]
-            CL_alpha_maxLift_Polar = polarData.CL[polarData.maxLift_idx]
-
-            # new value is value between root-polar and strak polar
-            CL_alpha_maxLift = ((CL_alpha_maxLift * params.maxLiftGain) +
-                                (CL_alpha_maxLift_Polar * (1.0 - params.maxLiftGain)))
-
-            alpha_maxLift = ((alpha_maxLift * params.maxLiftGain) +
-                             (alpha_maxLift_Polar * (1.0 - params.maxLiftGain)))
-
-            # set new values
-            self.changeOpPoint("alphaClmax", alpha_maxLift)
-            self.changeTargetValue("alphaClmax", CL_alpha_maxLift)
-        except:
-            print("opPoint alphaClmax was skipped")
+##        try: #TODO not working properly
+##            # alphaClmax
+##            # get opPoint-values
+##            alpha_maxLift = self.getOpPoint("alphaClmax")
+##            CL_alpha_maxLift = self.getTargetValue("alphaClmax")
+##
+##            # get polar-values
+##            alpha_maxLift_Polar = polarData.alpha[polarData.maxLift_idx]
+##            CL_alpha_maxLift_Polar = polarData.CL[polarData.maxLift_idx]
+##
+##            # new value is value between root-polar and strak polar
+##            CL_alpha_maxLift = ((CL_alpha_maxLift * params.maxLiftGain) +
+##                                (CL_alpha_maxLift_Polar * (1.0 - params.maxLiftGain)))
+##
+##            alpha_maxLift = ((alpha_maxLift * params.maxLiftGain) +
+##                             (alpha_maxLift_Polar * (1.0 - params.maxLiftGain)))
+##
+##            # set new values
+##            self.changeOpPoint("alphaClmax", alpha_maxLift)
+##            self.changeTargetValue("alphaClmax", CL_alpha_maxLift)
+##        except:
+##            print("opPoint alphaClmax was skipped")
 
 
     # all target-values will be shifted "downward" according
     # to the difference in CL_CD_MaxGlide
     def transferMaxGlide(self, params, polarData):
+        # assign the polars to local variables
+        root_polar = params.polars[0]
+        strak_polar = polarData
+
         # calculate difference between oppoint maxGlide and polar maxGlide
         CL_maxGlide = self.getOpPoint("maxGlide")
         CD_maxGlide = self.getTargetValue("maxGlide")
@@ -535,7 +559,7 @@ class inputFile:
         # create List of opPoints to be affected. The target-values of these
         # oppoints will be "shifted", according to the calculated difference
         opPointList = ['preGlide','helperPreGlide', 'maxGlide','helperKeepGlide',
-                       'keepGlide']#, 'Clmax' ]
+                       'keepGlide']
         #self.shiftTargetValues(diff, opPointList)
         self.scaleTargetValues(factor, opPointList)
 
@@ -749,7 +773,7 @@ class polarGraph:
                         y = operatingConditions["op_point"][idx]
                         # do not plot, if target-value is -1
                         if (x != -1):
-                            ax.plot(x, y, 'yo')
+                            ax.plot(x, y, 'y.')
                 idx = idx + 1
 
     def plotLiftDragPolar(self, ax):
@@ -836,7 +860,7 @@ class polarGraph:
                 if (optimization_type == 'target-lift'):
                     x = operatingConditions["op_point"][idx]
                     y = operatingConditions["target_value"][idx]
-                    ax.plot(x, y, 'yo')
+                    ax.plot(x, y, 'y.')
                 idx = idx +1
 
 
@@ -933,10 +957,8 @@ class polarGraph:
                         if (Cd != -1):
                             # calculate Cl/Cd
                             y = x/Cd
-                            if (Name.find('helper') >= 0):
-                                ax.plot(x, y, 'y.')
-                            else:
-                                ax.plot(x, y, 'yo')
+                            ax.plot(x, y, 'y.')
+
                 idx = idx + 1
 
 
@@ -1078,6 +1100,9 @@ class polarData:
         self.CL_maxLift = 0.0
         self.alpha_maxLift = 0.0
         self.maxLift_idx = 0
+        self.pre_CL_maxLift = 0.0
+        self.pre_maxLift_idx = 0
+        self.pre_alpha_maxLift = 0.0
         self.CL_Markers = []
         self.CD_Markers = []
         self.textstr = ""
@@ -1210,6 +1235,12 @@ class polarData:
         self.CL_maxLift = self.CL[self.maxLift_idx]
         self.alpha_maxLift = self.alpha[self.maxLift_idx]
 
+        # also calculate opPoint before MaxLift that can be reached by the
+        # optimizer
+        self.pre_CL_maxLift = self.CL_maxLift * 0.975
+        self.pre_maxLift_idx = self.find_index(self.pre_CL_maxLift)
+        self.pre_alpha_maxLift = self.alpha[self.pre_maxLift_idx]
+
         print("max Lift, Cl = %f @ alpha = %f" %
                                   (self.CL_maxLift, self.alpha_maxLift))
 
@@ -1227,6 +1258,12 @@ class polarData:
         CD = np.interp( CL, self.CL, self.CD)
         return CD
 
+    def find_index(self, CL):
+        for i in range(len(self.CL)):
+            if (self.CL[i] >= CL):
+                return i
+        return 0
+
     def find_CL(self, alpha):
         # calculate corresponding CL
         CL = np.interp( alpha, self.alpha, self.CL)
@@ -1234,8 +1271,12 @@ class polarData:
 
     def find_CL_CD(self, CL):
         # calculate corresponding CL_CD
-        CL_CD = np.interp( CL, self.CL, self.CL_CD)
-        return CL_CD
+        #CL_CD = np.interp( CL, self.CL, self.CL_CD)
+        for i in range(len(self.CL)):
+            if (self.CL[i] > CL):
+                print (CL, self.CL[i], self.CL_CD[i], i)
+                return self.CL_CD[i]
+        return 0.0
 
 
 ################################################################################
@@ -1778,7 +1819,7 @@ if __name__ == "__main__":
         #print systemString #Debug
 
         # execute xfoil-worker / create polar-file
-        os.system(systemString)
+        #os.system(systemString)
 
         # import polar
         newPolar = polarData()
