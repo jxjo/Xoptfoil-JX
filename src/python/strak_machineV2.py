@@ -747,7 +747,9 @@ class polarGraph:
                         x = operatingConditions["target_value"][idx]
                         # get CL
                         y = operatingConditions["op_point"][idx]
-                        ax.plot(x, y, 'yo')
+                        # do not plot, if target-value is -1
+                        if (x != -1):
+                            ax.plot(x, y, 'yo')
                 idx = idx + 1
 
     def plotLiftDragPolar(self, ax):
@@ -927,13 +929,14 @@ class polarGraph:
                         #y = polar.find_CL_CD(x)
                         # get CD
                         Cd = operatingConditions["target_value"][idx]
-                        # calculate Cl/Cd
-                        y = x/Cd
-
-                        if (Name.find('helper') >= 0):
-                            ax.plot(x, y, 'y.')
-                        else:
-                            ax.plot(x, y, 'yo')
+                        # do not plot if target-value is -1
+                        if (Cd != -1):
+                            # calculate Cl/Cd
+                            y = x/Cd
+                            if (Name.find('helper') >= 0):
+                                ax.plot(x, y, 'y.')
+                            else:
+                                ax.plot(x, y, 'yo')
                 idx = idx + 1
 
 
@@ -1422,10 +1425,29 @@ def generate_commandlines(params):
     commandline = ("md %s\n") % root_polar_dir
     commandLines.append(commandline)
 
+    # get filename of first polar only of root-airfoil
+    polarFileName = params.polarFileNames[0]
+    if (polarFileName.find("\\") >= 0):
+        splitlines = polarFileName.split("\\")
+        num = len(splitlines)
+        polarFileName = splitlines[(num-1)]
+    elif (nepolarFileNamew.find("/") >= 0):
+        splitlines = polarFileName.split("/")
+        num = len(splitlines)
+        polarFileName = splitlines[(num-1)]
+
     # copy rootfoil polars
-    commandline = ("copy .."+bs+"foil_polars"+bs+"*.* %s"+bs+"*.*\n") %\
-                   root_polar_dir
+    sourceFolder = seedFoilName.strip('.dat') + "_polars"
+    source = ".." + bs + sourceFolder + bs + ("%s" % polarFileName)
+    destination = ("%s" % root_polar_dir) + bs + ("%s" % polarFileName)
+    commandline = ("copy " + source + " "+ destination + "\n")
     commandLines.append(commandline)
+
+    # rename polar inside polar-file
+    commandline = "change_polarname.py -p %s -n %s\n" % \
+      (destination, get_FoilName(params, 0))
+    commandLines.append(commandline)
+
 
     # copy seedFoil with its original name to output-folder
     commandline = ("copy .." + bs +"%s"+ bs + "%s %s\n") % \
@@ -1727,12 +1749,12 @@ if __name__ == "__main__":
 
     # generate polars of seedfoil / root-airfoil:
     # get name of root-airfoil
-    seedFoilName = params.seedFoilName.strip('.dat')+ '.dat'
+    seedFoilName = params.seedFoilName.strip('.dat')
 
     print("Generating polars for airfoil %s" % seedFoilName)
 
     # compose polar-dir
-    polarDir = workingDir + bs + "foil_polars"
+    polarDir = workingDir + bs + seedFoilName+ '_polars'
 
     idx = 0
     # create polars, polar-file-Names and input-file-names from Re-Numbers
@@ -1748,11 +1770,11 @@ if __name__ == "__main__":
         params.inputFileNames.append(inputFilename)
 
         # compose string for system-call of XFOIL-worker
-        airfoilName = workingDir + bs + params.inputFolder + bs + seedFoilName
+        airfoilName = workingDir + bs + params.inputFolder + bs + seedFoilName + '.dat'
         inputFilename = getPresetInputFileName(params.strakType)
 
-        systemString = "xfoil_worker.exe -i %s -w polar -a %s -r %d" % (
-                        inputFilename, airfoilName, Re)
+        systemString = "xfoil_worker.exe -i %s -o %s -w polar -a %s -r %d" % (
+                        inputFilename, seedFoilName, airfoilName, Re)
         #print systemString #Debug
 
         # execute xfoil-worker / create polar-file
