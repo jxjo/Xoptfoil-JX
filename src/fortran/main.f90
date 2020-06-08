@@ -104,6 +104,11 @@ program main
     !LE radius and blending-range
     nshapedvtop = 6
     nshapedvbot = 0
+  else if (trim(shape_functions) == 'camb-thick-plus') then
+    !Use a fixed number of 12 designvariables for airfoil-generation.
+    !Top and Bottom are treated seperately
+    nshapedvtop = 12
+    nshapedvbot = 0
   else
     nshapedvtop = nparams_top*3
     nshapedvbot = nparams_bot*3
