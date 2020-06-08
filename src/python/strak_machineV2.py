@@ -1193,45 +1193,6 @@ class polarData:
         fileHandle.close()
         print("done.\n")
 
-    def makeSimilar(self, ideal):
-        print("making similar")
-        # find out differences
-        maxGlide_factor = self.CL_CD_max / ideal.CL_CD_max *0.985
-        maxGlideAlpha = self.alpha[self.maxGlide_idx]
-        idealmaxGlideAlpha = ideal.alpha[ideal.maxGlide_idx]
-        maxGlideAlphaFaktor = maxGlideAlpha / idealmaxGlideAlpha
-        maxLift_factor  = self.CL_maxLift / ideal.CL_maxLift
-        maxAlpha_factor = self.alpha_maxLift / ideal.alpha_maxLift
-        #print factor
-##        for i in range(self.maxGlide_idx):
-##            self.alpha[i] = self.alpha[i] / maxGlideAlphaFaktor
-
-        # clear existing data
-        self.alpha = []
-        self.CL = []
-        self.CD = []
-        self.CL_CD = []
-        self.CDp = []
-        self.Cm = []
-        self.Top_Xtr = []
-        self.Bot_Xtr= []
-
-        # build up new data
-        for i in range(len(ideal.CL)):
-            CL_CD = ideal.CL_CD[i]*maxGlide_factor
-            alpha = ideal.alpha[i]#*maxAlpha_factor
-            CL = ideal.CL[i]
-            CD = CL / CL_CD
-
-            self.CL_CD.append(CL_CD)
-            self.CL.append(CL)
-            self.CD.append(CD)
-            self.alpha.append(alpha)
-
-        #analyze new data
-        self.analyze()
-        # correct CL-values
-        # find out differences
 
     def determineMaxSpeed(self):
         self.CL_maxSpeed = 0.0
@@ -1761,8 +1722,6 @@ def getwingDataFromXML(params):
     # return data
     return planeData[0]
 
-def getwingDataFromParams(params):
-    return
 ################################################################################
 # Main program
 if __name__ == "__main__":
@@ -1848,10 +1807,9 @@ if __name__ == "__main__":
 
         systemString = "xfoil_worker.exe -i %s -o %s -w polar -a %s -r %d" % (
                         inputFilename, seedFoilName, airfoilName, Re)
-        #print systemString #Debug
 
         # execute xfoil-worker / create polar-file
-        #os.system(systemString)
+        os.system(systemString)
 
         # import polar
         newPolar = polarData()
@@ -1870,10 +1828,6 @@ if __name__ == "__main__":
                 rootPolar = newPolar
             else:
                 targetPolar = deepcopy(newPolar)
-                # make target polar "similar" too root polar
-                targetPolar.makeSimilar(rootPolar)
-                params.targetPolars.append(targetPolar)
-                graph.targetPolars.append(targetPolar)
 
         idx = idx +1
     print("Done.")
