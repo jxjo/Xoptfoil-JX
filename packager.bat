@@ -20,7 +20,6 @@ if     exist %WIN_RELEASE% rd %WIN_RELEASE% /s /q
 mkdir %WIN_RELEASE%
 
 xcopy windows\bin\*.exe    %WIN_RELEASE%\windows\bin   /s /i /q
-xcopy windows\bin\*.dll    %WIN_RELEASE%\windows\bin   /s /i /q
 xcopy windows\bin\x*.py    %WIN_RELEASE%\windows\bin   /s /i /q
 
 xcopy doc\*.pdf            %WIN_RELEASE%\doc           /s /i /q
