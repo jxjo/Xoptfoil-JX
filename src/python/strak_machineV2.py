@@ -478,7 +478,7 @@ class inputFile:
     # polar of the root-airfoil at the Re-number of the strak-airfoil. But the
     # polar should come as close as possible to the polar of the root-airfoil in
     # some specified points. So the target opPoints for the strak-airfoil, that
-    # will be calculated here are a mixture between the polar of the root-
+    # will be calculated here, are a mixture between the polar of the root-
     # airfoil and the polar of the not optimized strak-airfoil.
     def transferMaxLift(self, params, polarData):
         try:
@@ -489,7 +489,7 @@ class inputFile:
             # get Clmax-values of polars of root and strak-airfoil (in this case
             # we take the "pre-" Cl-max values)
             CL_maxLift_root = root_polar.pre_CL_maxLift
-            CL_maxLift_strak = strak_polar.pre_CL_maxLift #TODO remove !!! Test, only
+            CL_maxLift_strak = strak_polar.pre_CL_maxLift
 
                # determine new value from "gain" (=improvement), a mixture of root
             # polar and strak polar.
@@ -538,65 +538,97 @@ class inputFile:
 ##            print("opPoint alphaClmax was skipped")
 
 
-    # all target-values will be shifted "downward" according
-    # to the difference in CL_CD_MaxGlide
+    # all target-values will be scaled "downward" according
+    # to the factor in CL_CD_MaxGlide between root-polar and strak-polar
     def transferMaxGlide(self, params, polarData):
         # assign the polars to local variables
         root_polar = params.polars[0]
         strak_polar = polarData
 
-        # calculate difference between oppoint maxGlide and polar maxGlide
-        CL_maxGlide = self.getOpPoint("maxGlide")
-        CD_maxGlide = self.getTargetValue("maxGlide")
-
-        CL_CD_maxGlide = CL_maxGlide / CD_maxGlide
-        factor = (CL_CD_maxGlide) / (polarData.CL_CD_max * (1.00 - params.maxGlideLoss))
-
-        # Calculate CD-Difference
-        CD_PolarMaxGlide = factor * CD_maxGlide
-        diff = CD_maxGlide - CD_PolarMaxGlide
+        # calculate factor between root-polar maxGlide and strak-polar maxGlide,
+        # include an additional "loss" in max-glide that is a parameter
+        factor = (root_polar.CL_CD_max) / (strak_polar.CL_CD_max * (1.00 - params.maxGlideLoss))
 
         # create List of opPoints to be affected. The target-values of these
         # oppoints will be "shifted", according to the calculated difference
         opPointList = ['preGlide','helperPreGlide', 'maxGlide','helperKeepGlide',
                        'keepGlide']
-        #self.shiftTargetValues(diff, opPointList)
+
         self.scaleTargetValues(factor, opPointList)
 
 
     def transferMaxSpeed(self, params, polarData):
+        # assign the polars to local variables
+        root_polar = params.polars[0]
+        strak_polar = polarData
+
+        # op-point 'keepSpeed', if existing in input-file
         try:
-            # get polar-values of root-airfoil
+            # get CL-value / op-Point
             CL_keepSpeed = self.getOpPoint("keepSpeed")
-            CD_keepSpeed = self.getTargetValue("keepSpeed")
-            CD_Polar = polarData.find_CD(CL_keepSpeed)
 
-            # new target-value is value between root-polar and strak polar
-            CD_keepSpeed = ((CD_keepSpeed * params.maxSpeedGain) + # part coming from root-airfoil
-                            (CD_Polar * (1.0 - params.maxSpeedGain)))# part coming from not optimized strak-airfoil
+            # get polar-values (root and strak-polar)
+            CD_keepSpeed_root = root_polar.find_CD(CL_keepSpeed)
+            CD_keepSpeed_strak = strak_polar.find_CD(CL_keepSpeed)
 
-            self.changeTargetValue("keepSpeed", CD_keepSpeed)
+            # new target-value is value between root-polar and strak-polar
+            CD_keepSpeed_target = ((CD_keepSpeed_root * params.maxSpeedGain) + # part coming from root-airfoil
+                            (CD_keepSpeed_strak * (1.0 - params.maxSpeedGain)))# part coming from not optimized strak-airfoil
+
+            # Caution: Type 2-polars !!
+            if (strak_polar.polarType == 2):
+               # TODO Workaround: problem negative Cl-values
+               if (CL_keepSpeed < 0.0):
+                    CD_keepSpeed_target = -1
+
+            # set new target-value
+            self.changeTargetValue("keepSpeed", CD_keepSpeed_target)
         except:
             print("opPoint keepSpeed was skipped")
 
+        # op-point 'maxSpeed', if existing in input-file
         try:
+            # get CL-value / op-Point
             CL_maxSpeed = self.getOpPoint("maxSpeed")
-            CD_maxSpeed = self.getTargetValue("maxSpeed")
-            CD_Polar = polarData.find_CD(CL_maxSpeed)
+
+            # get polar-values (root and strak-polar)
+            CD_maxSpeed_root = root_polar.find_CD(CL_maxSpeed)
+            CD_maxSpeed_strak = strak_polar.find_CD(CL_maxSpeed)
 
             # new target-value is value between root-polar and strak polar
-            CD_maxSpeed = ((CD_maxSpeed * params.maxSpeedGain) +
-                           (CD_Polar * (1.0 - params.maxSpeedGain)))
-# TODO Test
-            self.changeTargetValue("maxSpeed", -1)#CD_maxSpeed)
+            CD_maxSpeed_target = ((CD_maxSpeed_root * params.maxSpeedGain) +
+                           (CD_maxSpeed_strak * (1.0 - params.maxSpeedGain)))
+
+            # Caution: Type 2-polars !!
+            if (strak_polar.polarType == 2):
+               # TODO Workaround: problem negative Cl-values
+               if (CL_maxSpeed < 0.0):
+                    CD_maxSpeed_target = -1
+
+            self.changeTargetValue("maxSpeed", CD_maxSpeed_target)
         except:
             print("opPoint maxSpeed was skipped")
 
+       # op-point 'preSpeed', if existing in input-file
         try:
-            # set pre speed to polar-value
+            # get CL-value / op-Point
             CL_preSpeed = self.getOpPoint("preSpeed")
-            CD_Polar = polarData.find_CD(CL_preSpeed)
-            self.changeTargetValue("preSpeed", -1)#CD_Polar)
+
+            # get polar-values (root and strak-polar)
+            CD_preSpeed_root = root_polar.find_CD(CL_preSpeed)
+            CD_preSpeed_strak = strak_polar.find_CD(CL_preSpeed)
+
+            # new target-value is value between root-polar and strak polar
+            CD_preSpeed_target = ((CD_preSpeed_root * params.maxSpeedGain) +
+                           (CD_preSpeed_strak * (1.0 - params.maxSpeedGain)))
+
+            # Caution: Type 2-polars !!
+            if (strak_polar.polarType == 2):
+               # TODO Workaround: problem negative Cl-values
+               if (CL_preSpeed < 0.0):
+                    CD_preSpeed_target = -1
+
+            self.changeTargetValue("preSpeed", CD_preSpeed_target)
         except:
             print("opPoint preSpeed was skipped")
 
