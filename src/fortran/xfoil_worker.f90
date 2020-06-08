@@ -44,7 +44,7 @@ program xfoil_worker
 ! Set default names and read command line arguments
 
   input_file        = 'inputs.txt'
-  output_prefix     = 'foil'
+  output_prefix     = ''
   action            = ''
   airfoil_filename  = ''
   call read_worker_clo(input_file, output_prefix, airfoil_filename, action)
@@ -54,45 +54,38 @@ program xfoil_worker
   if (trim(airfoil_filename) == "") &
     call my_stop("Must specify an airfoil file with the -a option.")
 
+! Load airfoil defined in command line 
+  call load_airfoil(airfoil_filename, foil)
+
+! If output airfoil name omitted built name from input file 
+  if (trim(output_prefix) == '') & 
+    output_prefix = airfoil_filename (1: (index (airfoil_filename,'.') - 1)) //'-smoothed'
+
+! Allocate xfoil variables
+  call xfoil_init()
+
 ! Do actions according command line option
 
   select case (trim(action)) 
-    case ('polar')
 
-    ! Load airfoil defined in command line 
-      call load_airfoil(airfoil_filename, foil)
-    ! Allocate xfoil variables
-      call xfoil_init()
-    ! Do work - generate poalrs in subdirectory ".\<output_prfix>_polars\*.*
+    case ('polar')        ! Generate polars in subdirectory ".\<output_prfix>_polars\*.*
+
       call check_and_do_polar_generation (input_file, output_prefix, foil)
-    ! Deallocate xfoil variables
-      call xfoil_cleanup()
-      call deallocate_airfoil (foil)
 
-    case ('smooth')
+    case ('norm')         ! Repanel, Normalize 
 
-      ! Test for change max thickness location 
-      call load_airfoil(airfoil_filename, foil)
-      call xfoil_init()
-    ! Repanel and optionally smooth 
-      call repanel_smooth (input_file, output_prefix, foil)
-    ! Deallocate xfoil variables
-      call xfoil_cleanup()
-      call deallocate_airfoil (foil)
+      call repanel_smooth (input_file, output_prefix, foil, .false.)
 
-    case ('test')
+    case ('smooth')       ! Repanel, Normalize and smooth 
 
-      ! Test for change max thickness location 
-      airfoil_filename = 'JX-FXrcn-15.dat'
-      output_prefix = 'FX-thick-test'
-      call load_airfoil(airfoil_filename, foil)
-      call xfoil_init()
+      call repanel_smooth (input_file, output_prefix, foil, .true.)
+  
+    case ('test')         ! Test for change max thickness location 
+      
       call xfoil_set_airfoil (foil)
       call HIPNT (0.3d0, 0.25d0)
       call xfoil_reload_airfoil(foil)
       call airfoil_write (trim(output_prefix)//'.dat', output_prefix, foil)
-      call xfoil_cleanup()
-      call deallocate_airfoil (foil)
 
     case default
 
@@ -100,16 +93,19 @@ program xfoil_worker
 
   end select 
 
+  call xfoil_cleanup()
+  call deallocate_airfoil (foil)
+
+
 end program xfoil_worker
 
 !-------------------------------------------------------------------------
 ! Repanels and optionally smoothes foil based on settings in 'input file'
 !-------------------------------------------------------------------------
 
-subroutine repanel_smooth (input_file, output_prefix, seed_foil)
+subroutine repanel_smooth (input_file, output_prefix, seed_foil, do_smoothing)
 
   use vardef,             only : airfoil_type
-  use vardef,             only : do_smoothing
   use vardef,             only : spike_threshold, highlow_treshold, curv_threshold
   use xfoil_driver,       only : xfoil_geom_options_type, smooth_paneling
   use airfoil_operations, only : airfoil_write, le_find, transform_airfoil, get_split_points
@@ -119,6 +115,7 @@ subroutine repanel_smooth (input_file, output_prefix, seed_foil)
 
   character(*), intent(in)          :: input_file, output_prefix
   type (airfoil_type), intent (in)  :: seed_foil
+  logical, intent(in)               :: do_smoothing
 
   double precision, dimension(:), allocatable :: xt, xb, zt, zb, zt_smoothed, zb_smoothed
   integer :: npoint_paneling
@@ -127,6 +124,7 @@ subroutine repanel_smooth (input_file, output_prefix, seed_foil)
 
 ! Read inputs file to get xfoil paneling options  
 
+  write(*,*) 'Reading paneling options from file: '//trim(input_file)//' ...'
   call read_xfoil_paneling_inputs  (input_file, geom_options)
 
 ! Repanel seed airfoil with xfoil PANGEN 
@@ -145,10 +143,11 @@ subroutine repanel_smooth (input_file, output_prefix, seed_foil)
 
 ! Smooth it ?
 
-  call read_smoothing_inputs  (input_file, do_smoothing, spike_threshold, &
-                               highlow_treshold, curv_threshold)
-
   if (do_smoothing) then 
+
+    write(*,*)
+    write(*,*) 'Reading smoothing options from file: '//trim(input_file)//' ...'
+    call read_smoothing_inputs (input_file, spike_threshold, highlow_treshold, curv_threshold)
 
     write (*,*) 
     write (*,'(1x,A)') 'Before smoothing ...'
@@ -174,8 +173,6 @@ subroutine repanel_smooth (input_file, output_prefix, seed_foil)
 
   else                        ! no smoothing write repaneld foil 
 
-    write (*,*) 
-    write (*,'(1x,A)') 'No smoothing activated'
     call airfoil_write (trim(output_prefix)//'.dat', output_prefix, foil)
 
   end if 
@@ -371,7 +368,8 @@ subroutine print_worker_usage()
   write(*,'(A)') "Usage: Xfoil_worker -w worker_action [Options]"
   write(*,'(A)')
   write(*,'(A)') "  -w polars         Generate polars of 'airfoil_file'"
-  write(*,'(A)') "  -w smooth         Repanel and smooth 'airfoil_file'"
+  write(*,'(A)') "  -w norm           Repanel, normalize 'airfoil_file'"
+  write(*,'(A)') "  -w smooth         Repanel, normalize, smooth 'airfoil_file'"
   write(*,'(A)')
   write(*,'(A)') "Options:"
   write(*,'(A)') "  -i input_file     Specify an input file (default: 'inputs.txt')"
@@ -380,7 +378,7 @@ subroutine print_worker_usage()
   write(*,'(A)') "  -a airfoil_file   Specify filename of seed airfoil"
   write(*,'(A)') "  -h, --help        Display usage information and exit"
   write(*,'(A)')
-  write(*,'(A)') "Refer to the PDF reference guide for complete input help."
+  write(*,'(A)') "Refer to the worker reference guide for complete input help."
   write(*,'(A)')
 
 end subroutine print_worker_usage

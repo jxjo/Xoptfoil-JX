@@ -602,7 +602,10 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
                             ! the design airfoil will have 200+1 (npan default value) points...
                             !   ... to have run_xfoil results equal airfoil external results
   cvpar = 1.d0
-  cterat = 0.15d0
+  ! jx-mod If set to geom_options%cterat = 0.15d0 the curvature at TE panel
+  !     tends to flip away and have tripple value (bug in xfoil) 
+  !     with a very small value the panel gets wider and the quality better
+  cterat = 0.d0
   ctrrat = 0.2d0
   xsref1 = 1.d0
   xsref2 = 1.d0
@@ -1235,6 +1238,13 @@ subroutine namelist_check(nmlname, errcode, action_missing_nml)
     else
       call my_stop ('Error: namelist '//trim(nmlname)//&
                      ' is required and was not found in input file.')
+    end if
+  else if (errcode == 2) then
+    if (trim(action_missing_nml) == 'warn') then
+      call print_note ('No input file. Using default values for namelist '// trim(nmlname))
+    else
+      call my_stop ('Error: No input file. Namelist '//trim(nmlname)//&
+                     ' is required for operation.')
     end if
   else if (errcode > 0) then
     call my_stop ('Error: unrecognized variable in namelist '//trim(nmlname)//&

@@ -1,1 +1,1 @@
-xoptfoil_visualizer-jx.py -c jx-fxrcn-15 -o 3
+xoptfoil_visualizer-jx.py -c jx-fxevo-15 -o 3

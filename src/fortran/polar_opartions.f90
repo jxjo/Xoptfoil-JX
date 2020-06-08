@@ -137,6 +137,8 @@ subroutine read_polar_inputs  (input_file, foil_name, npolars, polars, xfoil_opt
   use airfoil_operations, only : my_stop
   use xfoil_driver,       only : xfoil_options_type
   use input_output,       only : read_cl_re_default
+  use input_output,       only : namelist_check
+
 
   type (polar_type), dimension (MAXPOLARS), intent (out) :: polars
   character(*), intent(in) :: input_file, foil_name
@@ -186,12 +188,16 @@ subroutine read_polar_inputs  (input_file, foil_name, npolars, polars, xfoil_opt
 
   iunit = 12
   open(unit=iunit, file=input_file, status='old', iostat=istat)
-  if (istat /= 0)                                                              &
-    call my_stop('Could not find input file '//trim(input_file)//'.')
-  read(iunit, iostat=istat, nml=polar_generation)
-  rewind(iunit)
-  read(iunit, iostat=istat, nml=xfoil_run_options)
-  close (iunit)
+
+  if (istat == 0) then
+    read (iunit, iostat=istat, nml=xfoil_run_options)
+    call namelist_check('xfoil_run_options', istat, 'warn')
+    rewind(iunit)
+    read(iunit, iostat=istat, nml=polar_generation)
+    close (iunit)
+  end if
+  
+  call namelist_check('polar_generation', istat, 'warn')
 
 ! if there are no re numbers in input file take from command line
   if (polar_reynolds(1) == 0d0) then
@@ -263,9 +269,10 @@ end subroutine read_polar_inputs
 
 subroutine read_xfoil_paneling_inputs  (input_file, geom_options)
 
-  use vardef, only : airfoil_type
+  use vardef,             only : airfoil_type
   use airfoil_operations, only : my_stop
-  use xfoil_driver, only : xfoil_geom_options_type
+  use xfoil_driver,       only : xfoil_geom_options_type
+  use input_output,       only : namelist_check
 
   character(*), intent(in) :: input_file
   type(xfoil_geom_options_type), intent(out) :: geom_options
@@ -293,11 +300,12 @@ subroutine read_xfoil_paneling_inputs  (input_file, geom_options)
 
   iunit = 12
   open(unit=iunit, file=input_file, status='old', iostat=istat)
-  if (istat /= 0)                                                              &
-    call my_stop('Could not find input file '//trim(input_file)//'.')
-  read(iunit, iostat=istat, nml=xfoil_paneling_options)
-  close (iunit)
-
+  if (istat == 0) then
+    read (iunit, iostat=istat, nml=xfoil_paneling_options)
+    close (iunit)
+  end if
+  
+  call namelist_check('xfoil_paneling_options', istat, 'warn')
 
 ! Put xfoil options into derived types
 
@@ -317,37 +325,42 @@ end subroutine read_xfoil_paneling_inputs
 !   (separated from read_inputs to be more modular)
 !=============================================================================
 
-subroutine read_smoothing_inputs  (input_file, do_smoothing, spike_threshold, &
+subroutine read_smoothing_inputs  (input_file, spike_threshold, &
                                     highlow_treshold, curv_threshold)
 
   use airfoil_operations, only : my_stop
+  use input_output,       only : namelist_check
 
   character(*), intent(in)      :: input_file
-  logical, intent(out)          :: do_smoothing
   double precision , intent(out):: highlow_treshold, curv_threshold, spike_threshold
 
   integer :: istat, iunit
+  logical                       :: do_smoothing
 
   namelist /smoothing_options/ do_smoothing, spike_threshold 
   namelist /constraints/ highlow_treshold, curv_threshold
 
   ! Init default values 
 
-  do_smoothing      = .true.
+  do_smoothing      = .true.                !currently dummy
   spike_threshold   = 0.8
-  curv_threshold    = 0.10d0
-  highlow_treshold  = 0.05d0
+  curv_threshold    = 0.01d0
+  highlow_treshold  = 0.02d0
  
 ! Open input file and read namelist from file
 
   iunit = 12
   open(unit=iunit, file=input_file, status='old', iostat=istat)
-  if (istat /= 0)                                                              &
-    call my_stop('Could not find input file '//trim(input_file)//'.')
-  read(iunit, iostat=istat, nml=smoothing_options)
-  rewind(iunit)
-  read(iunit, iostat=istat, nml=constraints)
-  close (iunit)
+
+  if (istat == 0) then
+    read (iunit, iostat=istat, nml=constraints)
+    call namelist_check('constraints', istat, 'warn')
+    rewind(iunit)
+    read(iunit, iostat=istat, nml=smoothing_options)
+    close (iunit)
+  end if
+  
+  call namelist_check('smoothing_options', istat, 'warn')
 
 end subroutine read_smoothing_inputs
 
