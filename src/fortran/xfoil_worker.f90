@@ -57,10 +57,6 @@ program xfoil_worker
 ! Load airfoil defined in command line 
   call load_airfoil(airfoil_filename, foil)
 
-! If output airfoil name omitted built name from input file 
-  if (trim(output_prefix) == '') & 
-    output_prefix = airfoil_filename (1: (index (airfoil_filename,'.') - 1)) //'-smoothed'
-
 ! Allocate xfoil variables
   call xfoil_init()
 
@@ -70,14 +66,24 @@ program xfoil_worker
 
     case ('polar')        ! Generate polars in subdirectory ".\<output_prfix>_polars\*.*
 
+      ! If output airfoil name omitted built name from input file 
+      if (trim(output_prefix) == '') & 
+        output_prefix = airfoil_filename (1: (index (airfoil_filename,'.') - 1))
+
       call check_and_do_polar_generation (input_file, output_prefix, foil)
 
     case ('norm')         ! Repanel, Normalize 
 
+      ! If output airfoil name omitted built name from input file 
+      if (trim(output_prefix) == '') & 
+        output_prefix = airfoil_filename (1: (index (airfoil_filename,'.') - 1)) //'-norm'
       call repanel_smooth (input_file, output_prefix, foil, .false.)
 
     case ('smooth')       ! Repanel, Normalize and smooth 
 
+      ! If output airfoil name omitted built name from input file 
+      if (trim(output_prefix) == '') & 
+        output_prefix = airfoil_filename (1: (index (airfoil_filename,'.') - 1)) //'-smoothed'
       call repanel_smooth (input_file, output_prefix, foil, .true.)
   
     case ('test')         ! Test for change max thickness location 
@@ -107,14 +113,15 @@ subroutine repanel_smooth (input_file, output_prefix, seed_foil, do_smoothing)
 
   use vardef,             only : airfoil_type
   use vardef,             only : spike_threshold, highlow_treshold, curv_threshold
-  use xfoil_driver,       only : xfoil_geom_options_type, smooth_paneling
-  use airfoil_operations, only : airfoil_write, le_find, transform_airfoil, get_split_points
+  use xfoil_driver,       only : xfoil_geom_options_type
+  use airfoil_operations, only : airfoil_write, transform_airfoil, get_split_points
   use airfoil_operations, only : split_airfoil, assess_surface, smooth_it, rebuild_airfoil
+  use airfoil_operations, only : repanel_and_normalize_airfoil
   use polar_operations,   only : read_xfoil_paneling_inputs, read_smoothing_inputs
 
 
   character(*), intent(in)          :: input_file, output_prefix
-  type (airfoil_type), intent (in)  :: seed_foil
+  type (airfoil_type), intent (inout)  :: seed_foil
   logical, intent(in)               :: do_smoothing
 
   double precision, dimension(:), allocatable :: xt, xb, zt, zb, zt_smoothed, zb_smoothed
@@ -124,29 +131,31 @@ subroutine repanel_smooth (input_file, output_prefix, seed_foil, do_smoothing)
 
 ! Read inputs file to get xfoil paneling options  
 
-  write(*,*) 'Reading paneling options from file: '//trim(input_file)//' ...'
   call read_xfoil_paneling_inputs  (input_file, geom_options)
 
 ! Repanel seed airfoil with xfoil PANGEN 
 
-  npoint_paneling = geom_options%npan -1      ! one point will be added at normalize
-  write (*,'(1x, A,A,A,I3,A)') 'Repaneling ',trim(seed_foil%name), ' with ',npoint_paneling,' Points'
-  call smooth_paneling(seed_foil, npoint_paneling, foil, geom_options)
+  npoint_paneling = geom_options%npan -1      ! one point will be added for LE
 
-! Normalize airfoil - transform, split, add LE point, rebuild 
+  write (*,'(1x, A,A,A,I3,A)') 'Repaneling and normalizing ',trim(seed_foil%name), ' with ',npoint_paneling,' Points'
+  call repanel_and_normalize_airfoil (seed_foil, npoint_paneling, foil)
 
-  call le_find(foil%x, foil%z, foil%leclose, foil%xle, foil%zle, foil%addpoint_loc)
-  call transform_airfoil(foil)
+! Now split and rebuild to add a real  LE point at 0,0 
+
   call split_airfoil   (foil, xt, xb, zt, zb, .false.)
   call rebuild_airfoil (xt, xb, zt, zb, foil)
-  write (*,'(1x, A,A,A,I3,A)') 'Normalize  ',trim(seed_foil%name), ' having now ',foil%npoint,' Points'
+
+  if (foil%addpoint_loc /= 0) then 
+    write (*,'(1x, A,A,A,I3,A)') 'Leading edge (0,0) added having now ',foil%npoint,' Points'
+  else
+    write (*,'(1x, A,A,A,I3,A)') 'Set closest point to LE to become new leading edge at (0,0)'
+  end if
 
 ! Smooth it ?
 
   if (do_smoothing) then 
 
     write(*,*)
-    write(*,*) 'Reading smoothing options from file: '//trim(input_file)//' ...'
     call read_smoothing_inputs (input_file, spike_threshold, highlow_treshold, curv_threshold)
 
     write (*,*) 

@@ -36,6 +36,7 @@ subroutine matchfoils_preprocessing(matchfoil_file)
   use memory_util,        only : deallocate_airfoil
   use airfoil_operations, only : get_seed_airfoil, get_split_points,           &
                                  split_airfoil, my_stop
+  use airfoil_operations, only : repanel_and_normalize_airfoil
   use math_deps,          only : interp_vector
   use naca,               only : naca_options_type
   use os_util,            only : print_note
@@ -43,7 +44,7 @@ subroutine matchfoils_preprocessing(matchfoil_file)
   
   character(*), intent(in) :: matchfoil_file
 
-  type(airfoil_type) :: match_foil
+  type(airfoil_type) :: match_foil, original_foil
   type(naca_options_type) :: dummy_naca_options
   integer :: pointst, pointsb
   double precision, dimension(:), allocatable :: zttmp, zbtmp
@@ -59,7 +60,11 @@ subroutine matchfoils_preprocessing(matchfoil_file)
 
 ! Load airfoil to match
 
-  call get_seed_airfoil('from_file', matchfoil_file, dummy_naca_options, match_foil)
+  call get_seed_airfoil('from_file', matchfoil_file, dummy_naca_options, original_foil)
+
+! Repanel to fixed 200 points and normalize to get LE at 0,0 and TE (1,0)
+
+  call repanel_and_normalize_airfoil (original_foil, 200, match_foil)
 
 ! Split match_foil into upper and lower halves
 
