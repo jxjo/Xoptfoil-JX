@@ -78,7 +78,8 @@ if (trim(shape_functions) == 'naca') then
   allocate(modesb(nparams_bot))
   modest(:) = 0.d0
   modesb(:) = 0.d0
-else if (trim(shape_functions) == 'camb-thick') then
+else if ((trim(shape_functions) == 'camb-thick') .or.                          &
+         (trim(shape_functions) == 'camb-thick-plus')) then
   allocate(modest(nparams_top))
   modest(:) = 0.d0
 else
@@ -110,7 +111,8 @@ call create_shape_functions(xseedt, xseedb, modest, modesb,                  &
 
 !$omp end parallel
 
-if (trim(shape_functions) /= 'camb-thick') then
+if ((trim(shape_functions) /= 'camb-thick') .and. & 
+    (trim(shape_functions) /= 'camb-thick-plus')) then
 ! Deallocate shape function setup arrays
 
   deallocate(modest)

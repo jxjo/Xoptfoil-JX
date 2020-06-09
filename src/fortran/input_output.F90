@@ -189,6 +189,10 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
   if (trim(shape_functions) == 'camb-thick' ) then
     nfunctions_top = 6
     nfunctions_bot = 0
+! In case of 'camb-thick-plus' set number of top functions to a fixed number of 12    
+  else if (trim(shape_functions) == 'camb-thick-plus' ) then
+    nfunctions_top = 12
+    nfunctions_bot = 0
   end if
 
 ! jx-mod get seed airfoil file from command file 
@@ -425,7 +429,8 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
   pso_maxit = 700
   pso_write_particlefile = .false.
 
-  if (trim(shape_functions) == 'camb-thick' ) then
+  if ((trim(shape_functions) == 'camb-thick' ) .or. &
+      (trim(shape_functions) == 'camb-thick-plus')) then
     pso_convergence_profile = 'quick_camb_thick'
   else
     pso_convergence_profile = 'exhaustive'
@@ -464,7 +469,8 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
 !   Set design variables with side constraints
 
     if ((trim(shape_functions) == 'naca')  .or. &
-        (trim(shape_functions) == 'camb-thick')) then
+        (trim(shape_functions) == 'camb-thick') .or. &
+        (trim(shape_functions) == 'camb-thick-plus')) then
 
 !     For NACA / camb-thick, we will only constrain the flap deflection
 
@@ -655,7 +661,8 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
   xfoil_options%show_details = show_details
 
 
-  if (trim(shape_functions) == 'camb-thick') then
+  if ((trim(shape_functions) == 'camb-thick') .or. &
+      (trim(shape_functions) == 'camb-thick-plus')) then
     ! in case of camb_thick a re-paneling is not needed and
     ! not good for high cl
     xfoil_options%auto_repanel = .false. 
@@ -955,15 +962,22 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
     call my_stop("seed_airfoil must be 'from_file' or 'naca'.")
   if (trim(shape_functions) /= 'hicks-henne' .and.                             &
       trim(shape_functions) /= 'camb-thick' .and.                              &
+      trim(shape_functions) /= 'camb-thick-plus' .and.                         &
       trim(shape_functions) /= 'naca')                                         &
-    call my_stop("shape_functions must be 'hicks-henne', 'camb-thick' or 'naca'.")
-  if ((nfunctions_top < 0) .and. trim(shape_functions) /= 'camb-thick')                                                    &
+    call my_stop("shape_functions must be 'hicks-henne', 'camb-thick', 'camb-thick-plus' or 'naca'.")
+  if ((nfunctions_top < 0) .and.   & 
+      trim(shape_functions) /= 'camb-thick' .and.                              &
+      trim(shape_functions) /= 'camb-thick-plus')                              &
     call my_stop("nfunctions_top must be >= 0.")
-  if ((nfunctions_bot < 0) .and. trim(shape_functions) /= 'camb-thick')                                                     &
+  if ((nfunctions_bot < 0) .and. &
+       trim(shape_functions) /= 'camb-thick' .and.                             &
+       trim(shape_functions) /= 'camb-thick-plus')                             &
     call my_stop("nfunctions_bot must be >= 0.")
   if (initial_perturb <= 0.d0)                                                 &
     call my_stop("initial_perturb must be > 0.")
-  if ((min_bump_width <= 0.d0) .and. trim(shape_functions) /= 'camb-thick')    &
+  if ((min_bump_width <= 0.d0) .and.                                           &
+      trim(shape_functions) /= 'camb-thick' .and.                              &
+      trim(shape_functions) /= 'camb-thick-plus')                              &
     call my_stop("min_bump_width must be > 0.")
 
 ! Operating points

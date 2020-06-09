@@ -96,7 +96,7 @@ module vardef
 
   character(8), dimension(max_op_points) :: moment_constraint_type
   double precision, dimension(max_op_points) :: min_moment
-  character(11) :: shape_functions
+  character(16) :: shape_functions
 
 ! Match foil mode
   double precision, dimension(:), allocatable :: xmatcht, xmatchb, zmatcht, zmatchb
