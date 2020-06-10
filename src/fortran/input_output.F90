@@ -603,10 +603,11 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
   fix_unconverged = .true.
   reinitialize = .true.
 
-  npan   = 201              ! For the seed airfoil 200 panel points are used.
+  npan   = 200              ! For the seed airfoil 200 panel points are used.
                             ! When the airfoil will be split in top & bot and then rebuild
                             ! the design airfoil will have 200+1 (npan default value) points...
                             !   ... to have run_xfoil results equal airfoil external results
+                            ! this will be adjusted in main
   cvpar = 1.d0
   ! jx-mod If set to geom_options%cterat = 0.15d0 the curvature at TE panel
   !     tends to flip away and have tripple value (bug in xfoil) 

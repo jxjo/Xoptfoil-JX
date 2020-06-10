@@ -42,21 +42,20 @@ subroutine get_seed_airfoil (seed_airfoil, airfoil_file, naca_options, foil )
   type(naca_options_type), intent(in) :: naca_options
   type(airfoil_type), intent(out) :: foil
 
-  type(airfoil_type) :: tempfoil
   integer :: pointsmcl
 
   if (trim(seed_airfoil) == 'from_file') then
 
 !   Read seed airfoil from file
 
-    call load_airfoil(airfoil_file, tempfoil)
+    call load_airfoil(airfoil_file, foil)
 
   elseif (trim(seed_airfoil) == 'naca') then
 
 !   Create NACA 4, 4M, 5, 6, or 6A series airfoil
 
     pointsmcl = 200
-    call naca_456(naca_options, pointsmcl, tempfoil)
+    call naca_456(naca_options, pointsmcl, foil)
 
   else
 
@@ -65,19 +64,6 @@ subroutine get_seed_airfoil (seed_airfoil, airfoil_file, naca_options, foil )
     stop
 
   end if
-! Use Xfoil to smooth airfoil paneling
-!      For the seed airfoil 200 panel points are used.
-!      When the airfoil will be split in top & bot and then rebuild
-!      the design airfoil will have 200+1 (npan default value) points...
-  call smooth_paneling(tempfoil, 200, foil)
-
-! Calculate leading edge information
-
-  call le_find(foil%x, foil%z, foil%leclose, foil%xle, foil%zle,               &
-               foil%addpoint_loc)
-! Translate and scale
-
-  call transform_airfoil(foil)
 
 end subroutine get_seed_airfoil
 
@@ -254,35 +240,39 @@ subroutine cc_ordering(foil)
 
   use vardef,    only : airfoil_type
   use math_deps, only : norm_2
+  use os_util,   only : print_warning
 
   type(airfoil_type), intent(inout) :: foil
 
   double precision, dimension(foil%npoint) :: xtemp, ztemp
-  double precision, dimension(2) :: tevec1, tevec2
-  double precision :: len1, len2
+!  double precision, dimension(2) :: tevec1, tevec2
+!  double precision :: len1, len2
   integer :: i, npoints
 
   npoints = foil%npoint
 
+! jxmod vector based detection didn't work for strange s type airfoils
+
 ! Check if ordering needs to be switched
 
-  tevec1(1) = foil%x(2) - foil%x(1)
-  tevec1(2) = foil%z(2) - foil%z(1)
-  len1 = norm_2(tevec1)
+!  tevec1(1) = foil%x(2) - foil%x(1)
+!  tevec1(2) = foil%z(2) - foil%z(1)
+!  len1 = norm_2(tevec1)
 
-  tevec2(1) = foil%x(npoints-1) - foil%x(npoints)
-  tevec2(2) = foil%z(npoints-1) - foil%z(npoints)
-  len2 = norm_2(tevec2)
+!  tevec2(1) = foil%x(npoints-1) - foil%x(npoints)
+!  tevec2(2) = foil%z(npoints-1) - foil%z(npoints)
+!  len2 = norm_2(tevec2)
 
-  if ( (len1 == 0.d0) .or. (len2 == 0.d0) )                                    &
-    call my_stop("Panel with 0 length detected near trailing edge.")
+!  if ( (len1 == 0.d0) .or. (len2 == 0.d0) )                                    &
+!    call my_stop("Panel with 0 length detected near trailing edge.")
+!
+!  tevec1 = tevec1/len1
+!  tevec2 = tevec2/len2
 
-  tevec1 = tevec1/len1
-  tevec2 = tevec2/len2
-
-  if (tevec1(2) < tevec2(2)) then
+!  if (tevec1(2) < tevec2(2)) then
+  if (foil%z(npoints) > foil%z(1)) then
     
-    write(*,*) 'Changing point ordering to counter-clockwise ...'
+    call print_warning ('Changing point ordering to counter-clockwise ...')
     
     xtemp = foil%x
     ztemp = foil%z
@@ -361,10 +351,14 @@ subroutine le_find(x, z, le, xle, zle, addpoint_loc)
     if (dist2 /= 0.d0) r2 = r2/dist2
 
     dot = dot_product(r1, r2)
-
     if (dist1 == 0.d0) then
       le = i
       addpoint_loc = 0
+      ! jx-test
+      !write (*,*) "p  i-1 " , i-1,   x(i-1), z(i-1)
+      !write (*,*) "p  i   " , i,   x(i), z(i), dist1
+      !write (*,*) "p  LE  " , le,  xle, zle, 0d0, addpoint_loc
+      !write (*,*) "p  i+1 " , i+1, x(i+1), z(i+1), dist2
       exit
     else if (dist2 == 0.d0) then
       le = i+1
@@ -386,22 +380,116 @@ end subroutine le_find
 
 !-----------------------------------------------------------------------------
 !
+! Repanel an airfoil with npoints and normalize it to get LE at 0,0 and
+!    TE at 1.0 (upper and lower side may have a gap)  
+!
+! For normalization xfoils LEFIND is used to calculate the (virtual) LE of
+!    the airfoil - then it's shifted, rotated, sclaed to be normalized.
+!
+! Bad thing: a subsequent xfoil LEFIND won't deliver TE at 0,0 but still with a little 
+!    offset. SO this is iterated until the offset is small than epsilon
+!
+!-----------------------------------------------------------------------------
+subroutine repanel_and_normalize_airfoil (seed_foil, npoint_paneling, foil)
+
+  use vardef,       only : airfoil_type, foil_transform
+  use math_deps,    only : norm_2
+  use os_util,      only : print_warning
+  use xfoil_driver, only : smooth_paneling
+
+
+  type(airfoil_type), intent(in)  :: seed_foil
+  type(airfoil_type), intent(out) :: foil
+  integer,            intent(in)  :: npoint_paneling
+
+  type(airfoil_type)  :: tmp_foil
+  integer             :: i
+  logical             :: le_fixed
+  double precision    :: epsilon = 1.d-16
+  double precision, dimension(2) :: dist
+
+
+  allocate (tmp_foil%x(npoint_paneling))  
+  allocate (tmp_foil%z(npoint_paneling))  
+  tmp_foil%npoint = npoint_paneling
+
+  ! initial paneling to npoint_paneling
+  call smooth_paneling(seed_foil, npoint_paneling, foil)
+  call le_find(foil%x, foil%z, foil%leclose, foil%xle, foil%zle, foil%addpoint_loc)
+
+  le_fixed = .false. 
+
+  do i = 1,10
+
+    call transform_airfoil(foil)
+
+    call le_find(foil%x, foil%z, foil%leclose, foil%xle, foil%zle, foil%addpoint_loc)
+
+    dist(1) = foil%xle
+    dist(2) = foil%zle
+    write (*,*) "iteration   ", i, foil%xle, foil%zle, norm_2(dist)
+    
+    if (norm_2(dist) < epsilon) then
+      le_fixed = .true. 
+      exit 
+    end if
+    
+    tmp_foil%x = foil%x
+    tmp_foil%z = foil%z
+    call smooth_paneling(tmp_foil, npoint_paneling, foil)
+    call le_find(foil%x, foil%z, foil%leclose, foil%xle, foil%zle, foil%addpoint_loc)
+    
+  end do
+
+  ! reached a virtual LE which is closer to 0,0 than epsilon, set it to 0,0
+  if (le_fixed) then 
+    foil_transform%xoffset = 0.d0
+    foil_transform%zoffset = 0.d0
+    foil_transform%scale   = 1.d0
+    foil_transform%angle   = 0.d0 
+    foil%xle = 0.d0
+    foil%zle = 0.d0
+    ! is the real closest point closer epsilon? if yes take this one as new LE
+    dist(1) = foil%x(foil%leclose)
+    dist(2) = foil%z(foil%leclose)
+    write (*,*) "le closest   ", foil%x(foil%leclose), foil%z(foil%leclose), norm_2(dist)
+    if (norm_2(dist) < 5d-4) then
+      foil%addpoint_loc = 0               ! will lead to no insertion of new point
+      foil%x(foil%leclose) = 0d0
+      foil%z(foil%leclose) = 0d0
+    end if 
+  else
+    call print_warning ("Leading edge couln't be moved close to 0,0. Continuing ...")
+  end if 
+
+
+end subroutine repanel_and_normalize_airfoil
+
+
+!-----------------------------------------------------------------------------
+!
 ! Translates and scales an airfoil such that it has a 
 !    length of 1 
 !    leading edge is at the origin
 !    chord is parallel to x-axis
+! 
+! transform_airfoil uses - must be set in le_find!
+!    foil%xle       (virtuell LE as calculated in xfoil)
+!    foil%zle
+!    leclose        Index of point closest to (virtuell) LE
+!    addpoint_loc      is (virtuell) LE before, at, after leclose 
 !
 !-----------------------------------------------------------------------------
 subroutine transform_airfoil (foil)
 
-  use vardef, only : airfoil_type, foil_transform
+  use vardef, only : airfoil_type
 
   type(airfoil_type), intent(inout) :: foil
 
-  double precision :: xoffset, zoffset, foilscale
+  double precision :: xoffset, zoffset, foilscale_upper, foilscale_lower
   double precision :: angle, cosa, sina
 
-  integer :: npoints, i
+  integer :: npoints, i, pointst, pointsb
 
   npoints = foil%npoint
 
@@ -426,21 +514,24 @@ subroutine transform_airfoil (foil)
     foil%z(i) = foil%x(i) * sina + foil%z(i) * cosa
   end do
 
+! Scale airfoil so that it has a length of 1 
+! - there are mal formed airfoils with different TE on upper and lower
+!   scale both to 1.0  
 
-! Scale airfoil so that it has a length of 1
+  foilscale_upper = 1.d0 / foil%x(1)
+  foilscale_lower = 1.d0 / foil%x(npoints)
 
-  foilscale = 1.d0 / maxval(foil%x)
+  call get_split_points(foil, pointst, pointsb, .false.)
+
   do i = 1, npoints
-    foil%x(i) = foil%x(i)*foilscale
-    foil%z(i) = foil%z(i)*foilscale
+    if (i >= (npoints - pointsb)) then 
+      foil%x(i) = foil%x(i)*foilscale_lower
+      foil%z(i) = foil%z(i)*foilscale_lower
+    else
+      foil%x(i) = foil%x(i)*foilscale_upper
+      foil%z(i) = foil%z(i)*foilscale_upper
+    end if
   end do
-
-! Switch off later transformation to original "false" position  
-
-  foil_transform%xoffset = 0.d0
-  foil_transform%zoffset = 0.d0
-  foil_transform%scale   = 1.d0
-  foil_transform%angle   = 0.d0 
 
 end subroutine transform_airfoil
 

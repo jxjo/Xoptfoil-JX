@@ -28,6 +28,7 @@ program main
   use simplex_search,      only : ds_options_type
   use airfoil_evaluation,  only : xfoil_geom_options, xfoil_options
   use airfoil_operations,  only : get_seed_airfoil, split_airfoil
+  use airfoil_operations,  only : repanel_and_normalize_airfoil
   use memory_util,         only : deallocate_airfoil, allocate_airfoil_data,   &
                                   deallocate_airfoil_data
   use input_sanity,        only : check_seed
@@ -43,7 +44,7 @@ program main
 #define PACKAGE_VERSION ""
 #endif
 
-  type(airfoil_type) :: buffer_foil
+  type(airfoil_type) :: buffer_foil, original_foil
   character(80) :: search_type, global_search, local_search, seed_airfoil,     &
                    airfoil_file, matchfoil_file
   character(80) :: input_file, text
@@ -81,11 +82,17 @@ program main
                    pso_options, ga_options, ds_options, matchfoil_file,        &
                    xfoil_geom_options, xfoil_options)
 
-! Load seed airfoil into memory, including transformations and smoothing
+! Load seed airfoil into memory
 
-  call get_seed_airfoil(seed_airfoil, airfoil_file, naca_options, buffer_foil)
+  call get_seed_airfoil(seed_airfoil, airfoil_file, naca_options, original_foil)
 
-! Split up seed airfoil into upper and lower surfaces
+! Repanel to fixed 200 points and normalize to get LE at 0,0 and TE (1,0)
+
+  call repanel_and_normalize_airfoil (original_foil, 200, buffer_foil)                            !   ... to have run_xfoil results equal airfoil external results
+  !   ... to have run_xfoil results equal airfoil external results
+  xfoil_geom_options%npan = buffer_foil%npoint
+
+! Split up seed airfoil into upper and lower surfaces - LE point will be added
 
   call split_airfoil(buffer_foil, xseedt, xseedb, zseedt, zseedb, symmetrical)
 
