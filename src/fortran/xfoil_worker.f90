@@ -36,6 +36,7 @@ program xfoil_worker
   type(airfoil_type) :: foil
   character(255)     :: input_file, output_prefix, airfoil_filename
   character(20)      :: action
+  logical            :: visualizer
 
   write(*,'(A)') 
   write(*,'(A)') 'Xfoil_Worker      Version '//trim(PACKAGE_VERSION)//  &
@@ -47,7 +48,8 @@ program xfoil_worker
   output_prefix     = ''
   action            = ''
   airfoil_filename  = ''
-  call read_worker_clo(input_file, output_prefix, airfoil_filename, action)
+  visualizer        = .false.
+  call read_worker_clo(input_file, output_prefix, airfoil_filename, action, visualizer)
 
   if (trim(action) == "") &
     call my_stop("Must specify an action for the worker with -w option.")
@@ -77,14 +79,14 @@ program xfoil_worker
       ! If output airfoil name omitted built name from input file 
       if (trim(output_prefix) == '') & 
         output_prefix = airfoil_filename (1: (index (airfoil_filename,'.') - 1)) //'-norm'
-      call repanel_smooth (input_file, output_prefix, foil, .false.)
+      call repanel_smooth (input_file, output_prefix, foil, visualizer, .false.)
 
     case ('smooth')       ! Repanel, Normalize and smooth 
 
       ! If output airfoil name omitted built name from input file 
       if (trim(output_prefix) == '') & 
         output_prefix = airfoil_filename (1: (index (airfoil_filename,'.') - 1)) //'-smoothed'
-      call repanel_smooth (input_file, output_prefix, foil, .true.)
+      call repanel_smooth (input_file, output_prefix, foil, visualizer, .true.)
   
     case ('test')         ! Test for change max thickness location 
       
@@ -109,7 +111,7 @@ end program xfoil_worker
 ! Repanels and optionally smoothes foil based on settings in 'input file'
 !-------------------------------------------------------------------------
 
-subroutine repanel_smooth (input_file, output_prefix, seed_foil, do_smoothing)
+subroutine repanel_smooth (input_file, output_prefix, seed_foil, visualizer, do_smoothing)
 
   use vardef,             only : airfoil_type
   use vardef,             only : spike_threshold, highlow_treshold, curv_threshold
@@ -122,7 +124,7 @@ subroutine repanel_smooth (input_file, output_prefix, seed_foil, do_smoothing)
 
   character(*), intent(in)          :: input_file, output_prefix
   type (airfoil_type), intent (inout)  :: seed_foil
-  logical, intent(in)               :: do_smoothing
+  logical, intent(in)               :: do_smoothing, visualizer
 
   double precision, dimension(:), allocatable :: xt, xb, zt, zb, zt_smoothed, zb_smoothed
   integer :: npoint_paneling
@@ -137,7 +139,7 @@ subroutine repanel_smooth (input_file, output_prefix, seed_foil, do_smoothing)
 
   npoint_paneling = geom_options%npan -1      ! one point will be added for LE
 
-  write (*,'(1x, A,A,A,I3,A)') 'Repaneling and normalizing ',trim(seed_foil%name), ' with ',npoint_paneling,' Points'
+  write (*,'(1x,A,I3,A)') 'Repaneling and normalizing with ',npoint_paneling,' Points'
   call repanel_and_normalize_airfoil (seed_foil, npoint_paneling, foil)
 
 ! Now split and rebuild to add a real  LE point at 0,0 
@@ -146,9 +148,9 @@ subroutine repanel_smooth (input_file, output_prefix, seed_foil, do_smoothing)
   call rebuild_airfoil (xt, xb, zt, zb, foil)
 
   if (foil%addpoint_loc /= 0) then 
-    write (*,'(1x, A,A,A,I3,A)') 'Leading edge (0,0) added having now ',foil%npoint,' Points'
+    write (*,'(1x, A,I3,A)') 'Leading edge (0,0) added having now ',foil%npoint,' Points'
   else
-    write (*,'(1x, A,A,A,I3,A)') 'Set closest point to LE to become new leading edge at (0,0)'
+    write (*,'(1x, A)')      'Set closest point to LE to become new leading edge at (0,0)'
   end if
 
 ! Smooth it ?
@@ -188,14 +190,16 @@ subroutine repanel_smooth (input_file, output_prefix, seed_foil, do_smoothing)
 
 ! Write all airfoils to _design_coordinates using XOptfoil format for visualizer
   
-  call write_design_coordinates (output_prefix, 0, seed_foil)
+  if (visualizer) then 
+    call write_design_coordinates (output_prefix, 0, seed_foil)
 
-  foil%name = trim (seed_foil%name) // '-repaneled'
-  call write_design_coordinates (output_prefix, 1, foil)
+    foil%name = trim (seed_foil%name) // '-repaneled'
+    call write_design_coordinates (output_prefix, 1, foil)
 
-  if (do_smoothing) then
-    foil_smoothed%name = trim (seed_foil%name) // '-smoothed'
-    call write_design_coordinates (output_prefix, 2, foil_smoothed)
+    if (do_smoothing) then
+      foil_smoothed%name = trim (seed_foil%name) // '-smoothed'
+      call write_design_coordinates (output_prefix, 2, foil_smoothed)
+    end if 
   end if 
 
 end subroutine repanel_smooth
@@ -297,11 +301,12 @@ end subroutine write_design_coordinates
 ! Reads command line arguments for input file name and output file prefix
 !-------------------------------------------------------------------------
 
-subroutine read_worker_clo(input_file, output_prefix, airfoil_name, action)
+subroutine read_worker_clo(input_file, output_prefix, airfoil_name, action, visualizer)
 
   use airfoil_operations, only : my_stop
 
   character(*), intent(inout) :: input_file, output_prefix, action, airfoil_name
+  logical,      intent(inout) :: visualizer
 
   character(80) :: arg
   integer i, nargs
@@ -353,6 +358,9 @@ subroutine read_worker_clo(input_file, output_prefix, airfoil_name, action)
         call getarg(i+1, action)
         i = i+2
       end if
+    else if (trim(arg) == "-v") then
+      visualizer = .true.
+      i = i+1
     else if ( (trim(arg) == "-h") .or. (trim(arg) == "--help") ) then
       call print_worker_usage
       stop
@@ -385,6 +393,7 @@ subroutine print_worker_usage()
   write(*,'(A)') "  -o output_prefix  Specify an output prefix (default: 'foil')"
   write(*,'(A)') "  -r xxxxxx         Specify a default reynolds number (re_default)"
   write(*,'(A)') "  -a airfoil_file   Specify filename of seed airfoil"
+  write(*,'(A)') "  -v                Generate file 'design_coordinates' for visualizer"
   write(*,'(A)') "  -h, --help        Display usage information and exit"
   write(*,'(A)')
   write(*,'(A)') "Refer to the worker reference guide for complete input help."
@@ -400,7 +409,7 @@ end subroutine print_worker_usage
 subroutine test_set_thickness_camber (foil)
 
   use vardef,    only : airfoil_type
-  use xfoil_driver,       only : xfoil_set_thickness_camber, smooth_paneling
+  use xfoil_driver,       only : xfoil_set_thickness_camber
   use xfoil_driver,       only : xfoil_scale_thickness_camber
   use airfoil_operations, only : airfoil_write
 

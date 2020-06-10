@@ -35,7 +35,6 @@ module airfoil_operations
 subroutine get_seed_airfoil (seed_airfoil, airfoil_file, naca_options, foil )
 
   use vardef,       only : airfoil_type
-  use xfoil_driver, only : smooth_paneling
   use naca,         only : naca_options_type, naca_456
 
   character(*), intent(in) :: seed_airfoil, airfoil_file
@@ -405,8 +404,11 @@ subroutine repanel_and_normalize_airfoil (seed_foil, npoint_paneling, foil)
   type(airfoil_type)  :: tmp_foil
   integer             :: i
   logical             :: le_fixed
-  double precision    :: epsilon = 1.d-16
-  double precision, dimension(2) :: dist
+  double precision, dimension(2) :: p, p_next
+
+  ! iteration threshols
+  double precision    :: epsilon = 1.d-12          ! distance xfoil LE to 0,0
+  double precision    :: le_panel_factor = 0.2d0   ! lenght LE panel / length prev panel
 
 
   allocate (tmp_foil%x(npoint_paneling))  
@@ -425,11 +427,11 @@ subroutine repanel_and_normalize_airfoil (seed_foil, npoint_paneling, foil)
 
     call le_find(foil%x, foil%z, foil%leclose, foil%xle, foil%zle, foil%addpoint_loc)
 
-    dist(1) = foil%xle
-    dist(2) = foil%zle
-    write (*,*) "iteration   ", i, foil%xle, foil%zle, norm_2(dist)
+    p(1) = foil%xle
+    p(2) = foil%zle
+    ! write (*,*) "iteration   ", i, foil%xle, foil%zle, norm_2(p)
     
-    if (norm_2(dist) < epsilon) then
+    if (norm_2(p) < epsilon) then
       le_fixed = .true. 
       exit 
     end if
@@ -449,11 +451,13 @@ subroutine repanel_and_normalize_airfoil (seed_foil, npoint_paneling, foil)
     foil_transform%angle   = 0.d0 
     foil%xle = 0.d0
     foil%zle = 0.d0
-    ! is the real closest point closer epsilon? if yes take this one as new LE
-    dist(1) = foil%x(foil%leclose)
-    dist(2) = foil%z(foil%leclose)
-    write (*,*) "le closest   ", foil%x(foil%leclose), foil%z(foil%leclose), norm_2(dist)
-    if (norm_2(dist) < 5d-4) then
+    ! is the LE panel of closest point much! shorter tanh the next panel? 
+    !       if yes, take this point to LE 0,0
+    p(1)      = foil%x(foil%leclose)
+    p(2)      = foil%z(foil%leclose)
+    p_next(1) = foil%x(foil%leclose + 1) - foil%x(foil%leclose)
+    p_next(2) = foil%z(foil%leclose + 1) - foil%z(foil%leclose)
+    if ((norm_2(p) / norm_2(p_next)) < le_panel_factor) then
       foil%addpoint_loc = 0               ! will lead to no insertion of new point
       foil%x(foil%leclose) = 0d0
       foil%z(foil%leclose) = 0d0

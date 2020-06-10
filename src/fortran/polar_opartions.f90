@@ -233,7 +233,7 @@ subroutine read_polar_inputs  (input_file, foil_name, npolars, polars, xfoil_opt
   xfoil_options%fix_unconverged = fix_unconverged
   xfoil_options%reinitialize = reinitialize
   ! suppress a re-paneling of the airfoil as we want the original properties.
-  xfoil_options%auto_repanel = .false.  
+  xfoil_options%repanel = .false.  
   xfoil_options%show_details = .true.
 
   

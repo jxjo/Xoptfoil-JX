@@ -27,7 +27,7 @@ module xfoil_driver
     double precision :: xtript, xtripb !Trip locations
     logical :: viscous_mode                       
     logical :: silent_mode             !Toggle xfoil screen write
-    logical :: auto_repanel            ! = true (default) do re-paneling (PANGEN)
+    logical :: repanel                 ! = true (default) do re-paneling (PANGEN)
                                        ! before xfoil is called for aero calcs 
     logical :: show_details            ! show some user entertainment during xfoil loop
     integer :: maxit                   !Iterations for BL calcs
@@ -269,7 +269,7 @@ subroutine run_xfoil(foil, geom_options, operating_points, op_modes,           &
 
 ! jx-mod avoid (eg camb-thick) to always PANGEN as it could have
 !        influence at high cl (TE micro stuff) 
-  if (xfoil_options%auto_repanel) then
+  if (xfoil_options%repanel) then
     call PANGEN(.not. SILENT_MODE)
   end if
 

@@ -337,7 +337,6 @@ subroutine create_airfoil_camb_thick (xt_seed, zt_seed, xb_seed, zb_seed, modes,
 
   use vardef,       only : airfoil_type
   use xfoil_driver, only : xfoil_scale_thickness_camber, xfoil_scale_LE_radius
-  use xfoil_driver, only : smooth_paneling
                                    
   double precision, dimension(:), intent(in) :: xt_seed, zt_seed, xb_seed, zb_seed
   double precision, dimension(:), intent(in) :: modes
@@ -417,7 +416,6 @@ subroutine create_airfoil_camb_thick_plus (xt_seed, zt_seed, xb_seed, zb_seed, m
 
 use vardef,       only : airfoil_type
 use xfoil_driver, only : xfoil_scale_thickness_camber, xfoil_scale_LE_radius
-use xfoil_driver, only : smooth_paneling
 
 double precision, dimension(:), intent(in) :: xt_seed, zt_seed, xb_seed, zb_seed
 double precision, dimension(:), intent(in) :: modes

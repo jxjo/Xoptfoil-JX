@@ -63,7 +63,7 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
 
   logical :: viscous_mode, silent_mode, fix_unconverged, feasible_init,        &
              reinitialize, restart, write_designs, reflexed,                   &
-             pso_write_particlefile
+             pso_write_particlefile, repanel
   integer :: restart_write_freq, pso_pop, pso_maxit, simplex_maxit, bl_maxit,  &
              npan, feasible_init_attempts
   integer :: ga_pop, ga_maxit
@@ -100,14 +100,11 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
             seed_airfoil, airfoil_file, shape_functions, nfunctions_top,       &
             nfunctions_bot, initial_perturb, min_bump_width, restart,          &
             restart_write_freq, write_designs,                                 &
-! jx-mod Show  
             show_details, echo_input_parms                                                      
 
   namelist /operating_conditions/ noppoint, op_mode, op_point, reynolds, mach, &
             use_flap, x_flap, y_flap, y_flap_spec, flap_selection,             &
-! jx-mod Aero targets - new option: target_value
             target_value,                                                      &
-! jx-mod re_default - to ease Type1 and Type2 polar op points
             re_default_as_resqrtcl, re_default,                                 &
             flap_degrees, weighting, optimization_type, ncrit_pt
   namelist /constraints/ min_thickness, max_thickness, moment_constraint_type, &
@@ -134,7 +131,7 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
   namelist /xfoil_run_options/ ncrit, xtript, xtripb, viscous_mode,            &
             silent_mode, bl_maxit, vaccel, fix_unconverged, reinitialize
   namelist /xfoil_paneling_options/ npan, cvpar, cterat, ctrrat, xsref1,       &
-            xsref2, xpref1, xpref2
+            xsref2, xpref1, xpref2, repanel
   namelist /matchfoil_options/ match_foils, matchfoil_file
 
 ! jx-mod Smoothing - namelist for smoothing options
@@ -605,7 +602,8 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
 
   npan   = 200              ! For the seed airfoil 200 panel points are used.
                             ! When the airfoil will be split in top & bot and then rebuild
-                            ! the design airfoil will have 200+1 (npan default value) points...
+                            ! the design airfoil will have 200+1 (npan default value) points
+                            !   if a LE is inserted
                             !   ... to have run_xfoil results equal airfoil external results
                             ! this will be adjusted in main
   cvpar = 1.d0
@@ -618,6 +616,7 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
   xsref2 = 1.d0
   xpref1 = 1.d0
   xpref2 = 1.d0
+  repanel = .false.          ! repanel for each design before running xfoil
 
 ! Read xfoil options
 
@@ -657,7 +656,7 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
 ! jx-mod swtich to avoid PANGEN before each xfoil calculation as 
 !        it could have influence at high cl (TE micro stuff) 
 !        default is "always smooth" before xfoil
-  xfoil_options%auto_repanel  = .true. 
+  xfoil_options%repanel  = repanel
   xfoil_options%show_details = show_details
 
 
@@ -665,7 +664,7 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
       (trim(shape_functions) == 'camb-thick-plus')) then
     ! in case of camb_thick a re-paneling is not needed and
     ! not good for high cl
-    xfoil_options%auto_repanel = .false. 
+    xfoil_options%repanel = .false. 
   end if 
  
 
