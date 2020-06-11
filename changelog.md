@@ -7,19 +7,20 @@ All notable changes to this project are documented in this file.
 ### Xoptfoil-JX
 
 - Normalization of the airfoil - the optimized airfoil will be repaneled, moved, scaled and rotated to have the leading edge at 0,0 and the trailing edge at 1,0
+  - depending on the repaneling result a new airfoil will have 200 or 201 points (if an additional leading edge point was added)
   - *breaking change* as the new airfoil can differ a little from previous runs
 - Revision of smoothing and bump prevention for Hicks Henne shape functions
-  - improved smoothing algorithm which now also includes leading edge area
+  - improved smoothing algorithm for the seed airfoil which now also includes leading edge area
   - new constraints max_curv_highlow_top and max_curv_highlow_top to limit the number of "bumps" at top and bottom side (default = 0)
   - moved parameter highlow_threshold from smoothing options to constraints namelist - *breaking change*
   - added examples for smoothing
   - see updated documentation for further information on smoothing and bump prevention
+- New shape functions type 'camb-thick-plus' where upper and lower side of the airfoil is treated sperately when modifying the surface. This broadens and improves the usecases for this fast lane optimization type.
+- Updated example of a 'high end F3F airfoil' to feature the capabilties of Xoptfoil-JX 
 - New utility tool `Xfoil_worker` to execute little jobs - also convinient for automizations
-  - Generate polars of an airfoil in xfoil format which can be imported directly in xflr5 or flow5
-  - Normalize an airfoil 
-  - Smooth an airfoil 
+  - generate polars of an airfoil in xfoil format which can be imported directly in xflr5 or flow5
+  - normalize, optionally smooth an airfoil. Generates a 7 decimals airfoil file.
   - see documentation of `Xfoil_worker`
-- Updated example of a 'high end F3F airfoil' to feature the capabilties  
 - For Windows the programs will be linked 'static' - so no more additional libraries are needed to run `Xoptfoil-JX` or `Xfoil_worker`
 - Fixes
   - Different methods were used to calculate thickness and camber. This is now consistent taking the more precise method
@@ -29,6 +30,8 @@ All notable changes to this project are documented in this file.
 - Fixes
   - new plot objects were added at each refresh. This slowed down the visualizer more and more during long optimizations
   - removed flicker of the three plot windows
+
+Thanks to Tobias for testing and advices, Alexander for his hint regarding smoothing algrorithm - and of course to my super developer mate Matthias.
 
 ## [1.51.0] - 2020-05-24
 

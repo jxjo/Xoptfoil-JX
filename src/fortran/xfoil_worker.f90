@@ -56,6 +56,10 @@ program xfoil_worker
   if (trim(airfoil_filename) == "") &
     call my_stop("Must specify an airfoil file with the -a option.")
 
+  ! If output airfoil name omitted built name from input file 
+  if (trim(output_prefix) == '') & 
+    output_prefix = airfoil_filename (1: (index (airfoil_filename,'.') - 1))
+
 ! Load airfoil defined in command line 
   call load_airfoil(airfoil_filename, foil)
 
@@ -68,24 +72,14 @@ program xfoil_worker
 
     case ('polar')        ! Generate polars in subdirectory ".\<output_prfix>_polars\*.*
 
-      ! If output airfoil name omitted built name from input file 
-      if (trim(output_prefix) == '') & 
-        output_prefix = airfoil_filename (1: (index (airfoil_filename,'.') - 1))
-
       call check_and_do_polar_generation (input_file, output_prefix, foil)
 
     case ('norm')         ! Repanel, Normalize 
 
-      ! If output airfoil name omitted built name from input file 
-      if (trim(output_prefix) == '') & 
-        output_prefix = airfoil_filename (1: (index (airfoil_filename,'.') - 1)) //'-norm'
       call repanel_smooth (input_file, output_prefix, foil, visualizer, .false.)
 
     case ('smooth')       ! Repanel, Normalize and smooth 
 
-      ! If output airfoil name omitted built name from input file 
-      if (trim(output_prefix) == '') & 
-        output_prefix = airfoil_filename (1: (index (airfoil_filename,'.') - 1)) //'-smoothed'
       call repanel_smooth (input_file, output_prefix, foil, visualizer, .true.)
   
     case ('test')         ! Test for change max thickness location 
@@ -130,6 +124,7 @@ subroutine repanel_smooth (input_file, output_prefix, seed_foil, visualizer, do_
   integer :: npoint_paneling
   type (airfoil_type) :: foil_smoothed, foil
   type (xfoil_geom_options_type) :: geom_options
+  character (250)  :: output_name
 
 ! Read inputs file to get xfoil paneling options  
 
@@ -146,6 +141,7 @@ subroutine repanel_smooth (input_file, output_prefix, seed_foil, visualizer, do_
 
   call split_airfoil   (foil, xt, xb, zt, zb, .false.)
   call rebuild_airfoil (xt, xb, zt, zb, foil)
+  foil%name   = trim (seed_foil%name)//'-norm'
 
   if (foil%addpoint_loc /= 0) then 
     write (*,'(1x, A,I3,A)') 'Leading edge (0,0) added having now ',foil%npoint,' Points'
@@ -180,26 +176,25 @@ subroutine repanel_smooth (input_file, output_prefix, seed_foil, visualizer, do_
   ! Rebuild foil and write to file
 
     call rebuild_airfoil (xt, xb, zt_smoothed, zb_smoothed, foil_smoothed)
-    call airfoil_write   (trim(output_prefix)//'.dat', output_prefix, foil_smoothed)
+    foil_smoothed%name = trim (seed_foil%name)//'-smoothed'
+
+    output_name        = trim (output_prefix) //'-smoothed'
+    call airfoil_write   (trim(output_name)//'.dat', trim(foil_smoothed%name), foil_smoothed)
 
   else                        ! no smoothing write repaneld foil 
 
-    call airfoil_write (trim(output_prefix)//'.dat', output_prefix, foil)
+    output_name = trim (output_prefix) //'-norm'
+    call airfoil_write   (trim(output_name)//'.dat', trim(foil%name), foil)
 
   end if 
 
 ! Write all airfoils to _design_coordinates using XOptfoil format for visualizer
   
   if (visualizer) then 
-    call write_design_coordinates (output_prefix, 0, seed_foil)
-
-    foil%name = trim (seed_foil%name) // '-repaneled'
-    call write_design_coordinates (output_prefix, 1, foil)
-
-    if (do_smoothing) then
-      foil_smoothed%name = trim (seed_foil%name) // '-smoothed'
-      call write_design_coordinates (output_prefix, 2, foil_smoothed)
-    end if 
+    call write_design_coordinates (output_name, 0, seed_foil)
+    call write_design_coordinates (output_name, 1, foil)
+    if (do_smoothing) &
+      call write_design_coordinates (output_name, 2, foil_smoothed)
   end if 
 
 end subroutine repanel_smooth

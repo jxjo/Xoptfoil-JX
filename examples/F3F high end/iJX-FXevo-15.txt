@@ -95,7 +95,7 @@
 
 &constraints
   check_curvature      = .true.
-  max_te_curvature     = 0.3
+  max_te_curvature     = 0.2
   curv_threshold       = 0.01
   highlow_treshold     = 0.02	
   max_curv_reverse_bot = 1						
