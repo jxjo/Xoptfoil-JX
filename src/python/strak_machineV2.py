@@ -29,6 +29,9 @@ import pip
 import f90nml
 from copy import deepcopy
 
+# for debug-purposes
+skipPolarGeneration = False
+
 # paths and separators
 bs = "\\"
 presetsPath = 'ressources' + bs + 'presets'
@@ -1446,7 +1449,7 @@ def generate_commandlines(params):
     commandLines = []
 
     # do some initializations / set local variables
-    seedFoilName = params.seedFoilName.strip('.dat') +'.dat'
+    rootfoilName = get_FoilName(params, 0).strip('.dat') +'.dat'
     numFoils = get_NumberOfAirfoils(params)
     ReList = get_ReList(params)
 
@@ -1454,61 +1457,15 @@ def generate_commandlines(params):
     commandline = "cd %s\n" % params.outputFolder
     commandLines.append(commandline)
 
-    # make directory for polars of root-airfoil
-    root_polar_dir = "%s_polars" % (get_FoilName(params, 0).strip('.dat'))
-    commandline = ("md %s\n") % root_polar_dir
-    commandLines.append(commandline)
-
-    # get filename of first polar only of root-airfoil
-    polarFileName = params.polarFileNames[0]
-    if (polarFileName.find("\\") >= 0):
-        splitlines = polarFileName.split("\\")
-        num = len(splitlines)
-        polarFileName = splitlines[(num-1)]
-    elif (nepolarFileNamew.find("/") >= 0):
-        splitlines = polarFileName.split("/")
-        num = len(splitlines)
-        polarFileName = splitlines[(num-1)]
-
-    # copy rootfoil polars
-    sourceFolder = seedFoilName.strip('.dat') + "_polars"
-    source = ".." + bs + sourceFolder + bs + ("%s" % polarFileName)
-    destination = ("%s" % root_polar_dir) + bs + ("%s" % polarFileName)
-    commandline = ("copy " + source + " "+ destination + "\n")
-    commandLines.append(commandline)
-
-    # rename polar inside polar-file
-    commandline = "change_polarname.py -p %s -n %s\n" % \
-      (destination, get_FoilName(params, 0))
-    commandLines.append(commandline)
-
-
-    # copy seedFoil with its original name to output-folder
-    commandline = ("copy .." + bs +"%s"+ bs + "%s %s\n") % \
-    (params.inputFolder, seedFoilName, seedFoilName)
-    commandLines.append(commandline)
-
-    for i in range (1, (numFoils)):
-        # copy input-file to output-folder
-        inputfile = params.inputFileNames[i]
-        commandline = ("copy .." + bs +"%s"+ bs + "%s %s\n") % \
-                             (params.inputFolder, inputfile, inputfile)
-        commandLines.append(commandline)
-
-    # rename seedfoil inside outputfolder
-    commandline = ("change_airfoilname.py -i .." + bs + params.inputFolder
-                + bs +"%s -o %s\n") % (seedFoilName, get_FoilName(params, 0))
-    commandLines.append(commandline)
-
-    # copy (renamed) seedFoil to airfoil-folder as it can be used
+    # copy root-foil to airfoil-folder as it can be used
     # as the root airfoil without optimization
     commandline = ("copy %s %s" + bs + "%s\n") % \
     (get_FoilName(params, 0), params.airfoilFolder, get_FoilName(params, 0))
     commandLines.append(commandline)
 
-    # store seedfoilname
-    strakFoilName = seedFoilName
-    previousFoilname = seedFoilName
+    # store rootfoilname
+    strakFoilName = rootfoilName
+    previousFoilname = rootfoilName
 
     # add command-lines for each strak-airfoil
     # skip the root airfoil (as it was already copied)
@@ -1779,22 +1736,44 @@ if __name__ == "__main__":
     # create an instance of polar graph
     graph = polarGraph()
 
-    # generate polars of seedfoil / root-airfoil:
-    # get name of root-airfoil
+    # change working-directory
+    os.chdir(workingDir + bs + params.outputFolder)
+
+    # get current working dir again
+    workingDir = os.getcwd()
+
+    # get name of seed-airfoil
     seedFoilName = params.seedFoilName.strip('.dat')
 
-    print("Generating polars for airfoil %s" % seedFoilName)
+    # get name of root-airfoil
+    rootfoilName = get_FoilName(params, 0).strip('.dat')
+
+    print("Smoothing airfoil \'%s\', creating airfoil \'%s\'\n" %\
+                       (seedFoilName, rootfoilName))
+
+    seedfoilNameAndPath = ".." + bs + params.inputFolder + bs + seedFoilName + '.dat'
+
+    # compose system-string for smoothing the seed-airfoil
+    systemString = "xfoil_worker.exe -w smooth -a %s -o %s" % (
+                         seedfoilNameAndPath, rootfoilName)
+
+    # execute xfoil-worker / create polar-file
+    os.system(systemString)
+    print("Done.")
+
+    # generate polars of seedfoil / root-airfoil:
+    print("Generating polars for airfoil %s..." % rootfoilName)
 
     # compose polar-dir
-    polarDir = workingDir + bs + seedFoilName+ '_polars'
+    polarDir = workingDir + bs + rootfoilName + '_polars'
 
     idx = 0
     # create polars, polar-file-Names and input-file-names from Re-Numbers
     for Re in params.ReNumbers:
         # create polar-file-Name from Re-Number
         polarFileName = "T2_Re0.%03d_M0.00_N9.0.txt" % (Re/1000)
-        polarFileName = polarDir + bs + polarFileName
-        params.polarFileNames.append(polarFileName)
+        polarFileNameAndPath = polarDir + bs + polarFileName
+        params.polarFileNames.append(polarFileNameAndPath)
 
         # generate inputfilename
         inputFilename = params.strakInputFileName.strip('.txt')
@@ -1802,18 +1781,21 @@ if __name__ == "__main__":
         params.inputFileNames.append(inputFilename)
 
         # compose string for system-call of XFOIL-worker
-        airfoilName = workingDir + bs + params.inputFolder + bs + seedFoilName + '.dat'
+        airfoilName = workingDir + bs + rootfoilName + '.dat'
         inputFilename = getPresetInputFileName(params.strakType)
 
         systemString = "xfoil_worker.exe -i %s -o %s -w polar -a %s -r %d" % (
-                        inputFilename, seedFoilName, airfoilName, Re)
+                        inputFilename, rootfoilName, airfoilName, Re)
+
+        print("Generating polar %s" % polarFileName)
 
         # execute xfoil-worker / create polar-file
-        os.system(systemString)
+        if (not skipPolarGeneration):
+            os.system(systemString)
 
         # import polar
         newPolar = polarData()
-        newPolar.importFromFile(polarFileName)
+        newPolar.importFromFile(polarFileNameAndPath)
         newPolar.analyze()
 
         # add polar to params
@@ -1871,7 +1853,7 @@ if __name__ == "__main__":
         # for all airfoils after the root-airfoil
         if (i>0):
             # physically create the file
-            newFile.writeToFile(params.inputFolder + bs + params.inputFileNames[i])
+            newFile.writeToFile(params.inputFileNames[i])
 
     print("Done.")
 
@@ -1884,6 +1866,9 @@ if __name__ == "__main__":
         print (element)
     print("Done.")
 
+    # change working-directory
+    os.chdir(".." + bs)
+
     # generate batchfile
     print("Generating batchfiles...")
     if (params.generateBatch == True):
@@ -1892,8 +1877,6 @@ if __name__ == "__main__":
         print ('generating visu-batchfiles')
         generate_visu_batchfiles(params)
     print("Done.")
-
-
 
     # show graph
     graph.draw(scriptPath)
