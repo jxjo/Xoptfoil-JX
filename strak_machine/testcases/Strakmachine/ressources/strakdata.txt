@@ -5,6 +5,7 @@
       "strakInputFileName": "istrak.txt", 
       "seedFoilName": "rg15", 
       "useAlwaysRootfoil": "false",
+      "skipPolarGeneration": "false",
       "generateBatchfile": "true", 
       "adaptInitialPerturb": "true",
       "inputFolder": "ressources", 
