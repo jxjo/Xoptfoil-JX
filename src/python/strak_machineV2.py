@@ -29,9 +29,6 @@ import pip
 import f90nml
 from copy import deepcopy
 
-# for debug-purposes
-skipPolarGeneration = False
-
 # paths and separators
 bs = "\\"
 presetsPath = 'ressources' + bs + 'presets'
@@ -227,8 +224,8 @@ class inputFile:
                 self.presetInputFileName = name
                 return
 
-    def getPresetInputFileName(self):
-        return self.presetInputFileName
+##    def getPresetInputFileName(self):
+##        return self.presetInputFileName
 
 
     def changeTargetValue(self, keyName, targetValue):
@@ -763,6 +760,7 @@ class strakData:
         self.operatingMode = 'default'
         self.useAlwaysRootfoil = False
         self.adaptInitialPerturb = True
+        self.skipPolarGeneration = False
         self.seedFoilName = ""
         self.ReNumbers = []
         self.polarFileNames = []
@@ -1636,6 +1634,14 @@ def getParameters(dict):
         print ('adaptInitialPerturb not specified')
 
     try:
+        if (dict["skipPolarGeneration"] == 'true'):
+            params.skipPolarGeneration = True
+        else:
+            params.skipPolarGeneration = False
+    except:
+        print ('skipPolarGeneration not specified')
+
+    try:
         params.maxGlideLoss = dict["maxGlideLoss"]
     except:
         print ('maxGlideLoss not specified')
@@ -1752,12 +1758,20 @@ if __name__ == "__main__":
                        (seedFoilName, rootfoilName))
 
     seedfoilNameAndPath = ".." + bs + params.inputFolder + bs + seedFoilName + '.dat'
+    inputFilename = getPresetInputFileName('Smooth')
 
     # compose system-string for smoothing the seed-airfoil
-    systemString = "xfoil_worker.exe -w smooth -a %s -o %s" % (
-                         seedfoilNameAndPath, rootfoilName)
+    systemString = "xfoil_worker.exe -w smooth -i %s -a %s -o %s" % \
+                       (inputFilename, seedfoilNameAndPath, rootfoilName)
 
-    # execute xfoil-worker / create polar-file
+    # execute xfoil-worker / create the smootehed root-airfoil
+    os.system(systemString)
+
+    # rename the airfoil
+    smoothedName = rootfoilName + '-smoothed.dat'
+    unsmoothedName = rootfoilName + '.dat'
+    systemString = "change_airfoilname.py -i %s -o %s" %\
+                              (smoothedName, unsmoothedName)
     os.system(systemString)
     print("Done.")
 
@@ -1790,7 +1804,7 @@ if __name__ == "__main__":
         print("Generating polar %s" % polarFileName)
 
         # execute xfoil-worker / create polar-file
-        if (not skipPolarGeneration):
+        if (not params.skipPolarGeneration):
             os.system(systemString)
 
         # import polar
