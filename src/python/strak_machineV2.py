@@ -130,26 +130,39 @@ strakdata = {
             "outputFolder": 'build',
             # name of XFLR5-xml-file
             "XMLfileName": 'wing.xml',
-            # Re-numbers of the strak
-            "ReNumbers": [150000, 130000, 110000, 90000],
+            # ReSqrt(Cl)-numbers of the strak
+            "ReNumbers": [220000, 190000, 160000, 130000, 100000, 70500],
+            # determines max Re-number to use for Type2 polar. Will switch to
+            # Type1-polar at maxReFactor * ReNumber[i]
+            "maxReFactor": 2.5,
             # list of chord-lenghts
             "chordlengths": [],
-            # ReSqrtCl of root airfoil
+            # ReSqrt(Cl) of root airfoil if using chord-lenghts instead of Re-numbers
             "ReSqrtCl": '150000',
             # root airfoil name
             "seedFoilName": 'rg15.dat',
             # type of the strak that shall be developed
-            "strakType":  'F3F',
+            "strakType":  'Generic',
              # name of the xoptfoil-inputfile for strak-airfoil(s)
-            "strakInputFileName": 'i-strak.txt',
+            "strakInputFileName": 'istrak.txt',
             # generate batchfile for running Xoptfoil
             "generateBatchfile" : 'true',
             # name of the batchfile
             "batchfileName" : 'make_strak.bat',
             # operating-mode for strakmachine
-            "operatingMode" : 'targetPolar',
+            "operatingMode" : 'default',
             # use always root-airfoil or use predecessing airfoil
-            "useAlwaysRootfoil" : 'false'
+            "useAlwaysRootfoil" : 'false',
+            # skip the generation of polars (to save time if already done before)
+            "skipPolarGeneration": 'false',
+            # adapt initial_perturb in input file according to differenc in Re-numbers
+            "adaptInitialPerturb": 'true',
+            # projected maxGlide loss (percent), absolte value
+            "maxGlideLoss": 0.008,
+            # projected maxSpeed gain between root and strak-airfoil (percent)
+            "maxSpeedGain": 0.5,
+            # projected maxLift gain between root and strak-airfoil (percent)
+            "maxLiftGain": 0.3
             }
 
 
@@ -763,6 +776,10 @@ class strakData:
         self.skipPolarGeneration = False
         self.seedFoilName = ""
         self.ReNumbers = []
+        self.chordLengths = []
+        self.maxReFactor = 3.0
+        self.maxReNumbers = []
+        self.Cl_switchpoint_Type2_Type1_polar = []
         self.polarFileNames = []
         self.inputFileNames = []
         self.polars = []
@@ -771,6 +788,63 @@ class strakData:
         self.maxSpeedGain = 0.5
         self.maxLiftGain = 0.3
 
+
+    ############################################################################
+    # function that returns a list of Re-numbers
+    def get_ReList(params):
+        return params.ReNumbers
+
+
+   ############################################################################
+    # function that returns a list of max. Re-numbers
+    def get_maxReList(params):
+        return params.ReNumbers
+
+
+    ############################################################################
+    # function that calculates dependend values
+    def calculateDependendValues(self):
+
+        # calculate List of Re-numers, if wingdata available
+        if (self.wingData != None):
+            # clear the list of chord-lenghts
+            self.chordLengths = []
+
+            # get list of all chord-lengths of the wing
+            chordLengths = params.wingData.get('chordLengths')
+
+            # copy the list
+            self.chordLengths = chordLengths
+
+        # is there a list of chord-lengths available ?
+        if (self.chordLengths != []):
+            # clear the list of Re-numbers
+            self.ReNumbers = []
+
+            # get Re-number of root-airfoil
+            rootRe = params.ReSqrtCl
+
+            # get chord-length of root-airfoil
+            rootChord = self.chordLengths[0]
+
+            # calculate list of Re-numbers
+            for chord in chordLengths:
+                Re = (rootRe * chord) / rootChord
+                self.ReNumbers.append(Re)
+
+        # calculate list of max Re-numbers
+        for Re in self.ReNumbers:
+            ReMax = Re * self.maxReFactor
+            self.maxReNumbers.append(ReMax)
+
+        # calculate Cl where polar-generation is going to switch from
+        # type2- to type1-polar
+        self.Cl_switchpoint_Type2_Type1_polar =\
+                   ((self.ReNumbers[0] * self.ReNumbers[0]))/\
+                   ((self.maxReNumbers[0])*(self.maxReNumbers[0]))
+
+        print("polar-generation will switch vom type2 to type1 at Cl = %.3f\n"\
+         % self.Cl_switchpoint_Type2_Type1_polar)
 
 
 ################################################################################
@@ -1136,9 +1210,6 @@ class polarData:
         self.pre_CL_maxLift = 0.0
         self.pre_maxLift_idx = 0
         self.pre_alpha_maxLift = 0.0
-        self.CL_Markers = []
-        self.CD_Markers = []
-        self.textstr = ""
         self.operatingConditions = None
 
     def addOperatingConditions(self, opConditions):
@@ -1193,6 +1264,9 @@ class polarData:
 
         fileHandle.close()
         print("done.\n")
+
+    def merge(self, mergePolar, Cl):
+        print ("merge")
 
 
     def determineMaxSpeed(self):
@@ -1418,28 +1492,6 @@ def get_NumberOfAirfoils(params):
 
 
 ################################################################################
-# function that returns a list of Re-numbers
-def get_ReList(params):
-    list = []
-    # is there wingdata available ?
-    if (params.wingData != None):
-        # get list of all chord-lengths
-        chordLengths = params.wingData.get('chordLengths')
-        # get Re-number of root-airfoil
-        rootRe = params.ReNumbers[0]
-        # get chord-length of root-airfoil
-        rootChord = chordLengths[0]
-        # calculate list of Re-numbers
-        for chord in chordLengths:
-            Re = (rootRe * chord) / rootChord
-            list.append(Re)
-    else:
-        # get list of ReNumbers from params
-        list = params.ReNumbers
-
-    return list
-
-################################################################################
 # function that generates commandlines to run Xoptfoil
 def generate_commandlines(params):
 
@@ -1447,9 +1499,9 @@ def generate_commandlines(params):
     commandLines = []
 
     # do some initializations / set local variables
-    rootfoilName = get_FoilName(params, 0).strip('.dat') +'.dat'
-    numFoils = get_NumberOfAirfoils(params)
-    ReList = get_ReList(params)
+    rootfoilName = get_FoilName(params, 0).strip('.dat') +'.dat'#TODO refactor
+    numFoils = get_NumberOfAirfoils(params)#TODO refactor
+    ReList = params.get_ReList()
 
     # change current working dir to output folder
     commandline = "cd %s\n" % params.outputFolder
@@ -1603,6 +1655,12 @@ def getParameters(dict):
         print ('ReNumbers not specified, using no list of ReNumbers')
 
     try:
+        params.maxReFactor = dict["maxReFactor"]
+    except:
+        print ('maxReFactor not specified, using default-value %f'
+                 % params.maxReFactor)
+
+    try:
         params.seedFoilName = dict["seedFoilName"].strip('.dat')
     except:
         print ('seedFoilName not specified')
@@ -1724,6 +1782,9 @@ if __name__ == "__main__":
     # read plane-data from XML-File, if requested //TODO: only wing-data
     if (params.xmlFileName != None):
         params.wingData = getwingDataFromXML(params)
+
+    # calculate further values like max Re-numbers etc.
+    params.calculateDependendValues()
 
     # compose name of the folder, where the airfoils shall be stored
     params.airfoilFolder = 'airfoils'
