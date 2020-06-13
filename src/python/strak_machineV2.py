@@ -608,12 +608,6 @@ class inputFile:
             CD_keepSpeed_target = ((CD_keepSpeed_root * params.maxSpeedGain) + # part coming from root-airfoil
                             (CD_keepSpeed_strak * (1.0 - params.maxSpeedGain)))# part coming from not optimized strak-airfoil
 
-##            # Caution: Type 2-polars !!
-##            if (strak_polar.polarType == 2):
-##               # TODO Workaround: problem negative Cl-values
-##               if (CL_keepSpeed < 0.0):
-##                    CD_keepSpeed_target = -1
-
             # set new target-value
             self.changeTargetValue("keepSpeed", CD_keepSpeed_target)
         except:
@@ -632,12 +626,6 @@ class inputFile:
             CD_maxSpeed_target = ((CD_maxSpeed_root * params.maxSpeedGain) +
                            (CD_maxSpeed_strak * (1.0 - params.maxSpeedGain)))
 
-##            # Caution: Type 2-polars !!
-##            if (strak_polar.polarType == 2):
-##               # TODO Workaround: problem negative Cl-values
-##               if (CL_maxSpeed < 0.0):
-##                    CD_maxSpeed_target = -1
-
             self.changeTargetValue("maxSpeed", CD_maxSpeed_target)
         except:
             print("opPoint maxSpeed was skipped")
@@ -654,12 +642,6 @@ class inputFile:
             # new target-value is value between root-polar and strak polar
             CD_preSpeed_target = ((CD_preSpeed_root * params.maxSpeedGain) +
                            (CD_preSpeed_strak * (1.0 - params.maxSpeedGain)))
-
-##            # Caution: Type 2-polars !!
-##            if (strak_polar.polarType == 2):
-##               # TODO Workaround: problem negative Cl-values
-##               if (CL_preSpeed < 0.0):
-##                    CD_preSpeed_target = -1
 
             self.changeTargetValue("preSpeed", CD_preSpeed_target)
         except:
