@@ -52,6 +52,7 @@ fs_infotext = 10
 
 # colours
 cl_infotext = 'aqua'
+cl_polar_change = 'orange'
 
 
 ################################################################################
@@ -435,6 +436,21 @@ class inputFile:
         self.changeTargetValue("alphaMaxGlide", CL_maxGlide)
 
 
+    def adaptReNumbers(self, polarData):
+        # get operating-conditions
+        operatingConditions = self.values["operating_conditions"]
+
+       # walk through the opPoints
+        for idx in range(len(operatingConditions["weighting"])):#TODO use other key
+            if(operatingConditions["op_mode"][idx] == 'spec-cl'):
+                # check the op-point-value
+                Cl = operatingConditions["op_point"][idx]
+                if (Cl <= polarData.Cl_switchpoint_Type2_Type1_polar):
+                    # adapt maxRe --> Type 1 oppoint
+                    operatingConditions["reynolds"][idx] = int(polarData.maxRe)
+                    print("adapted oppoint @ Cl = %0.3f, Type 1, Re = %d\n" % \
+                          (Cl, int(polarData.maxRe)))
+
     # shifts a list of oppoints by a certain difference. Does not change the
     # target-values
     def shiftOpPoints(self, diff, opPointList):
@@ -592,11 +608,11 @@ class inputFile:
             CD_keepSpeed_target = ((CD_keepSpeed_root * params.maxSpeedGain) + # part coming from root-airfoil
                             (CD_keepSpeed_strak * (1.0 - params.maxSpeedGain)))# part coming from not optimized strak-airfoil
 
-            # Caution: Type 2-polars !!
-            if (strak_polar.polarType == 2):
-               # TODO Workaround: problem negative Cl-values
-               if (CL_keepSpeed < 0.0):
-                    CD_keepSpeed_target = -1
+##            # Caution: Type 2-polars !!
+##            if (strak_polar.polarType == 2):
+##               # TODO Workaround: problem negative Cl-values
+##               if (CL_keepSpeed < 0.0):
+##                    CD_keepSpeed_target = -1
 
             # set new target-value
             self.changeTargetValue("keepSpeed", CD_keepSpeed_target)
@@ -616,11 +632,11 @@ class inputFile:
             CD_maxSpeed_target = ((CD_maxSpeed_root * params.maxSpeedGain) +
                            (CD_maxSpeed_strak * (1.0 - params.maxSpeedGain)))
 
-            # Caution: Type 2-polars !!
-            if (strak_polar.polarType == 2):
-               # TODO Workaround: problem negative Cl-values
-               if (CL_maxSpeed < 0.0):
-                    CD_maxSpeed_target = -1
+##            # Caution: Type 2-polars !!
+##            if (strak_polar.polarType == 2):
+##               # TODO Workaround: problem negative Cl-values
+##               if (CL_maxSpeed < 0.0):
+##                    CD_maxSpeed_target = -1
 
             self.changeTargetValue("maxSpeed", CD_maxSpeed_target)
         except:
@@ -639,11 +655,11 @@ class inputFile:
             CD_preSpeed_target = ((CD_preSpeed_root * params.maxSpeedGain) +
                            (CD_preSpeed_strak * (1.0 - params.maxSpeedGain)))
 
-            # Caution: Type 2-polars !!
-            if (strak_polar.polarType == 2):
-               # TODO Workaround: problem negative Cl-values
-               if (CL_preSpeed < 0.0):
-                    CD_preSpeed_target = -1
+##            # Caution: Type 2-polars !!
+##            if (strak_polar.polarType == 2):
+##               # TODO Workaround: problem negative Cl-values
+##               if (CL_preSpeed < 0.0):
+##                    CD_preSpeed_target = -1
 
             self.changeTargetValue("preSpeed", CD_preSpeed_target)
         except:
@@ -658,6 +674,9 @@ class inputFile:
         self.adaptMaxLift(polarData)
         # adapt maxGlide and dependend values to polar
         self.adaptMaxGlide(polarData)
+
+        # adapt Re-numbers for Type2 / Type1 oppoints
+        self.adaptReNumbers(polarData)
 
 
     # transfer oppoints to a new polar, keeping the shape of the original polar/
@@ -891,6 +910,27 @@ class polarGraph:
                             ax.plot(x, y, 'y.')
                 idx = idx + 1
 
+    def plotPolarChange(self, ax, rootPolar):
+        if (rootPolar.Cl_switchpoint_Type2_Type1_polar != 999999):
+            xlimits = ax.get_xlim()
+
+            ax.axhline(y=rootPolar.Cl_switchpoint_Type2_Type1_polar,
+                              xmin = xlimits[0], xmax = xlimits[1],
+                              color = cl_polar_change)
+
+            ax.text(xlimits[1], 0.3, 'Type 2',
+                    transform = ax.transAxes,
+                    horizontalalignment = 'right',
+                    verticalalignment = 'bottom',
+                    color = cl_polar_change)
+
+            ax.text(xlimits[1], 0.1, 'Type 1',
+                    transform = ax.transAxes,
+                    horizontalalignment = 'right',
+                    verticalalignment = 'bottom',
+                    color = cl_polar_change)
+
+
     def plotLiftDragPolar(self, ax):
         # set axes and labels
         self.setAxesAndLabels(ax, 'Cl, Cd', 'Cd', 'Cl')
@@ -900,6 +940,9 @@ class polarGraph:
 
         # set y-axis manually
         ax.set_ylim(min(rootPolar.CL) - 0.2, max(rootPolar.CL) + 0.2)
+
+        # plot horizontal line where polar changes from T1 to T2
+        self.plotPolarChange(ax, rootPolar)
 
         # all polars
         for polar in self.polars:
@@ -917,7 +960,7 @@ class polarGraph:
             if (polar == rootPolar):
                 ax.plot(x, y, marker='o',color=cl_infotext)
                 ax.annotate('maxSpeed (root) @ Cl = %.2f, Cd = %.4f' % (y, x),
-                 xy=(x,y), xytext=(20,0), textcoords='offset points',
+                 xy=(x,y), xytext=(20,10), textcoords='offset points',
                       fontsize = fs_infotext, color=cl_infotext)
             else:
                 ax.plot(x, y, 'ro')
@@ -989,6 +1032,9 @@ class polarGraph:
         # set y-axis manually
         ax.set_ylim(min(rootPolar.CL) - 0.1, max(rootPolar.CL) + 0.2)
 
+        # plot horizontal line where polar changes from T1 to T2
+        self.plotPolarChange(ax, rootPolar)
+
         # all polars
         for polar in self.polars:
             # plot CL, alpha
@@ -1004,7 +1050,7 @@ class polarGraph:
             if (polar == rootPolar):
                 ax.annotate('maxSpeed (root) @ alpha = %.2f, Cl = %.2f' %\
                   (x, y), xy=(x,y),
-                  xytext=(40,0), textcoords='offset points',
+                  xytext=(40,10), textcoords='offset points',
                   fontsize = fs_infotext, color=cl_infotext)
 
             # plot max Glide
@@ -1087,6 +1133,12 @@ class polarGraph:
         # set y-axis manually
         ax.set_ylim(min(rootPolar.CL_CD) - 10, max(rootPolar.CL_CD) + 10)
 
+        if (rootPolar.Cl_switchpoint_Type2_Type1_polar != 999999):
+            # plot vertical line where polar changes from T1 to T2
+            ylimits = ax.get_ylim()
+            ax.axvline(x=rootPolar.Cl_switchpoint_Type2_Type1_polar,
+                              ymin = ylimits[0], ymax = ylimits[1],
+                              color = cl_polar_change)
         # all polars
         for polar in self.polars:
             # plot CL/CD, alpha
@@ -1196,6 +1248,7 @@ class polarData:
         self.airfoilname = "airfoil"
         self.polarType = 2
         self.Re = 0
+        self.maxRe = 0
         self.NCrit = 9.0
         self.alpha = []
         self.CL = []
@@ -1219,6 +1272,7 @@ class polarData:
         self.pre_maxLift_idx = 0
         self.pre_alpha_maxLift = 0.0
         self.operatingConditions = None
+        self.Cl_switchpoint_Type2_Type1_polar = 999999
 
     def addOperatingConditions(self, opConditions):
         self.operatingConditions = opConditions.copy()
@@ -1274,7 +1328,7 @@ class polarData:
         print("done.\n")
 
 
-    def merge(self, mergePolar_1, switching_Cl):
+    def merge(self, mergePolar_1, switching_Cl, maxRe):
         print ("merging polars at Cl = %s.." % switching_Cl)
 
         # create a new, empty polar
@@ -1285,6 +1339,8 @@ class polarData:
         mergedPolar.polarType = self.polarType
         mergedPolar.Re = self.Re
         mergedPolar.NCrit = self.NCrit
+        mergedPolar.Cl_switchpoint_Type2_Type1_polar = switching_Cl
+        mergedPolar.maxRe = maxRe
 
         # merge first polar from start Cl to switching_Cl
         for idx in range(len(mergePolar_1.CL)):
@@ -1916,7 +1972,7 @@ if __name__ == "__main__":
                               (inputFilename, rootfoilName, airfoilName, maxRe)
 
         # compose string for system-call of XFOIL-worker for T2-polar generation
-        inputFilename = getPresetInputFileName(T1_polarInputFile)
+        inputFilename = getPresetInputFileName(T2_polarInputFile)
         systemString_T2 = "xfoil_worker.exe -i %s -o %s -w polar -a %s -r %d" %\
                                  (inputFilename, rootfoilName, airfoilName, Re)
 
@@ -1939,7 +1995,8 @@ if __name__ == "__main__":
         params.T1_polars.append(newPolar_T2)
 
         # merge t1/t2 polars at Cl switching-point
-        mergedPolar = newPolar_T2.merge(newPolar_T1, params.Cl_switchpoint_Type2_Type1_polar)
+        mergedPolar = newPolar_T2.merge(newPolar_T1,
+                         params.Cl_switchpoint_Type2_Type1_polar, maxRe)
 
         # analyze merged polar
         mergedPolar.analyze()
