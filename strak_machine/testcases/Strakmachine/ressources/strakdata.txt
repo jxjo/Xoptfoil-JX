@@ -13,6 +13,7 @@
       "maxGlideLoss": 0.008,
       "maxSpeedGain": 0.5,
       "maxLiftGain": 0.3,
+      "maxReFactor": 2.5,
       "ReNumbers": [
             220000,
             190000, 

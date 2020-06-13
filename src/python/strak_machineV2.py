@@ -35,6 +35,10 @@ presetsPath = 'ressources' + bs + 'presets'
 imagesPath = 'ressources' + bs + 'images'
 logoName = 'strakmachine.png'
 
+# fixed filenames
+T1_polarInputFile = 'iPolars_T1.txt'
+T2_polarInputFile = 'iPolars_T2.txt'
+
 # fonts
 csfont = {'fontname':'Segoe Print'}
 
@@ -779,9 +783,13 @@ class strakData:
         self.chordLengths = []
         self.maxReFactor = 3.0
         self.maxReNumbers = []
-        self.Cl_switchpoint_Type2_Type1_polar = []
+        self.Cl_switchpoint_Type2_Type1_polar = 0.05
         self.polarFileNames = []
+        self.polarFileNames_T1 = []
+        self.polarFileNames_T2 = []
         self.inputFileNames = []
+        self.T1_polars = []
+        self.T2_polars = []
         self.polars = []
         self.targetPolars = []
         self.maxGlideLoss = 0.008
@@ -1265,8 +1273,45 @@ class polarData:
         fileHandle.close()
         print("done.\n")
 
-    def merge(self, mergePolar, Cl):
-        print ("merge")
+
+    def merge(self, mergePolar_1, switching_Cl):
+        print ("merging polars at Cl = %s.." % switching_Cl)
+
+        # create a new, empty polar
+        mergedPolar = polarData()
+
+        # copy some information form mergePolar_1
+        mergedPolar.airfoilname = self.airfoilname
+        mergedPolar.polarType = self.polarType
+        mergedPolar.Re = self.Re
+        mergedPolar.NCrit = self.NCrit
+
+        # merge first polar from start Cl to switching_Cl
+        for idx in range(len(mergePolar_1.CL)):
+            if (mergePolar_1.CL[idx] <= switching_Cl):
+                mergedPolar.alpha.append(mergePolar_1.alpha[idx])
+                mergedPolar.CL.append(mergePolar_1.CL[idx])
+                mergedPolar.CD.append(mergePolar_1.CD[idx])
+                mergedPolar.CL_CD.append(mergePolar_1.CL_CD[idx])
+                mergedPolar.CDp.append(mergePolar_1.CDp[idx])
+                mergedPolar.Cm.append(mergePolar_1.Cm[idx])
+                mergedPolar.Top_Xtr.append(mergePolar_1.Top_Xtr[idx])
+                mergedPolar.Bot_Xtr.append(mergePolar_1.Bot_Xtr[idx])
+
+        # merge second polar from switching_Cl to end Cl
+        for idx in range(len(self.CL)):
+            if (self.CL[idx] > switching_Cl):
+                mergedPolar.alpha.append(self.alpha[idx])
+                mergedPolar.CL.append(self.CL[idx])
+                mergedPolar.CD.append(self.CD[idx])
+                mergedPolar.CL_CD.append(self.CL_CD[idx])
+                mergedPolar.CDp.append(self.CDp[idx])
+                mergedPolar.Cm.append(self.Cm[idx])
+                mergedPolar.Top_Xtr.append(self.Top_Xtr[idx])
+                mergedPolar.Bot_Xtr.append(self.Bot_Xtr[idx])
+
+        print("done.\n")
+        return mergedPolar
 
 
     def determineMaxSpeed(self):
@@ -1844,40 +1889,66 @@ if __name__ == "__main__":
 
     idx = 0
     # create polars, polar-file-Names and input-file-names from Re-Numbers
-    for Re in params.ReNumbers:
-        # create polar-file-Name from Re-Number
-        polarFileName = "T2_Re0.%03d_M0.00_N9.0.txt" % (Re/1000)
-        polarFileNameAndPath = polarDir + bs + polarFileName
-        params.polarFileNames.append(polarFileNameAndPath)
+    for ReIdx in range(len(params.ReNumbers)):
+        # get Re, maxRe
+        Re = params.ReNumbers[ReIdx]
+        maxRe = params.maxReNumbers[ReIdx]
 
-        # generate inputfilename
+        # create polar-file-Name T1-polar from maxRe-Number
+        polarFileName_T1 = "T1_Re0.%03d_M0.00_N9.0.txt" % (maxRe/1000)
+        polarFileNameAndPath_T1 = polarDir + bs + polarFileName_T1
+        params.polarFileNames_T1.append(polarFileNameAndPath_T1)
+
+        # create polar-file-Name T2-polar from Re-Number
+        polarFileName_T2 = "T2_Re0.%03d_M0.00_N9.0.txt" % (Re/1000)
+        polarFileNameAndPath_T2 = polarDir + bs + polarFileName_T2
+        params.polarFileNames_T2.append(polarFileNameAndPath_T2)
+
+        # generate inputfilename from Re-number
         inputFilename = params.strakInputFileName.strip('.txt')
         inputFilename = inputFilename + ("_%03dk.txt" % (Re/1000))
         params.inputFileNames.append(inputFilename)
 
-        # compose string for system-call of XFOIL-worker
+        # compose string for system-call of XFOIL-worker for T1-polar generation
         airfoilName = workingDir + bs + rootfoilName + '.dat'
-        inputFilename = getPresetInputFileName(params.strakType)
+        inputFilename = getPresetInputFileName(T1_polarInputFile)
+        systemString_T1 = "xfoil_worker.exe -i %s -o %s -w polar -a %s -r %d" %\
+                              (inputFilename, rootfoilName, airfoilName, maxRe)
 
-        systemString = "xfoil_worker.exe -i %s -o %s -w polar -a %s -r %d" % (
-                        inputFilename, rootfoilName, airfoilName, Re)
+        # compose string for system-call of XFOIL-worker for T2-polar generation
+        inputFilename = getPresetInputFileName(T1_polarInputFile)
+        systemString_T2 = "xfoil_worker.exe -i %s -o %s -w polar -a %s -r %d" %\
+                                 (inputFilename, rootfoilName, airfoilName, Re)
 
-        print("Generating polar %s" % polarFileName)
-
-        # execute xfoil-worker / create polar-file
+        # execute xfoil-worker / create T1 / T2 polar-files
         if (not params.skipPolarGeneration):
-            os.system(systemString)
+            print("Generating polar %s" % polarFileName_T1)
+            os.system(systemString_T1)
 
-        # import polar
-        newPolar = polarData()
-        newPolar.importFromFile(polarFileNameAndPath)
-        newPolar.analyze()
+            print("Generating polar %s" % polarFileName_T2)
+            os.system(systemString_T2)
 
-        # add polar to params
-        params.polars.append(newPolar)
+        # import polar type 1
+        newPolar_T1 = polarData()
+        newPolar_T1.importFromFile(polarFileNameAndPath_T1)
+        params.T1_polars.append(newPolar_T1)
 
-        # also add polar to graph
-        graph.addPolar(newPolar)
+        # import polar type 2
+        newPolar_T2 = polarData()
+        newPolar_T2.importFromFile(polarFileNameAndPath_T2)
+        params.T1_polars.append(newPolar_T2)
+
+        # merge t1/t2 polars at Cl switching-point
+        mergedPolar = newPolar_T2.merge(newPolar_T1, params.Cl_switchpoint_Type2_Type1_polar)
+
+        # analyze merged polar
+        mergedPolar.analyze()
+
+        # add merged polar to params
+        params.polars.append(mergedPolar)
+
+        # also add merged polar to graph
+        graph.addPolar(mergedPolar)
 
         if (params.operatingMode == 'targetPolar'):
             # add target polar for all airfoils that are not the root-airfoil
