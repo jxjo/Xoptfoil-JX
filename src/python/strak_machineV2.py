@@ -433,10 +433,6 @@ class inputFile:
         except:
                 print("opPoint \"keepGlide\" was skipped")
 
-        # set new OpPoint / target-value for alphaMaxGlide
-        self.changeOpPoint("alphaMaxGlide", AlphaMaxGlide)
-        self.changeTargetValue("alphaMaxGlide", CL_maxGlide)
-
 
     def adaptReNumbers(self, polarData):
         # get operating-conditions
