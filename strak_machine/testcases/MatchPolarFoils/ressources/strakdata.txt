@@ -1,0 +1,21 @@
+{
+      "strakType": "Generic", 
+      "batchfileName": "match_polarfoils.bat", 
+      "outputFolder": "build", 
+      "strakInputFileName": "istrak.txt", 
+      "seedFoilName": "rg15", 
+      "matchPolarFoilName": "SD",
+      "useAlwaysRootfoil": "false",
+      "skipPolarGeneration": "false",
+      "generateBatchfile": "true", 
+      "adaptInitialPerturb": "true",
+      "inputFolder": "ressources", 
+      "operatingMode": "matchpolarfoils",
+      "maxGlideLoss": 0.008,
+      "maxSpeedGain": 0.5,
+      "maxLiftGain": 0.3,
+      "maxReFactor": 2.5,
+      "ReNumbers": [
+            220000
+      ] 
+}
