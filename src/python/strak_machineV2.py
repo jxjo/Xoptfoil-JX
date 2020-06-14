@@ -360,37 +360,22 @@ class inputFile:
     def adaptMaxLift(self, polarData):
         # get new values from polar
         alphaMaxLift = polarData.alpha_maxLift
-        preAlphaMaxLift = polarData.pre_alpha_maxLift
+        pre_CL_MaxLift = polarData.pre_CL_maxLift
 
         # set new values
         self.changeOpPoint("alphaClmax", alphaMaxLift)
         self.adaptTargetValueToPolar("alphaClmax", polarData)
 
-        self.changeOpPoint("preClmax", preAlphaMaxLift)
+        self.changeOpPoint("preClmax", pre_CL_MaxLift)
         self.adaptTargetValueToPolar("preClmax", polarData)
-
 
 
     def adaptMaxSpeed(self, polarData):
         # get new values from polar
         CL_maxSpeed = polarData.CL_maxSpeed
 
-        # calculate difference (=shift-value)
-        diff = CL_maxSpeed - self.getOpPoint("maxSpeed")
-
-        # create List of opPoints to be affected. These oppoints will be
-        # "shifted", according to the calculated difference
-        opPointList = ['preSpeed', 'maxSpeed', 'keepSpeed']
-
-        # shift all opPoints according to the difference
-        self.shiftOpPoints(diff, opPointList)
-
-        # now adapt target-values of shifted opPoints to polar
-        for opPointName in opPointList:
-            try:
-                self.adaptTargetValueToPolar(opPointName, polarData)
-            except:
-                print("opPoint %s was skipped" % opPointName)
+        self.changeOpPoint('maxSpeed', CL_maxSpeed)
+        self.adaptTargetValueToPolar("maxSpeed", polarData)
 
 
     # adapts Max-Glide and dependend values to given polar
@@ -399,39 +384,109 @@ class inputFile:
         AlphaMaxGlide = polarData.alpha_maxGlide
         CL_maxGlide = polarData.CL_maxGlide
 
-        # calculate difference (=shift-value)
-        diff = CL_maxGlide - self.getOpPoint("maxGlide")
-
-        # create List of opPoints to be affected. These oppoints will be
-        # "shifted", according to the calculated difference
-        opPointList = ['helperPreGlide', 'maxGlide', 'slopeMaxGlide',
-                       'helperKeepGlide']
-
-        # shift all opPoints according to the difference
-        self.shiftOpPoints(diff, opPointList)
-
-        # now adapt target-values of shifted opPoints to polar
-        for opPointName in opPointList:
-            try:
-                self.adaptTargetValueToPolar(opPointName, polarData)
-            except:
-                print("opPoint %s was skipped" % opPointName)
+        # set new op-Points and target-values
+        self.changeOpPoint('maxGlide', CL_maxGlide)
+        self.adaptTargetValueToPolar("maxGlide", polarData)
 
         try:
-            # shift the "pre glide" oppoint and adapt to polar
-            newPreGlide = (polarData.CL_maxSpeed/3) + ((2*polarData.CL_maxGlide)/3)
-            self.changeOpPoint('preGlide', newPreGlide)
-            self.adaptTargetValueToPolar('preGlide', polarData)
+            self.changeOpPoint('alphaMaxGlide', AlphaMaxGlide)
+            self.adaptTargetValueToPolar("alphaMaxGlide", polarData)
         except:
-                print("opPoint \"preGlide\" was skipped")
+            pass
 
         try:
-            # also shift the "keep glide" oppoint and adapt to polar
-            newKeepGlide = (polarData.CL_maxGlide + polarData.pre_CL_maxLift)/2
-            self.changeOpPoint('keepGlide', newKeepGlide)
-            self.adaptTargetValueToPolar('keepGlide', polarData)
+            self.changeOpPoint('slopeMaxGlide',CL_maxGlide)
         except:
-                print("opPoint \"keepGlide\" was skipped")
+            pass
+
+    # distributes all intermediate-oppoints equally
+    def distributeIntermediateOppoints(self, polarData):
+        # get operating-conditions
+        operatingConditions = self.values["operating_conditions"]
+        numOpPoints = len(operatingConditions["op_point"])
+
+        idx_maxSpeed = -1
+        idx_maxGlide = -1
+        idx_preClmax = -1
+        # number of deltas between 'maxSpeed' and 'maxGlide'
+        num_AfterMaxSpeed = 0
+        # number of deltas between 'maxGlide' and 'preClmax'
+        num_AfterMaxGlide = 0
+
+        # find out idx and target-values of fixed op-points
+        for idx in range(numOpPoints):
+            name = operatingConditions["name"][idx]
+            op_mode = operatingConditions["op_mode"][idx]
+            op_type = operatingConditions["optimization_type"][idx]
+
+            if name == 'maxSpeed':
+                idx_maxSpeed = idx
+                opPoint_maxSpeed = operatingConditions["op_point"][idx]
+            elif name == 'maxGlide':
+                idx_maxGlide = idx
+                opPoint_maxGlide = operatingConditions["op_point"][idx]
+            elif name == 'preClmax':
+                idx_preClmax = idx
+                opPoint_preClmax = operatingConditions["op_point"][idx]
+
+            if (idx_maxSpeed > -1) and (idx_maxGlide == -1):
+                # count all spec-cl op-points between maxSpeed and maxGlide
+                if (op_mode == 'spec-cl') and (op_type != 'min-glide-slope'):
+                    num_AfterMaxSpeed = num_AfterMaxSpeed + 1
+
+            elif (idx_maxGlide > -1) and (idx_preClmax == -1):
+                if (op_mode == 'spec-cl') and (op_type != 'min-glide-slope'):
+                    num_AfterMaxGlide = num_AfterMaxGlide + 1
+
+        # calculate the delta-values
+        diff_maxSpeed = (opPoint_maxGlide - opPoint_maxSpeed)/num_AfterMaxSpeed
+        diff_maxGlide = (opPoint_preClmax - opPoint_maxGlide)/num_AfterMaxGlide
+
+        # distribute all 'spec-cl' opPoints before maxSpeed equally
+        num = 1
+        start = idx_maxSpeed-1
+        end = -1
+
+        # loop backwards
+        for idx in range(start, end, -1):
+            op_mode = operatingConditions["op_mode"][idx]
+            op_type = operatingConditions["optimization_type"][idx]
+
+            if (op_mode == 'spec-cl') and (op_type != 'min-glide-slope'):
+                operatingConditions["op_point"][idx] = opPoint_maxSpeed - (num*diff_maxSpeed)
+                name = operatingConditions["name"][idx]
+                self.adaptTargetValueToPolar(name, polarData)
+                num = num + 1
+
+        # distribute all 'spec-cl' opPoints between maxSpeed and maxGlide equally
+        num = 1
+        start = idx_maxSpeed + 1
+        end = idx_maxGlide
+
+        for idx in range(start, end):
+            op_mode = operatingConditions["op_mode"][idx]
+            op_type = operatingConditions["optimization_type"][idx]
+
+            if (op_mode == 'spec-cl') and (op_type != 'min-glide-slope'):
+                operatingConditions["op_point"][idx] = opPoint_maxSpeed + (num*diff_maxSpeed)
+                name = operatingConditions["name"][idx]
+                self.adaptTargetValueToPolar(name, polarData)
+                num = num + 1
+
+        # distribute all 'spec-cl' opPoints between maxGlide and preClmax equally
+        num = 1
+        start = idx_maxGlide + 1
+        end = idx_preClmax
+
+        for idx in range(start, end):
+            op_mode = operatingConditions["op_mode"][idx]
+            op_type = operatingConditions["optimization_type"][idx]
+
+            if (op_mode == 'spec-cl') and (op_type != 'min-glide-slope'):
+                operatingConditions["op_point"][idx] = opPoint_maxGlide + (num*diff_maxGlide)
+                name = operatingConditions["name"][idx]
+                self.adaptTargetValueToPolar(name, polarData)
+                num = num + 1
 
 
     def adaptReNumbers(self, polarData):
@@ -647,6 +702,9 @@ class inputFile:
         self.adaptMaxLift(polarData)
         # adapt maxGlide and dependend values to polar
         self.adaptMaxGlide(polarData)
+
+        # distribute oppoints in between
+        self.distributeIntermediateOppoints(polarData)
 
         # adapt Re-numbers for Type2 / Type1 oppoints
         self.adaptReNumbers(polarData)
@@ -869,10 +927,11 @@ class polarGraph:
             numOpPoints = len(operatingConditions["op_point"])
 
         for idx in range(numOpPoints):
-            # get op-mode
+            # get op-mode and type
             op_mode = operatingConditions["op_mode"][idx]
+            op_type = operatingConditions["optimization_type"][idx]
 
-            if (op_mode == 'spec-cl'):
+            if (op_mode == 'spec-cl') and (op_type != 'min-glide-slope'):
 
                 # get CD from target-value
                 x = operatingConditions["target_value"][idx]
@@ -1087,13 +1146,15 @@ class polarGraph:
             numOpPoints = len(operatingConditions["op_point"])
 
         for idx in range(numOpPoints):
-            # get op-mode
+            # get op-mode and -type
             op_mode = operatingConditions["op_mode"][idx]
+            op_type = operatingConditions["optimization_type"][idx]
 
-            if (op_mode == 'spec-cl'):
+            if (op_mode == 'spec-cl') and (op_type != 'min-glide-slope'):
                 # get CL
                 x = operatingConditions["op_point"][idx]
-
+                name = operatingConditions["name"][idx]
+                print (name)
                 # get CD from target-value
                 Cd = operatingConditions["target_value"][idx]
 
@@ -1387,7 +1448,7 @@ class polarData:
 
         # also calculate opPoint before MaxLift that can be reached by the
         # optimizer
-        self.pre_CL_maxLift = self.CL_maxLift * 0.975
+        self.pre_CL_maxLift = self.CL_maxLift * 0.95
         self.pre_maxLift_idx = self.find_index(self.pre_CL_maxLift)
         self.pre_alpha_maxLift = self.alpha[self.pre_maxLift_idx]
 
@@ -1405,7 +1466,16 @@ class polarData:
 
     def find_CD(self, CL):
         # calculate corresponding CD
-        CD = np.interp( CL, self.CL, self.CD)
+        # reduce list of CL, CD-values up to CL_max. No duplicate CL-values are
+        # allowed!
+        x = []
+        y = []
+        for i in range(self.maxLift_idx):
+            x.append(self.CL[i])
+            y.append(self.CD[i])
+
+        # interpolate the values
+        CD = np.interp( CL, x, y)
         return CD
 
     def find_index(self, CL):
@@ -1415,18 +1485,32 @@ class polarData:
         return 0
 
     def find_CL(self, alpha):
+        # reduce list of CL, alpha-values up to CL_max. No duplicate CL-values
+        # are allowed!
+        x = []
+        y = []
+        for i in range(self.maxLift_idx):
+            x.append(self.alpha[i])
+            y.append(self.CL[i])
+
         # calculate corresponding CL
-        CL = np.interp( alpha, self.alpha, self.CL)
+        CL = np.interp( alpha, x, y)
         return CL
 
     def find_CL_CD(self, CL):
         # calculate corresponding CL_CD
-        #CL_CD = np.interp( CL, self.CL, self.CL_CD)
-        for i in range(len(self.CL)):
-            if (self.CL[i] > CL):
-                print (CL, self.CL[i], self.CL_CD[i], i)
-                return self.CL_CD[i]
-        return 0.0
+        # reduce list of CL, CL_CD-values up to CL_max. No duplicate CL-values are
+        # allowed!
+        x = []
+        y = []
+        for i in range(self.maxLift_idx):
+            x.append(self.CL[i])
+            y.append(self.CL_CD[i])
+
+        # interpolate the values
+        CL_CD = np.interp(CL, x, y)
+        return CL_CD
+
 
 
 ################################################################################
