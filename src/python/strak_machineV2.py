@@ -861,22 +861,28 @@ class polarGraph:
         ax.set_axis_off()
 
     def plotLiftDragOptimizationPoints(self, ax, polar):
-        if (polar.operatingConditions != None):
-            idx = 0
+        # check if there are operationg-conditions available
+        if (polar.operatingConditions == None):
+            return
+        else:
             operatingConditions = polar.operatingConditions
-            validNames = ['preSpeed', 'maxSpeed', 'keepSpeed']
+            numOpPoints = len(operatingConditions["op_point"])
 
-            for Name in operatingConditions["name"]:
-                for validName in validNames:
-                    if (Name == validName):
-                        # get CD
-                        x = operatingConditions["target_value"][idx]
-                        # get CL
-                        y = operatingConditions["op_point"][idx]
-                        # do not plot, if target-value is -1
-                        if (x != -1):
-                            ax.plot(x, y, 'y.')
-                idx = idx + 1
+        for idx in range(numOpPoints):
+            # get op-mode
+            op_mode = operatingConditions["op_mode"][idx]
+
+            if (op_mode == 'spec-cl'):
+
+                # get CD from target-value
+                x = operatingConditions["target_value"][idx]
+
+                # get CL
+                y = operatingConditions["op_point"][idx]
+
+                # plot
+                ax.plot(x, y, 'y.')
+
 
     def plotPolarChange(self, ax, rootPolar):
         if (rootPolar.Cl_switchpoint_Type2_Type1_polar != 999999):
@@ -978,16 +984,28 @@ class polarGraph:
             y = polar.CL[polar.maxLift_idx]
             ax.plot(x, y, 'yo')
 
+
     def plotLiftOverAlphaOptimizationPoints(self, ax, polar):
-        if (polar.operatingConditions != None):
-            idx = 0
+        # check if there are operationg-conditions available
+        if (polar.operatingConditions == None):
+            return
+        else:
             operatingConditions = polar.operatingConditions
-            for optimization_type in operatingConditions["optimization_type"]:
-                if (optimization_type == 'target-lift'):
-                    x = operatingConditions["op_point"][idx]
-                    y = operatingConditions["target_value"][idx]
-                    ax.plot(x, y, 'y.')
-                idx = idx +1
+            numOpPoints = len(operatingConditions["op_point"])
+
+        for idx in range(numOpPoints):
+            # get op-mode
+            op_mode = operatingConditions["op_mode"][idx]
+
+            if (op_mode == 'spec-al'):
+                # get CL
+                x = operatingConditions["op_point"][idx]
+
+                # get alpha from target-value
+                y = operatingConditions["target_value"][idx]
+
+                # plot
+                ax.plot(x, y, 'y.')
 
 
     def plotLiftOverAlphaPolar(self, ax):
@@ -1007,8 +1025,6 @@ class polarGraph:
         for polar in self.polars:
             # plot CL, alpha
             ax.plot(polar.alpha, polar.CL, 'b-')
-
-            self.plotLiftOverAlphaOptimizationPoints(ax, polar)
 
             # plot max Speed
             x = polar.alpha[polar.maxSpeed_idx]
@@ -1043,15 +1059,9 @@ class polarGraph:
                   xytext=(-80,15), textcoords='offset points',
                   fontsize = fs_infotext, color=cl_infotext)
 
-        # all target polars
-        for polar in self.targetPolars:
-             # plot CL, alpha
-            ax.plot(polar.alpha, polar.CL, 'r-')
+        # plot optimization-points
+        self.plotLiftOverAlphaOptimizationPoints(ax, polar)
 
-            # plot max lift
-            x = polar.alpha[polar.maxLift_idx]
-            y = polar.CL[polar.maxLift_idx]
-            ax.plot(x, y, 'yo')
 
     def setAxesAndLabels(self, ax, title, xlabel, ylabel):
 
@@ -1068,27 +1078,30 @@ class polarGraph:
 
 
     def plotLiftDragOverLiftOptimizationPoints(self, ax, polar):
-        if (polar.operatingConditions != None):
-            idx = 0
-            operatingConditions = polar.operatingConditions
-            validNames = ['preSpeed','maxSpeed', 'keepSpeed', 'preGlide',
-                     'helperPreGlide','maxGlide','helperKeepGlide', 'keepGlide']
 
-            for Name in operatingConditions["name"]:
-                for validName in validNames:
-                    if (Name == validName):
-                        # get CL
-                        x = operatingConditions["op_point"][idx]
-                        #y = polar.find_CL_CD(x)
-                        # get CD
-                        Cd = operatingConditions["target_value"][idx]
-                        # do not plot if target-value is -1
-                        if (Cd != -1):
-                            # calculate Cl/Cd
-                            y = x/Cd
-                            ax.plot(x, y, 'y.')
+        # check if there are operationg-conditions available
+        if (polar.operatingConditions == None):
+            return
+        else:
+            operatingConditions =polar.operatingConditions
+            numOpPoints = len(operatingConditions["op_point"])
 
-                idx = idx + 1
+        for idx in range(numOpPoints):
+            # get op-mode
+            op_mode = operatingConditions["op_mode"][idx]
+
+            if (op_mode == 'spec-cl'):
+                # get CL
+                x = operatingConditions["op_point"][idx]
+
+                # get CD from target-value
+                Cd = operatingConditions["target_value"][idx]
+
+                # calculate Cl/Cd
+                y = x/Cd
+
+                # plot
+                ax.plot(x, y, 'y.')
 
 
     def plotLiftDragOverLiftPolar(self, ax):
