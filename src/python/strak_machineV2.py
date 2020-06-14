@@ -805,12 +805,6 @@ class strakData:
         return params.ReNumbers
 
 
-   ############################################################################
-    # function that returns a list of max. Re-numbers
-    def get_maxReList(params):
-        return params.ReNumbers
-
-
     ############################################################################
     # function that calculates dependend values
     def calculateDependendValues(self):
@@ -1548,8 +1542,11 @@ def get_FoilName(params, index):
     else:
         # compose foilname with seedfoilname and Re-number
         Re = params.ReNumbers[index]
-        # strip .dat ending
-        foilName = params.seedFoilName.strip('.dat')
+
+        if (params.operatingMode == 'matchpolarfoils'):
+            foilName = params.matchPolarFoilName.strip('.dat')
+        else:
+            foilName = params.seedFoilName.strip('.dat')
 
         if (index == 0):
             suffix = '-root'
@@ -1584,7 +1581,13 @@ def generate_commandlines(params):
     commandLines = []
 
     # do some initializations / set local variables
-    rootfoilName = get_FoilName(params, 0).strip('.dat') +'.dat'#TODO refactor
+    if (params.operatingMode != 'matchpolarfoils'):
+        rootfoilName = get_FoilName(params, 0).strip('.dat') +'.dat'
+        firstIdx = 1
+    else:
+        rootfoilName = params.seedFoilName.strip('.dat') +'.dat'
+        firstIdx = 0
+
     numFoils = get_NumberOfAirfoils(params)#TODO refactor
     ReList = params.get_ReList()
 
@@ -1592,11 +1595,12 @@ def generate_commandlines(params):
     commandline = "cd %s\n" % params.outputFolder
     commandLines.append(commandline)
 
-    # copy root-foil to airfoil-folder as it can be used
-    # as the root airfoil without optimization
-    commandline = ("copy %s %s" + bs + "%s\n") % \
-    (get_FoilName(params, 0), params.airfoilFolder, get_FoilName(params, 0))
-    commandLines.append(commandline)
+    if (params.operatingMode != 'matchpolarfoils'):
+        # copy root-foil to airfoil-folder as it can be used
+        # as the root airfoil without optimization
+        commandline = ("copy %s %s" + bs + "%s\n") % \
+        (get_FoilName(params, 0), params.airfoilFolder, get_FoilName(params, 0))
+        commandLines.append(commandline)
 
     # store rootfoilname
     strakFoilName = rootfoilName
@@ -1604,7 +1608,7 @@ def generate_commandlines(params):
 
     # add command-lines for each strak-airfoil
     # skip the root airfoil (as it was already copied)
-    for i in range (1, numFoils):
+    for i in range (firstIdx, numFoils):
 
         if (params.useAlwaysRootfoil == False):
             # store previous airfoil-name
@@ -1654,7 +1658,13 @@ def generate_batchfile(batchFileName, commandlines):
 
 
 def generate_visu_batchfiles(params):
-    for i in range(1, len(params.ReNumbers)):
+   # determine start-index
+    if (params.operatingMode == 'matchpolarfoils'):
+        startidx = 0
+    else:
+        startidx = 1
+
+    for i in range(startidx, len(params.ReNumbers)):
         visuFileName = "visu_%dk.bat" % (params.ReNumbers[i]/1000)
         airfoilName = get_FoilName(params, i).strip('.dat')
 
@@ -1765,16 +1775,17 @@ def getParameters(dict):
     if (params.operatingMode == 'matchpolarfoils'):
         try:
             params.matchPolarFoilName = dict["matchPolarFoilName"].strip('.dat')
+            params.useAlwaysRootfoil = True
         except:
             print ('matchPolarFoilName not specified')
-
-    try:
-        if (dict["useAlwaysRootfoil"] == 'true'):
-            params.useAlwaysRootfoil = True
-        else:
-            params.useAlwaysRootfoil = False
-    except:
-        print ('useAlwaysRootfoil not specified')
+    else:
+        try:
+            if (dict["useAlwaysRootfoil"] == 'true'):
+                params.useAlwaysRootfoil = True
+            else:
+                params.useAlwaysRootfoil = False
+        except:
+            print ('useAlwaysRootfoil not specified')
 
     try:
         if (dict["adaptInitialPerturb"] == 'true'):
@@ -1836,6 +1847,32 @@ def getwingDataFromXML(params):
     # return data
     return planeData[0]
 
+def copy_matchpolarfoil(params):
+    foilName = params.matchPolarFoilName + '.dat'
+
+    print("copying matchPolarFoil \'%s\' to %s\n" % \
+                       (foilName, params.outputFolder))
+
+    foilNameAndPath = ".." + bs + params.inputFolder + bs + foilName
+
+    # compose system-string for copying
+    systemString = ("copy %s %s\n") % (foilNameAndPath, foilName)
+    os.system(systemString)
+
+    foilName = params.seedFoilName + '.dat'
+
+    print("copying seedfoil \'%s\' to %s\n" % \
+                       (foilName, params.outputFolder))
+
+    foilNameAndPath = ".." + bs + params.inputFolder + bs + foilName
+
+    # compose system-string for copying
+    systemString = ("copy %s %s\n") % (foilNameAndPath, foilName)
+    os.system(systemString)
+
+    print("Done.")
+    return params.matchPolarFoilName
+
 
 def generate_rootfoil(params):
     # get name of seed-airfoil
@@ -1876,45 +1913,45 @@ def generate_inputFiles(params):
         # create new inputfile
         newFile = inputFile(params.strakType)
 
-        # as a first step always adapt op-points according to polar of
-        # root-airfoil
-        newFile.adaptAllOppointsToPolar(params.polars[0])
+        if (params.operatingMode == 'matchpolarfoils'):
+          # adapt op-points according to polar of match-polar-foil
+            newFile.adaptAllOppointsToPolar(params.polars[i])
+##            # special mode 'target-polar'
+##            if (params.operatingMode == 'targetPolar'):
+##                # completely exchange oppoints of inputfile
+##                newFile.SetOppointsFromPolar(params.targetPolars[(i-1)], 10)
+        else:
+            # as a first step always adapt op-points according to polar of
+            # root-airfoil
+            newFile.adaptAllOppointsToPolar(params.polars[0])
 
-        # as a second step,change oppoints again, but only "shift" them
-        # matching the polar of the strak-airfoil
-        if (i>0):
+            # as a second step,change oppoints again, but only "shift" them
+            # matching the polar of the strak-airfoil
             newFile.transferOppointsKeepShape(params, params.polars[i])
 
-            if params.adaptInitialPerturb:
-                # also adapt the initial perturb according to the change in
-                # Re-number
-                if (params.useAlwaysRootfoil):
-                    # difference always calculated to Re-number of root-airfoil
-                    ReDiff = params.ReNumbers[0] - params.ReNumbers[i]
-                else:
-                    # difference calculated to Re-number of previous-airfoil
-                    ReDiff = params.ReNumbers[i-1] - params.ReNumbers[i]
+        if params.adaptInitialPerturb:
+            # also adapt the initial perturb according to the change in
+            # Re-number
+            if (params.useAlwaysRootfoil):
+                # difference always calculated to Re-number of root-airfoil
+                ReDiff = params.ReNumbers[0] - params.ReNumbers[i]
+            else:
+                # difference calculated to Re-number of previous-airfoil
+                ReDiff = params.ReNumbers[i-1] - params.ReNumbers[i]
 
-                newFile.setInitialPerturb(ReDiff)
+            newFile.setInitialPerturb(ReDiff)
 
         # copy operating-conditions to polar, so they can be plotted in the graph
         opConditions = newFile.getOperatingConditions()
         params.polars[i].addOperatingConditions(opConditions)
 
-        # special mode 'target-polar'
-        if (params.operatingMode == 'targetPolar'):
-            # completely exchange oppoints of inputfile
-            newFile.SetOppointsFromPolar(params.targetPolars[(i-1)], 10)#TODO number of oppoints
-
-        # for all airfoils after the root-airfoil
-        if (i>0):
-            # physically create the file
-            newFile.writeToFile(params.inputFileNames[i])
+        # physically create the file
+        newFile.writeToFile(params.inputFileNames[i])
 
     print("Done.")
 
 
-def generate_polars(params, workingDir, rootfoilName):
+def generate_polars(params, workingDir, rootfoilName, graph):
 # generate polars of seedfoil / root-airfoil:
     print("Generating polars for airfoil %s..." % rootfoilName)
 
@@ -1971,7 +2008,7 @@ def generate_polars(params, workingDir, rootfoilName):
         newPolar_T2.importFromFile(polarFileNameAndPath_T2)
         params.T1_polars.append(newPolar_T2)
 
-        # merge t1/t2 polars at Cl switching-point
+        # merge T1/T2 polars at Cl switching-point
         mergedPolar = newPolar_T2.merge(newPolar_T1,
                          params.Cl_switchpoint_Type2_Type1_polar, maxRe)
 
@@ -2053,14 +2090,14 @@ if __name__ == "__main__":
 
     # get name of root-airfoil according to operating-mode
     if (params.operatingMode == 'matchpolarfoils'):
-        rootfoilName = params.matchPolarFoilName
+        rootfoilName = copy_matchpolarfoil(params)
     else:
         rootfoilName = generate_rootfoil(params)
 
-    # generate polars of root-airfoil
-    generate_polars(params, workingDir, rootfoilName)
+    # generate polars of root-airfoil, also analyze and add to graph
+    generate_polars(params, workingDir, rootfoilName, graph)
 
-    # Generate input-Files
+    # generate input-Files
     generate_inputFiles(params)
 
     # generate Xoptfoil command-lines
