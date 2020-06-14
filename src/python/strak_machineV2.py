@@ -359,15 +359,17 @@ class inputFile:
 
     def adaptMaxLift(self, polarData):
         # get new values from polar
-        ClMaxLift = polarData.pre_CL_maxLift
-        CdMaxLift = polarData.CD[polarData.pre_maxLift_idx]
-        alphaMaxLift = polarData.pre_alpha_maxLift
+        alphaMaxLift = polarData.alpha_maxLift
+        preAlphaMaxLift = polarData.pre_alpha_maxLift
 
         # set new values
         self.changeOpPoint("alphaClmax", alphaMaxLift)
-        self.changeTargetValue("alphaClmax", ClMaxLift)
-        self.changeOpPoint("Clmax", ClMaxLift)
-        self.changeTargetValue("Clmax", CdMaxLift)
+        self.adaptTargetValueToPolar("alphaClmax", polarData)
+
+        self.changeOpPoint("preClmax", preAlphaMaxLift)
+        self.adaptTargetValueToPolar("preClmax", polarData)
+
+
 
     def adaptMaxSpeed(self, polarData):
         # get new values from polar
@@ -496,7 +498,7 @@ class inputFile:
 
         if (opPointType == 'spec-al'):
             # oppoint is alpha-value, get target-value from polar
-            targetValue = polar.find_alpha(opPointValue)
+            targetValue = polar.find_CL(opPointValue)
         else:
             # oppoint is Cl-value, get target-value from polar
             targetValue = polar.find_CD(opPointValue)
@@ -514,61 +516,54 @@ class inputFile:
     # will be calculated here, are a mixture between the polar of the root-
     # airfoil and the polar of the not optimized strak-airfoil.
     def transferMaxLift(self, params, polarData):
+        # assign the polars to local variables
+        root_polar = params.polars[0]
+        strak_polar = polarData
+
         try:
-            # assign the polars to local variables
-            root_polar = params.polars[0]
-            strak_polar = polarData
+            # 'preClmax'
+            # get root-polar-values
+            alpha_root = root_polar.pre_alpha_maxLift
 
-            # get Clmax-values of polars of root and strak-airfoil (in this case
-            # we take the "pre-" Cl-max values)
-            CL_maxLift_root = root_polar.pre_CL_maxLift
-            CL_maxLift_strak = strak_polar.pre_CL_maxLift
+            # get strak-polar-values
+            alpha_strak = strak_polar.pre_alpha_maxLift
 
-               # determine new value from "gain" (=improvement), a mixture of root
-            # polar and strak polar.
-            CL_maxLift_target = ((CL_maxLift_root * params.maxLiftGain) + # part coming from root-airfoil
-                          (CL_maxLift_strak * (1.0 - params.maxLiftGain)))# part coming from not optimized strak-airfoil
+            # calculate new value
+            target_alpha = ((alpha_root * params.maxLiftGain) +
+                             (alpha_strak * (1.0 - params.maxLiftGain)))
 
-            # now get the corresponding CL/Cd-value of root-airfoil for the new CL_maxLift
-            CL_CD_maxLift_target_root = root_polar.find_CL_CD(CL_maxLift_target)
+            # get according Cl from root-polar
+            target_CL = root_polar.find_CL(target_alpha)
 
-            # determine difference between root and strak airfoil (in CL/CD-graph)
-            CL_CD_maxLift_strak = strak_polar.find_CL_CD(CL_maxLift_strak)
-            CL_CD_root = root_polar.find_CL_CD(CL_maxLift_strak)
-            diff = CL_CD_root - CL_CD_maxLift_strak
-
-            # determine new CD_maxlift-target value
-            CL_CD_maxLift_target = CL_CD_maxLift_target_root - diff
-            CD_maxLift_target = CL_maxLift_target / CL_CD_maxLift_target
-
-            # set new oppoint in the inputfile
-            self.changeOpPoint("Clmax", CL_maxLift_target)
-            self.changeTargetValue("Clmax", CD_maxLift_target)
+            # set new values
+            self.changeOpPoint("preClmax", target_alpha)
+            self.changeTargetValue("preClmax", target_CL)
         except:
-            print("opPoint Clmax was skipped")
+            print("opPoint \'preClmax\' was skipped")
 
-##        try: #TODO not working properly
-##            # alphaClmax
-##            # get opPoint-values
-##            alpha_maxLift = self.getOpPoint("alphaClmax")
-##            CL_alpha_maxLift = self.getTargetValue("alphaClmax")
-##
-##            # get polar-values
-##            alpha_maxLift_Polar = polarData.alpha[polarData.maxLift_idx]
-##            CL_alpha_maxLift_Polar = polarData.CL[polarData.maxLift_idx]
-##
-##            # new value is value between root-polar and strak polar
-##            CL_alpha_maxLift = ((CL_alpha_maxLift * params.maxLiftGain) +
-##                                (CL_alpha_maxLift_Polar * (1.0 - params.maxLiftGain)))
-##
-##            alpha_maxLift = ((alpha_maxLift * params.maxLiftGain) +
-##                             (alpha_maxLift_Polar * (1.0 - params.maxLiftGain)))
-##
-##            # set new values
-##            self.changeOpPoint("alphaClmax", alpha_maxLift)
-##            self.changeTargetValue("alphaClmax", CL_alpha_maxLift)
-##        except:
-##            print("opPoint alphaClmax was skipped")
+        try:
+            # 'alphaClmax'
+            # get root-polar-values
+            alpha_root = root_polar.alpha_maxLift
+            CL_root = root_polar.CL_maxLift
+
+            # get strak-polar-values
+            alpha_strak = strak_polar.alpha_maxLift
+            CL_strak = strak_polar.CL_maxLift
+
+            # new value is value between root-polar and strak polar
+            target_CL = ((CL_root * params.maxLiftGain) +
+                                (CL_strak * (1.0 - params.maxLiftGain)))
+
+            target_alpha = ((alpha_root * params.maxLiftGain) +
+                             (alpha_strak * (1.0 - params.maxLiftGain)))
+
+            # set new values
+            self.changeOpPoint("alphaClmax", target_alpha)
+            self.changeTargetValue("alphaClmax", target_CL)
+
+        except:
+            print("opPoint \'alphaClmax\' was skipped")
 
 
     # all target-values will be scaled "downward" according
@@ -1081,7 +1076,7 @@ class polarGraph:
             idx = 0
             operatingConditions = polar.operatingConditions
             validNames = ['preSpeed','maxSpeed', 'keepSpeed', 'preGlide',
-                     'helperPreGlide','maxGlide','helperKeepGlide', 'keepGlide','Clmax']
+                     'helperPreGlide','maxGlide','helperKeepGlide', 'keepGlide']
 
             for Name in operatingConditions["name"]:
                 for validName in validNames:
