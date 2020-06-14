@@ -121,33 +121,24 @@ subroutine repanel_smooth (input_file, output_prefix, seed_foil, visualizer, do_
   logical, intent(in)               :: do_smoothing, visualizer
 
   double precision, dimension(:), allocatable :: xt, xb, zt, zb, zt_smoothed, zb_smoothed
-  integer :: npoint_paneling
   type (airfoil_type) :: foil_smoothed, foil
   type (xfoil_geom_options_type) :: geom_options
   character (250)  :: output_name
 
 ! Read inputs file to get xfoil paneling options  
 
+  write (*,*)
   call read_xfoil_paneling_inputs  (input_file, geom_options)
 
 ! Repanel seed airfoil with xfoil PANGEN 
 
-  npoint_paneling = geom_options%npan -1      ! one point will be added for LE
-
-  write (*,'(1x,A,I3,A)') 'Repaneling and normalizing with ',npoint_paneling,' Points'
-  call repanel_and_normalize_airfoil (seed_foil, npoint_paneling, foil)
+  call repanel_and_normalize_airfoil (seed_foil, geom_options%npan, foil)
 
 ! Now split and rebuild to add a real  LE point at 0,0 
 
   call split_airfoil   (foil, xt, xb, zt, zb, .false.)
   call rebuild_airfoil (xt, xb, zt, zb, foil)
   foil%name   = trim (seed_foil%name)//'-norm'
-
-  if (foil%addpoint_loc /= 0) then 
-    write (*,'(1x, A,I3,A)') 'Leading edge (0,0) added having now ',foil%npoint,' Points'
-  else
-    write (*,'(1x, A)')      'Set closest point to LE to become new leading edge at (0,0)'
-  end if
 
 ! Smooth it ?
 
@@ -156,22 +147,13 @@ subroutine repanel_smooth (input_file, output_prefix, seed_foil, visualizer, do_
     write(*,*)
     call read_smoothing_inputs (input_file, spike_threshold, highlow_treshold, curv_threshold)
 
-    write (*,*) 
-    write (*,'(1x,A)') 'Before smoothing ...'
-    call assess_surface ('Top', xt, zt)
-    call assess_surface ('Bot', xb, zb)
-
+    write (*,'(/,1x,A)') 'Smoothing Top surface ...'
     zt_smoothed = zt
+    call smooth_it (.true., xt, zt_smoothed) 
+
+    write (*,'(/,1x,A)') 'Smoothing Bottom surface ...'
     zb_smoothed = zb
-
-    call smooth_it (xt, zt_smoothed) 
-    call smooth_it (xb, zb_smoothed)
-    ! for testing: call write_polyline ('Top', size(xt), xt, zt)
-    ! for testing: call write_polyline ('Bot', size(xb), xb, zb)
-
-    write (*,'(1x,A)') 'After smoothing ...'
-    call assess_surface ('Top', xt, zt_smoothed)
-    call assess_surface ('Bot', xb, zb_smoothed)
+    call smooth_it (.true., xb, zb_smoothed)
 
   ! Rebuild foil and write to file
 
@@ -397,65 +379,6 @@ subroutine print_worker_usage()
 end subroutine print_worker_usage
 
 
-!===========================================================================
-! jx-mod Testing purposes 
-!===========================================================================
-
-subroutine test_set_thickness_camber (foil)
-
-  use vardef,    only : airfoil_type
-  use xfoil_driver,       only : xfoil_set_thickness_camber
-  use xfoil_driver,       only : xfoil_scale_thickness_camber
-  use airfoil_operations, only : airfoil_write
-
-  type(airfoil_type), intent(in) :: foil
-  double precision :: maxt, xmaxt, maxc, xmaxc
-  type(airfoil_type) :: outfoil
-
-  maxt = 9.d-2
-  xmaxt = 30.d-2
-  maxc = 2.5d-2
-  xmaxc = 45.d-2
-
-  ! Use Xfoil to smooth airfoil paneling
-  ! call smooth_paneling(foil, 200, foilsmoothed)
-
-  call xfoil_set_thickness_camber (foil, maxt, xmaxt, maxc, xmaxc, outfoil)
-
-end subroutine test_set_thickness_camber 
-
-
-subroutine test_set_LE_radius (foil)
-
-  use vardef,    only : airfoil_type, output_prefix
-  use xfoil_driver,       only : smooth_paneling
-  use xfoil_driver,       only : xfoil_scale_LE_radius
-  use airfoil_operations, only : airfoil_write
-
-  type(airfoil_type), intent(in) :: foil
-  double precision :: f_radius, x_blend
-  character(80) :: output_file
-  type(airfoil_type) ::foilsmoothed, outfoil
-  integer :: i
-  character(len=5) :: charI
-
-  f_radius  =  1.0d0
-  x_blend  =  0.1d0
-
-  ! Use Xfoil to smooth airfoil paneling
-  call smooth_paneling(foil, 200, foilsmoothed)
-
-  do i = 1, 6
-    call xfoil_scale_LE_radius (foilsmoothed, f_radius, x_blend, outfoil)
-    write (*,*) i, 'LE scaled by ', f_radius, '    x-blending  ', x_blend
-    write(charI,"(I0)") i
-    output_file = trim(output_prefix)//trim(charI) //'.dat'
-    call airfoil_write(output_file, trim(output_prefix)//trim(charI), outfoil)
-    f_radius  =  f_radius + 0.05d0
-    x_blend = x_blend + 0.0d0
-  end do 
-
-end subroutine test_set_LE_radius
 
 !-----------------------------------------------------------------------------
 ! Write a single polyline with its derivatives  to file 

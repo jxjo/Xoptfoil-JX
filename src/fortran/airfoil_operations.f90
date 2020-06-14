@@ -76,7 +76,7 @@ subroutine load_airfoil(filename, foil)
 
   use vardef,      only : airfoil_type
   use memory_util, only : allocate_airfoil
-  use os_util,     only : print_error
+  use os_util,     only : print_error, print_colored, COLOR_HIGH
 
 
   character(*), intent(in) :: filename
@@ -93,8 +93,9 @@ subroutine load_airfoil(filename, foil)
   end if 
 
   write(*,*)
-  write(*,*) 'Reading airfoil from file: '//trim(filename)//' ...'
-  write(*,*)
+  write (*,'(1x, A)', advance = 'no') 'Reading airfoil from file: '
+  call print_colored (COLOR_HIGH,trim(filename))
+  write (*,*)
 
 ! Read number of points and allocate coordinates
 
@@ -416,6 +417,8 @@ subroutine repanel_and_normalize_airfoil (seed_foil, npoint_paneling, foil)
   tmp_foil%npoint = npoint_paneling
 
   ! initial paneling to npoint_paneling
+  write (*,*)
+  write (*,'(1x,A,I3,A)') 'Repaneling and normalizing with ',npoint_paneling,' Points'
   call smooth_paneling(seed_foil, npoint_paneling, foil)
   call le_find(foil%x, foil%z, foil%leclose, foil%xle, foil%zle, foil%addpoint_loc)
 
@@ -465,6 +468,13 @@ subroutine repanel_and_normalize_airfoil (seed_foil, npoint_paneling, foil)
   else
     call print_warning ("Leading edge couln't be moved close to 0,0. Continuing ...")
   end if 
+
+  if (foil%addpoint_loc /= 0) then 
+    write (*,'(1x, A,I3,A)') 'Leading edge (0,0) added. Airfoil will have ',(npoint_paneling + 1),' Points'
+  else
+    write (*,'(1x, A)')      'Set closest point to LE to become new leading edge at (0,0)'
+  end if
+
 
 
 end subroutine repanel_and_normalize_airfoil
@@ -839,9 +849,9 @@ subroutine assess_surface (info, x, y)
   use vardef,    only:  curv_threshold, spike_threshold, highlow_treshold
 
   character(*), intent(in) :: info
-  double precision, dimension(:), intent(inout) :: x, y
+  double precision, dimension(:), intent(in) :: x, y
 
-  integer :: nhighlows, nspikes, nreversals
+  integer :: nhighlows, nspikes, nreversals, i_check_start
   character (size(x)) :: result_info
 
   nreversals = 0
@@ -850,8 +860,9 @@ subroutine assess_surface (info, x, y)
 
   result_info = repeat ('-', size(x) ) 
 
-  ! have a look at 3rd derivation ... skip first 5 points at LE (too special there) 
-  call find_curvature_spikes (size(x), 5, spike_threshold, x, y, nspikes, result_info)
+  ! have a look at 3rd derivation ... 
+  i_check_start  = 1              ! leave LE out from counting - too special there 
+  call find_curvature_spikes (size(x), i_check_start, spike_threshold, x, y, nspikes, result_info)
 
   ! have a look at 2nd derivation ... skip first 5 points at LE (too special there) 
   call find_curvature_reversals(size(x), 5, highlow_treshold, curv_threshold, x, y, &
@@ -956,73 +967,127 @@ end subroutine get_curv_violations
 !    delta = y_smoothed - y_original
 !------------------------------------------------------------------------------
 
-subroutine smooth_it (x, y)
+subroutine smooth_it (show_details, x, y)
 
   use math_deps, only : find_curvature_spikes
   use math_deps, only : smooth_it_Chaikin
   use vardef,    only:  spike_threshold
+  use os_util, only: COLOR_BAD, COLOR_GOOD, COLOR_NORMAL, COLOR_HIGH
+  use os_util, only: print_colored
 
-  double precision, dimension(:), intent(inout) :: x, y
+
+  logical, intent(in) :: show_details
+  double precision, dimension(:), intent(in) :: x
+  double precision, dimension(:), intent(inout) :: y
 
   integer :: max_iterations, nspikes_target, i_range_start, i_range_end
-  integer :: nspikes
+  integer :: nspikes, i_check_start, nspikes_initial
   integer :: i, n_Chaikin_iter, best_nspikes_index, best_nspikes
-  double precision :: tension
+  double precision :: tension, sum_y_before, sum_y_after, delta_y
   character (size(x)) :: result_info
+  character (100)     :: text_change
   
-  double precision, dimension(size(x)) :: x_save
+  double precision, dimension(size(x)) :: x_cos
   double precision :: pi
 
-  ! Transform the x-Axis with a arccos function so that the leading area will be stretched  
-  ! resulting in lower curvature at LE - and the rear part a little compressed
-  ! This great approach is from Harry Morgan in his smoothing algorithm
-  !    see https://ntrs.nasa.gov/archive/nasa/casi.ntrs.nasa.gov/19850022698.pdf
-  x_save = x
+  sum_y_before = abs(sum(y))
+
+! print some info
+  if (show_details) then
+    call assess_surface ('   ', x, y)
+  else
+    call assess_surface ('Before', x, y)
+  end if 
+
+! Transform the x-Axis with a arccos function so that the leading area will be stretched  
+! resulting in lower curvature at LE - and the rear part a little compressed
+! This great approach is from Harry Morgan in his smoothing algorithm
+!    see https://ntrs.nasa.gov/archive/nasa/casi.ntrs.nasa.gov/19850022698.pdf
+
+  x_cos = x
   pi = acos(-1.d0)
   do i = 1, size(x)
     if (x(i) < 0.d0) then         ! sanity check - nowbody knows ...
-      x(i) = 0.d0
+      x_cos(i) = 0.d0
     else
-      x(i) = acos(1.d0 - x(i)) * 2.d0 / pi 
+      x_cos(i) = acos(1.d0 - x(i)) * 2.d0 / pi 
     end if       
   end do 
-  ! end transformation of x 
 
-  i_range_start  = 1              ! with transformation will start now at 1
+  i_range_start  = 1              ! with transformation will start smoothing now at 1
   i_range_end    = size (x)       ! ... and end
-                                  ! count the number of current spikes in the polyline
-  !jx-test zähle erst ab 5
-  !call find_curvature_spikes(size(x), i_range_start, spike_threshold, x, y, nspikes, result_info)
-  call find_curvature_spikes(size(x), 5, spike_threshold, x, y, nspikes, result_info)
+  
+! Count initial value of spikes
 
-  nspikes_target = int(nspikes/5) ! how many curve spikes should be at the end?
+  i_check_start  = 1              ! leave LE out from counting - too special there 
+  result_info    = repeat ('-', size(x) ) 
+
+  call find_curvature_spikes(size(x), i_check_start, spike_threshold, x, y, nspikes, result_info)
+  nspikes_target  = int(nspikes/5) ! how many curve spikes should be at the end?
+  nspikes_initial = nspikes
                                   !   Reduce by factor 5 --> not too much as smoothing become critical for surface
   tension        = 0.5d0          ! = 0.5 equals to the original Chaikin cutting distance of 0.25 
-  n_Chaikin_iter = 5              ! number of iterations within Chaikin
+  n_Chaikin_iter = 4              ! number of iterations within Chaikin
   max_iterations = 10             ! max iterations over n_Chaikin_iter 
 
   best_nspikes = nspikes          ! init with current to check if there is improvement of nspikes over iterations
   best_nspikes_index = 1          ! iterate only until improvements of nspikes within  i+2
+  
+! Now do iteration 
 
   i = 1
 
   do while ((i <= max_iterations) .and. (nspikes > nspikes_target) .and. (i <= (best_nspikes_index+2)))
 
-    call smooth_it_Chaikin (i_range_start, i_range_end, tension, n_Chaikin_iter, x, y)
+    call smooth_it_Chaikin (i_range_start, i_range_end, tension, n_Chaikin_iter, x_cos, y)
 
-    call find_curvature_spikes    (size(x), i_range_start, spike_threshold, x, y, nspikes, result_info)
+    result_info    = repeat ('-', size(x) ) 
+    call find_curvature_spikes    (size(x), i_check_start, spike_threshold, x, y, nspikes, result_info)
 
     if (nspikes < best_nspikes) then
       best_nspikes = nspikes
       best_nspikes_index = i  
     end if 
 
-    i = i +1
+    if (show_details) call assess_surface ('   ', x, y)
+
+    i = i + 1
 
   end do
 
-! restore original x values as they were transformed for smoothing
-  x = x_save
+! Summarize - final info for user 
+
+  if (show_details) then
+
+    sum_y_after = abs(sum(y)) 
+    delta_y = 100d0 * (sum_y_after - sum_y_before)/sum_y_before
+    write (text_change,'(A,F8.5,A)') ' Overall change of y values ',delta_y,'%' 
+
+    if ( nspikes_initial == 0) then 
+      write (*,'(17x, A,F4.1,A)') "No spikes found based on spike_threshold =", &
+                                   spike_threshold," - Nothing done"
+
+    elseif (nspikes <= nspikes_target) then 
+      write (*,'(17x)', advance = 'no')
+      call print_colored (COLOR_GOOD, "Successfully smoothed." )
+      write (*,'(A,I2,A)') " Number of spikes reduced by factor", nspikes_initial/nspikes, &
+            ". "//trim(text_change)
+
+    elseif (i > max_iterations) then 
+      write (*,'(17x,A,I2,A)') "Smoothing ended. Reached maximum iterations = ", max_iterations, &
+            ". "//trim(text_change)
+
+    elseif (i > (best_nspikes_index+2)) then 
+      write (*,'(17x,A,I2,A)') "Smoothing ended. No further improvement possible" // &
+            ". "//trim(text_change)
+
+    else 
+      write (*,'(17x,A)') "Smoothing ended."          ! this shouldn't happen
+    end if 
+
+  else
+    call assess_surface ('After ', x, y)
+  end if
 
 end subroutine smooth_it
 

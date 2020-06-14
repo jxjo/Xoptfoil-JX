@@ -31,7 +31,7 @@ All notable changes to this project are documented in this file.
   - new plot objects were added at each refresh. This slowed down the visualizer more and more during long optimizations
   - removed flicker of the three plot windows
 
-Thanks to Tobias for testing and advices, Alexander for his hint regarding smoothing algrorithm - and of course to my super developer mate Matthias.
+Thanks to Tobias for testing and advices, Alexander for his hint regarding smoothing algorithm - and of course to my super developer mate Matthias.
 
 ## [1.51.0] - 2020-05-24
 

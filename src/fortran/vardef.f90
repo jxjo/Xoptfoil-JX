@@ -32,7 +32,7 @@ module vardef
                                                         !  after leclose
   end type airfoil_type
 
-! info about the transfomration of seed
+! info about the transformation of seed
   type foil_transform_type                              
     double precision :: xoffset, zoffset                ! x,z shift in space
     double precision :: scale                           ! scale factor
@@ -61,6 +61,8 @@ module vardef
 ! Global variables (mainly needed to preserve generality of optimization
 ! routines)
 
+  integer :: npan_fixed = 0          ! set a fixed number of panels which can't be changed
+
   integer :: noppoint
   integer, parameter :: max_op_points = 30
   double precision, dimension(:), allocatable :: xseedt, xseedb, zseedt, zseedb
@@ -70,7 +72,6 @@ module vardef
                                  flap_degrees, weighting, scale_factor, ncrit_pt
   type (re_type), dimension(max_op_points)   :: re, ma
 
-! jx-mod Aero targets - new Option: target_value for op_mode target-moment and target-drag
   double precision, dimension(max_op_points) :: target_value
 
   double precision :: x_flap, y_flap

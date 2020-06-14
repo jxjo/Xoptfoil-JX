@@ -63,37 +63,21 @@ subroutine check_seed()
 
 
   write(*,*) 'Checking to make sure seed airfoil passes all constraints ...'
-  write(*,*)
 
 
-!  Check paneling option - npan (number of panels) should be equal to internal panel number
-!       - to ensure xfoil results to not differ during optimization from results of final airfoil! 
-
-  if (xfoil_geom_options%npan /= (nptt + nptb - 1)) then
-    write (text,'(A,I3,A,I3)') 'Number of panels (npan=',xfoil_geom_options%npan,') '// &
-                               'should be set to ', (nptt + nptb - 1)
-    call ask_stop (trim(text))
-  end if 
-
-! jx-mod Smoothing ---- Ask user for Smoothing - switch off if 'camb_thick'---------
-
-  ! smooth surfaces of airfoil *before* other checks are made
+! Smooth surfaces of airfoil *before* other checks are made
 
   if (do_smoothing) then
+    write (*,*) 
+    write (*,'(1x,A)') 'Smoothing Top surface ...'
+    call smooth_it (show_details, xseedt, zseedt) 
 
-    write (*,'(1x,A)') 'Before smoothing ...'
-    call assess_surface ('Top', xseedt, zseedt)
-    call assess_surface ('Bot', xseedb, zseedb)
-
-    call smooth_it (xseedt, zseedt)
-    call smooth_it (xseedb, zseedb)
-
-    write (*,'(1x,A)') 'After smoothing ...'
-    call assess_surface ('Top', xseedt, zseedt)
-    call assess_surface ('Bot', xseedb, zseedb)
-    write (*,*)
-
+    write (*,*) 
+    write (*,'(1x,A)') 'Smoothing Bottom surface ...'
+    call smooth_it (show_details, xseedb, zseedb)
   end if
+
+  write(*,*)
 
 ! Get allowable panel growth rate
 

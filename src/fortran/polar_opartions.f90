@@ -64,6 +64,7 @@ subroutine check_and_do_polar_generation (input_file, output_prefix, foil)
   type (xfoil_options_type)      :: xfoil_options
   integer  :: npolars
 
+  write (*,*)
   call read_xfoil_paneling_inputs (input_file, xfoil_geom_options)
   call read_polar_inputs          (input_file, foil%name, npolars, polars, xfoil_options)
 
@@ -269,7 +270,7 @@ end subroutine read_polar_inputs
 
 subroutine read_xfoil_paneling_inputs  (input_file, geom_options)
 
-  use vardef,             only : airfoil_type
+  use vardef,             only : airfoil_type, npan_fixed
   use airfoil_operations, only : my_stop
   use xfoil_driver,       only : xfoil_geom_options_type
   use input_output,       only : namelist_check
@@ -286,8 +287,7 @@ subroutine read_xfoil_paneling_inputs  (input_file, geom_options)
 
   ! Init default values for xfoil options
 
-  npan   = 201              ! default adapted to xoptfoils internal 200 panels
-                            !   ... will have 201 after split and rebuild (normalize)
+  npan   = 200              ! default adapted to xoptfoils internal 200 panels
   cvpar  = 1.d0
   cterat = 0.d0             ! normally 0.15 - reduce curvature peek at TE with PANGEN
   ctrrat = 0.2d0
@@ -308,6 +308,10 @@ subroutine read_xfoil_paneling_inputs  (input_file, geom_options)
   call namelist_check('xfoil_paneling_options', istat, 'warn')
 
 ! Put xfoil options into derived types
+
+  if (npan_fixed > 0 .and. (npan /= npan_fixed)) then 
+    npan = npan_fixed 
+  end if 
 
   geom_options%npan   = npan
   geom_options%cvpar  = cvpar
@@ -343,7 +347,7 @@ subroutine read_smoothing_inputs  (input_file, spike_threshold, &
   ! Init default values 
 
   do_smoothing      = .true.                !currently dummy
-  spike_threshold   = 0.8
+  spike_threshold   = 0.8d0           
   curv_threshold    = 0.01d0
   highlow_treshold  = 0.02d0
  

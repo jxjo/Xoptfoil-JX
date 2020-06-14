@@ -76,6 +76,8 @@ program main
 
 ! Read inputs from namelist file
 
+  npan_fixed = 200                      ! for optimizing npan is fixed ...
+
   call read_inputs(input_file, search_type, global_search, local_search,       &
                    seed_airfoil, airfoil_file, nparams_top, nparams_bot,       &
                    restart, restart_write_freq, constrained_dvs, naca_options, &
@@ -86,11 +88,11 @@ program main
 
   call get_seed_airfoil(seed_airfoil, airfoil_file, naca_options, original_foil)
 
-! Repanel to fixed 200 points and normalize to get LE at 0,0 and TE (1,0)
+! Repanel to npan_fixed points and normalize to get LE at 0,0 and TE (1,0)
 
-  call repanel_and_normalize_airfoil (original_foil, 200, buffer_foil)                            !   ... to have run_xfoil results equal airfoil external results
-  !   ... to have run_xfoil results equal airfoil external results
-  xfoil_geom_options%npan = buffer_foil%npoint
+  call repanel_and_normalize_airfoil (original_foil, npan_fixed, buffer_foil)                            !   ... to have run_xfoil results equal airfoil external results
+  
+  xfoil_geom_options%npan = buffer_foil%npoint    ! will use this constant value now
 
 ! Split up seed airfoil into upper and lower surfaces - LE point will be added
 
@@ -135,8 +137,8 @@ program main
   if (match_foils) then
     call matchfoils_preprocessing(matchfoil_file)
   else
-    write(*,*) "Optimizing for requested operating points."
     write(*,*)
+    write(*,*) "Optimizing for requested operating points."
   end if
 
 ! Switch off multi threading when using show_details because the output to the console 

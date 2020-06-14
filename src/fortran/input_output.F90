@@ -43,6 +43,7 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
   use xfoil_driver,       only : xfoil_geom_options_type, xfoil_options_type
   use naca,               only : naca_options_type
   use math_deps,          only : sort_vector
+  use os_util,            only : print_note
 
 
  
@@ -594,23 +595,16 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
   viscous_mode = .true.
   silent_mode = .true.
   bl_maxit = 100
-! jx-mod die original value of vaccel 0.01 leads to too many non convergences at 
-!        higher lift --> reduced 
-  vaccel = 0.005d0
+  vaccel = 0.005d0          ! the original value of 0.01 leads to too many non convergences at 
+                            !   higher lift --> reduced 
   fix_unconverged = .true.
   reinitialize = .true.
 
-  npan   = 200              ! For the seed airfoil 200 panel points are used.
-                            ! When the airfoil will be split in top & bot and then rebuild
-                            ! the design airfoil will have 200+1 (npan default value) points
-                            !   if a LE is inserted
-                            !   ... to have run_xfoil results equal airfoil external results
-                            ! this will be adjusted in main
+  npan   = 200              ! if npan_fixed is set in main, this value will be overwritten
   cvpar = 1.d0
-  ! jx-mod If set to geom_options%cterat = 0.15d0 the curvature at TE panel
-  !     tends to flip away and have tripple value (bug in xfoil) 
-  !     with a very small value the panel gets wider and the quality better
-  cterat = 0.d0
+  cterat = 0.d0             ! if set to normal value 0.15d0, the curvature at TE panel
+                            !   tends to flip away and have tripple value (bug in xfoil) 
+                            !   with a very small value the panel gets wider and the quality better
   ctrrat = 0.2d0
   xsref1 = 1.d0
   xsref2 = 1.d0
@@ -667,7 +661,10 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
     xfoil_options%repanel = .false. 
   end if 
  
-
+  if (npan_fixed > 0 .and. (npan /= npan_fixed)) then 
+    npan = npan_fixed 
+    call print_note ("Number of panels (npan) is fixed for optimizations and can't changed")
+  end if 
 
   xfoil_geom_options%npan = npan
   xfoil_geom_options%cvpar = cvpar

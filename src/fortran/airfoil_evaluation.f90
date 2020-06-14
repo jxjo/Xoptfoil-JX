@@ -798,7 +798,7 @@ end function write_function
 function write_airfoil_optimization_progress(designvars, designcounter)
 
   use math_deps,          only : interp_vector 
-  use airfoil_operations, only : smooth_it, rebuild_airfoil
+  use airfoil_operations, only : rebuild_airfoil
   use airfoil_operations, only : airfoil_write_to_unit
 
 
