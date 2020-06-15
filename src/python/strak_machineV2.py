@@ -28,6 +28,7 @@ import numpy as np
 import pip
 import f90nml
 from copy import deepcopy
+from scipy.signal import savgol_filter
 
 # paths and separators
 bs = "\\"
@@ -43,9 +44,9 @@ T2_polarInputFile = 'iPolars_T2.txt'
 csfont = {'fontname':'Segoe Print'}
 
 # number of decimals in the generated input-files
-Cl_decimals = 3 # lift
-Cd_decimals = 5 # drag
-Al_decimals = 3 # alpha
+Cl_decimals = 4 # lift
+Cd_decimals = 6 # drag
+Al_decimals = 4 # alpha
 
 # fontsizes
 fs_infotext = 10
@@ -452,8 +453,11 @@ class inputFile:
             op_mode = operatingConditions["op_mode"][idx]
             op_type = operatingConditions["optimization_type"][idx]
 
+            # check the opPoint has the demanded type
             if (op_mode == 'spec-cl') and (op_type != 'min-glide-slope'):
-                operatingConditions["op_point"][idx] = opPoint_maxSpeed - (num*diff_maxSpeed)
+                newValue = round(opPoint_maxSpeed - (num*diff_maxSpeed),
+                                 Cl_decimals)
+                operatingConditions["op_point"][idx] = newValue
                 name = operatingConditions["name"][idx]
                 self.adaptTargetValueToPolar(name, polarData)
                 num = num + 1
@@ -468,7 +472,9 @@ class inputFile:
             op_type = operatingConditions["optimization_type"][idx]
 
             if (op_mode == 'spec-cl') and (op_type != 'min-glide-slope'):
-                operatingConditions["op_point"][idx] = opPoint_maxSpeed + (num*diff_maxSpeed)
+                newValue = round(opPoint_maxSpeed + (num*diff_maxSpeed),
+                                 Cl_decimals)
+                operatingConditions["op_point"][idx] = newValue
                 name = operatingConditions["name"][idx]
                 self.adaptTargetValueToPolar(name, polarData)
                 num = num + 1
@@ -483,7 +489,9 @@ class inputFile:
             op_type = operatingConditions["optimization_type"][idx]
 
             if (op_mode == 'spec-cl') and (op_type != 'min-glide-slope'):
-                operatingConditions["op_point"][idx] = opPoint_maxGlide + (num*diff_maxGlide)
+                newValue = round(opPoint_maxGlide + (num*diff_maxGlide),
+                                 Cl_decimals)
+                operatingConditions["op_point"][idx] = newValue
                 name = operatingConditions["name"][idx]
                 self.adaptTargetValueToPolar(name, polarData)
                 num = num + 1
@@ -1457,6 +1465,7 @@ class polarData:
 
 
     def analyze(self):
+        # yy_sg = savgol_filter(itp(xx), window_size, poly_order) TODO smoothing
         print("analysing polar...")
         self.determineMaxSpeed()
         self.determineMaxGlide()
@@ -1473,6 +1482,10 @@ class polarData:
         for i in range(self.maxLift_idx):
             x.append(self.CL[i])
             y.append(self.CD[i])
+
+        #double append the last value
+        x.append(self.CL[i])
+        y.append(self.CD[i])
 
         # interpolate the values
         CD = np.interp( CL, x, y)
@@ -1493,6 +1506,10 @@ class polarData:
             x.append(self.alpha[i])
             y.append(self.CL[i])
 
+        #double append the last value
+        x.append(self.alpha[i])
+        y.append(self.CL[i])
+
         # calculate corresponding CL
         CL = np.interp( alpha, x, y)
         return CL
@@ -1506,6 +1523,10 @@ class polarData:
         for i in range(self.maxLift_idx):
             x.append(self.CL[i])
             y.append(self.CL_CD[i])
+
+        #double append the last value
+        x.append(self.CL[i])
+        y.append(self.CL_CD[i])
 
         # interpolate the values
         CL_CD = np.interp(CL, x, y)
