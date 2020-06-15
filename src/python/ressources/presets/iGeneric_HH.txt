@@ -1,0 +1,52 @@
+! Rocketeer-Strak 
+! strak airfoils  
+
+&optimization_options
+  search_type      = 'global'
+  global_search    = 'particle_swarm'
+  seed_airfoil     = 'from_file'
+  shape_functions  = 'hicks-henne'
+  min_bump_width   = 0.1  
+  initial_perturb  = 0.005						! reduced - get more initial designs					
+  nfunctions_top   = 5
+  nfunctions_bot   = 5
+
+  show_details     = .false.                         
+/  
+
+&operating_conditions
+  re_default_as_resqrtcl = .true.                           ! strak: get reynolds (type 2) from command line
+
+  noppoint          = 13
+  name              = 'preSpeed'    ,'maxSpeed'   ,'keepSpeed'  ,'preGlide'   ,'helperPreGlide','maxGlide'   ,'alphaMaxGlide','slopeMaxGlide'   ,'helperKeepGlide','keepGlide'  ,'helperPreClmax','preClmax'   ,'alphaClmax' 
+  op_mode           = 'spec-cl'     ,'spec-cl'    ,'spec-cl'    ,'spec-cl'    ,'spec-cl'       ,'spec-cl'    ,'spec-al'      ,'spec-cl'         ,'spec-cl'        ,'spec-cl'    ,'spec-cl'       ,'spec-cl'    ,'spec-al'    
+  op_point          = -0.05         , 0.15       , 0.30        ,0.39         ,0.50            ,0.60         ,4.0            ,0.60              ,0.70              ,0.90         ,1.0             ,1.1         ,10.5        
+  optimization_type = 'target-drag' ,'target-drag','target-drag','target-drag','target-drag'   ,'target-drag','target-lift'  ,'min-glide-slope' ,'target-drag'    ,'target-drag','target-drag'   ,'target-drag','target-lift'
+  target_value      =  -1           ,-1           ,-1           ,-1           ,                , -1          ,0.6            ,                  ,                 ,-1           ,-1              ,1.0          ,1.2          
+  reynolds          =               ,             ,             ,             ,                ,             ,               ,                  ,                 ,             ,                ,             ,
+  weighting         =  0.7          ,0.9          ,1.0          ,1.0          ,1.0             , 1.0         ,0.0            , 0.0              , 1.0             ,1.0          ,1.0             ,1.0         ,1.0          
+/
+
+&polar_generation
+  generate_polars  = .true.                                 ! get re number from command line
+  type_of_polar    = 2 
+  op_mode          = 'spec-al'
+  op_point_range   =  -4.5, 12.5, 0.05
+/
+
+
+&constraints
+  min_te_angle    = 3
+/
+ 
+&particle_swarm_options
+  pso_pop        = 40
+  pso_maxit      = 700
+  pso_convergence_profile = 'exhaustive'
+/
+
+&xfoil_run_options
+  vaccel          = 0.004
+  reinitialize    = .false.                                 ! speed up a little (set true if too many no convergence) 
+/
+
