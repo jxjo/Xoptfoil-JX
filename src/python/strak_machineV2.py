@@ -1732,9 +1732,9 @@ def get_FoilName(params, index):
         Re = params.ReNumbers[index]
 
         if (params.operatingMode == 'matchpolarfoils'):
-            foilName = params.matchPolarFoilName.strip('.dat')
+            foilName = params.matchPolarFoilName
         else:
-            foilName = params.seedFoilName.strip('.dat')
+            foilName = params.seedFoilName
 
         if (index == 0):
             suffix = '-root'
@@ -1770,10 +1770,10 @@ def generate_commandlines(params):
 
     # do some initializations / set local variables
     if (params.operatingMode != 'matchpolarfoils'):
-        rootfoilName = get_FoilName(params, 0).strip('.dat') +'.dat'
+        rootfoilName = get_FoilName(params, 0)# +'.dat'
         firstIdx = 1
     else:
-        rootfoilName = params.seedFoilName.strip('.dat') +'.dat'
+        rootfoilName = params.seedFoilName# +'.dat'
         firstIdx = 0
 
     numFoils = get_NumberOfAirfoils(params)#TODO refactor
@@ -1810,8 +1810,8 @@ def generate_commandlines(params):
 
         # generate Xoptfoil-commandline
         commandline = "xoptfoil-jx -i %s -r %d -a %s -o %s\n" %\
-                        (iFile, ReList[i], previousFoilname.strip('.dat') + '.dat',
-                         strakFoilName.strip('.dat'))
+                        (iFile, ReList[i], previousFoilname + '.dat',
+                          strakFoilName)
         commandLines.append(commandline)
 
         #copy strak-airfoil to airfoil-folder
@@ -1854,7 +1854,7 @@ def generate_visu_batchfiles(params):
 
     for i in range(startidx, len(params.ReNumbers)):
         visuFileName = "visu_%dk.bat" % (params.ReNumbers[i]/1000)
-        airfoilName = get_FoilName(params, i).strip('.dat')
+        airfoilName = get_FoilName(params, i)
 
         try:
             # create a new file
@@ -1945,7 +1945,7 @@ def getParameters(dict):
                  % params.maxReFactor)
 
     try:
-        params.seedFoilName = dict["seedFoilName"].strip('.dat')
+        params.seedFoilName = dict["seedFoilName"]
     except:
         print ('seedFoilName not specified')
 
@@ -1962,7 +1962,7 @@ def getParameters(dict):
     # get matchpolarfoilname only, if operating-mode is set to "matchpolarfoils"
     if (params.operatingMode == 'matchpolarfoils'):
         try:
-            params.matchPolarFoilName = dict["matchPolarFoilName"].strip('.dat')
+            params.matchPolarFoilName = dict["matchPolarFoilName"]
             params.useAlwaysRootfoil = True
         except:
             print ('matchPolarFoilName not specified')
@@ -2061,10 +2061,10 @@ def copyAndSmoothAirfoil(srcName, srcPath, destName):
 
 def copy_matchpolarfoils(params):
     # get the name of the matchfoil
-    matchfoilName = params.matchPolarFoilName.strip('dat')
+    matchfoilName = params.matchPolarFoilName
 
     # get name of seed-airfoil
-    seedFoilName = params.seedFoilName.strip('.dat')
+    seedFoilName = params.seedFoilName
 
     # get the path where the airfoil can be found
     srcPath = ".." + bs + params.inputFolder
@@ -2081,10 +2081,10 @@ def copy_matchpolarfoils(params):
 
 def generate_rootfoil(params):
     # get name of seed-airfoil
-    seedFoilName = params.seedFoilName.strip('.dat')
+    seedFoilName = params.seedFoilName
 
     # get name of root-airfoil
-    rootfoilName = get_FoilName(params, 0).strip('.dat')
+    rootfoilName = get_FoilName(params, 0)
 
     # get the path where the seed-airfoil can be found
     srcPath = ".." + bs + params.inputFolder
