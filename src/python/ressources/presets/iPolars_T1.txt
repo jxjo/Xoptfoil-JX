@@ -4,7 +4,7 @@
   generate_polars = .true. 									
   type_of_polar   = 1
   op_mode         = 'spec-al'
-  op_point_range  = -3, 5, 0.25
+  op_point_range  = -3, 5, 0.05
 /
 
 &xfoil_run_options

@@ -6,7 +6,7 @@
   global_search    = 'particle_swarm'
   seed_airfoil     = 'from_file'
   shape_functions  = 'camb-thick-plus'
-  initial_perturb  = 0.01
+  initial_perturb  = 0.02
   write_designs    = .true.
   show_details     = .false.
   echo_input_parms = .false.
@@ -22,14 +22,14 @@
   optimization_type = 'target-drag' ,'target-drag','target-drag','target-drag','target-drag'   ,'target-drag','target-lift'  ,'min-glide-slope' ,'target-drag'    ,'target-drag','target-drag'   ,'target-drag','target-lift'
   target_value      =  -1           ,-1           ,-1           ,-1           ,                , -1          ,0.6            ,                  ,                 ,-1           ,-1              ,1.0          ,1.2          
   reynolds          =               ,             ,             ,             ,                ,             ,               ,                  ,                 ,             ,                ,             ,
-  weighting         =  1.0          ,1.0          ,1.0          ,1.0          ,1.0             , 1.0         ,0.0            , 0.0              , 1.0             ,1.0          ,1.0             ,1.0          ,1.0          
+  weighting         =  0.7          ,0.9          ,1.0          ,1.0          ,1.5             , 1.5         ,0.0            , 0.0              , 1.5             ,1.4          ,1.4             ,1.4         ,0.0          
 /
 
 &polar_generation
   generate_polars  = .true.                                 ! get re number from command line
   type_of_polar    = 2 
   op_mode          = 'spec-al'
-  op_point_range   =  -4.5, 12.5, 0.25
+  op_point_range   =  -4.5, 12.5, 0.05
 /
 
 
@@ -39,9 +39,9 @@
  
 &particle_swarm_options
   pso_pop         = 40
-  pso_tol         = 0.00015  
+  pso_tol         = 0.0005  
   pso_convergence_profile = 'quick_camb_thick'
-  pso_maxit       = 240
+  pso_maxit       = 140
 /
 
 &xfoil_run_options
