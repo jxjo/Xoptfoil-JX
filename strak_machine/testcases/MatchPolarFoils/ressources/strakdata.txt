@@ -1,5 +1,5 @@
 {
-      "strakType": "MatchPolarFoils_HH", 
+      "strakType": "Generic", 
       "batchfileName": "match_polarfoils.bat", 
       "outputFolder": "build", 
       "strakInputFileName": "istrak.txt", 
