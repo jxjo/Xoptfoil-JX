@@ -361,13 +361,32 @@ class inputFile:
     def adaptMaxLift(self, polarData):
         # get new values from polar
         alphaMaxLift = polarData.alpha_maxLift
+        pre_alphaMaxLift = polarData.alpha_maxLift
+        CL_MaxLift = polarData.CL_maxLift
         pre_CL_MaxLift = polarData.pre_CL_maxLift
 
-        # set new values
-        self.changeOpPoint("alphaClmax", alphaMaxLift)
+        # determine type of op-point
+        op_type = self.getOpPointType('alphaClmax')
+
+        # set new oppoint-value
+        if (op_type == 'spec-al'):
+            self.changeOpPoint("alphaClmax", alphaMaxLift)
+        else:
+            self.changeOpPoint("alphaClmax", CL_MaxLift)
+
+        # adapt target-value to polar
         self.adaptTargetValueToPolar("alphaClmax", polarData)
 
-        self.changeOpPoint("preClmax", pre_CL_MaxLift)
+        # determine type of op-point
+        op_type = self.getOpPointType('preClmax')
+
+        # set new oppoint-value
+        if (op_type == 'spec-al'):
+            self.changeOpPoint("preClmax", pre_alphaMaxLift)
+        else:
+            self.changeOpPoint("preClmax", pre_CL_MaxLift)
+
+        # adapt target-value to polar
         self.adaptTargetValueToPolar("preClmax", polarData)
 
 
@@ -527,6 +546,7 @@ class inputFile:
             except:
                 print("opPoint %s was skipped" % opPointName)
 
+
     # scales the target-values of a list of oppoints by a certain factor.
     def scaleTargetValues(self, factor, opPointList):
          # scale all target-values in list
@@ -537,6 +557,7 @@ class inputFile:
                 self.changeTargetValue(opPointName, value)
             except:
                 print("opPoint %s was skipped" % opPointName)
+
 
     # shifts the target-values of a list of oppoints by a certain difference.
     def shiftTargetValues(self, diff, opPointList):
@@ -582,36 +603,60 @@ class inputFile:
         root_polar = params.polars[0]
         strak_polar = polarData
 
+        # is this the polar of the root-airfoil ?
+        if (root_polar == strak_polar):
+            # do nothing
+            return
+
+        # 'preClmax'
         try:
-            # 'preClmax'
-            # get root-polar-values
+            # get type of op-point
+            op_type = self.getOpPointType('preClmax')
+
+            # get some polar values
             alpha_root = root_polar.pre_alpha_maxLift
-
-            # get strak-polar-values
             alpha_strak = strak_polar.pre_alpha_maxLift
+            CL_root = root_polar.pre_CL_maxLift
+            CD_root = root_polar.pre_CD_maxLift
 
-            # calculate new value
-            target_alpha = ((alpha_root * params.maxLiftGain) +
-                             (alpha_strak * (1.0 - params.maxLiftGain)))
+            if (op_type == 'spec-al'):
+                # calculate new value
+                target_alpha = ((alpha_root * params.maxLiftGain) +
+                                 (alpha_strak * (1.0 - params.maxLiftGain)))
 
-            # get according Cl from root-polar
-            target_CL = root_polar.find_CL(target_alpha)
+                # get according Cl from root-polar
+                target_CL = root_polar.find_CL(target_alpha)
 
-            # set new values
-            self.changeOpPoint("preClmax", target_alpha)
-            self.changeTargetValue("preClmax", target_CL)
+                # set new values
+                self.changeOpPoint("preClmax", target_alpha)
+                self.changeTargetValue("preClmax", target_CL)
+            #else:
+                # not implementeed yet
+##                # calculate new value
+##                target_alpha = ((alpha_root * params.maxLiftGain) +
+##                                 (alpha_strak * (1.0 - params.maxLiftGain)))
+##
+##                # get according Cl from root-polar
+##                target_CL = root_polar.find_CL(target_alpha)
+##
+##                # set new values
+##                self.changeOpPoint("preClmax", target_alpha)
+##                self.changeTargetValue("preClmax", target_CL)
+
         except:
             print("opPoint \'preClmax\' was skipped")
 
+        # 'alphaClmax'
         try:
-            # 'alphaClmax'
             # get root-polar-values
             alpha_root = root_polar.alpha_maxLift
             CL_root = root_polar.CL_maxLift
+            CD_root = root_polar.CD_maxLift
 
             # get strak-polar-values
             alpha_strak = strak_polar.alpha_maxLift
             CL_strak = strak_polar.CL_maxLift
+            CD_strak = strak_polar.CD_maxLift
 
             # new value is value between root-polar and strak polar
             target_CL = ((CL_root * params.maxLiftGain) +
@@ -635,6 +680,11 @@ class inputFile:
         root_polar = params.polars[0]
         strak_polar = polarData
 
+        # is this the polar of the root-airfoil ?
+        if (root_polar == strak_polar):
+            # do nothing
+            return
+
         # calculate factor between root-polar maxGlide and strak-polar maxGlide,
         # include an additional "loss" in max-glide that is a parameter
         factor = (root_polar.CL_CD_max) / (strak_polar.CL_CD_max * (1.00 - params.maxGlideLoss))
@@ -642,7 +692,7 @@ class inputFile:
         # create List of opPoints to be affected. The target-values of these
         # oppoints will be "shifted", according to the calculated difference
         opPointList = ['preGlide','helperPreGlide', 'maxGlide','helperKeepGlide',
-                       'keepGlide', 'helperPreClmax']
+                       'keepGlide', 'helperPreClmax', 'preClmax']
 
         self.scaleTargetValues(factor, opPointList)
 
@@ -651,6 +701,11 @@ class inputFile:
         # assign the polars to local variables
         root_polar = params.polars[0]
         strak_polar = polarData
+
+        # is this the polar of the root-airfoil ?
+        if (root_polar == strak_polar):
+            # do nothing
+            return
 
         # op-point 'keepSpeed', if existing in input-file
         try:
