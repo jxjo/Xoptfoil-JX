@@ -406,11 +406,14 @@ class inputFile:
         operatingConditions = self.values["operating_conditions"]
         numOpPoints = len(operatingConditions["op_point"])
 
+        # idx where the op-points occur, reset-values
         idx_maxSpeed = -1
         idx_maxGlide = -1
         idx_preClmax = -1
+
         # number of deltas between 'maxSpeed' and 'maxGlide'
         num_AfterMaxSpeed = 0
+
         # number of deltas between 'maxGlide' and 'preClmax'
         num_AfterMaxGlide = 0
 
@@ -639,7 +642,7 @@ class inputFile:
         # create List of opPoints to be affected. The target-values of these
         # oppoints will be "shifted", according to the calculated difference
         opPointList = ['preGlide','helperPreGlide', 'maxGlide','helperKeepGlide',
-                       'keepGlide']
+                       'keepGlide', 'helperPreClmax']
 
         self.scaleTargetValues(factor, opPointList)
 
@@ -927,6 +930,9 @@ class polarGraph:
         ax.set_axis_off()
 
     def plotLiftDragOptimizationPoints(self, ax, polar):
+        print("plotting CL over CD target-op-points for Re = %.0f...\n"\
+              % (polar.Re))
+
         # check if there are operationg-conditions available
         if (polar.operatingConditions == None):
             return
@@ -938,6 +944,7 @@ class polarGraph:
             # get op-mode and type
             op_mode = operatingConditions["op_mode"][idx]
             op_type = operatingConditions["optimization_type"][idx]
+            op_name = operatingConditions["name"][idx]
 
             if (op_mode == 'spec-cl') and (op_type != 'min-glide-slope'):
 
@@ -947,8 +954,12 @@ class polarGraph:
                 # get CL
                 y = operatingConditions["op_point"][idx]
 
+                print("target-op-point[%d] \'%s\', CL: %f, CD:%f" % (idx, op_name, x, y))
+
                 # plot
                 ax.plot(x, y, 'y.')
+
+        print("Done.\n\n")
 
 
     def plotPolarChange(self, ax, rootPolar):
@@ -1053,6 +1064,9 @@ class polarGraph:
 
 
     def plotLiftOverAlphaOptimizationPoints(self, ax, polar):
+        print("plotting CL over alpha target-op-points for Re = %.0f...\n"\
+              % (polar.Re))
+
         # check if there are operationg-conditions available
         if (polar.operatingConditions == None):
             return
@@ -1063,6 +1077,7 @@ class polarGraph:
         for idx in range(numOpPoints):
             # get op-mode
             op_mode = operatingConditions["op_mode"][idx]
+            op_name = operatingConditions["name"][idx]
 
             if (op_mode == 'spec-al'):
                 # get CL
@@ -1071,9 +1086,12 @@ class polarGraph:
                 # get alpha from target-value
                 y = operatingConditions["target_value"][idx]
 
+                print("target-op-point[%d] \'%s\', CL: %f, alpha:%f"\
+                 % (idx, op_name, x, y))
                 # plot
                 ax.plot(x, y, 'y.')
 
+        print("Done.\n\n")
 
     def plotLiftOverAlphaPolar(self, ax):
         # set axes and labels
@@ -1145,6 +1163,8 @@ class polarGraph:
 
 
     def plotLiftDragOverLiftOptimizationPoints(self, ax, polar):
+        print("plotting CL/CD over CL target-op-points for Re = %.0f...\n"\
+              % (polar.Re))
 
         # check if there are operationg-conditions available
         if (polar.operatingConditions == None):
@@ -1157,20 +1177,24 @@ class polarGraph:
             # get op-mode and -type
             op_mode = operatingConditions["op_mode"][idx]
             op_type = operatingConditions["optimization_type"][idx]
+            op_name = operatingConditions["name"][idx]
 
             if (op_mode == 'spec-cl') and (op_type != 'min-glide-slope'):
                 # get CL
                 x = operatingConditions["op_point"][idx]
-                name = operatingConditions["name"][idx]
-                print (name)
+
                 # get CD from target-value
                 Cd = operatingConditions["target_value"][idx]
 
                 # calculate Cl/Cd
                 y = x/Cd
 
+                print("target-op-point[%d] \'%s\', CL/CD: %f, CL:%f" % (idx, op_name, x, y))
+
                 # plot
                 ax.plot(x, y, 'y.')
+
+        print("Done.\n\n")
 
 
     def plotLiftDragOverLiftPolar(self, ax):
