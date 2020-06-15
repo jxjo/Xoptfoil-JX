@@ -1811,7 +1811,7 @@ def generate_commandlines(params):
         # generate Xoptfoil-commandline
         commandline = "xoptfoil-jx -i %s -r %d -a %s -o %s\n" %\
                         (iFile, ReList[i], previousFoilname + '.dat',
-                          strakFoilName)
+                          strakFoilName.strip('.dat'))
         commandLines.append(commandline)
 
         #copy strak-airfoil to airfoil-folder
@@ -1855,6 +1855,7 @@ def generate_visu_batchfiles(params):
     for i in range(startidx, len(params.ReNumbers)):
         visuFileName = "visu_%dk.bat" % (params.ReNumbers[i]/1000)
         airfoilName = get_FoilName(params, i)
+        airfoilName = airfoilName.strip('.dat')
 
         try:
             # create a new file
@@ -2170,15 +2171,16 @@ def generate_polars(params, workingDir, rootfoilName, graph):
         params.inputFileNames.append(inputFilename)
 
         # compose string for system-call of XFOIL-worker for T1-polar generation
-        airfoilName = workingDir + bs + rootfoilName + '.dat'
+        airfoilName = rootfoilName + '.dat'
         inputFilename = getPresetInputFileName(T1_polarInputFile)
-        systemString_T1 = "xfoil_worker.exe -i %s -o %s -w polar -a %s -r %d" %\
+        systemString_T1 = "xfoil_worker.exe -i \"%s\" -o \"%s\" -w polar -a \"%s\" -r %d" %\
                               (inputFilename, rootfoilName, airfoilName, maxRe)
 
         # compose string for system-call of XFOIL-worker for T2-polar generation
         inputFilename = getPresetInputFileName(T2_polarInputFile)
-        systemString_T2 = "xfoil_worker.exe -i %s -o %s -w polar -a %s -r %d" %\
+        systemString_T2 = "xfoil_worker.exe -i \"%s\" -o \"%s\" -w polar -a \"%s\" -r %d" %\
                                  (inputFilename, rootfoilName, airfoilName, Re)
+        print(systemString_T2)
 
         # execute xfoil-worker / create T1 / T2 polar-files
         if (not params.skipPolarGeneration):
