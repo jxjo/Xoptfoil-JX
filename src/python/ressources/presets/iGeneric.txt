@@ -15,21 +15,21 @@
 &operating_conditions
   re_default_as_resqrtcl = .true.                           ! strak: get reynolds (type 2) from command line
 
-  noppoint          = 12
-  name              = 'preSpeed'    ,'maxSpeed'   ,'keepSpeed'  ,'preGlide'   ,'helperPreGlide','maxGlide'   ,'alphaMaxGlide','slopeMaxGlide'   ,'helperKeepGlide','keepGlide'   ,'Clmax'       ,'alphaClmax' 
-  op_mode           = 'spec-cl'     ,'spec-cl'    ,'spec-cl'    ,'spec-cl'    ,'spec-cl'       ,'spec-cl'    ,'spec-al'      ,'spec-cl'         ,'spec-cl'        ,'spec-cl'     ,'spec-cl'     ,'spec-al'    
-  op_point          = -0.10         , -0.02       , 0.20        ,0.39         ,0.55            ,0.60         ,4.0            ,0.60              ,0.65             ,0.90          ,1.1           ,10.5        
-  optimization_type = 'target-drag' ,'target-drag','target-drag','target-drag','target-drag'   ,'target-drag','target-lift'  ,'min-glide-slope' ,'target-drag'    ,'target-drag' ,'target-drag' ,'target-lift'
-  target_value      =  -1           ,-1           ,-1           ,-1           ,                , -1          ,0.6            ,                  ,                 ,-1            ,-1            ,1.2          
-  reynolds          =               ,             ,             ,             ,                ,             ,               ,                  ,                 ,              ,              ,
-  weighting         =  1.0          ,1.0          ,1.1          ,1.0          ,1.0             , 1.5         ,0.0            , 1.3              , 1.0             ,1.0           ,1.0           ,0.0          
+  noppoint          = 13
+  name              = 'preSpeed'    ,'maxSpeed'   ,'keepSpeed'  ,'preGlide'   ,'helperPreGlide','maxGlide'   ,'alphaMaxGlide','slopeMaxGlide'   ,'helperKeepGlide','keepGlide'  ,'helperPreClmax','preClmax'   ,'alphaClmax' 
+  op_mode           = 'spec-cl'     ,'spec-cl'    ,'spec-cl'    ,'spec-cl'    ,'spec-cl'       ,'spec-cl'    ,'spec-al'      ,'spec-cl'         ,'spec-cl'        ,'spec-cl'    ,'spec-cl'       ,'spec-cl'    ,'spec-al'    
+  op_point          = -0.05         , 0.15       , 0.30        ,0.39         ,0.50            ,0.60         ,4.0            ,0.60              ,0.70              ,0.90         ,1.0             ,1.1         ,10.5        
+  optimization_type = 'target-drag' ,'target-drag','target-drag','target-drag','target-drag'   ,'target-drag','target-lift'  ,'min-glide-slope' ,'target-drag'    ,'target-drag','target-drag'   ,'target-drag','target-lift'
+  target_value      =  -1           ,-1           ,-1           ,-1           ,                , -1          ,0.6            ,                  ,                 ,-1           ,-1              ,1.0          ,1.2          
+  reynolds          =               ,             ,             ,             ,                ,             ,               ,                  ,                 ,             ,                ,             ,
+  weighting         =  0.7          ,0.9          ,1.0          ,1.0          ,1.0             , 1.0         ,0.0            , 0.0              , 1.0             ,1.0          ,1.0             ,1.0         ,1.0          
 /
 
 &polar_generation
   generate_polars  = .true.                                 ! get re number from command line
   type_of_polar    = 2 
   op_mode          = 'spec-al'
-  op_point_range   =  -4.5, 12.5, 0.25
+  op_point_range   =  -4.5, 12.5, 0.05
 /
 
 
@@ -39,13 +39,13 @@
  
 &particle_swarm_options
   pso_pop         = 40
-  pso_tol         = 0.0015  
+  pso_tol         = 0.0005  
   pso_convergence_profile = 'quick_camb_thick'
-  pso_maxit       = 120
+  pso_maxit       = 140
 /
 
 &xfoil_run_options
   vaccel          = 0.004
-  reinitialize    = .false.                                 ! speed up a little (set true if too many no convergence) 
+  reinitialize    = .true.                                 ! speed up a little (set true if too many no convergence) 
 /
 
