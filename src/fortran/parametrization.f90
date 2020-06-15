@@ -453,7 +453,11 @@ call xfoil_scale_thickness_camber (seed_foil, f_thick,d_xthick,f_camb,d_xcamb, n
 
 ! Change LE radius ... according to new values hidden in modes
 f_radius = 1.d0 + 3.d0 * modes(5)
-x_blend  = max (0.02d0, (5.d0 * modes(6) + 0.1d0))
+! max() will deliver the bigger value of both arguments, so the minimum possible value
+! in this case is 0.005 / 0,5 percent
+x_blend  = max (0.005, modes(6)) 
+
+
 call xfoil_scale_LE_radius (new_foil_1, f_radius, x_blend, new_foil_2)
 
 ! Sanity check - new_foil may not have different number of points
@@ -472,7 +476,7 @@ call xfoil_scale_thickness_camber (seed_foil, f_thick,d_xthick,f_camb,d_xcamb, n
 
 ! Change LE radius ... according to new values hidden in modes
 f_radius = 1.d0 + 3.d0 * modes(11)
-x_blend  = max (0.02d0, (5.d0 * modes(12) + 0.1d0))
+x_blend  = max (0.005, modes(6)) 
 call xfoil_scale_LE_radius (new_foil_1, f_radius, x_blend, new_foil_4)
 
 ! Sanity check - new_foil may not have different number of points
