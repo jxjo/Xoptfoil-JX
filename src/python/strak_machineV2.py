@@ -54,6 +54,8 @@ fs_infotext = 10
 # colours
 cl_infotext = 'aqua'
 cl_polar_change = 'orange'
+cl_T1_polar = 'g'
+cl_T2_polar = 'b'
 
 
 ################################################################################
@@ -1051,12 +1053,25 @@ class polarGraph:
         ax.set_ylim(min(rootPolar.CL) - 0.2, max(rootPolar.CL) + 0.2)
 
         # plot horizontal line where polar changes from T1 to T2
-        self.plotPolarChange(ax, rootPolar)
+        #self.plotPolarChange(ax, rootPolar)
 
         # all polars
         for polar in self.polars:
+            # determine idx for changing colors
+            switchIdx = polar.T2_T1_switchIdx
+
+            # plot lower (T1)-part of polar
+            x = polar.CD[0:switchIdx]
+            y = polar.CL[0:switchIdx]
             # plot CL, CD
-            ax.plot(polar.CD, polar.CL, 'b-')
+            ax.plot(x, y, (cl_T1_polar+'-'), label='T1-polar')
+
+            # plot upper (T2)-part of polar
+            x = polar.CD[switchIdx:len(polar.CD)]
+            y = polar.CL[switchIdx:len(polar.CL)]
+            # plot CL, CD
+            ax.plot(x, y, (cl_T2_polar+'-'), label='T2-polar')
+            ax.legend(loc='upper left')
 
             # plot optimization points
             self.plotLiftDragOptimizationPoints(ax, polar)
@@ -1101,24 +1116,6 @@ class polarGraph:
             else:
                 ax.plot(x, y, 'ro')
 
-                # plot additional markers for root polar only
-                #ax.plot(polar.CD_Markers, polar.CL_Markers,'ro')
-
-        # all target polars
-        for polar in self.targetPolars:
-            # plot CL, CD
-            ax.plot(polar.CD, polar.CL, 'r-')
-
-            # plot max_glide
-            x = polar.CD[polar.maxGlide_idx]
-            y = polar.CL[polar.maxGlide_idx]
-            ax.plot(x, y, 'yo')
-
-            # plot max lift
-            x = polar.CD[polar.maxLift_idx]
-            y = polar.CL[polar.maxLift_idx]
-            ax.plot(x, y, 'yo')
-
 
     def plotLiftOverAlphaOptimizationPoints(self, ax, polar):
         print("plotting CL over alpha target-op-points for Re = %.0f...\n"\
@@ -1161,12 +1158,26 @@ class polarGraph:
         ax.set_ylim(min(rootPolar.CL) - 0.1, max(rootPolar.CL) + 0.2)
 
         # plot horizontal line where polar changes from T1 to T2
-        self.plotPolarChange(ax, rootPolar)
+        #self.plotPolarChange(ax, rootPolar)
 
         # all polars
         for polar in self.polars:
-            # plot CL, alpha
-            ax.plot(polar.alpha, polar.CL, 'b-')
+
+            # determine idx for changing colors
+            switchIdx = polar.T2_T1_switchIdx
+
+            # plot lower (T1)-part of polar
+            x = polar.alpha[0:switchIdx]
+            y = polar.CL[0:switchIdx]
+            # plot CL, CD
+            ax.plot(x, y, (cl_T1_polar+'-'), label='T1-polar')
+
+            # plot upper (T2)-part of polar
+            x = polar.alpha[switchIdx:len(polar.CD)]
+            y = polar.CL[switchIdx:len(polar.CL)]
+            # plot CL, CD
+            ax.plot(x, y, (cl_T2_polar+'-'), label='T2-polar')
+            ax.legend(loc='upper left')
 
             # plot max Speed
             x = polar.alpha[polar.maxSpeed_idx]
@@ -1264,16 +1275,30 @@ class polarGraph:
         # set y-axis manually
         ax.set_ylim(min(rootPolar.CL_CD) - 10, max(rootPolar.CL_CD) + 10)
 
-        if (rootPolar.Cl_switchpoint_Type2_Type1_polar != 999999):
-            # plot vertical line where polar changes from T1 to T2
-            ylimits = ax.get_ylim()
-            ax.axvline(x=rootPolar.Cl_switchpoint_Type2_Type1_polar,
-                              ymin = ylimits[0], ymax = ylimits[1],
-                              color = cl_polar_change)
+##     if (rootPolar.Cl_switchpoint_Type2_Type1_polar != 999999):
+##            # plot vertical line where polar changes from T1 to T2
+##            ylimits = ax.get_ylim()
+##            ax.axvline(x=rootPolar.Cl_switchpoint_Type2_Type1_polar,
+##                              ymin = ylimits[0], ymax = ylimits[1],
+##                              color = cl_polar_change)
         # all polars
         for polar in self.polars:
-            # plot CL/CD, alpha
-            ax.plot(polar.CL, polar.CL_CD, 'b-')
+
+            # determine idx for changing colors
+            switchIdx = polar.T2_T1_switchIdx
+
+            # plot lower (T1)-part of polar
+            x = polar.CL[0:switchIdx]
+            y = polar.CL_CD[0:switchIdx]
+            # plot CL, CD
+            ax.plot(x, y, (cl_T1_polar+'-'), label='T1-polar')
+
+            # plot upper (T2)-part of polar
+            x = polar.CL[switchIdx:len(polar.CD)]
+            y = polar.CL_CD[switchIdx:len(polar.CL)]
+            # plot CL, CD
+            ax.plot(x, y, (cl_T2_polar+'-'), label='T2-polar')
+            ax.legend(loc='upper left')
 
             # plot max_speed
             x = polar.CL[polar.maxSpeed_idx]
@@ -1306,18 +1331,6 @@ class polarGraph:
             self.plotLiftDragOverLiftOptimizationPoints(ax, polar)
 
 
-
-        # all target polars
-        for polar in self.targetPolars:
-            # plot CL/CD, alpha
-            ax.plot(polar.CL, polar.CL_CD, 'r-')
-
-            # plot max_glide
-            x = polar.CL[polar.maxGlide_idx]
-            y = polar.CL_CD[polar.maxGlide_idx]
-            ax.plot(x, y, 'yo')
-
-
     def draw(self, scriptDir):
 
         # get polar of root-airfoil
@@ -1337,14 +1350,16 @@ class polarGraph:
 
         if (rootPolar.polarType == 2):
             text = text + "ReSqrt(Cl) = "
+            polarType = '1/2'
         else:
             text = text + "Re = "
+            polarType = '1'
 
         # add Re-numbers
         for polar in self.polars:
             text = text + ("%d, " %polar.Re)
 
-        text = text + ("Type %d polars" % rootPolar.polarType)
+        text = text + ("Type %s polars" % polarType)
 
 
         fig.suptitle(text, fontsize = 20, color="darkgrey", **csfont)
@@ -1404,6 +1419,7 @@ class polarData:
         self.pre_alpha_maxLift = 0.0
         self.operatingConditions = None
         self.Cl_switchpoint_Type2_Type1_polar = 999999
+        self.T2_T1_switchIdx = 0
 
     def addOperatingConditions(self, opConditions):
         self.operatingConditions = opConditions.copy()
@@ -1484,6 +1500,7 @@ class polarData:
                 mergedPolar.Cm.append(mergePolar_1.Cm[idx])
                 mergedPolar.Top_Xtr.append(mergePolar_1.Top_Xtr[idx])
                 mergedPolar.Bot_Xtr.append(mergePolar_1.Bot_Xtr[idx])
+                mergedPolar.T2_T1_switchIdx = idx
 
         # merge second polar from switching_Cl to end Cl
         for idx in range(len(self.CL)):
