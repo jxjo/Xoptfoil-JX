@@ -8,7 +8,7 @@
       "smoothSeedFoil": "false",
       "smoothMatchPolarFoil": "false",
       "useAlwaysRootfoil": "false",
-      "skipPolarGeneration": "true",
+      "skipPolarGeneration": "false",
       "generateBatchfile": "true", 
       "adaptInitialPerturb": "false",
       "inputFolder": "ressources", 
