@@ -896,6 +896,8 @@ class strakData:
         self.skipPolarGeneration = False
         self.seedFoilName = ""
         self.matchPolarFoilName = ""
+        self.smoothSeedfoil = True
+        self.smoothMatchPolarFoil = True
         self.ReNumbers = []
         self.chordLengths = []
         self.maxReFactor = 3.0
@@ -1993,6 +1995,22 @@ def getParameters(dict):
         print ('skipPolarGeneration not specified')
 
     try:
+        if (dict["smoothSeedfoil"] == 'true'):
+            params.smoothSeedfoil = True
+        else:
+            params.smoothSeedfoil = False
+    except:
+        print ('smoothSeedfoil not specified')
+
+    try:
+        if (dict["smoothMatchPolarFoil"] == 'true'):
+            params.smoothMatchPolarFoil = True
+        else:
+            params.smoothMatchPolarFoil = False
+    except:
+        print ('smoothMatchPolarFoil not specified')
+
+    try:
         params.maxGlideLoss = dict["maxGlideLoss"]
     except:
         print ('maxGlideLoss not specified')
@@ -2037,26 +2055,28 @@ def getwingDataFromXML(params):
     return planeData[0]
 
 
-def copyAndSmoothAirfoil(srcName, srcPath, destName):
-    print("Smoothing airfoil \'%s\', creating airfoil \'%s\'\n" %\
-                       (srcName, destName))
-
+def copyAndSmoothAirfoil(srcName, srcPath, destName, smooth):
     srcfoilNameAndPath = srcPath + bs + srcName + '.dat'
-    inputFilename = getPresetInputFileName('Smooth')
 
-    # compose system-string for smoothing the seed-airfoil
-    systemString = "xfoil_worker.exe -w smooth -i %s -a %s -o %s" % \
+    if (smooth):
+        print("Smoothing airfoil \'%s\', creating airfoil \'%s\'\n" %\
+                       (srcName, destName))
+        # smooth, rename and copy the airfoil
+        inputFilename = getPresetInputFileName('Smooth')
+
+        # compose system-string for smoothing the seed-airfoil
+        systemString = "xfoil_worker.exe -w smooth -i %s -a %s -o %s" % \
                        (inputFilename, srcfoilNameAndPath, destName)
 
-    # execute xfoil-worker / create the smootehed root-airfoil
-    os.system(systemString)
+        # execute xfoil-worker / create the smootehed root-airfoil
+        os.system(systemString)
+    else:
+        print("Renaming airfoil \'%s\' to \'%s\'\n" % (srcName, destName))
+        # only reanme and copy the airfoil
+        systemString = "change_airfoilname.py -i %s -o %s" %\
+                              (srcfoilNameAndPath, destName + '.dat')
+        os.system(systemString)
 
-    # rename the smoothed airfoil
-    smoothedName = destName + '-smoothed.dat'
-    unsmoothedName = destName + '.dat'
-    systemString = "change_airfoilname.py -i %s -o %s" %\
-                              (smoothedName, unsmoothedName)
-    os.system(systemString)
     print("Done.")
 
 
@@ -2071,10 +2091,12 @@ def copy_matchpolarfoils(params):
     srcPath = ".." + bs + params.inputFolder
 
     # copy and smooth the matchfoil
-    copyAndSmoothAirfoil(matchfoilName, srcPath, matchfoilName)
+    copyAndSmoothAirfoil(matchfoilName, srcPath, matchfoilName,
+                                             params.smoothMatchPolarFoil)
 
     # copy and smooth the seedfoil
-    copyAndSmoothAirfoil(seedFoilName, srcPath, seedFoilName)
+    copyAndSmoothAirfoil(seedFoilName, srcPath, seedFoilName,
+                                             params.smoothSeedfoil)
 
     print("Done.")
     return matchfoilName
@@ -2091,7 +2113,8 @@ def generate_rootfoil(params):
     srcPath = ".." + bs + params.inputFolder
 
     # copy and smooth the airfoil, also rename
-    copyAndSmoothAirfoil(seedFoilName, srcPath, rootfoilName)
+    copyAndSmoothAirfoil(seedFoilName, srcPath, rootfoilName,
+                                           params.smoothSeedfoil)
 
     return rootfoilName
 
