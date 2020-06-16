@@ -23,8 +23,8 @@ module polar_operations
   end type op_point_type
 
   type polar_type
-    character(50)    :: airfoil_name    ! Name of airfoil
-    character(50)    :: file_name       ! Name of polar file name 
+    character(250)   :: airfoil_name    ! Name of airfoil
+    character(250)   :: file_name       ! Name of polar file name 
     type(re_type)    :: re              ! Re number of this polar (re*sqrt(cl) if Type2)
     type(re_type)    :: ma              ! Ma number of this polar (mach*sqrt(cl) if Type2)
     double precision :: ncrit           ! ncrit of polar
@@ -65,10 +65,10 @@ subroutine check_and_do_polar_generation (input_file, output_prefix, foil)
   integer  :: npolars
 
   write (*,*)
-  call read_xfoil_paneling_inputs (input_file, xfoil_geom_options)
   call read_polar_inputs          (input_file, foil%name, npolars, polars, xfoil_options)
 
   if (npolars > 0)                                               &
+    call read_xfoil_paneling_inputs (input_file, xfoil_geom_options)
     call generate_polar_files (output_prefix, foil, npolars, polars, &
                                xfoil_geom_options, xfoil_options)
 
@@ -108,15 +108,23 @@ subroutine generate_polar_files (output_prefix, foil, npolars, polars, &
   call make_directory (trim(polars_subdirectory))
 
   ! calc and write all polars
-  
+
+  if (npolars > 1) then
+    write (*,'(1x,A,I2,A)') 'A total of ',npolars,' polars will be generated '//  &
+    'for airfoil '//trim(foil%name)
+  else
+    write (*,*)
+  end if
+
   do i = 1, npolars
 
-    write (*,'(A,I1,A, I7,A)') '   Calculating polar Type ',polars(i)%re%type,' Re=',  &
+    write (*,'(1x,A,I1,A, I7,A)') 'Calculating polar Type ',polars(i)%re%type,' Re=',  &
           int(polars(i)%re%number), ' for '// polars(i)%airfoil_name
     call init_polar (polars(i))
     call calculate_polar (foil, polars(i), xfoil_geom_options, xfoil_options)
 
-    write (*,'(A, F7.0,/)')      '   Writing to '//trim(polars_subdirectory)//'/'//trim(polars(i)%file_name)
+    write (*,'(1x,A, F7.0,/)')    'Writing to '//trim(polars_subdirectory)//'/'//trim(polars(i)%file_name)
+
     open(unit=13, file= trim(polars_subdirectory)//'/'//trim(polars(i)%file_name), status='replace')
     call write_polar_header (13, polars(i))
     call write_polar_data   (13, polars(i))
@@ -191,14 +199,20 @@ subroutine read_polar_inputs  (input_file, foil_name, npolars, polars, xfoil_opt
   open(unit=iunit, file=input_file, status='old', iostat=istat)
 
   if (istat == 0) then
+
+    read (iunit, iostat=istat, nml=polar_generation)
+    if (.not. generate_polars) return 
+    call namelist_check('polar_generation', istat, 'warn')
+
+    rewind(iunit)
     read (iunit, iostat=istat, nml=xfoil_run_options)
     call namelist_check('xfoil_run_options', istat, 'warn')
-    rewind(iunit)
-    read(iunit, iostat=istat, nml=polar_generation)
+
     close (iunit)
+  else
+    call my_stop('Could not find input file '//trim(input_file)//'.')
   end if
   
-  call namelist_check('polar_generation', istat, 'warn')
 
 ! if there are no re numbers in input file take from command line
   if (polar_reynolds(1) == 0d0) then
@@ -206,8 +220,6 @@ subroutine read_polar_inputs  (input_file, foil_name, npolars, polars, xfoil_opt
   end if
 
 ! Input sanity
-
-  if (.not. generate_polars) return 
 
   if ((op_mode /= 'spec-al') .and. (op_mode /= 'spec-cl')) then
     call my_stop ("op_mode must be 'spec-cl' or 'spec-al'")
@@ -255,9 +267,6 @@ subroutine read_polar_inputs  (input_file, foil_name, npolars, polars, xfoil_opt
       npolars                   = i
     end if
   end do
-
-  write (*,'(A,I2,A)') ' A total of ',npolars,' polars will be generated '//  &
-                         'for airfoil '//trim(foil_name)
 
 
 end subroutine read_polar_inputs
@@ -505,6 +514,7 @@ subroutine write_polar_header (out_unit, polar)
 
   type (polar_type), intent (in) :: polar
   integer,           intent (in) :: out_unit
+
 
 ! Example xflr5
 !-

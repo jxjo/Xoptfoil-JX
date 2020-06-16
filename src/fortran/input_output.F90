@@ -600,7 +600,11 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
   fix_unconverged = .true.
   reinitialize = .true.
 
-  npan   = 200              ! if npan_fixed is set in main, this value will be overwritten
+  if (npan_fixed > 0) then 
+    npan   = npan_fixed     ! if npan_fixed is set - this is the one
+  else             
+    npan   = 200            ! a real default
+  end if             
   cvpar = 1.d0
   cterat = 0.d0             ! if set to normal value 0.15d0, the curvature at TE panel
                             !   tends to flip away and have tripple value (bug in xfoil) 
@@ -663,7 +667,7 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
  
   if (npan_fixed > 0 .and. (npan /= npan_fixed)) then 
     npan = npan_fixed 
-    call print_note ("Number of panels (npan) is fixed for optimizations and can't changed")
+    call print_note ("Number of panels (npan) is fixed for optimizations and can't be hanged")
   end if 
 
   xfoil_geom_options%npan = npan
