@@ -354,7 +354,6 @@ subroutine le_find(x, z, le, xle, zle, addpoint_loc)
     if (dist1 == 0.d0) then
       le = i
       addpoint_loc = 0
-      ! jx-test
       !write (*,*) "p  i-1 " , i-1,   x(i-1), z(i-1)
       !write (*,*) "p  i   " , i,   x(i), z(i), dist1
       !write (*,*) "p  LE  " , le,  xle, zle, 0d0, addpoint_loc
@@ -982,7 +981,7 @@ subroutine smooth_it (show_details, x, y)
 
   integer :: max_iterations, nspikes_target, i_range_start, i_range_end
   integer :: nspikes, i_check_start, nspikes_initial
-  integer :: i, n_Chaikin_iter, best_nspikes_index, best_nspikes
+  integer :: i, n_Chaikin_iter, n_no_improve, nspikes_best, n_no_imp_max
   double precision :: tension, sum_y_before, sum_y_after, delta_y
   character (size(x)) :: result_info
   character (100)     :: text_change
@@ -1030,23 +1029,26 @@ subroutine smooth_it (show_details, x, y)
   n_Chaikin_iter = 4              ! number of iterations within Chaikin
   max_iterations = 10             ! max iterations over n_Chaikin_iter 
 
-  best_nspikes = nspikes          ! init with current to check if there is improvement of nspikes over iterations
-  best_nspikes_index = 1          ! iterate only until improvements of nspikes within  i+2
+  nspikes_best = nspikes          ! init with current to check if there is improvement of nspikes over iterations
+  n_no_improve = 0                ! iterate only until iteration with no improvements of nspikes 
+  n_no_imp_max = 3                !  ... within  n_no_imp_max
   
 ! Now do iteration 
 
   i = 1
 
-  do while ((i <= max_iterations) .and. (nspikes > nspikes_target) .and. (i <= (best_nspikes_index+2)))
+  do while ((i <= max_iterations) .and. (nspikes > nspikes_target) .and. (n_no_improve < n_no_imp_max))
 
     call smooth_it_Chaikin (i_range_start, i_range_end, tension, n_Chaikin_iter, x_cos, y)
 
     result_info    = repeat ('-', size(x) ) 
     call find_curvature_spikes    (size(x), i_check_start, spike_threshold, x, y, nspikes, result_info)
 
-    if (nspikes < best_nspikes) then
-      best_nspikes = nspikes
-      best_nspikes_index = i  
+    if (nspikes < nspikes_best) then
+      nspikes_best = nspikes
+      n_no_improve = 0
+    else
+      n_no_improve = n_no_improve + 1  
     end if 
 
     if (show_details) call assess_surface ('   ', x, y)
@@ -1067,6 +1069,11 @@ subroutine smooth_it (show_details, x, y)
       write (*,'(17x, A,F4.1,A)') "No spikes found based on spike_threshold =", &
                                    spike_threshold," - Nothing done"
 
+    elseif (nspikes == 0) then 
+      write (*,'(17x)', advance = 'no')
+      call print_colored (COLOR_GOOD, "Successfully smoothed." )
+      write (*,'(A)') " All spikes removed. "//trim(text_change)
+
     elseif (nspikes <= nspikes_target) then 
       write (*,'(17x)', advance = 'no')
       call print_colored (COLOR_GOOD, "Successfully smoothed." )
@@ -1077,9 +1084,9 @@ subroutine smooth_it (show_details, x, y)
       write (*,'(17x,A,I2,A)') "Smoothing ended. Reached maximum iterations = ", max_iterations, &
             ". "//trim(text_change)
 
-    elseif (i > (best_nspikes_index+2)) then 
-      write (*,'(17x,A,I2,A)') "Smoothing ended. No further improvement possible" // &
-            ". "//trim(text_change)
+    elseif (n_no_improve >= n_no_imp_max) then 
+      write (*,'(17x,A,I2,A)') "Smoothing ended. No further improvement with ",n_no_imp_max, &
+             " iteration. " // trim(text_change)
 
     else 
       write (*,'(17x,A)') "Smoothing ended."          ! this shouldn't happen
