@@ -1061,8 +1061,8 @@ class polarGraph:
             switchIdx = polar.T2_T1_switchIdx
 
             # plot lower (T1)-part of polar
-            x = polar.CD[0:switchIdx]
-            y = polar.CL[0:switchIdx]
+            x = polar.CD[0:switchIdx+1]
+            y = polar.CL[0:switchIdx+1]
             # plot CL, CD
             ax.plot(x, y, (cl_T1_polar+'-'), label='T1-polar')
 
@@ -1167,8 +1167,8 @@ class polarGraph:
             switchIdx = polar.T2_T1_switchIdx
 
             # plot lower (T1)-part of polar
-            x = polar.alpha[0:switchIdx]
-            y = polar.CL[0:switchIdx]
+            x = polar.alpha[0:switchIdx+1]
+            y = polar.CL[0:switchIdx+1]
             # plot CL, CD
             ax.plot(x, y, (cl_T1_polar+'-'), label='T1-polar')
 
@@ -1288,8 +1288,8 @@ class polarGraph:
             switchIdx = polar.T2_T1_switchIdx
 
             # plot lower (T1)-part of polar
-            x = polar.CL[0:switchIdx]
-            y = polar.CL_CD[0:switchIdx]
+            x = polar.CL[0:switchIdx+1]
+            y = polar.CL_CD[0:switchIdx+1]
             # plot CL, CD
             ax.plot(x, y, (cl_T1_polar+'-'), label='T1-polar')
 
