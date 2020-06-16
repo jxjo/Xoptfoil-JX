@@ -1,23 +1,17 @@
 {
-      "strakType": "Generic", 
-      "batchfileName": "make_strak.bat", 
-      "outputFolder": "build", 
-      "strakInputFileName": "istrak.txt", 
-      "seedFoilName": "SD", 
-      "useAlwaysRootfoil": "false",
-      "generateBatchfile": "true", 
-      "adaptInitialPerturb": "true",
       "inputFolder": "ressources", 
-      "operatingMode": "default",
-      "maxGlideLoss": 0.008,
-      "maxSpeedGain": 0.5,
-      "maxLiftGain": 0.5,
+      "outputFolder": "build", 
+      "operatingMode": "matchpolarfoils",
+      "strakType": "MatchPolarFoils", 
+      "batchfileName": "match_polar_foils.bat", 
+      "strakInputFileName": "imatch.txt", 
+      "seedFoilName": "rg15", 
+      "matchPolarFoilName": "SD",
+      "smoothSeedFoil": "false",
+      "smoothMatchPolarFoil": "false",
+      "skipPolarGeneration": "false",
+      "generateBatchfile": "true", 
       "ReNumbers": [
-            220000,
-            190000, 
-            160000, 
-            130000, 
-            100000,
-            70500
+            220000
       ] 
 }
