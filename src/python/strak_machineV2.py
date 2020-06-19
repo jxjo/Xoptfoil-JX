@@ -642,8 +642,8 @@ class inputFile:
                 weight = round(min_weight + (idx*diff), 2)
                 self.changeWeighting(idx, weight)
 
-        print(operatingConditions["weighting"])#Debug
-        print("Done.")
+            #print(operatingConditions["weighting"])#Debug
+            #print("Done.")
 
 
     def adaptReNumbers(self, polarData):
