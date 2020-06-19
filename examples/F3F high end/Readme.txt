@@ -17,7 +17,7 @@ Serveral measures are taken to achieve a "bump free" perfect surface:
 A very low value of the threshold helps for an early detection of eventual reversals. 
 There is one reversal allowed at the bottom side ("rearload" type of airfoil) 
 
-  highlow_treshold     = 0.02	
+  highlow_threshold    = 0.02	
 
 Also the threshold for bump detection has a quite low value to avoid any tendency of bumps.
 

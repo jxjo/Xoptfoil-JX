@@ -827,7 +827,7 @@ def plot_polars(seedfoil, designfoils, plotnum, firsttime=True, animation=False,
         axarr[1].annotate(('f {:5.2f}'.format(foil.flapangle[i])), (cdmax - 0.29*cdrng, foil.cl[i]), 
                           fontsize = 8,color='dimgrey')
       elif (show_cd_value):
-        axarr[1].annotate(('{:5.4f}'.format(foil.cd[i])), (foil.cd[i], foil.cl[i]),
+        axarr[1].annotate(('{:5.5f}'.format(foil.cd[i])), (foil.cd[i], foil.cl[i]),
                           xytext = (10,-4), textcoords="offset points", fontsize = 8, color='dimgrey')
 
   # set axis 
@@ -953,6 +953,8 @@ def plot_optimization_history(steps, fmins, relfmins, rads, firsttime=True,
   axarr[1].set_yscale("log")
   axarr[1].grid()
 
+  print_improvement (mirrorax0, steps, relfmins)
+
   # Update plot for animation only (for others, plt.show() must be called
   # separately)
 
@@ -962,6 +964,36 @@ def plot_optimization_history(steps, fmins, relfmins, rads, firsttime=True,
   ofig.canvas.draw()
 
   return 
+
+#---------------------------------------------------------------------------------------
+# Print actual improvement in history plot
+#---------------------------------------------------------------------------------------
+def print_improvement (axes, steps, improvements):
+
+  i_best = len(steps) - 1
+  best_improve   = improvements [-1]
+  for i in reversed(range(len(steps)-1)):
+    if (improvements[i] < best_improve):
+      break
+    else:
+      i_best = i
+
+
+  my_marker = 7
+  y_text = 10
+  x_text = -4
+
+  axes.plot([steps[i_best]], [improvements[i_best]], marker=my_marker, markersize=7, color="red")
+  if (i_best == (len(steps) - 1)):
+    axes.annotate(('{:.5f}'.format(improvements[i_best])+'%'), 
+                  xy = (steps[i_best], improvements[i_best]), 
+                  xytext = (x_text,y_text), textcoords="offset points", ha = "center",
+                  fontsize='small', color='white', bbox = dict (facecolor="green"))
+  else:
+    axes.annotate(('{:.5f}'.format(improvements[i_best])+'%'), 
+                  xy = (steps[i_best], improvements[i_best]), 
+                  xytext = (x_text,y_text), textcoords="offset points", ha = "center",
+                  fontsize='small', color='red')
 
 ################################################################################
 # Input function that checks python version

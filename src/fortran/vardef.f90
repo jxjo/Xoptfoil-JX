@@ -127,7 +127,7 @@ module vardef
   logical :: show_details
 
 ! jx-mod Smoothing - parameters for smoothing 
-  double precision :: spike_threshold, highlow_treshold
+  double precision :: spike_threshold, highlow_threshold
   logical :: do_smoothing
   double precision, dimension(:), allocatable :: zseedt_not_smoothed, zseedb_not_smoothed
   

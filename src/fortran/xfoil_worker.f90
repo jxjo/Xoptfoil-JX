@@ -113,7 +113,7 @@ end program xfoil_worker
 subroutine repanel_smooth (input_file, output_prefix, seed_foil, visualizer, do_smoothing)
 
   use vardef,             only : airfoil_type
-  use vardef,             only : spike_threshold, highlow_treshold, curv_threshold
+  use vardef,             only : spike_threshold, highlow_threshold, curv_threshold
   use xfoil_driver,       only : xfoil_geom_options_type
   use airfoil_operations, only : airfoil_write, transform_airfoil, get_split_points
   use airfoil_operations, only : split_airfoil, assess_surface, smooth_it, rebuild_airfoil
@@ -148,7 +148,7 @@ subroutine repanel_smooth (input_file, output_prefix, seed_foil, visualizer, do_
   if (do_smoothing) then 
 
     write(*,*)
-    call read_smoothing_inputs (input_file, spike_threshold, highlow_treshold, curv_threshold)
+    call read_smoothing_inputs (input_file, spike_threshold, highlow_threshold, curv_threshold)
 
     write (*,'(/,1x,A)') 'Smoothing Top surface ...'
     zt_smoothed = zt

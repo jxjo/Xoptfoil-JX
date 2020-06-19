@@ -278,7 +278,7 @@ subroutine check_seed()
     match_delta = norm_2(zseedt(2:nptt-1) - zmatcht(2:nptt-1)) + &
                   norm_2(zseedb(2:nptb-1) - zmatchb(2:nptb-1))
     ! Playground: Match foil equals seed foil. Take a dummy objective value to start
-    if (match_delta < 1d-20) then 
+    if (match_delta < 1d-10) then 
       call ask_stop('Match foil and seed foil are equal. A dummy initial value '// &
                      'for the objective function will be taken for demo')
       match_delta = 1d-1 
@@ -591,7 +591,7 @@ end subroutine ask_stop
 
 subroutine  check_handle_curve_violations (info, x, y, max_curv_reverse, max_curv_highlow)
 
-  use vardef,             only : curv_threshold, highlow_treshold
+  use vardef,             only : curv_threshold, highlow_threshold
   use os_util,            only : print_warning
   use airfoil_operations, only : show_reversals_highlows, get_curv_violations
 
@@ -603,7 +603,7 @@ subroutine  check_handle_curve_violations (info, x, y, max_curv_reverse, max_cur
   integer :: n, max, nreverse_violations, nhighlow_violations
 
   call get_curv_violations (x, y, & 
-                            curv_threshold, highlow_treshold, & 
+                            curv_threshold, highlow_threshold, & 
                             max_curv_reverse, max_curv_highlow,   &
                             nreverse_violations, nhighlow_violations)
 
@@ -626,7 +626,7 @@ subroutine  check_handle_curve_violations (info, x, y, max_curv_reverse, max_cur
   end if 
 
   write (*,*)
-  call show_reversals_highlows ('', x, y, curv_threshold, highlow_treshold )
+  call show_reversals_highlows ('', x, y, curv_threshold, highlow_threshold )
   write (*,*)
   write (*,'(11x,A)') 'The Optimizer may not found a solution with this inital violation.'
   write (*,'(11x,A)') 'Either increase max_curv_reverse or curv_threshold (not recommended) or'
