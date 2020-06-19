@@ -9,5 +9,4 @@
 
 &xfoil_run_options
   reinitialize = .true.
-  vaccel          = 0.004
 /
