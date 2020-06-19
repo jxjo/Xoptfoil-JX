@@ -310,6 +310,15 @@ class inputFile:
             idx = idx + 1
 
 
+    def changeWeighting(self, idx, new_weighting):
+        # get operating-conditions from dictionary
+        operatingConditions = self.values["operating_conditions"]
+
+         # set new weighting
+        operatingConditions['weighting'][idx] = new_weighting
+
+
+
     def getOpPoint(self, keyName):
         # get operating-conditions from dictionary
         operatingConditions = self.values["operating_conditions"]
@@ -523,7 +532,7 @@ class inputFile:
 
     # distributes main-oppoints
     def distributeMainOpPoints(self, CL_maxSpeed, CL_maxGlide, pre_CL_maxLift,
-                               CL_maxLift, alpha_maxLift):
+                               pre_alpha_maxLift, CL_maxLift, alpha_maxLift):
         # get operating-conditions
         operatingConditions = self.values["operating_conditions"]
         opPointNames = operatingConditions["name"]
@@ -533,8 +542,8 @@ class inputFile:
         (opPoint_maxLift, self.idx_Clmax) = self.getLastOpPoint()
 
         # change value
-        self.changeOpPoint(opPoint_maxLift, alpha_maxLift)
-        self.changeTargetValue(opPoint_maxLift, CL_maxLift)
+        self.changeOpPoint(opPoint_maxLift, pre_alpha_maxLift)
+        self.changeTargetValue(opPoint_maxLift, pre_CL_maxLift)
 
         self.idx_preClmax = self.idx_Clmax-1
         opPoint_preClmax = opPointNames[self.idx_preClmax]
@@ -620,6 +629,23 @@ class inputFile:
         #print("Done.")#Debug
 
 
+    def SetWeightings(self, params):
+        if (params.weighting_mode == 'linear_progression'):
+            operatingConditions = self.values["operating_conditions"]#Debug
+            max_weigth = 3.0
+            min_weight = 0.7
+
+            num_intervals = self.idx_Clmax
+            diff = (max_weigth - min_weight) / num_intervals
+
+            for idx in range(num_intervals+1):
+                weight = round(min_weight + (idx*diff), 2)
+                self.changeWeighting(idx, weight)
+
+        print(operatingConditions["weighting"])#Debug
+        print("Done.")
+
+
     def adaptReNumbers(self, polarData):
         # get operating-conditions
         operatingConditions = self.values["operating_conditions"]
@@ -702,7 +728,7 @@ class inputFile:
     # airfoil and the polar of the not optimized strak-airfoil.
     def transferMaxLift(self, params, polarData):
         # assign the polars to local variables
-        root_polar = params.polars[0]
+        root_polar = params.merged_polars[0]
         strak_polar = polarData
 
         # is this the polar of the root-airfoil ?
@@ -779,7 +805,7 @@ class inputFile:
     # to the factor in CL_CD_MaxGlide between root-polar and strak-polar
     def transferMaxGlide(self, params, polarData):
         # assign the polars to local variables
-        root_polar = params.polars[0]
+        root_polar = params.merged_polars[0]
         strak_polar = polarData
 
         # is this the polar of the root-airfoil ?
@@ -801,7 +827,7 @@ class inputFile:
 
     def transferMaxSpeed(self, params, polarData):
         # assign the polars to local variables
-        root_polar = params.polars[0]
+        root_polar = params.merged_polars[0]
         strak_polar = polarData
 
         # is this the polar of the root-airfoil ?
@@ -985,6 +1011,7 @@ class strakData:
         self.strakInputFileName = 'i-strak.txt'
         self.ReSqrtCl = 150000
         self.numOpPoints = 16
+        self.weighting_mode = 'constant'
         self.useWingPlanform = True
         self.generateBatch = True
         self.batchfileName = 'make_strak.bat'
@@ -1155,18 +1182,24 @@ class polarGraph:
             # determine idx for changing colors
             switchIdx = polar.T2_T1_switchIdx
 
+            if (polar == rootPolar):
+                T1_label = 'T1-polar'
+                T2_label = 'T2-polar'
+            else:
+                T1_label = None
+                T2_label = None
+
             # plot lower (T1)-part of polar
             x = polar.CD[0:switchIdx+1]
             y = polar.CL[0:switchIdx+1]
             # plot CL, CD
-            ax.plot(x, y, (cl_T1_polar+'-'), label='T1-polar')
+            ax.plot(x, y, (cl_T1_polar+'-'), label=T1_label)
 
             # plot upper (T2)-part of polar
             x = polar.CD[switchIdx:len(polar.CD)]
             y = polar.CL[switchIdx:len(polar.CL)]
             # plot CL, CD
-            ax.plot(x, y, (cl_T2_polar+'-'), label='T2-polar')
-            ax.legend(loc='upper left')
+            ax.plot(x, y, (cl_T2_polar+'-'), label=T2_label)
 
             # plot optimization points
             self.plotLiftDragOptimizationPoints(ax, polar)
@@ -1182,7 +1215,7 @@ class polarGraph:
                  xy=(x,y), xytext=(20,10), textcoords='offset points',
                       fontsize = fs_infotext, color=cl_infotext)
             else:
-                ax.plot(x, y, 'ro')
+                ax.plot(x, y, 'o', color=cl_infotext)
 
 
             # plot max_glide
@@ -1196,7 +1229,7 @@ class polarGraph:
                  xy=(x,y), xytext=(20,0), textcoords='offset points',
                       fontsize = fs_infotext, color=cl_infotext)
             else:
-                ax.plot(x, y, 'ro')
+                ax.plot(x, y, 'o', color=cl_infotext)
 
             # plot max lift
             x = polar.CD[polar.maxLift_idx]
@@ -1209,8 +1242,9 @@ class polarGraph:
                   xy=(x,y), xytext=(10,10), textcoords='offset points',
                     fontsize = fs_infotext, color=cl_infotext)
             else:
-                ax.plot(x, y, 'ro')
+                ax.plot(x, y, 'o', color=cl_infotext)
 
+            ax.legend(loc='upper left')
 
     def plotLiftOverAlphaOptimizationPoints(self, ax, polar):
         print("plotting CL over alpha target-op-points for Re = %.0f...\n"\
@@ -1258,6 +1292,13 @@ class polarGraph:
         # all polars
         for polar in polars:
 
+            if (polar == rootPolar):
+                T1_label = 'T1-polar'
+                T2_label = 'T2-polar'
+            else:
+                T1_label = None
+                T2_label = None
+
             # determine idx for changing colors
             switchIdx = polar.T2_T1_switchIdx
 
@@ -1265,13 +1306,13 @@ class polarGraph:
             x = polar.alpha[0:switchIdx+1]
             y = polar.CL[0:switchIdx+1]
             # plot CL, CD
-            ax.plot(x, y, (cl_T1_polar+'-'), label='T1-polar')
+            ax.plot(x, y, (cl_T1_polar+'-'), label=T1_label)
 
             # plot upper (T2)-part of polar
             x = polar.alpha[switchIdx:len(polar.CD)]
             y = polar.CL[switchIdx:len(polar.CL)]
             # plot CL, CD
-            ax.plot(x, y, (cl_T2_polar+'-'), label='T2-polar')
+            ax.plot(x, y, (cl_T2_polar+'-'), label=T2_label)
             ax.legend(loc='upper left')
 
             # plot max Speed
@@ -1373,6 +1414,13 @@ class polarGraph:
         # all polars
         for polar in polars:
 
+            if (polar == rootPolar):
+                T1_label = 'T1-polar'
+                T2_label = 'T2-polar'
+            else:
+                T1_label = None
+                T2_label = None
+
             # determine idx for changing colors
             switchIdx = polar.T2_T1_switchIdx
 
@@ -1380,13 +1428,13 @@ class polarGraph:
             x = polar.CL[0:switchIdx+1]
             y = polar.CL_CD[0:switchIdx+1]
             # plot CL, CD
-            ax.plot(x, y, (cl_T1_polar+'-'), label='T1-polar')
+            ax.plot(x, y, (cl_T1_polar+'-'), label=T1_label)
 
             # plot upper (T2)-part of polar
             x = polar.CL[switchIdx:len(polar.CD)]
             y = polar.CL_CD[switchIdx:len(polar.CL)]
             # plot CL, CD
-            ax.plot(x, y, (cl_T2_polar+'-'), label='T2-polar')
+            ax.plot(x, y, (cl_T2_polar+'-'), label=T2_label)
             ax.legend(loc='upper left')
 
             # plot max_speed
@@ -1645,7 +1693,7 @@ class polarData:
 
         # also calculate opPoint before MaxLift that can be reached by the
         # optimizer
-        self.pre_CL_maxLift = self.CL_maxLift * 0.97
+        self.pre_CL_maxLift = self.CL_maxLift * 0.99
         self.pre_maxLift_idx = self.find_index(self.pre_CL_maxLift)
         self.pre_alpha_maxLift = self.alpha[self.pre_maxLift_idx]
 
@@ -2084,6 +2132,14 @@ def getParameters(dict):
         print ('adaptInitialPerturb not specified')
 
     try:
+        if (dict["weighting_mode"] == 'linear_progression'):
+            params.weighting_mode = 'linear_progression'
+        else:
+            params.weighting_mode = 'constant'
+    except:
+        print ('weighting_mode not specified')
+
+    try:
         if (dict["skipPolarGeneration"] == 'true'):
             params.skipPolarGeneration = True
         else:
@@ -2216,7 +2272,7 @@ def generate_rootfoil(params):
     seedFoilName = params.seedFoilName
 
     # get name of root-airfoil
-    rootfoilName = get_FoilName(params, 0)
+    rootfoilName = get_FoilName(params, 0).strip('.dat')
 
     # get the path where the seed-airfoil can be found
     srcPath = ".." + bs + params.inputFolder
@@ -2249,17 +2305,21 @@ def generate_inputFiles(params):
 
         # distribute main opPoints, taking the analysed data of the root-polar
         newFile.distributeMainOpPoints(rootPolar.CL_maxSpeed,
-         rootPolar.CL_maxGlide, rootPolar.pre_CL_maxLift, rootPolar.CL_maxLift,
+         rootPolar.CL_maxGlide, rootPolar.pre_CL_maxLift,
+         rootPolar.pre_alpha_maxLift, rootPolar.CL_maxLift,
          rootPolar.alpha_maxLift)
 
         # now distribute the opPoints between the main opPoints equally
         newFile.distributeIntermediateOpPoints(rootPolar)
-        newFile.printOpPoints()#debug
+        #newFile.printOpPoints()#debug
+
+        # set the importance / weightings of the op-points
+        newFile.SetWeightings(params)
 
         if (params.operatingMode == 'matchpolarfoils'):
           # adapt op-points according to polar of match-polar-foil
             newFile.adaptAllOppointsToPolar(strakPolar)
-            newFile.printOpPoints()#Debug
+            #newFile.printOpPoints()#Debug
         else:
             # as a first step always adapt op-points according to polar of
             # root-airfoil
@@ -2267,7 +2327,7 @@ def generate_inputFiles(params):
 
             # as a second step,change oppoints again, but only "shift" them
             # matching the polar of the strak-airfoil
-            newFile.transferOppointsKeepShape(params, params.polars[i])
+            newFile.transferOppointsKeepShape(params, params.merged_polars[i])
 
         if params.adaptInitialPerturb:
             # also adapt the initial perturb according to the change in
@@ -2283,7 +2343,6 @@ def generate_inputFiles(params):
 
         # copy operating-conditions to polar, so they can be plotted in the graph
         opConditions = newFile.getOperatingConditions()
-        print(opConditions)
         strakPolar.addOperatingConditions(opConditions)
 
         # physically create the file
@@ -2330,7 +2389,6 @@ def generate_polars(params, workingDir, rootfoilName):
         inputFilename = getPresetInputFileName(T2_polarInputFile)
         systemString_T2 = "xfoil_worker.exe -i \"%s\" -o \"%s\" -w polar -a \"%s\" -r %d" %\
                                  (inputFilename, rootfoilName, airfoilName, Re)
-        print(systemString_T2)
 
         # execute xfoil-worker / create T1 / T2 polar-files
         if (not params.skipPolarGeneration):
