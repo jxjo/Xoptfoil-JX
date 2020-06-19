@@ -18,13 +18,13 @@
   re_default_as_resqrtcl = .true.                           ! strak: get reynolds (type 2) from command line
 
   noppoint          = 13
-  name              = 'preSpeed'    ,'maxSpeed'   ,'keepSpeed'  ,'preGlide'   ,'helperPreGlide','maxGlide'   ,'alphaMaxGlide','slopeMaxGlide'   ,'helperKeepGlide','keepGlide'  ,'intermediate','helperPreClmax','preClmax'   ,'alphaClmax' 
-  op_mode           = 'spec-cl'     ,'spec-cl'    ,'spec-cl'    ,'spec-cl'    ,'spec-cl'       ,'spec-cl'    ,'spec-al'      ,'spec-cl'         ,'spec-cl'        ,'spec-cl'    ,'spec-cl'     ,'spec-cl'       ,'spec-cl'    ,'spec-al'    
-  op_point          = -0.05         , 0.15       , 0.30        ,0.39         ,0.50            ,0.60         ,4.0            ,0.60              ,0.70              ,0.90         ,1.0           ,1.0             ,1.1          ,10.5        
-  optimization_type = 'target-drag' ,'target-drag','target-drag','target-drag','target-drag'   ,'target-drag','target-lift'  ,'min-glide-slope' ,'target-drag'    ,'target-drag','target-drag' ,'target-drag'   ,'target-drag','target-lift'
-  target_value      =  -1           ,-1           ,-1           ,-1           ,                , -1          ,0.6            ,                  ,                 ,-1           ,-1            ,-1              ,1.0          ,1.2          
-  reynolds          =               ,             ,             ,             ,                ,             ,               ,                  ,                 ,             ,              ,                ,             ,
-  weighting         =  0.7          ,0.9          ,1.0          ,1.0          ,1.0             , 1.0         ,0.0            , 0.0              , 1.0             ,1.0          ,1.0           ,1.0             ,1.0          ,1.0          
+  name              = 'preSpeed'    ,'maxSpeed'   ,'keepSpeed'  ,'preGlide'   ,'helperPreGlide','intermedia3','maxGlide'   ,'alphaMaxGlide','slopeMaxGlide'   ,'helperKeepGlide','keepGlide'  ,'intermedia4','intermediate','intermediate1','intermediate2','helperPreClmax','preClmax'   ,'alphaClmax' 
+  op_mode           = 'spec-cl'     ,'spec-cl'    ,'spec-cl'    ,'spec-cl'    ,'spec-cl'       ,'spec-cl'    ,'spec-cl'    ,'spec-al'      ,'spec-cl'         ,'spec-cl'        ,'spec-cl'    ,'spec-cl'    ,'spec-cl'     ,'spec-cl'     ,'spec-cl'     ,'spec-cl'       ,'spec-cl'    ,'spec-al'    
+  op_point          = -0.05         , 0.15        , 0.30        ,0.39         ,0.50            ,1.0          ,0.60         ,4.0            ,0.60              ,0.70              ,0.90        ,1.0          ,1.0           ,1.0           ,1.0           ,1.0             ,1.1          ,10.5        
+  optimization_type = 'target-drag' ,'target-drag','target-drag','target-drag','target-drag'   ,'target-drag','target-drag','target-lift'  ,'min-glide-slope' ,'target-drag'    ,'target-drag','target-drag','target-drag' ,'target-drag' ,'target-drag' ,'target-drag'   ,'target-drag','target-lift'
+  target_value      =  -1           ,-1           ,-1           ,-1           ,                ,-1           , -1          ,0.6            ,                  ,                 ,-1           ,-1           ,-1            ,-1            ,-1            ,-1              ,1.0          ,1.2          
+  reynolds          =               ,             ,             ,             ,                ,             ,             ,               ,                  ,                 ,             ,             ,              ,              ,              ,                ,             ,
+  weighting         =  0.7          ,0.9          ,1.0          ,1.0          ,1.0             ,1.0          , 1.0         ,0.0            , 0.0              , 1.0             ,1.0          ,1.0          ,1.0           ,1.0           ,1.0           ,1.0             ,1.0          ,1.0          
 /
 
 &polar_generation
@@ -46,7 +46,6 @@
 /
 
 &xfoil_run_options
-  vaccel          = 0.004
   reinitialize    = .true.                                 ! speed up a little (set true if too many no convergence) 
 /
 
