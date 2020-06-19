@@ -567,7 +567,7 @@ class inputFile:
             opPoint_maxSpeed = opPointNames[self.idx_maxSpeed]
 
         # change values
-        self.changeOpPoint(opPoint_preClmax, pre_CL_maxLift)
+        self.changeOpPoint(opPoint_preClmax, (pre_CL_maxLift*0.980))
         self.changeOpPoint(opPoint_maxGlide, CL_maxGlide)
         self.changeOpPoint(opPoint_maxSpeed, CL_maxSpeed)
 
