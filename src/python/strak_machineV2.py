@@ -196,6 +196,10 @@ class inputFile:
     def __init__(self, strakType):
         self.values = {}
         self.presetInputFileName = ""
+        self.idx_maxSpeed = 0
+        self.idx_maxGlide = 0
+        self.idx_preClmax = 0
+        self.idx_Clmax = 0
 
         # get real path of the script
         pathname = os.path.dirname(sys.argv[0])
@@ -205,9 +209,11 @@ class inputFile:
 
         # read input-file as a Fortan namelist
         self.values = f90nml.read(self.presetInputFileName)
+        #operatingConditions = self.values["operating_conditions"]#Debug
+        #print (operatingConditions)#Debug
 
         # clean-up file
-        self.removeDeactivatedOpPoints()
+        self.removeDeactivatedOpPoints() #TODO remove
 
     # removes an op-Point if weighting is beyond a certain limit
     def removeDeactivatedOpPoints(self):
@@ -421,104 +427,197 @@ class inputFile:
         except:
             pass
 
-    # distributes all intermediate-oppoints equally
-    def distributeIntermediateOppoints(self, polarData):
+    def generateOpPoints(self, numOpPoints, Cl_min, Cl_max, alpha_Cl_max):
+        # get operating-conditions
+        operatingConditions = self.values["operating_conditions"]
+
+        # clear operating conditions
+        self.deleteAllOpPoints(operatingConditions)
+
+        # calculate the intervall
+        diff = (Cl_max - Cl_min) / (numOpPoints-1)
+
+        # always start at Cl_min for first opPoint
+        op_point = Cl_min
+        op_mode = 'spec-cl'
+        optimization_type = 'target-drag'
+        target_value = 0.0
+        weighting = 1.0
+        reynolds = None
+
+        # now build up new opPoints
+        for i in range(numOpPoints):
+            # set generic op-point-name
+            name = "op_%s" % i
+
+            # last opPoint has always lift-target
+            if (i == (numOpPoints-1)):
+                op_point_value = round(alpha_Cl_max, Al_decimals)
+                op_mode = 'spec-al'
+                optimization_type = 'target-lift'
+                target_value = Cl_max
+            else:
+                # round opPoint
+                op_point_value = round(op_point, Cl_decimals)
+
+            # add new opPoint to dictionary
+            self.addOppoint(name, op_mode, op_point_value, optimization_type,
+                                            target_value, weighting, reynolds)
+            # increment op-point
+            op_point = op_point + diff
+
+        # set new number of opPoints
+        operatingConditions['noppoint'] = numOpPoints
+#        print(self.values["operating_conditions"])#Debug
+#        print("Done.")#Debug
+
+
+    def findClosestClOpPoint(self, Cl):
+        # get operating-conditions
+        operatingConditions = self.values["operating_conditions"]
+        numOpPoints = len(operatingConditions["op_point"])
+        name = None
+        idx = -1
+
+        for i in range(1, numOpPoints):
+            value_left = operatingConditions["op_point"][i-1]
+            value_right = operatingConditions["op_point"][i]
+            name_left = operatingConditions["name"][i-1]
+            name_right = operatingConditions["name"][i]
+
+            if (Cl >= value_left) & (Cl <= value_right):
+                # we found the correct interval. Which one is closer ?
+                diff_To_left = Cl - value_left
+                diff_To_right = value_right - Cl
+
+                if (diff_To_left < diff_To_right):
+                    return (name_left, i-1)
+                else:
+                    return (name_right, i)
+
+        return (name, idx)
+
+
+    def getLastOpPoint(self):
         # get operating-conditions
         operatingConditions = self.values["operating_conditions"]
         numOpPoints = len(operatingConditions["op_point"])
 
-        # idx where the op-points occur, reset-values
-        idx_maxSpeed = -1
-        idx_maxGlide = -1
-        idx_preClmax = -1
+        # return last opPoint
+        name = operatingConditions["name"][numOpPoints-1]
+        idx = numOpPoints-1
+        return (name, idx)
 
-        # number of deltas between 'maxSpeed' and 'maxGlide'
-        num_AfterMaxSpeed = 0
+    def printOpPoints(self):
+        # get operating-conditions
+        operatingConditions = self.values["operating_conditions"]
+        opPointNames = operatingConditions["name"]
+        opPoints = operatingConditions["op_point"]
+        targetValues = operatingConditions["target_value"]
 
-        # number of deltas between 'maxGlide' and 'preClmax'
-        num_AfterMaxGlide = 0
+        print(opPointNames)
+        print(opPoints)
+        print(targetValues)
+        print("Done.")
 
-        # find out idx and target-values of fixed op-points
-        for idx in range(numOpPoints):
-            name = operatingConditions["name"][idx]
-            op_mode = operatingConditions["op_mode"][idx]
-            op_type = operatingConditions["optimization_type"][idx]
 
-            if name == 'maxSpeed':
-                idx_maxSpeed = idx
-                opPoint_maxSpeed = operatingConditions["op_point"][idx]
-            elif name == 'maxGlide':
-                idx_maxGlide = idx
-                opPoint_maxGlide = operatingConditions["op_point"][idx]
-            elif name == 'preClmax':
-                idx_preClmax = idx
-                opPoint_preClmax = operatingConditions["op_point"][idx]
+    # distributes main-oppoints
+    def distributeMainOpPoints(self, CL_maxSpeed, CL_maxGlide, pre_CL_maxLift,
+                               CL_maxLift, alpha_maxLift):
+        # get operating-conditions
+        operatingConditions = self.values["operating_conditions"]
+        opPointNames = operatingConditions["name"]
+        opPoints = operatingConditions["op_point"]
 
-            if (idx_maxSpeed > -1) and (idx_maxGlide == -1):
-                # count all spec-cl op-points between maxSpeed and maxGlide
-                if (op_mode == 'spec-cl') and (op_type != 'min-glide-slope'):
-                    num_AfterMaxSpeed = num_AfterMaxSpeed + 1
+        # get opPoint
+        (opPoint_maxLift, self.idx_Clmax) = self.getLastOpPoint()
 
-            elif (idx_maxGlide > -1) and (idx_preClmax == -1):
-                if (op_mode == 'spec-cl') and (op_type != 'min-glide-slope'):
-                    num_AfterMaxGlide = num_AfterMaxGlide + 1
+        # change value
+        self.changeOpPoint(opPoint_maxLift, alpha_maxLift)
+        self.changeTargetValue(opPoint_maxLift, CL_maxLift)
 
-        # calculate the delta-values
-        diff_maxSpeed = (opPoint_maxGlide - opPoint_maxSpeed)/num_AfterMaxSpeed
-        diff_maxGlide = (opPoint_preClmax - opPoint_maxGlide)/num_AfterMaxGlide
+        self.idx_preClmax = self.idx_Clmax-1
+        opPoint_preClmax = opPointNames[self.idx_preClmax]
 
-        # distribute all 'spec-cl' opPoints before maxSpeed equally
+        # get opPoint
+        (opPoint_maxGlide, self.idx_maxGlide) =\
+                            self.findClosestClOpPoint(CL_maxGlide)
+
+        # correct oppoint, if necessary
+        if (self.idx_maxGlide >= self.idx_preClmax):
+            self.idx_maxGlide = self.idx_preClmax -1
+            opPoint_maxGlide = opPointNames[self.idx_maxGlide]
+
+        # get opPoint
+        (opPoint_maxSpeed, self.idx_maxSpeed) =\
+                                 self.findClosestClOpPoint(CL_maxSpeed)
+
+        # correct oppoint, if necessary
+        if (self.idx_maxSpeed >= self.idx_maxGlide):
+            self.idx_maxSpeed = self.idx_maxGlide -1
+            opPoint_maxSpeed = opPointNames[self.idx_maxSpeed]
+
+        # change values
+        self.changeOpPoint(opPoint_preClmax, pre_CL_maxLift)
+        self.changeOpPoint(opPoint_maxGlide, CL_maxGlide)
+        self.changeOpPoint(opPoint_maxSpeed, CL_maxSpeed)
+
+        # change names
+        opPointNames[self.idx_Clmax] = 'alphaClmax'
+        opPointNames[self.idx_preClmax] = 'preClmax'
+        opPointNames[self.idx_maxGlide] = 'maxGlide'
+        opPointNames[self.idx_maxSpeed] = 'maxSpeed'
+
+
+    def distributeEqually(self, start, end):
+         # get operating-conditions
+        operatingConditions = self.values["operating_conditions"]
+
+        # get operating-modes
+        op_mode_start = operatingConditions["op_mode"][start]
+        op_mode_end = operatingConditions["op_mode"][end]
+
+        # get Cl-values
+        if (op_mode_start == 'spec-cl'):
+            Cl_start = operatingConditions["op_point"][start]
+        else:
+            Cl_start = operatingConditions["target_value"][start]
+
+        if (op_mode_end == 'spec-cl'):
+            Cl_end = operatingConditions["op_point"][end]
+        else:
+            Cl_end = operatingConditions["target_value"][end]
+
+        # calculate the interval
+        num_intervals = end - start
+        Cl_interval = (Cl_end - Cl_start) / num_intervals
+
+        print(Cl_start, Cl_end, Cl_interval, num_intervals)
+
         num = 1
-        start = idx_maxSpeed-1
-        end = -1
-
-        # loop backwards
-        for idx in range(start, end, -1):
+        for idx in range(start+1, end):
             op_mode = operatingConditions["op_mode"][idx]
             op_type = operatingConditions["optimization_type"][idx]
 
-            # check the opPoint has the demanded type
+            # only "spec-cl" op-points shalle be affected
             if (op_mode == 'spec-cl') and (op_type != 'min-glide-slope'):
-                newValue = round(opPoint_maxSpeed - (num*diff_maxSpeed),
-                                 Cl_decimals)
+                newValue = round(Cl_start + (num*Cl_interval), Cl_decimals)
                 operatingConditions["op_point"][idx] = newValue
-                name = operatingConditions["name"][idx]
-                self.adaptTargetValueToPolar(name, polarData)
                 num = num + 1
 
-        # distribute all 'spec-cl' opPoints between maxSpeed and maxGlide equally
-        num = 1
-        start = idx_maxSpeed + 1
-        end = idx_maxGlide
 
-        for idx in range(start, end):
-            op_mode = operatingConditions["op_mode"][idx]
-            op_type = operatingConditions["optimization_type"][idx]
+    # distribute all intermediate-oppoints
+    def distributeIntermediateOpPoints(self, polarData):
+        # get operating-conditions
+        operatingConditions = self.values["operating_conditions"]
 
-            if (op_mode == 'spec-cl') and (op_type != 'min-glide-slope'):
-                newValue = round(opPoint_maxSpeed + (num*diff_maxSpeed),
-                                 Cl_decimals)
-                operatingConditions["op_point"][idx] = newValue
-                name = operatingConditions["name"][idx]
-                self.adaptTargetValueToPolar(name, polarData)
-                num = num + 1
+        # distribute the opPoints between the main opPoints equally
+        self.distributeEqually(0, self.idx_maxSpeed)
+        self.distributeEqually(self.idx_maxSpeed, self.idx_maxGlide)
+        self.distributeEqually(self.idx_maxGlide, self.idx_preClmax)
 
-        # distribute all 'spec-cl' opPoints between maxGlide and preClmax equally
-        num = 1
-        start = idx_maxGlide + 1
-        end = idx_preClmax
-
-        for idx in range(start, end):
-            op_mode = operatingConditions["op_mode"][idx]
-            op_type = operatingConditions["optimization_type"][idx]
-
-            if (op_mode == 'spec-cl') and (op_type != 'min-glide-slope'):
-                newValue = round(opPoint_maxGlide + (num*diff_maxGlide),
-                                 Cl_decimals)
-                operatingConditions["op_point"][idx] = newValue
-                name = operatingConditions["name"][idx]
-                self.adaptTargetValueToPolar(name, polarData)
-                num = num + 1
+        #print(self.values["operating_conditions"])#Debug
+        #print("Done.")#Debug
 
 
     def adaptReNumbers(self, polarData):
@@ -577,6 +676,7 @@ class inputFile:
     def adaptTargetValueToPolar(self, opPointName, polar):
         # get value of opPoint
         opPointValue = self.getOpPoint(opPointName)
+        print(polar.polarName)#debug
 
         # what kind of value is it?
         opPointType = self.getOpPointType(opPointName)
@@ -762,17 +862,16 @@ class inputFile:
             print("opPoint preSpeed was skipped")
 
 
-    # adapt all oppoints and also the target-values to the given polar-data
+    # adapt all target-values to the given polar-data
     def adaptAllOppointsToPolar(self, polarData):
-        # adapt maxSpeed to polar.
-        self.adaptMaxSpeed(polarData)
-        # adapt maxLift to polar.
-        self.adaptMaxLift(polarData)
-        # adapt maxGlide and dependend values to polar
-        self.adaptMaxGlide(polarData)
+        # get operating-conditions
+        operatingConditions = self.values["operating_conditions"]
+        num_points = operatingConditions['noppoint']
 
-        # distribute oppoints in between
-        self.distributeIntermediateOppoints(polarData)
+        # all target-values will be set to the corresponding polar-value
+        for i in range(num_points):
+            name = operatingConditions["name"][i]
+            self.adaptTargetValueToPolar(name, polarData)
 
         # adapt Re-numbers for Type2 / Type1 oppoints
         self.adaptReNumbers(polarData)
@@ -799,6 +898,7 @@ class inputFile:
         operatingConditions["optimization_type"] = []
         operatingConditions["target_value"] = []
         operatingConditions["weighting"] = []
+        operatingConditions["reynolds"] = []
         operatingConditions['noppoint'] = 0
 
 
@@ -809,9 +909,10 @@ class inputFile:
 
 
     def addOppoint(self, name, op_mode, op_point, optimization_type,
-                                            target_value, weighting):
+                                            target_value, weighting, reynolds):
          # get operating-conditions from dictionary
         operatingConditions = self.values["operating_conditions"]
+
         # append new oppoint
         operatingConditions["name"].append(name)
         operatingConditions["op_mode"].append(op_mode)
@@ -819,6 +920,7 @@ class inputFile:
         operatingConditions["optimization_type"].append(optimization_type)
         operatingConditions["target_value"].append(target_value)
         operatingConditions["weighting"].append(weighting)
+        operatingConditions["reynolds"].append(reynolds)
         operatingConditions['noppoint'] = operatingConditions['noppoint'] + 1
 
 
@@ -853,11 +955,6 @@ class inputFile:
 
         return operatingConditions
 
-
-    def getOppointText(self):
-        return "Dies ist ein Text"
-
-
     def writeToFile(self, fileName):
         # delete 'name'
         operatingConditions = self.values["operating_conditions"]
@@ -887,6 +984,7 @@ class strakData:
         self.xmlFileName = None
         self.strakInputFileName = 'i-strak.txt'
         self.ReSqrtCl = 150000
+        self.numOpPoints = 16
         self.useWingPlanform = True
         self.generateBatch = True
         self.batchfileName = 'make_strak.bat'
@@ -901,6 +999,7 @@ class strakData:
         self.smoothSeedfoil = True
         self.smoothMatchPolarFoil = True
         self.ReNumbers = []
+        self.CL_min = -0.1
         self.chordLengths = []
         self.maxReFactor = 3.0
         self.maxReNumbers = []
@@ -911,8 +1010,8 @@ class strakData:
         self.inputFileNames = []
         self.T1_polars = []
         self.T2_polars = []
-        self.polars = []
-        self.targetPolars = []
+        self.merged_polars = []
+        #self.targetPolars = []
         self.maxGlideLoss = 0.008
         self.maxSpeedGain = 0.5
         self.maxLiftGain = 0.3
@@ -977,11 +1076,7 @@ class strakData:
 ################################################################################
 class polarGraph:
     def __init__(self):
-        self.polars = []
-        self.targetPolars = []
-
-    def addPolar(self, polarData):
-        self.polars.append(polarData)
+        return
 
     def plotLogo(self, ax, scriptDir):
         image = mpimg.imread(scriptDir + bs + imagesPath + bs + logoName)
@@ -1042,12 +1137,12 @@ class polarGraph:
                     color = cl_polar_change)
 
 
-    def plotLiftDragPolar(self, ax):
+    def plotLiftDragPolar(self, ax, polars):
         # set axes and labels
         self.setAxesAndLabels(ax, 'Cl, Cd', 'Cd', 'Cl')
 
         # get polar of root-airfoil
-        rootPolar = self.polars[0]
+        rootPolar = polars[0]
 
         # set y-axis manually
         ax.set_ylim(min(rootPolar.CL) - 0.2, max(rootPolar.CL) + 0.2)
@@ -1056,7 +1151,7 @@ class polarGraph:
         #self.plotPolarChange(ax, rootPolar)
 
         # all polars
-        for polar in self.polars:
+        for polar in polars:
             # determine idx for changing colors
             switchIdx = polar.T2_T1_switchIdx
 
@@ -1140,19 +1235,19 @@ class polarGraph:
                 # get alpha from target-value
                 y = operatingConditions["target_value"][idx]
 
-                print("target-op-point[%d] \'%s\', CL: %f, alpha:%f"\
+                print("target-op-point[%d] \'%s\', alpha:%f, CL: %f,"\
                  % (idx, op_name, x, y))
                 # plot
                 ax.plot(x, y, 'y.')
 
         print("Done.\n\n")
 
-    def plotLiftOverAlphaPolar(self, ax):
+    def plotLiftOverAlphaPolar(self, ax, polars):
         # set axes and labels
         self.setAxesAndLabels(ax, 'Cl, alpha', 'alpha', 'Cl')
 
         # get polar of root-airfoil
-        rootPolar = self.polars[0]
+        rootPolar = polars[0]
 
         # set y-axis manually
         ax.set_ylim(min(rootPolar.CL) - 0.1, max(rootPolar.CL) + 0.2)
@@ -1161,7 +1256,7 @@ class polarGraph:
         #self.plotPolarChange(ax, rootPolar)
 
         # all polars
-        for polar in self.polars:
+        for polar in polars:
 
             # determine idx for changing colors
             switchIdx = polar.T2_T1_switchIdx
@@ -1182,7 +1277,7 @@ class polarGraph:
             # plot max Speed
             x = polar.alpha[polar.maxSpeed_idx]
             y = polar.CL[polar.maxSpeed_idx]
-            ax.plot(x, y, 'ro')
+            ax.plot(x, y, 'o', color=cl_infotext)
             # additonal text for root polar only
             if (polar == rootPolar):
                 ax.annotate('maxSpeed (root) @ alpha = %.2f, Cl = %.2f' %\
@@ -1193,7 +1288,7 @@ class polarGraph:
             # plot max Glide
             x = polar.alpha[polar.maxGlide_idx]
             y = polar.CL[polar.maxGlide_idx]
-            ax.plot(x, y, 'ro')
+            ax.plot(x, y, 'o', color=cl_infotext)
             # additonal text for root polar only
             if (polar == rootPolar):
                 ax.annotate('maxGlide (root) @ alpha = %.2f, Cl = %.2f' %\
@@ -1204,7 +1299,7 @@ class polarGraph:
             # plot max lift
             x = polar.alpha[polar.maxLift_idx]
             y = polar.CL[polar.maxLift_idx]
-            ax.plot(x, y, 'ro')
+            ax.plot(x, y, 'o', color=cl_infotext)
             # additonal text for root polar only
             if (polar == rootPolar):
                 ax.annotate('maxLift (root) @ alpha = %.2f, Cl = %.2f' %\
@@ -1265,24 +1360,18 @@ class polarGraph:
         print("Done.\n\n")
 
 
-    def plotLiftDragOverLiftPolar(self, ax):
+    def plotLiftDragOverLiftPolar(self, ax, polars):
         # set axes and labels
         self.setAxesAndLabels(ax, 'Cl/Cd, Cl', 'Cl', 'Cl/Cd')
 
         # get polar of root-airfoil
-        rootPolar = self.polars[0]
+        rootPolar = polars[0]
 
         # set y-axis manually
         ax.set_ylim(min(rootPolar.CL_CD) - 10, max(rootPolar.CL_CD) + 10)
 
-##     if (rootPolar.Cl_switchpoint_Type2_Type1_polar != 999999):
-##            # plot vertical line where polar changes from T1 to T2
-##            ylimits = ax.get_ylim()
-##            ax.axvline(x=rootPolar.Cl_switchpoint_Type2_Type1_polar,
-##                              ymin = ylimits[0], ymax = ylimits[1],
-##                              color = cl_polar_change)
         # all polars
-        for polar in self.polars:
+        for polar in polars:
 
             # determine idx for changing colors
             switchIdx = polar.T2_T1_switchIdx
@@ -1303,7 +1392,7 @@ class polarGraph:
             # plot max_speed
             x = polar.CL[polar.maxSpeed_idx]
             y = polar.CL_CD[polar.maxSpeed_idx]
-            ax.plot(x, y, 'ro')
+            ax.plot(x, y, 'o', color=cl_infotext)
             # add text for root Polar only
             if (polar == rootPolar):
                 ax.annotate('maxSpeed (root) @ Cl = %.2f, Cl/Cd = %.2f' % (x, y), xy=(x,y),
@@ -1312,7 +1401,7 @@ class polarGraph:
             # plot max_glide
             x = polar.CL[polar.maxGlide_idx]
             y = polar.CL_CD[polar.maxGlide_idx]
-            ax.plot(x, y, 'ro')
+            ax.plot(x, y, 'o', color=cl_infotext)
             # add text for root Polar only
             if (polar == rootPolar):
                 ax.annotate('maxGlide (root) @ Cl = %.2f, Cl/Cd = %.2f' % (x, y), xy=(x,y),
@@ -1321,7 +1410,7 @@ class polarGraph:
             # plot max Lift
             x = polar.CL[polar.maxLift_idx]
             y = polar.CL_CD[polar.maxLift_idx]
-            ax.plot(x, y, 'ro')
+            ax.plot(x, y, 'o', color=cl_infotext)
             # add text for root Polar only
             if (polar == rootPolar):
                 ax.annotate('maxLift (root) @ Cl = %.2f, Cl/Cd = %.2f' % (x, y), xy=(x,y),
@@ -1331,10 +1420,12 @@ class polarGraph:
             self.plotLiftDragOverLiftOptimizationPoints(ax, polar)
 
 
-    def draw(self, scriptDir):
+    def draw(self, scriptDir, params):
+        # get polars
+        polars = params.merged_polars
 
         # get polar of root-airfoil
-        rootPolar = self.polars[0]
+        rootPolar = polars[0]
 
         print("plotting polar of airfoil %s at Re = %.0f..."
                        % (rootPolar.airfoilname, rootPolar.Re))
@@ -1356,11 +1447,10 @@ class polarGraph:
             polarType = '1'
 
         # add Re-numbers
-        for polar in self.polars:
+        for polar in polars:
             text = text + ("%d, " %polar.Re)
 
         text = text + ("Type %s polars" % polarType)
-
 
         fig.suptitle(text, fontsize = 20, color="darkgrey", **csfont)
 
@@ -1368,13 +1458,13 @@ class polarGraph:
         self.plotLogo(upper[0], scriptDir)
 
         # second figure, display the Lift / Drag-Polar
-        self.plotLiftDragPolar(lower[0])
+        self.plotLiftDragPolar(lower[0], polars)
 
         # third figure, display the Lift / alpha-Polar
-        self.plotLiftOverAlphaPolar(upper[1])
+        self.plotLiftOverAlphaPolar(upper[1], polars)
 
         # fourth figure, display the lift/drag /Lift polar
-        self.plotLiftDragOverLiftPolar(lower[1])
+        self.plotLiftDragOverLiftPolar(lower[1], polars)
 
         # maximize window
         figManager = plt.get_current_fig_manager()
@@ -1391,6 +1481,7 @@ class polarGraph:
 ################################################################################
 class polarData:
     def __init__(self):
+        self.polarName = ''
         self.airfoilname = "airfoil"
         self.polarType = 2
         self.Re = 0
@@ -1554,7 +1645,7 @@ class polarData:
 
         # also calculate opPoint before MaxLift that can be reached by the
         # optimizer
-        self.pre_CL_maxLift = self.CL_maxLift * 0.95
+        self.pre_CL_maxLift = self.CL_maxLift * 0.97
         self.pre_maxLift_idx = self.find_index(self.pre_CL_maxLift)
         self.pre_alpha_maxLift = self.alpha[self.pre_maxLift_idx]
 
@@ -1596,21 +1687,10 @@ class polarData:
         return 0
 
     def find_CL(self, alpha):
-        # reduce list of CL, alpha-values up to CL_max. No duplicate CL-values
-        # are allowed!
-        x = []
-        y = []
-        for i in range(self.maxLift_idx):
-            x.append(self.alpha[i])
-            y.append(self.CL[i])
+        for i in range(len(self.alpha)):
+            if (self.alpha[i] >= alpha):
+                return self.CL[i]
 
-        #double append the last value
-        x.append(self.alpha[i])
-        y.append(self.CL[i])
-
-        # calculate corresponding CL
-        CL = np.interp( alpha, x, y)
-        return CL
 
     def find_CL_CD(self, CL):
         # calculate corresponding CL_CD
@@ -2042,6 +2122,18 @@ def getParameters(dict):
     except:
         print ('maxLiftGain not specified')
 
+    try:
+        params.numOpPoints = dict["numOpPoints"]
+        if (params.numOpPoints < 5):
+            params.numOpPoints = 5
+    except:
+        print ('numOpPoints not specified')
+
+    try:
+        params.Cl_min = dict["Cl_min"]
+    except:
+        print ('Cl_min not specified')
+
     return params
 
 
@@ -2139,22 +2231,39 @@ def generate_rootfoil(params):
 def generate_inputFiles(params):
     print("Generating inputfiles...")
 
+    # get root-polar
+    rootPolar = params.merged_polars[0]
+    num_polars = len(params.ReNumbers)
+
     # generate files for all Re-numbers
-    for i in range(0, len(params.ReNumbers)):
+    for i in range(num_polars):
+        # get strak-polar
+        strakPolar = params.merged_polars[i]
+
         # create new inputfile
         newFile = inputFile(params.strakType)
 
+        # generate a fresh list of equally distributed op-Points
+        newFile.generateOpPoints(params.numOpPoints, params.Cl_min,
+                               rootPolar.CL_maxLift, rootPolar.alpha_maxLift)
+
+        # distribute main opPoints, taking the analysed data of the root-polar
+        newFile.distributeMainOpPoints(rootPolar.CL_maxSpeed,
+         rootPolar.CL_maxGlide, rootPolar.pre_CL_maxLift, rootPolar.CL_maxLift,
+         rootPolar.alpha_maxLift)
+
+        # now distribute the opPoints between the main opPoints equally
+        newFile.distributeIntermediateOpPoints(rootPolar)
+        newFile.printOpPoints()#debug
+
         if (params.operatingMode == 'matchpolarfoils'):
           # adapt op-points according to polar of match-polar-foil
-            newFile.adaptAllOppointsToPolar(params.polars[i])
-##            # special mode 'target-polar'
-##            if (params.operatingMode == 'targetPolar'):
-##                # completely exchange oppoints of inputfile
-##                newFile.SetOppointsFromPolar(params.targetPolars[(i-1)], 10)
+            newFile.adaptAllOppointsToPolar(strakPolar)
+            newFile.printOpPoints()#Debug
         else:
             # as a first step always adapt op-points according to polar of
             # root-airfoil
-            newFile.adaptAllOppointsToPolar(params.polars[0])
+            newFile.adaptAllOppointsToPolar(rootPolar)
 
             # as a second step,change oppoints again, but only "shift" them
             # matching the polar of the strak-airfoil
@@ -2174,7 +2283,8 @@ def generate_inputFiles(params):
 
         # copy operating-conditions to polar, so they can be plotted in the graph
         opConditions = newFile.getOperatingConditions()
-        params.polars[i].addOperatingConditions(opConditions)
+        print(opConditions)
+        strakPolar.addOperatingConditions(opConditions)
 
         # physically create the file
         newFile.writeToFile(params.inputFileNames[i])
@@ -2182,7 +2292,7 @@ def generate_inputFiles(params):
     print("Done.")
 
 
-def generate_polars(params, workingDir, rootfoilName, graph):
+def generate_polars(params, workingDir, rootfoilName):
 # generate polars of seedfoil / root-airfoil:
     print("Generating polars for airfoil %s..." % rootfoilName)
 
@@ -2247,11 +2357,12 @@ def generate_polars(params, workingDir, rootfoilName, graph):
         # analyze merged polar
         mergedPolar.analyze()
 
-        # add merged polar to params
-        params.polars.append(mergedPolar)
+        # set name
+        mergedPolar.polarName = 'mergedPolar T1/T2, ReSqrt(Cl) = %.0f, Re = %0.f' %\
+                (newPolar_T2.Re, newPolar_T1.Re)
 
-        # also add merged polar to graph
-        graph.addPolar(mergedPolar)
+        # add merged polar to params
+        params.merged_polars.append(mergedPolar)
 
     print("Done.")
 
@@ -2326,8 +2437,8 @@ if __name__ == "__main__":
     else:
         rootfoilName = generate_rootfoil(params)
 
-    # generate polars of root-airfoil, also analyze and add to graph
-    generate_polars(params, workingDir, rootfoilName, graph)
+    # generate polars of root-airfoil, also analyze
+    generate_polars(params, workingDir, rootfoilName)
 
     # generate input-Files
     generate_inputFiles(params)
@@ -2348,6 +2459,6 @@ if __name__ == "__main__":
     print("Done.")
 
     # show graph
-    graph.draw(scriptPath)
+    graph.draw(scriptPath, params)
 
     print("Ready.")
