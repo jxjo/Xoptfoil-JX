@@ -115,7 +115,7 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
                          curv_threshold, symmetrical, min_flap_degrees,        &
                          max_flap_degrees, min_camber, max_camber,             &
                          naddthickconst, addthick_x, addthick_min, addthick_max, &
-                         max_te_curvature, highlow_treshold
+                         max_te_curvature, highlow_threshold
   namelist /naca_airfoil/ family, maxt, xmaxt, maxc, xmaxc, design_cl, a,      &
                           leidx, reflexed
   namelist /initialization/ feasible_init, feasible_limit,                     &
@@ -231,7 +231,7 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
   max_curv_highlow_top = 0
   max_curv_highlow_bot = 0
   curv_threshold       = 0.10d0
-  highlow_treshold     = 0.05d0
+  highlow_threshold     = 0.05d0
 
 
   symmetrical = .false.
@@ -785,7 +785,7 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
   write(*,*) " max_curv_reverse_bot = ", max_curv_reverse_bot
   write(*,*) " max_curv_highlow_top = ", max_curv_highlow_top
   write(*,*) " max_curv_highlow_bot = ", max_curv_highlow_bot
-  write(*,*) " highlow_treshold = ", highlow_treshold
+  write(*,*) " highlow_threshold = ", highlow_threshold
   write(*,*) " curv_threshold = ", curv_threshold
   write(*,*) " symmetrical = ", symmetrical
   write(*,*) " min_flap_degrees = ", min_flap_degrees
@@ -1056,7 +1056,7 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
 
   if (check_curvature ) then 
     if (curv_threshold <= 0.d0)    call my_stop("curv_threshold must be > 0.")
-    if (highlow_treshold < 0.01d0) call my_stop("highlow_treshold must be >= 0.01")
+    if (highlow_threshold < 0.01d0) call my_stop("highlow_threshold must be >= 0.01")
     if (max_curv_reverse_top < 0)  call my_stop("max_curv_reverse_top must be >= 0.")
     if (max_curv_reverse_bot < 0)  call my_stop("max_curv_reverse_bot must be >= 0.")
     if (max_curv_highlow_top < 0)  call my_stop("max_curv_highlow_top must be >= 0.")

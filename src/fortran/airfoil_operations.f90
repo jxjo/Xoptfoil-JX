@@ -845,7 +845,7 @@ end subroutine my_stop
 subroutine assess_surface (info, x, y)
 
   use math_deps, only : find_curvature_reversals, find_curvature_spikes
-  use vardef,    only:  curv_threshold, spike_threshold, highlow_treshold
+  use vardef,    only:  curv_threshold, spike_threshold, highlow_threshold
 
   character(*), intent(in) :: info
   double precision, dimension(:), intent(in) :: x, y
@@ -864,7 +864,7 @@ subroutine assess_surface (info, x, y)
   call find_curvature_spikes (size(x), i_check_start, spike_threshold, x, y, nspikes, result_info)
 
   ! have a look at 2nd derivation ... skip first 5 points at LE (too special there) 
-  call find_curvature_reversals(size(x), 5, highlow_treshold, curv_threshold, x, y, &
+  call find_curvature_reversals(size(x), 5, highlow_threshold, curv_threshold, x, y, &
                                 nhighlows, nreversals, result_info)
 
   write (*,'(11x,A,1x,3(I2,A),A)') info//' ', nreversals, 'R ', &
@@ -886,14 +886,14 @@ end subroutine assess_surface
 !------------------------------------------------------------------------------
 
 subroutine get_curv_violations (x, y, & 
-                      reversal_threshold, highlow_treshold, & 
+                      reversal_threshold, highlow_threshold, & 
                       max_curv_reverse, max_curv_highlow,   &
                       nreverse_violations, nhighlow_violations)
 
   use math_deps, only : find_curvature_reversals, find_curvature_spikes
 
   double precision, dimension(:), intent(in) :: x, y
-  double precision, intent(in)   :: highlow_treshold, reversal_threshold
+  double precision, intent(in)   :: highlow_threshold, reversal_threshold
   integer, intent(in)            :: max_curv_reverse, max_curv_highlow
 
   integer, intent(out) :: nreverse_violations, nhighlow_violations
@@ -904,7 +904,7 @@ subroutine get_curv_violations (x, y, &
   result_info = repeat ('-', size(x) )    ! dummy   
 
   ! have a look at 2nd derivation ... skip first 5 points at LE (too special there) 
-  call find_curvature_reversals(size(x), 5, highlow_treshold, reversal_threshold, x, y, &
+  call find_curvature_reversals(size(x), 5, highlow_threshold, reversal_threshold, x, y, &
   nhighlows,nreversals, result_info)
 
   nreverse_violations = max(0,(nreversals-max_curv_reverse))
@@ -923,13 +923,13 @@ end subroutine get_curv_violations
 !------------------------------------------------------------------------------
 
   subroutine show_reversals_highlows (info, x, y, & 
-                                     reversal_threshold, highlow_treshold )
+                                     reversal_threshold, highlow_threshold )
 
   use math_deps, only : find_curvature_reversals, find_curvature_spikes
 
   character(*), intent(in) :: info
   double precision, dimension(:), intent(in) :: x, y
-  double precision, intent(in)   :: highlow_treshold, reversal_threshold
+  double precision, intent(in)   :: highlow_threshold, reversal_threshold
   integer  :: nhighlows, nreversals
 
   character (size(x)) :: result_info
@@ -937,7 +937,7 @@ end subroutine get_curv_violations
   result_info = repeat ('-', size(x) )      
 
   ! have a look at 2nd derivation ...
-  call find_curvature_reversals(size(x), 5, highlow_treshold, reversal_threshold, x, y, &
+  call find_curvature_reversals(size(x), 5, highlow_threshold, reversal_threshold, x, y, &
                                 nhighlows,nreversals, result_info)
 
   write (*,'(11x,A,1x,2(I2,A),A)') info//' ', nreversals, 'R ', &

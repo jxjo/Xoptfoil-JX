@@ -616,14 +616,14 @@ end subroutine
 ! To find the "real" reversals only curve value greater curve_threshold
 !    are taken to check against the change from + to -
 ! To find high/lows all high/lows of 2nd derivation with a distance
-!    greater highlow_treshold are taken
+!    greater highlow_threshold are taken
 !
 ! result_info holds a string of npoints for user entertainment 
 !------------------------------------------------------------------------------
-subroutine find_curvature_reversals(npt, i_start, highlow_treshold, curve_threshold, x, y, nhighlows2, nreversals2, result_info)
+subroutine find_curvature_reversals(npt, i_start, highlow_threshold, curve_threshold, x, y, nhighlows2, nreversals2, result_info)
 
   integer, intent(in) :: npt, i_start
-  double precision, intent(in) :: curve_threshold, highlow_treshold
+  double precision, intent(in) :: curve_threshold, highlow_threshold
   double precision, dimension(npt), intent(in) :: x, y
   integer, intent(out) :: nreversals2, nhighlows2
   character (npt), intent(inout) :: result_info
@@ -651,7 +651,7 @@ subroutine find_curvature_reversals(npt, i_start, highlow_treshold, curve_thresh
   i_max = i_firstHighLow
   prev_highlow = ' '
 
-  ! find the highs and lows in 2nd derivation - dist between must be > highlow_treshold 
+  ! find the highs and lows in 2nd derivation - dist between must be > highlow_threshold 
   !    do not take the last panel at TE into account as PANGEN tends to produce
   !    a curvature peek for the last panel which could lead to a false highlow...
   do i = i_firstHighLow, (npt-1)
@@ -660,10 +660,10 @@ subroutine find_curvature_reversals(npt, i_start, highlow_treshold, curve_thresh
     if ( deriv2(i) - deriv2(i-1)> 0.d0 ) then             !.. going up now
       d_minmax = abs(deriv2(i_max) - deriv2(i_min))       ! diff between last min-max
       d_cur    = abs(deriv2(i_min) - deriv2(i))           ! diff between current -lastmin
-      if (((d_minmax > highlow_treshold) .and. (d_cur > highlow_treshold)) & 
+      if (((d_minmax > highlow_threshold) .and. (d_cur > highlow_threshold)) & 
          .and. (prev_highlow /= low_point)) then          ! no succeding lows
         if (prev_highlow /= ' ') then                     ! skip count for very first point
-          ! we passed a low - the curve is going highlow_treshold up
+          ! we passed a low - the curve is going highlow_threshold up
           nlows = nlows + 1
           result_info (i_min:i_min) = low_point
         end if 
@@ -676,9 +676,9 @@ subroutine find_curvature_reversals(npt, i_start, highlow_treshold, curve_thresh
     else                                                  ! going down
       d_minmax = abs(deriv2(i_max) - deriv2(i_min))       ! diff betwenn min-max
       d_cur    = abs(deriv2(i_max) - deriv2(i))           ! diff current-max
-      if (((d_minmax > highlow_treshold) .and. (d_cur > highlow_treshold)) &
+      if (((d_minmax > highlow_threshold) .and. (d_cur > highlow_threshold)) &
         .and. (prev_highlow /= high_point)) then          ! no succeding highs
-        ! we passed a high - the curve is going highlow_treshold down
+        ! we passed a high - the curve is going highlow_threshold down
         if (prev_highlow /= ' ') then                     ! skip count for very first point
           nhighs = nhighs + 1
           result_info (i_max:i_max) = high_point

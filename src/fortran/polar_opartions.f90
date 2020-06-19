@@ -339,26 +339,26 @@ end subroutine read_xfoil_paneling_inputs
 !=============================================================================
 
 subroutine read_smoothing_inputs  (input_file, spike_threshold, &
-                                    highlow_treshold, curv_threshold)
+                                    highlow_threshold, curv_threshold)
 
   use airfoil_operations, only : my_stop
   use input_output,       only : namelist_check
 
   character(*), intent(in)      :: input_file
-  double precision , intent(out):: highlow_treshold, curv_threshold, spike_threshold
+  double precision , intent(out):: highlow_threshold, curv_threshold, spike_threshold
 
   integer :: istat, iunit
   logical                       :: do_smoothing
 
   namelist /smoothing_options/ do_smoothing, spike_threshold 
-  namelist /constraints/ highlow_treshold, curv_threshold
+  namelist /constraints/ highlow_threshold, curv_threshold
 
   ! Init default values 
 
   do_smoothing      = .true.                !currently dummy
   spike_threshold   = 0.8d0           
   curv_threshold    = 0.01d0
-  highlow_treshold  = 0.02d0
+  highlow_threshold = 0.02d0
  
 ! Open input file and read namelist from file
 
