@@ -357,7 +357,7 @@ function aero_objective_function(designvars, include_penalty, evaluate_only_geom
 !   Top side 
 
     call get_curv_violations (xseedt, zt_new, & 
-                              curv_threshold, highlow_treshold, & 
+                              curv_threshold, highlow_threshold, & 
                               max_curv_reverse_top, max_curv_highlow_top,   &
                               nreverse_violations, nhighlow_violations)
 
@@ -373,7 +373,7 @@ function aero_objective_function(designvars, include_penalty, evaluate_only_geom
 !   Bottom side - 
 
     call get_curv_violations (xseedb, zb_new, & 
-                              curv_threshold, highlow_treshold, & 
+                              curv_threshold, highlow_threshold, & 
                               max_curv_reverse_bot, max_curv_highlow_bot,   &
                               nreverse_violations, nhighlow_violations)
 
@@ -760,7 +760,7 @@ function matchfoil_objective_function(designvars)
 
   match_delta = norm_2(zt_new(2:nptt-1) - zmatcht(2:nptt-1)) + &
                 norm_2(zb_new(2:nptb-1) - zmatchb(2:nptb-1))
-  if (match_delta < 1d-20)  match_delta = 1d-1 
+  if (match_delta < 1d-10)  match_delta = 1d-1 
 
   ! Scale result to initial value 1.
   matchfoil_objective_function = match_delta * match_foils_scale_factor
