@@ -49,7 +49,8 @@ Cd_decimals = 6 # drag
 Al_decimals = 4 # alpha
 
 # fontsizes
-fs_infotext = 10
+fs_infotext = 9
+fs_legend = 8
 
 # colours
 cl_infotext = 'aqua'
@@ -200,6 +201,7 @@ class inputFile:
         self.idx_maxGlide = 0
         self.idx_preClmax = 0
         self.idx_Clmax = 0
+        self.idx_additionalOpPoints = []
 
         # get real path of the script
         pathname = os.path.dirname(sys.argv[0])
@@ -517,6 +519,7 @@ class inputFile:
         idx = numOpPoints-1
         return (name, idx)
 
+
     def printOpPoints(self):
         # get operating-conditions
         operatingConditions = self.values["operating_conditions"]
@@ -578,41 +581,60 @@ class inputFile:
         opPointNames[self.idx_maxSpeed] = 'maxSpeed'
 
 
+    def insertAdditionalOpPoints(self, opPoints):
+        num = 0
+        #self.printOpPoints()#Debug
+
+        for opPoint in opPoints:
+
+            # compose name
+            name = "add_op_%s" % num
+
+            # insert new op-Point, get index
+            idx = self.insertOpPoint(name, 'spec-cl', opPoint, 'target-drag',
+             0.0, 1.0, None)
+
+            # correct idx of main op-points
+            if (idx <= self.idx_maxSpeed):
+                self.idx_maxSpeed = self.idx_maxSpeed + 1
+
+            if (idx <= self.idx_maxGlide):
+                self.idx_maxGlide = self.idx_maxGlide + 1
+
+            if (idx <= self.idx_preClmax):
+                self.idx_preClmax = self.idx_preClmax + 1
+
+            # append idx to list of additional op-points
+            self.idx_additionalOpPoints.append(idx)
+            num = num + 1
+
+        #self.printOpPoints()#Debug
+
+    # "start" and "end" are both fixed op-points. All op-points between
+    # start and end shall be distributed equally.
     def distributeEqually(self, start, end):
-         # get operating-conditions
+        # get operating-conditions
         operatingConditions = self.values["operating_conditions"]
 
-        # get operating-modes
-        op_mode_start = operatingConditions["op_mode"][start]
-        op_mode_end = operatingConditions["op_mode"][end]
-
-        # get Cl-values
-        if (op_mode_start == 'spec-cl'):
-            Cl_start = operatingConditions["op_point"][start]
-        else:
-            Cl_start = operatingConditions["target_value"][start]
-
-        if (op_mode_end == 'spec-cl'):
-            Cl_end = operatingConditions["op_point"][end]
-        else:
-            Cl_end = operatingConditions["target_value"][end]
+        # get Cl-values of start and end
+        Cl_start = operatingConditions["op_point"][start]
+        Cl_end = operatingConditions["op_point"][end]
 
         # calculate the interval
         num_intervals = end - start
-        Cl_interval = (Cl_end - Cl_start) / num_intervals
 
-        print(Cl_start, Cl_end, Cl_interval, num_intervals)
+        if (num_intervals <= 1):
+            # nothing to do, both points are fixed
+            return
+
+        Cl_interval = (Cl_end - Cl_start) / num_intervals
+        #print(Cl_start, Cl_end, Cl_interval, num_intervals) Debug
 
         num = 1
         for idx in range(start+1, end):
-            op_mode = operatingConditions["op_mode"][idx]
-            op_type = operatingConditions["optimization_type"][idx]
-
-            # only "spec-cl" op-points shalle be affected
-            if (op_mode == 'spec-cl') and (op_type != 'min-glide-slope'):
-                newValue = round(Cl_start + (num*Cl_interval), Cl_decimals)
-                operatingConditions["op_point"][idx] = newValue
-                num = num + 1
+            newValue = round(Cl_start + (num*Cl_interval), Cl_decimals)
+            operatingConditions["op_point"][idx] = newValue
+            num = num + 1
 
 
     # distribute all intermediate-oppoints
@@ -620,10 +642,27 @@ class inputFile:
         # get operating-conditions
         operatingConditions = self.values["operating_conditions"]
 
-        # distribute the opPoints between the main opPoints equally
-        self.distributeEqually(0, self.idx_maxSpeed)
-        self.distributeEqually(self.idx_maxSpeed, self.idx_maxGlide)
-        self.distributeEqually(self.idx_maxGlide, self.idx_preClmax)
+        # generate a sorted list of all fixed op-point-idx
+        fixed_opPoints = []
+        fixed_opPoints.append(self.idx_maxSpeed)
+        fixed_opPoints.append(self.idx_maxGlide)
+        fixed_opPoints.append(self.idx_preClmax)
+
+        for idx in self.idx_additionalOpPoints:
+            fixed_opPoints.append(idx)
+
+        fixed_opPoints.sort()
+        #print (fixed_opPoints) Debug
+
+        # distribute the opPoints between the fixed opPoints equally
+        for idx in range(len(fixed_opPoints)-1):
+            start = fixed_opPoints[idx]
+            end = fixed_opPoints[idx+1]
+            self.distributeEqually(start, end)
+
+        #self.distributeEqually(0, self.idx_maxSpeed)
+        #self.distributeEqually(self.idx_maxSpeed, self.idx_maxGlide)
+        #self.distributeEqually(self.idx_maxGlide, self.idx_preClmax)
 
         #print(self.values["operating_conditions"])#Debug
         #print("Done.")#Debug
@@ -950,6 +989,36 @@ class inputFile:
         operatingConditions['noppoint'] = operatingConditions['noppoint'] + 1
 
 
+    # insert a new oppoint in the list
+    def insertOpPoint(self, name, op_mode, op_point, optimization_type,
+                                            target_value, weighting, reynolds):
+         # get operating-conditions from dictionary
+        operatingConditions = self.values["operating_conditions"]
+
+        # find index
+        num_opPoints = len(operatingConditions["op_point"])
+
+        for idx in range(num_opPoints):
+            op_mode_list = operatingConditions["op_mode"][idx]
+            op_point_list = operatingConditions["op_point"][idx]
+
+            if ((op_mode_list== 'spec-cl') & (op_point_list >= op_point)):
+
+                # insert new oppoint
+                operatingConditions["name"].insert(idx, name)
+                operatingConditions["op_mode"].insert(idx, op_mode)
+                operatingConditions["op_point"].insert(idx, op_point)
+                operatingConditions["optimization_type"].insert(idx, optimization_type)
+                operatingConditions["target_value"].insert(idx, target_value)
+                operatingConditions["weighting"].insert(idx, weighting)
+                operatingConditions["reynolds"].insert(idx, reynolds)
+                operatingConditions['noppoint'] = operatingConditions['noppoint'] + 1
+
+                return idx
+
+        return None
+
+
     # add a "target-drag" oppoint to operating-conditions
     def addTargetPolarOppoint(self, Cl, Cd):
         self.addOppoint('target_polar', 'spec-cl', Cl, 'target-drag', Cd, 1.0)
@@ -1026,6 +1095,7 @@ class strakData:
         self.smoothSeedfoil = True
         self.smoothMatchPolarFoil = True
         self.ReNumbers = []
+        self.additionalOpPoints = []
         self.CL_min = -0.1
         self.chordLengths = []
         self.maxReFactor = 3.0
@@ -1143,27 +1213,6 @@ class polarGraph:
         print("Done.\n\n")
 
 
-    def plotPolarChange(self, ax, rootPolar):
-        if (rootPolar.Cl_switchpoint_Type2_Type1_polar != 999999):
-            xlimits = ax.get_xlim()
-
-            ax.axhline(y=rootPolar.Cl_switchpoint_Type2_Type1_polar,
-                              xmin = xlimits[0], xmax = xlimits[1],
-                              color = cl_polar_change)
-
-            ax.text(xlimits[1], 0.3, 'Type 2',
-                    transform = ax.transAxes,
-                    horizontalalignment = 'right',
-                    verticalalignment = 'bottom',
-                    color = cl_polar_change)
-
-            ax.text(xlimits[1], 0.1, 'Type 1',
-                    transform = ax.transAxes,
-                    horizontalalignment = 'right',
-                    verticalalignment = 'bottom',
-                    color = cl_polar_change)
-
-
     def plotLiftDragPolar(self, ax, polars):
         # set axes and labels
         self.setAxesAndLabels(ax, 'Cl, Cd', 'Cd', 'Cl')
@@ -1173,9 +1222,6 @@ class polarGraph:
 
         # set y-axis manually
         ax.set_ylim(min(rootPolar.CL) - 0.2, max(rootPolar.CL) + 0.2)
-
-        # plot horizontal line where polar changes from T1 to T2
-        #self.plotPolarChange(ax, rootPolar)
 
         # all polars
         for polar in polars:
@@ -1201,9 +1247,6 @@ class polarGraph:
             # plot CL, CD
             ax.plot(x, y, (cl_T2_polar+'-'), label=T2_label)
 
-            # plot optimization points
-            self.plotLiftDragOptimizationPoints(ax, polar)
-
             # plot max_speed
             x = polar.CD[polar.maxSpeed_idx]
             y = polar.CL[polar.maxSpeed_idx]
@@ -1212,7 +1255,7 @@ class polarGraph:
             if (polar == rootPolar):
                 ax.plot(x, y, marker='o',color=cl_infotext)
                 ax.annotate('maxSpeed (root) @ Cl = %.2f, Cd = %.4f' % (y, x),
-                 xy=(x,y), xytext=(20,10), textcoords='offset points',
+                 xy=(x,y), xytext=(10,0), textcoords='offset points',
                       fontsize = fs_infotext, color=cl_infotext)
             else:
                 ax.plot(x, y, 'o', color=cl_infotext)
@@ -1226,7 +1269,7 @@ class polarGraph:
             if (polar == rootPolar):
                 ax.plot(x, y, marker='o', color=cl_infotext)
                 ax.annotate('maxGlide (root) @ Cl = %.2f, Cd = %.4f' % (y, x),
-                 xy=(x,y), xytext=(20,0), textcoords='offset points',
+                 xy=(x,y), xytext=(10,0), textcoords='offset points',
                       fontsize = fs_infotext, color=cl_infotext)
             else:
                 ax.plot(x, y, 'o', color=cl_infotext)
@@ -1239,12 +1282,15 @@ class polarGraph:
             if (polar == rootPolar):
                 ax.plot(x, y, marker='o', color=cl_infotext)
                 ax.annotate('maxLift (root) @ Cl = %.2f, Cd = %.4f' %(y,x),
-                  xy=(x,y), xytext=(10,10), textcoords='offset points',
+                  xy=(x,y), xytext=(-80,10), textcoords='offset points',
                     fontsize = fs_infotext, color=cl_infotext)
             else:
                 ax.plot(x, y, 'o', color=cl_infotext)
 
-            ax.legend(loc='upper left')
+            # plot optimization points
+            self.plotLiftDragOptimizationPoints(ax, polar)
+
+            ax.legend(loc='upper left', fontsize = fs_legend)
 
     def plotLiftOverAlphaOptimizationPoints(self, ax, polar):
         print("plotting CL over alpha target-op-points for Re = %.0f...\n"\
@@ -1286,9 +1332,6 @@ class polarGraph:
         # set y-axis manually
         ax.set_ylim(min(rootPolar.CL) - 0.1, max(rootPolar.CL) + 0.2)
 
-        # plot horizontal line where polar changes from T1 to T2
-        #self.plotPolarChange(ax, rootPolar)
-
         # all polars
         for polar in polars:
 
@@ -1313,7 +1356,7 @@ class polarGraph:
             y = polar.CL[switchIdx:len(polar.CL)]
             # plot CL, CD
             ax.plot(x, y, (cl_T2_polar+'-'), label=T2_label)
-            ax.legend(loc='upper left')
+            ax.legend(loc='upper left', fontsize = fs_legend)
 
             # plot max Speed
             x = polar.alpha[polar.maxSpeed_idx]
@@ -1323,7 +1366,7 @@ class polarGraph:
             if (polar == rootPolar):
                 ax.annotate('maxSpeed (root) @ alpha = %.2f, Cl = %.2f' %\
                   (x, y), xy=(x,y),
-                  xytext=(40,10), textcoords='offset points',
+                  xytext=(10,0), textcoords='offset points',
                   fontsize = fs_infotext, color=cl_infotext)
 
             # plot max Glide
@@ -1334,7 +1377,7 @@ class polarGraph:
             if (polar == rootPolar):
                 ax.annotate('maxGlide (root) @ alpha = %.2f, Cl = %.2f' %\
                   (x, y), xy=(x,y),
-                  xytext=(40,0), textcoords='offset points',
+                  xytext=(10,0), textcoords='offset points',
                   fontsize = fs_infotext, color=cl_infotext)
 
             # plot max lift
@@ -1345,7 +1388,7 @@ class polarGraph:
             if (polar == rootPolar):
                 ax.annotate('maxLift (root) @ alpha = %.2f, Cl = %.2f' %\
                   (x, y), xy=(x,y),
-                  xytext=(-80,15), textcoords='offset points',
+                  xytext=(-140,5), textcoords='offset points',
                   fontsize = fs_infotext, color=cl_infotext)
 
         # plot optimization-points
@@ -1435,7 +1478,7 @@ class polarGraph:
             y = polar.CL_CD[switchIdx:len(polar.CL)]
             # plot CL, CD
             ax.plot(x, y, (cl_T2_polar+'-'), label=T2_label)
-            ax.legend(loc='upper left')
+            ax.legend(loc='upper left', fontsize = fs_legend)
 
             # plot max_speed
             x = polar.CL[polar.maxSpeed_idx]
@@ -1444,7 +1487,7 @@ class polarGraph:
             # add text for root Polar only
             if (polar == rootPolar):
                 ax.annotate('maxSpeed (root) @ Cl = %.2f, Cl/Cd = %.2f' % (x, y), xy=(x,y),
-                   xytext=(20,0), textcoords='offset points', fontsize = fs_infotext, color=cl_infotext)
+                   xytext=(10,0), textcoords='offset points', fontsize = fs_infotext, color=cl_infotext)
 
             # plot max_glide
             x = polar.CL[polar.maxGlide_idx]
@@ -1453,7 +1496,7 @@ class polarGraph:
             # add text for root Polar only
             if (polar == rootPolar):
                 ax.annotate('maxGlide (root) @ Cl = %.2f, Cl/Cd = %.2f' % (x, y), xy=(x,y),
-                   xytext=(10,10), textcoords='offset points', fontsize = fs_infotext, color=cl_infotext)
+                   xytext=(-60,7), textcoords='offset points', fontsize = fs_infotext, color=cl_infotext)
 
             # plot max Lift
             x = polar.CL[polar.maxLift_idx]
@@ -1461,8 +1504,8 @@ class polarGraph:
             ax.plot(x, y, 'o', color=cl_infotext)
             # add text for root Polar only
             if (polar == rootPolar):
-                ax.annotate('maxLift (root) @ Cl = %.2f, Cl/Cd = %.2f' % (x, y), xy=(x,y),
-                   xytext=(10,10), textcoords='offset points', fontsize = fs_infotext, color=cl_infotext)
+                ax.annotate('maxLift (root) @\nCl = %.2f,\nCl/Cd = %.2f' % (x, y), xy=(x,y),
+                   xytext=(10,0), textcoords='offset points', fontsize = fs_infotext, color=cl_infotext)
 
             # plot optimizationPoints
             self.plotLiftDragOverLiftOptimizationPoints(ax, polar)
@@ -2087,6 +2130,11 @@ def getParameters(dict):
         print ('ReNumbers not specified, using no list of ReNumbers')
 
     try:
+        params.additionalOpPoints = dict["additionalOpPoints"]
+    except:
+        print ('additionalOpPoints not specified, using no additional op-points')
+
+    try:
         params.maxReFactor = dict["maxReFactor"]
     except:
         print ('maxReFactor not specified, using default-value %f'
@@ -2300,6 +2348,7 @@ def generate_inputFiles(params):
         newFile = inputFile(params.strakType)
 
         # generate a fresh list of equally distributed op-Points
+        num_opPoints = params.numOpPoints + len(params.additionalOpPoints)
         newFile.generateOpPoints(params.numOpPoints, params.Cl_min,
                                rootPolar.CL_maxLift, rootPolar.alpha_maxLift)
 
@@ -2309,7 +2358,11 @@ def generate_inputFiles(params):
          rootPolar.pre_alpha_maxLift, rootPolar.CL_maxLift,
          rootPolar.alpha_maxLift)
 
-        # now distribute the opPoints between the main opPoints equally
+        # insert additional opPoints
+        newFile.insertAdditionalOpPoints(params.additionalOpPoints)
+
+        # now distribute the opPoints between the main opPoints and additional
+        # oppoints equally
         newFile.distributeIntermediateOpPoints(rootPolar)
         #newFile.printOpPoints()#debug
 

@@ -2,6 +2,7 @@
       "inputFolder": "ressources",
       "outputFolder": "build",
       "operatingMode": "matchpolarfoils",
+      "numOpPoints": 12,
       "strakType": "MatchPolarFoils",
       "batchfileName": "match_polar_foils.bat",
       "strakInputFileName": "imatch.txt",
@@ -10,8 +11,10 @@
       "smoothSeedFoil": "true",
       "smoothMatchPolarFoil": "true",
       "adaptInitialPerturb": "false",
-      "skipPolarGeneration": "false",
+      "skipPolarGeneration": "true",
       "generateBatchfile": "true",
-      "maxReFactor": 2.5,
+      "Cl_min" : -0.01,
+      "additionalOpPoints": [0.55, 0.89],
+      "maxReFactor": 1.0,
       "ReNumbers": [220000]
 }
