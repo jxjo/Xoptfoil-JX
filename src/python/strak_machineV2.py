@@ -731,8 +731,8 @@ class inputFile:
                 weight = round((min_weight + diff), 2)
                 self.changeWeighting(idx, weight)
 
-        print(operatingConditions["weighting"])#Debug
-        print("Done.")#Debug
+        #print(operatingConditions["weighting"])#Debug
+        #print("Done.")#Debug
 
 
     def adaptReNumbers(self, polarData):
@@ -1140,6 +1140,7 @@ class strakData:
         self.strakType = "F3F"
         self.operatingMode = 'default'
         self.useAlwaysRootfoil = False
+        self.showOnlyRootPolarOpPoints = True
         self.adaptInitialPerturb = True
         self.skipPolarGeneration = False
         self.seedFoilName = ""
@@ -1272,6 +1273,9 @@ class polarGraph:
         # get polar of root-airfoil
         rootPolar = polars[0]
 
+        # revert List of polars
+        polars = self.getReverseList(polars)
+
         # set y-axis manually
         ax.set_ylim(min(rootPolar.CL) - 0.2, max(rootPolar.CL) + 0.2)
 
@@ -1310,7 +1314,8 @@ class polarGraph:
                  xy=(x,y), xytext=(10,0), textcoords='offset points',
                       fontsize = fs_infotext, color=cl_infotext)
             else:
-                ax.plot(x, y, 'o', color=cl_infotext)
+                if params.showOnlyRootPolarOpPoints == False:
+                    ax.plot(x, y, 'o', color=cl_infotext)
 
 
             # plot max_glide
@@ -1324,7 +1329,8 @@ class polarGraph:
                  xy=(x,y), xytext=(10,0), textcoords='offset points',
                       fontsize = fs_infotext, color=cl_infotext)
             else:
-                ax.plot(x, y, 'o', color=cl_infotext)
+                if params.showOnlyRootPolarOpPoints == False:
+                    ax.plot(x, y, 'o', color=cl_infotext)
 
             # plot max lift
             x = polar.CD[polar.maxLift_idx]
@@ -1337,10 +1343,12 @@ class polarGraph:
                   xy=(x,y), xytext=(-80,10), textcoords='offset points',
                     fontsize = fs_infotext, color=cl_infotext)
             else:
-                ax.plot(x, y, 'o', color=cl_infotext)
+                if params.showOnlyRootPolarOpPoints == False:
+                    ax.plot(x, y, 'o', color=cl_infotext)
 
             # plot optimization points
-            self.plotLiftDragOptimizationPoints(ax, polar)
+            if (polar == rootPolar) or (params.showOnlyRootPolarOpPoints == False):
+                self.plotLiftDragOptimizationPoints(ax, polar)
 
             ax.legend(loc='upper left', fontsize = fs_legend)
 
@@ -1381,6 +1389,9 @@ class polarGraph:
         # get polar of root-airfoil
         rootPolar = polars[0]
 
+        # revert List of polars
+        polars = self.getReverseList(polars)
+
         # set y-axis manually
         ax.set_ylim(min(rootPolar.CL) - 0.1, max(rootPolar.CL) + 0.2)
 
@@ -1413,7 +1424,10 @@ class polarGraph:
             # plot max Speed
             x = polar.alpha[polar.maxSpeed_idx]
             y = polar.CL[polar.maxSpeed_idx]
-            ax.plot(x, y, 'o', color=cl_infotext)
+
+            if (polar == rootPolar) or (params.showOnlyRootPolarOpPoints == False):
+                ax.plot(x, y, 'o', color=cl_infotext)
+
             # additonal text for root polar only
             if (polar == rootPolar):
                 ax.annotate('maxSpeed (root) @ alpha = %.2f, Cl = %.2f' %\
@@ -1424,7 +1438,9 @@ class polarGraph:
             # plot max Glide
             x = polar.alpha[polar.maxGlide_idx]
             y = polar.CL[polar.maxGlide_idx]
-            ax.plot(x, y, 'o', color=cl_infotext)
+            if (polar == rootPolar) or (params.showOnlyRootPolarOpPoints == False):
+               ax.plot(x, y, 'o', color=cl_infotext)
+
             # additonal text for root polar only
             if (polar == rootPolar):
                 ax.annotate('maxGlide (root) @ alpha = %.2f, Cl = %.2f' %\
@@ -1435,7 +1451,9 @@ class polarGraph:
             # plot max lift
             x = polar.alpha[polar.maxLift_idx]
             y = polar.CL[polar.maxLift_idx]
-            ax.plot(x, y, 'o', color=cl_infotext)
+
+            if (polar == rootPolar) or (params.showOnlyRootPolarOpPoints == False):
+                ax.plot(x, y, 'o', color=cl_infotext)
             # additonal text for root polar only
             if (polar == rootPolar):
                 ax.annotate('maxLift (root) @ alpha = %.2f, Cl = %.2f' %\
@@ -1444,7 +1462,8 @@ class polarGraph:
                   fontsize = fs_infotext, color=cl_infotext)
 
         # plot optimization-points
-        self.plotLiftOverAlphaOptimizationPoints(ax, polar)
+        if (polar == rootPolar) or (params.showOnlyRootPolarOpPoints == False):
+            self.plotLiftOverAlphaOptimizationPoints(ax, polar)
 
 
     def setAxesAndLabels(self, ax, title, xlabel, ylabel):
@@ -1496,12 +1515,26 @@ class polarGraph:
         print("Done.\n\n")
 
 
+    def getReverseList(self, list):
+        reverseList = []
+        idx = len(list)-1
+
+        for element in list:
+            reverseList.append(list[idx])
+            idx = idx -1
+
+        return reverseList
+
+
     def plotLiftDragOverLiftPolar(self, ax, polars):
         # set axes and labels
         self.setAxesAndLabels(ax, 'Cl/Cd, Cl', 'Cl', 'Cl/Cd')
 
         # get polar of root-airfoil
         rootPolar = polars[0]
+
+        # revert List of polars
+        polars = self.getReverseList(polars)
 
         # set y-axis manually
         ax.set_ylim(min(rootPolar.CL_CD) - 10, max(rootPolar.CL_CD) + 10)
@@ -1535,7 +1568,10 @@ class polarGraph:
             # plot max_speed
             x = polar.CL[polar.maxSpeed_idx]
             y = polar.CL_CD[polar.maxSpeed_idx]
-            ax.plot(x, y, 'o', color=cl_infotext)
+
+            if (polar == rootPolar) or (params.showOnlyRootPolarOpPoints == False):
+                ax.plot(x, y, 'o', color=cl_infotext)
+
             # add text for root Polar only
             if (polar == rootPolar):
                 ax.annotate('maxSpeed (root) @ Cl = %.2f, Cl/Cd = %.2f' % (x, y), xy=(x,y),
@@ -1544,7 +1580,10 @@ class polarGraph:
             # plot max_glide
             x = polar.CL[polar.maxGlide_idx]
             y = polar.CL_CD[polar.maxGlide_idx]
-            ax.plot(x, y, 'o', color=cl_infotext)
+
+            if (polar == rootPolar) or (params.showOnlyRootPolarOpPoints == False):
+                ax.plot(x, y, 'o', color=cl_infotext)
+
             # add text for root Polar only
             if (polar == rootPolar):
                 ax.annotate('maxGlide (root) @ Cl = %.2f, Cl/Cd = %.2f' % (x, y), xy=(x,y),
@@ -1553,14 +1592,18 @@ class polarGraph:
             # plot max Lift
             x = polar.CL[polar.maxLift_idx]
             y = polar.CL_CD[polar.maxLift_idx]
-            ax.plot(x, y, 'o', color=cl_infotext)
+
+            if (polar == rootPolar) or (params.showOnlyRootPolarOpPoints == False):
+                ax.plot(x, y, 'o', color=cl_infotext)
+
             # add text for root Polar only
             if (polar == rootPolar):
                 ax.annotate('maxLift (root) @\nCl = %.2f,\nCl/Cd = %.2f' % (x, y), xy=(x,y),
                    xytext=(10,0), textcoords='offset points', fontsize = fs_infotext, color=cl_infotext)
 
             # plot optimizationPoints
-            self.plotLiftDragOverLiftOptimizationPoints(ax, polar)
+            if (polar == rootPolar) or (params.showOnlyRootPolarOpPoints == False):
+                self.plotLiftDragOverLiftOptimizationPoints(ax, polar)
 
 
     def draw(self, scriptDir, params):
@@ -2259,6 +2302,14 @@ def getParameters(dict):
             params.skipPolarGeneration = False
     except:
         print ('skipPolarGeneration not specified')
+
+    try:
+        if (dict["showOnlyRootPolarOpPoints"] == 'true'):
+            params.showOnlyRootPolarOpPoints = True
+        else:
+            params.showOnlyRootPolarOpPoints = False
+    except:
+        print ('showOnlyRootPolarOpPoints not specified')
 
     try:
         if (dict["smoothSeedfoil"] == 'true'):
