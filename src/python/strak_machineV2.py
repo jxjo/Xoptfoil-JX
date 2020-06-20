@@ -25,6 +25,7 @@ import sys, os
 from matplotlib import pyplot as plt
 import matplotlib.image as mpimg
 import numpy as np
+import math
 import pip
 import f90nml
 from copy import deepcopy
@@ -604,6 +605,9 @@ class inputFile:
             if (idx <= self.idx_preClmax):
                 self.idx_preClmax = self.idx_preClmax + 1
 
+            if (idx <= self.idx_Clmax):
+                self.idx_Clmax = self.idx_Clmax + 1
+
             # append idx to list of additional op-points
             self.idx_additionalOpPoints.append(idx)
             num = num + 1
@@ -667,22 +671,68 @@ class inputFile:
         #print(self.values["operating_conditions"])#Debug
         #print("Done.")#Debug
 
+    def linearEquation(self, x1, x2, y1, y2, x):
+        y = ((y2-y1)/(x2-x1)) * (x-x1) + y1
+        return y
 
     def SetWeightings(self, params):
-        if (params.weighting_mode == 'linear_progression'):
-            operatingConditions = self.values["operating_conditions"]#Debug
-            max_weigth = 3.0
-            min_weight = 0.7
+        # get operating-conditions
+        operatingConditions = self.values["operating_conditions"]#Debug
+        opPoints = operatingConditions["op_point"]
 
+        # determine min and max weight
+        max_weigth = params.max_weight
+        min_weight = params.min_weight
+
+        # set weight of CLmax to max_weight
+        self.changeWeighting(self.idx_Clmax, max_weigth)
+
+        # evaluate the weighting-mode
+        if (params.weighting_mode == 'constant'):
+            # set every op-point to constant min_weight (but not Clmax)
+            for idx in range((self.idx_Clmax)):
+                self.changeWeighting(idx, min_weight)
+
+        elif (params.weighting_mode == 'linear_progression'):
+            # increment weighting from min_weight to max_weight
+            # do not change Clmax
             num_intervals = self.idx_Clmax
             diff = (max_weigth - min_weight) / num_intervals
 
-            for idx in range(num_intervals+1):
+            for idx in range(num_intervals):
                 weight = round(min_weight + (idx*diff), 2)
                 self.changeWeighting(idx, weight)
 
-            #print(operatingConditions["weighting"])#Debug
-            #print("Done.")
+        elif (params.weighting_mode == 'sinus'):
+            # change weighting with a sinusoidal shape
+            # do not change Clmax
+
+            # all op-points from Cl-min up to maxGlide
+            for idx in range(self.idx_maxGlide):
+                x1 = opPoints[0]
+                x2 = opPoints[self.idx_maxGlide]
+                y1 = 0.0
+                y2 = math.pi/2
+                y = self.linearEquation(x1, x2, y1, y2, opPoints[idx])
+
+                diff = (max_weigth - min_weight) * math.sin(y)
+                weight = round((min_weight + diff), 2)
+                self.changeWeighting(idx, weight)
+
+            # all op-points from maxGlide up to Clmax
+            for idx in range(self.idx_maxGlide, self.idx_preClmax+1):
+                x1 = opPoints[self.idx_maxGlide]
+                x2 = opPoints[self.idx_preClmax]
+                y1 = math.pi/2
+                y2 = 0.0
+                y = self.linearEquation(x1, x2, y1, y2, opPoints[idx])
+
+                diff = (max_weigth - min_weight) * math.sin(y)
+                weight = round((min_weight + diff), 2)
+                self.changeWeighting(idx, weight)
+
+        print(operatingConditions["weighting"])#Debug
+        print("Done.")#Debug
 
 
     def adaptReNumbers(self, polarData):
@@ -1081,6 +1131,8 @@ class strakData:
         self.ReSqrtCl = 150000
         self.numOpPoints = 16
         self.weighting_mode = 'constant'
+        self.min_weight = 1.0
+        self.max_weight = 1.0
         self.useWingPlanform = True
         self.generateBatch = True
         self.batchfileName = 'make_strak.bat'
@@ -2180,12 +2232,25 @@ def getParameters(dict):
         print ('adaptInitialPerturb not specified')
 
     try:
-        if (dict["weighting_mode"] == 'linear_progression'):
-            params.weighting_mode = 'linear_progression'
-        else:
+        params.weighting_mode = dict["weighting_mode"]
+        if ((params.weighting_mode != 'linear_progression') &
+            (params.weighting_mode != 'constant') &
+            (params.weighting_mode != 'sinus')):
             params.weighting_mode = 'constant'
+            print ('weighting_mode %s not allowed' % params.weighting_mode)
     except:
-        print ('weighting_mode not specified')
+        print ('weighting_mode not specified, assuming constant weighting')
+        params.weighting_mode = 'constant'
+
+    try:
+        params.min_weight = dict["min_weight"]
+    except:
+        print ('min_weight not specified')
+
+    try:
+        params.max_weight = dict["max_weight"]
+    except:
+        print ('max_weight not specified')
 
     try:
         if (dict["skipPolarGeneration"] == 'true'):
