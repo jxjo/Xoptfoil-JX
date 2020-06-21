@@ -9,7 +9,7 @@
       "seedFoilName": "rg15", 
       "smoothSeedFoil": "true",
       "useAlwaysRootfoil": "false",
-      "showOnlyRootPolarOpPoints": "true",
+      "showOnlyRootPolarOpPoints": "false",
       "adaptInitialPerturb": "true",
       "skipPolarGeneration": "true",
       "generateBatchfile": "true",
@@ -18,7 +18,7 @@
       "min_weight": 0.7,
       "max_weight": 2.0,
       "maxGlideLoss": 0.008,
-      "maxSpeedGain": 0.5,
+      "maxSpeedGain": 0.3,
       "maxLiftGain": 0.3,
       "maxReFactor": 2.0,
       "ReNumbers": [

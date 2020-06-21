@@ -60,6 +60,8 @@ cl_polar_change = 'orange'
 cl_T1_polar = 'g'
 cl_T2_polar = 'b'
 
+# styles
+opt_point_style = 'y-'
 
 ################################################################################
 #
@@ -164,8 +166,6 @@ strakdata = {
             "operatingMode" : 'default',
             # use always root-airfoil or use predecessing airfoil
             "useAlwaysRootfoil" : 'false',
-            # skip the generation of polars (to save time if already done before)
-            "skipPolarGeneration": 'false',
             # adapt initial_perturb in input file according to differenc in Re-numbers
             "adaptInitialPerturb": 'true',
             # projected maxGlide loss (percent), absolte value
@@ -377,7 +377,8 @@ class inputFile:
         print("Re-Diff is %d, setting initial_perturb to %.4f and pso_tol to %.5f" %\
          (ReDiff, perturb, pso_tol))
 
-
+# TODO use other function than linear interpolation!
+# this only works for certain maxSpeedGain-values
     def setNewTargetValues(self, start, end, rootPolar, x1, x2, y1, y2):
         # get operating-conditions from dictionary
         operatingConditions = self.values["operating_conditions"]
@@ -450,7 +451,7 @@ class inputFile:
         end = self.idx_maxSpeed
 
         # now change all target-values of these op-points
-        y1 = factor_maxSpeed #TODO
+        y1 = factor_maxSpeed
         y2 = factor_maxSpeed
         x1 = params.CL_min
         x2 = CL_maxSpeed_strak
@@ -463,7 +464,7 @@ class inputFile:
         end = self.idx_maxGlide
 
         # now change all target-values of these op-points
-        y1 = factor_maxSpeed
+        y1 = factor_maxGlide#factor_maxSpeed
         y2 = factor_maxGlide
         x1 = CL_maxSpeed_strak
         x2 = CL_maxGlide
@@ -477,32 +478,11 @@ class inputFile:
 
         # now change all target-values of these op-points
         y1 = factor_maxGlide
-        y2 = factor_maxLift
+        y2 = factor_maxGlide
         x1 = CL_maxGlide
         x2 = pre_CL_maxLift_strak
 
         self.setNewTargetValues(start, end, rootPolar, x1, x2, y1, y2)
-
-##        for idx in range(start, end):
-##            # get opPoint
-##            opPoint = opPoints[idx]
-##
-##            # find CD value of root-polar
-##            CL_CD = rootPolar.find_CL_CD(opPoint)
-##
-##            # determine the factor for scaling the CD-values by
-##            # linear interpolation
-##            factor = self.linearEquation(x1,x2, y1, y2, x)
-##
-##            # calculate new target-value
-##            CL_CD = round((CL_CD * factor) , Cl_Cd_decimals)
-##            CD = opPoint / CL_CD
-##
-##            # set new target-value
-##            self.changeTargetValue(opPointNames[idx], CD)
-
-
-
 
 
     def adaptMaxLift(self, polarData):
@@ -728,6 +708,10 @@ class inputFile:
 
 
     def insertAdditionalOpPoints(self, opPoints):
+        if len(opPoints) == 0:
+            # nothing to do
+            return
+
         num = 0
         #self.printOpPoints()#Debug
 
@@ -1287,7 +1271,6 @@ class strakData:
         self.useAlwaysRootfoil = False
         self.showOnlyRootPolarOpPoints = True
         self.adaptInitialPerturb = True
-        self.skipPolarGeneration = False
         self.seedFoilName = ""
         self.matchPolarFoilName = ""
         self.smoothSeedfoil = True
@@ -1388,13 +1371,6 @@ class strakData:
         return round(target, Cl_decimals)
 
 
-    def calculate_CL_CD_TargetValue(self, root, strak, loss):
-        factor = root / (strak * (1.00 - loss))
-        target = strak * factor
-
-        return target
-
-
     def calculateMainTargetValues(self):
         # get root-polar
         rootPolar = self.merged_polars[0]
@@ -1417,10 +1393,12 @@ class strakData:
             self.targets["CL_maxGlide"].append(rootPolar.CL_maxGlide)
 
             # calculate CL/CD-target-value for each airfoil along the strak
-            #TODO Berechung fehlerhaft
-            target_CL_CD_maxGlide = self.calculate_CL_CD_TargetValue(
-                                rootPolar.CL_CD_maxGlide, polar.CL_CD_maxGlide,
-                                params.maxGlideLoss)
+            if (polar == rootPolar):
+                # no maxGlide loss for root-polar
+                factor = 1.00
+            else:
+                factor = 1.00 - params.maxGlideLoss
+            target_CL_CD_maxGlide =  polar.CL_CD_maxGlide * factor
 
             # CL_CD = CL/CD -> CD = CL/CL_CD
             target_CD_maxGlide = rootPolar.CL_maxGlide/target_CL_CD_maxGlide
@@ -1557,6 +1535,9 @@ class polarGraph:
             operatingConditions = polar.operatingConditions
             numOpPoints = len(operatingConditions["op_point"])
 
+        x = []
+        y = []
+
         for idx in range(numOpPoints):
             # get op-mode and type
             op_mode = operatingConditions["op_mode"][idx]
@@ -1566,15 +1547,16 @@ class polarGraph:
             if (op_mode == 'spec-cl') and (op_type != 'min-glide-slope'):
 
                 # get CD from target-value
-                x = operatingConditions["target_value"][idx]
+                x.append(operatingConditions["target_value"][idx])
 
                 # get CL
-                y = operatingConditions["op_point"][idx]
+                y.append(operatingConditions["op_point"][idx])
 
-                print("target-op-point[%d] \'%s\', CL: %f, CD:%f" % (idx, op_name, x, y))
+                print("target-op-point[%d] \'%s\', CL: %f, CD:%f" % \
+                        (idx, op_name, x[idx], y[idx]))
 
-                # plot
-                ax.plot(x, y, 'y.')
+        # plot
+        ax.plot(x, y, opt_point_style)
 
         print("Done.\n\n")
 
@@ -1804,6 +1786,8 @@ class polarGraph:
         else:
             operatingConditions =polar.operatingConditions
             numOpPoints = len(operatingConditions["op_point"])
+        x = []
+        y = []
 
         for idx in range(numOpPoints):
             # get op-mode and -type
@@ -1813,7 +1797,7 @@ class polarGraph:
 
             if (op_mode == 'spec-cl') and (op_type != 'min-glide-slope'):
                 # get CL
-                x = operatingConditions["op_point"][idx]
+                x.append(operatingConditions["op_point"][idx])
 
                 # get CD from target-value
                 Cd = operatingConditions["target_value"][idx]
@@ -1822,12 +1806,13 @@ class polarGraph:
                 if (Cd == 0):
                     print("Error, Cd is zero, op-point:%s" % op_name)
 
-                y = x/Cd
+                y.append(x[idx]/Cd)
 
-                print("target-op-point[%d] \'%s\', CL/CD: %f, CL:%f" % (idx, op_name, x, y))
+                print("target-op-point[%d] \'%s\', CL/CD: %f, CL:%f" %\
+                   (idx, op_name, x[idx], y[idx]))
 
-                # plot
-                ax.plot(x, y, 'y.')
+        # plot
+        ax.plot(x, y, opt_point_style)
 
         print("Done.\n\n")
 
@@ -2419,7 +2404,7 @@ def generate_commandlines(params):
 
         # generate Xoptfoil-commandline
         commandline = "xoptfoil-jx -i %s -r %d -a %s -o %s\n" %\
-                        (iFile, ReList[i], previousFoilname + '.dat',
+                        (iFile, ReList[i], previousFoilname,
                           strakFoilName.strip('.dat'))
         commandLines.append(commandline)
 
@@ -2620,14 +2605,6 @@ def getParameters(dict):
         print ('max_weight not specified')
 
     try:
-        if (dict["skipPolarGeneration"] == 'true'):
-            params.skipPolarGeneration = True
-        else:
-            params.skipPolarGeneration = False
-    except:
-        print ('skipPolarGeneration not specified')
-
-    try:
         if (dict["showOnlyRootPolarOpPoints"] == 'true'):
             params.showOnlyRootPolarOpPoints = True
         else:
@@ -2803,7 +2780,7 @@ def generate_inputFiles(params):
         newFile.distributeMainOpPoints(targets, i)
 
         # insert additional opPoints (if there are any):
-        if (len(params.additionalOpPoints) > 0):
+        if len(params.additionalOpPoints[0])>0:
             newFile.insertAdditionalOpPoints(params.additionalOpPoints[i])
 
         # now distribute the opPoints between the main opPoints and additional
