@@ -61,7 +61,7 @@ cl_T1_polar = 'g'
 cl_T2_polar = 'b'
 
 # styles
-opt_point_style = 'y-'
+opt_point_style = 'y.'
 
 ################################################################################
 #
@@ -2364,10 +2364,10 @@ def generate_commandlines(params):
 
     # do some initializations / set local variables
     if (params.operatingMode != 'matchpolarfoils'):
-        rootfoilName = get_FoilName(params, 0)# +'.dat'
+        rootfoilName = get_FoilName(params, 0)
         firstIdx = 1
     else:
-        rootfoilName = params.seedFoilName# +'.dat'
+        rootfoilName = params.seedFoilName +'.dat'
         firstIdx = 0
 
     numFoils = get_NumberOfAirfoils(params)#TODO refactor
