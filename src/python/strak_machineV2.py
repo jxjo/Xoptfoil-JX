@@ -47,6 +47,7 @@ csfont = {'fontname':'Segoe Print'}
 # number of decimals in the generated input-files
 Cl_decimals = 4 # lift
 Cd_decimals = 6 # drag
+Cl_Cd_decimals = 2 # lift/drag
 Al_decimals = 4 # alpha
 
 # fontsizes
@@ -174,7 +175,6 @@ strakdata = {
             # projected maxLift gain between root and strak-airfoil (percent)
             "maxLiftGain": 0.3
             }
-
 
 def getPresetInputFileName(strakType):
     # get real path of the script
@@ -904,7 +904,7 @@ class inputFile:
 
         # calculate factor between root-polar maxGlide and strak-polar maxGlide,
         # include an additional "loss" in max-glide that is a parameter
-        factor = (root_polar.CL_CD_max) / (strak_polar.CL_CD_max * (1.00 - params.maxGlideLoss))
+        factor = (root_polar.CL_CD_maxGlide) / (strak_polar.CL_CD_maxGlide * (1.00 - params.maxGlideLoss))
 
         # create List of opPoints to be affected. The target-values of these
         # oppoints will be "shifted", according to the calculated difference
@@ -1148,7 +1148,7 @@ class strakData:
         self.smoothSeedfoil = True
         self.smoothMatchPolarFoil = True
         self.ReNumbers = []
-        self.additionalOpPoints = []
+        self.additionalOpPoints = [[]]
         self.CL_min = -0.1
         self.chordLengths = []
         self.maxReFactor = 3.0
@@ -1161,10 +1161,20 @@ class strakData:
         self.T1_polars = []
         self.T2_polars = []
         self.merged_polars = []
-        #self.targetPolars = []
         self.maxGlideLoss = 0.008
         self.maxSpeedGain = 0.5
         self.maxLiftGain = 0.3
+        self.targets ={
+                        "CL_maxSpeed": [],
+                        "CD_maxSpeed": [],
+                        "CL_maxGlide": [],
+                        "CL_CD_maxGlide": [],
+                        "CD_maxGlide": [],
+                        "pre_CL_maxLift": [],
+                        "pre_alpha_maxLift": [],
+                        "CL_maxLift": [],
+                        "alpha_maxLift": []
+                       }
 
 
     ############################################################################
@@ -1217,6 +1227,159 @@ class strakData:
 
         print("polar-generation will switch vom type2 to type1 at Cl = %.3f\n"\
          % self.Cl_switchpoint_Type2_Type1_polar)
+
+
+    def calculate_CD_TargetValue(self, root, strak, gain):
+        target = (  (root * gain)           # part coming from root-airfoil
+                  + (strak * (1.0 - gain))) # part coming from strak-airfoil
+
+        return round(target, Cd_decimals)
+
+    def calculate_CL_TargetValue(self, root, strak, gain):
+        target = (  (root * gain)           # part coming from root-airfoil
+                  + (strak * (1.0 - gain))) # part coming from strak-airfoil
+
+        return round(target, Cl_decimals)
+
+
+    def calculate_CL_CD_TargetValue(self, root, strak, loss):
+        factor = root / (strak * (1.00 - loss))
+        target = strak * factor
+
+        return target
+
+
+    def calculateMainTargetValues(self):
+        # get root-polar
+        rootPolar = self.merged_polars[0]
+
+        for polar in self.merged_polars:
+
+            #---------------------- maxSpeed-targets --------------------------
+            # keep Cl-max-speed equal for all airfoils along the strak
+            self.targets["CL_maxSpeed"].append(rootPolar.CL_maxSpeed)
+
+            # calculate CD-max-speed target-value for each airfoil along the strak
+            target_CD_maxSpeed = self.calculate_CD_TargetValue(
+                 rootPolar.CD_maxSpeed, polar.CD_maxSpeed, params.maxSpeedGain)
+
+            self.targets["CD_maxSpeed"].append(target_CD_maxSpeed)
+
+
+            #---------------------- maxGlide-targets --------------------------
+            # keep Cl-maxGlide equal for all airfoils along the strak
+            self.targets["CL_maxGlide"].append(rootPolar.CL_maxGlide)
+
+            # calculate CL/CD-target-value for each airfoil along the strak
+            target_CL_CD_maxGlide = self.calculate_CL_CD_TargetValue(
+                                rootPolar.CL_CD_maxGlide, polar.CL_CD_maxGlide,
+                                params.maxGlideLoss)
+
+            # CL_CD = CL/CD -> CD = CL/CL_CD
+            target_CD_maxGlide = rootPolar.CL_maxGlide/target_CL_CD_maxGlide
+            target_CD_maxGlide = round(target_CD_maxGlide, Cd_decimals)
+            target_CL_CD_maxGlide = round(target_CL_CD_maxGlide, Cl_Cd_decimals)
+
+            self.targets["CL_CD_maxGlide"].append(target_CL_CD_maxGlide)
+            self.targets["CD_maxGlide"].append(target_CD_maxGlide)
+
+            #---------------------- maxLift-targets --------------------------
+            target_pre_CL_maxLift = self.calculate_CL_TargetValue(
+             rootPolar.pre_CL_maxLift, polar.pre_CL_maxLift, params.maxLiftGain)
+
+            target_pre_alpha_maxLift = rootPolar.find_alpha(target_pre_CL_maxLift)
+            target_pre_alpha_maxLift = round(target_pre_alpha_maxLift, Al_decimals)
+
+            self.targets["pre_CL_maxLift"].append(target_pre_CL_maxLift)
+            self.targets["pre_alpha_maxLift"].append(target_pre_alpha_maxLift)
+
+            target_CL_maxLift = self.calculate_CL_TargetValue(
+                  rootPolar.CL_maxLift, polar.CL_maxLift, params.maxLiftGain)
+
+            target_alpha_maxLift = rootPolar.find_alpha(target_CL_maxLift)
+            target_alpha_maxLift = round(target_alpha_maxLift, Al_decimals)
+
+            self.targets["CL_maxLift"].append(target_CL_maxLift)
+            self.targets["alpha_maxLift"].append(target_alpha_maxLift)
+
+        print(self.targets)
+        print("Done.")
+
+    def correctOpPoint_left(self, opPoint, CL_maxSpeed_root,
+                            CL_maxSpeed_strak, CL_maxGlide):
+        # distances of maxSpeed, root / strak to maxGlide as a fixed op-point
+        delta_root = CL_maxGlide - CL_maxSpeed_root
+        delta_strak = CL_maxGlide - CL_maxSpeed_strak
+        # factor between distances
+        factor = delta_strak / delta_root
+        # distance of op-point (root) to maxGlide
+        delta_opPoint = CL_maxGlide - opPoint
+        # new distance of op-point (strak) to maxGlide
+        delta_opPoint = delta_opPoint * factor
+        # new op-point (strak)
+        correctedOpPoint = CL_maxGlide - delta_opPoint
+
+        return round(correctedOpPoint, Cl_decimals)
+
+
+    def correctOpPoint_right(self, opPoint, CL_maxLift_root,
+                             CL_maxLift_strak, CL_maxGlide):
+
+        # distances of maxLift, root / strak to maxGlide as a fixed op-point
+        delta_root = CL_maxLift_root - CL_maxGlide
+        delta_strak = CL_maxLift_strak - CL_maxGlide
+        # factor between distances
+        factor = delta_strak / delta_root
+        # distance of op-point (root) to maxGlide
+        delta_opPoint = opPoint - CL_maxGlide
+        # new distance of op-point (strak) to maxGlide
+        delta_opPoint = delta_opPoint * factor
+        # new op-point (strak)
+        correctedOpPoint = CL_maxGlide + delta_opPoint
+
+        return round(correctedOpPoint, Cl_decimals)
+
+
+    # correct additional op-Points for strak-airfoils
+    def calculateAdditionalOpPoints(self):
+        # get and additional op-points of root
+        rootAddOpPoints = self.additionalOpPoints[0]
+
+        if (len(rootAddOpPoints) == 0):
+            # nothing to do
+            return
+
+        # get target-values
+        targets = self.targets
+        CL_maxSpeed_root = targets["CL_maxSpeed"][0]
+        CL_maxGlide = targets["CL_maxGlide"][0]
+        CL_maxLift_root = targets["CL_maxLift"][0]
+
+        # all polars behind the root polar
+        num = len(self.merged_polars)
+        for idx in range (1, num):
+            strakAddOpPoints = []
+
+            # get strak-target-values
+            CL_maxSpeed_strak = targets["CL_maxSpeed"][idx]
+            CL_maxLift_strak = targets["CL_maxLift"][idx]
+
+            # all additional opPoints
+            for opPoint in rootAddOpPoints:
+                if (CL_maxSpeed_root <= opPoint) and (CL_maxGlide >= opPoint):
+                    # correct the opPoint
+                    correctedOpPoint = self.correctOpPoint_left(opPoint,
+                    CL_maxSpeed_root, CL_maxSpeed_strak, CL_maxGlide)
+                else:
+                    # correct the opPoint
+                    correctedOpPoint = self.correctOpPoint_right(opPoint,
+                    CL_maxLift_root, CL_maxLift_strak, CL_maxGlide)
+
+                # append corrected opPoint to additional strakop-points
+                strakAddOpPoints.append(correctedOpPoint)
+
+            # append list of additional strak op-points to params
+            self.additionalOpPoints.append(strakAddOpPoints)
 
 
 ################################################################################
@@ -1461,9 +1624,9 @@ class polarGraph:
                   xytext=(-140,5), textcoords='offset points',
                   fontsize = fs_infotext, color=cl_infotext)
 
-        # plot optimization-points
-        if (polar == rootPolar) or (params.showOnlyRootPolarOpPoints == False):
-            self.plotLiftOverAlphaOptimizationPoints(ax, polar)
+            # plot optimization-points
+            if (polar == rootPolar) or (params.showOnlyRootPolarOpPoints == False):
+                self.plotLiftOverAlphaOptimizationPoints(ax, polar)
 
 
     def setAxesAndLabels(self, ax, title, xlabel, ylabel):
@@ -1684,7 +1847,7 @@ class polarData:
         self.CD_maxSpeed = 0.0
         self.CL_maxSpeed = 0.0
         self.maxSpeed_idx = 0
-        self.CL_CD_max = 0.0
+        self.CL_CD_maxGlide = 0.0
         self.maxGlide_idx = 0
         self.alpha_maxGlide= 0.0
         self.CL_maxGlide = 0.0
@@ -1816,10 +1979,10 @@ class polarData:
         self.maxGlide_idx = findPeak(self.CL_CD, peak_height)
         self.CL_maxGlide = self.CL[self.maxGlide_idx]
         self.alpha_maxGlide = self.alpha[self.maxGlide_idx]
-        self.CL_CD_max = self.CL_CD[self.maxGlide_idx]
+        self.CL_CD_maxGlide = self.CL_CD[self.maxGlide_idx]
 
         print("max Glide, Cl/Cd = %f @ Cl = %f" %
-                                  (self.CL_CD_max, self.CL_maxGlide))
+                                  (self.CL_CD_maxGlide, self.CL_maxGlide))
 
 
     def determineMaxLift(self):
@@ -1870,13 +2033,18 @@ class polarData:
         for i in range(len(self.CL)):
             if (self.CL[i] >= CL):
                 return i
-        return 0
+        return None
 
     def find_CL(self, alpha):
         for i in range(len(self.alpha)):
             if (self.alpha[i] >= alpha):
                 return self.CL[i]
 
+    def find_alpha(self, CL):
+        for i in range(len(self.CL)):
+            if (self.CL[i] >= CL):
+                return self.alpha[i]
+        return None
 
     def find_CL_CD(self, CL):
         # calculate corresponding CL_CD
@@ -2225,7 +2393,7 @@ def getParameters(dict):
         print ('ReNumbers not specified, using no list of ReNumbers')
 
     try:
-        params.additionalOpPoints = dict["additionalOpPoints"]
+        params.additionalOpPoints[0] = dict["additionalOpPoints"]
     except:
         print ('additionalOpPoints not specified, using no additional op-points')
 
@@ -2465,17 +2633,27 @@ def generate_inputFiles(params):
 
         # generate a fresh list of equally distributed op-Points
         num_opPoints = params.numOpPoints + len(params.additionalOpPoints)
+
+        # get the target-values
+        targets = params.targets
+        CL_maxSpeed = targets["CL_maxSpeed"][i]
+        CL_maxGlide = targets["CL_maxGlide"][i]
+        pre_CL_maxLift = targets["pre_CL_maxLift"][i]
+        pre_alpha_maxLift = targets["pre_alpha_maxLift"][i]
+        CL_maxLift = targets["CL_maxLift"][i]
+        alpha_maxLift = targets["alpha_maxLift"][i]
+
+        # generate op-points in the range Cl_min..Cl_max
         newFile.generateOpPoints(params.numOpPoints, params.Cl_min,
-                               rootPolar.CL_maxLift, rootPolar.alpha_maxLift)
+                               CL_maxLift, alpha_maxLift)
 
-        # distribute main opPoints, taking the analysed data of the root-polar
-        newFile.distributeMainOpPoints(rootPolar.CL_maxSpeed,
-         rootPolar.CL_maxGlide, rootPolar.pre_CL_maxLift,
-         rootPolar.pre_alpha_maxLift, rootPolar.CL_maxLift,
-         rootPolar.alpha_maxLift)
+        # distribute main opPoints, taking the target-values
+        newFile.distributeMainOpPoints(CL_maxSpeed, CL_maxGlide, pre_CL_maxLift,
+                              pre_alpha_maxLift, CL_maxLift, alpha_maxLift)
 
-        # insert additional opPoints
-        newFile.insertAdditionalOpPoints(params.additionalOpPoints)
+        # insert additional opPoints (if there are any):
+        if (len(params.additionalOpPoints) > 0):
+            newFile.insertAdditionalOpPoints(params.additionalOpPoints[i])
 
         # now distribute the opPoints between the main opPoints and additional
         # oppoints equally
@@ -2559,23 +2737,29 @@ def generate_polars(params, workingDir, rootfoilName):
         systemString_T2 = "xfoil_worker.exe -i \"%s\" -o \"%s\" -w polar -a \"%s\" -r %d" %\
                                  (inputFilename, rootfoilName, airfoilName, Re)
 
-        # execute xfoil-worker / create T1 / T2 polar-files
-        if (not params.skipPolarGeneration):
-            print("Generating polar %s" % polarFileName_T1)
-            os.system(systemString_T1)
-
-            print("Generating polar %s" % polarFileName_T2)
-            os.system(systemString_T2)
-
         # import polar type 1
         newPolar_T1 = polarData()
-        newPolar_T1.importFromFile(polarFileNameAndPath_T1)
+        try:
+            newPolar_T1.importFromFile(polarFileNameAndPath_T1)
+        except:
+            # execute xfoil-worker / create T1 polar-file
+            print("Generating polar %s" % polarFileName_T1)
+            os.system(systemString_T1)
+            newPolar_T1.importFromFile(polarFileNameAndPath_T1)
+
         params.T1_polars.append(newPolar_T1)
 
         # import polar type 2
         newPolar_T2 = polarData()
-        newPolar_T2.importFromFile(polarFileNameAndPath_T2)
-        params.T1_polars.append(newPolar_T2)
+        try:
+            newPolar_T2.importFromFile(polarFileNameAndPath_T2)
+        except:
+            # execute xfoil-worker / create T2 polar-file
+            print("Generating polar %s" % polarFileName_T2)
+            os.system(systemString_T2)
+            newPolar_T2.importFromFile(polarFileNameAndPath_T2)
+
+        params.T2_polars.append(newPolar_T2)
 
         # merge T1/T2 polars at Cl switching-point
         mergedPolar = newPolar_T2.merge(newPolar_T1,
@@ -2666,6 +2850,12 @@ if __name__ == "__main__":
 
     # generate polars of root-airfoil, also analyze
     generate_polars(params, workingDir, rootfoilName)
+
+    # calculate target-values for the main op-points
+    params.calculateMainTargetValues()
+
+    # calculate the additional op-points
+    params.calculateAdditionalOpPoints()
 
     # generate input-Files
     generate_inputFiles(params)
