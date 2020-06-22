@@ -15,7 +15,7 @@
       "Cl_min" : -0.01,
       "weighting_mode": "sinus",
       "min_weight": 0.7,
-      "max_weight": 2.0,
+      "max_weight": 1.5,
       "maxGlideLoss": 0.008,
       "maxSpeedGain": 0.3,
       "maxLiftGain": 0.3,

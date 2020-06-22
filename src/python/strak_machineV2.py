@@ -61,7 +61,10 @@ cl_T1_polar = 'g'
 cl_T2_polar = 'b'
 
 # styles
-opt_point_style = 'y.'
+opt_point_style_root = 'y.'
+opt_point_style_strak = 'y-'
+ls_targetPolar = 'dotted'
+lw_targetPolar = 0.6
 
 ################################################################################
 #
@@ -218,6 +221,7 @@ class inputFile:
         # clean-up file
         self.removeDeactivatedOpPoints() #TODO remove
 
+
     # removes an op-Point if weighting is beyond a certain limit
     def removeDeactivatedOpPoints(self):
         # get operating-conditions
@@ -334,6 +338,7 @@ class inputFile:
                 return operatingConditions['op_point'][idx]
             idx = idx + 1
 
+
     def getTargetValue(self, keyName):
         # get operating-conditions from dictionary
         operatingConditions = self.values["operating_conditions"]
@@ -360,6 +365,7 @@ class inputFile:
                 return operatingConditions['op_mode'][idx]
             idx = idx + 1
 
+
     def setInitialPerturb(self, ReDiff):
         ReDiffList =  [(150000/5), 150000]
         perturbList = [(0.01/5), 0.01]
@@ -376,6 +382,7 @@ class inputFile:
         particle_swarm_options['pso_tol'] = pso_tol
         print("Re-Diff is %d, setting initial_perturb to %.4f and pso_tol to %.5f" %\
          (ReDiff, perturb, pso_tol))
+
 
 # TODO use other function than linear interpolation!
 # this only works for certain maxSpeedGain-values
@@ -484,67 +491,6 @@ class inputFile:
 
         self.setNewTargetValues(start, end, rootPolar, x1, x2, y1, y2)
 
-
-    def adaptMaxLift(self, polarData):
-        # get new values from polar
-        alphaMaxLift = polarData.alpha_maxLift
-        pre_alphaMaxLift = polarData.alpha_maxLift
-        CL_MaxLift = polarData.CL_maxLift
-        pre_CL_MaxLift = polarData.pre_CL_maxLift
-
-        # determine type of op-point
-        op_type = self.getOpPointType('alphaClmax')
-
-        # set new oppoint-value
-        if (op_type == 'spec-al'):
-            self.changeOpPoint("alphaClmax", alphaMaxLift)
-        else:
-            self.changeOpPoint("alphaClmax", CL_MaxLift)
-
-        # adapt target-value to polar
-        self.adaptTargetValueToPolar("alphaClmax", polarData)
-
-        # determine type of op-point
-        op_type = self.getOpPointType('preClmax')
-
-        # set new oppoint-value
-        if (op_type == 'spec-al'):
-            self.changeOpPoint("preClmax", pre_alphaMaxLift)
-        else:
-            self.changeOpPoint("preClmax", pre_CL_MaxLift)
-
-        # adapt target-value to polar
-        self.adaptTargetValueToPolar("preClmax", polarData)
-
-
-    def adaptMaxSpeed(self, polarData):
-        # get new values from polar
-        CL_maxSpeed = polarData.CL_maxSpeed
-
-        self.changeOpPoint('maxSpeed', CL_maxSpeed)
-        self.adaptTargetValueToPolar("maxSpeed", polarData)
-
-
-    # adapts Max-Glide and dependend values to given polar
-    def adaptMaxGlide(self, polarData):
-        # get polar values, Cl MaxGlide, alpha Max-Glide
-        AlphaMaxGlide = polarData.alpha_maxGlide
-        CL_maxGlide = polarData.CL_maxGlide
-
-        # set new op-Points and target-values
-        self.changeOpPoint('maxGlide', CL_maxGlide)
-        self.adaptTargetValueToPolar("maxGlide", polarData)
-
-        try:
-            self.changeOpPoint('alphaMaxGlide', AlphaMaxGlide)
-            self.adaptTargetValueToPolar("alphaMaxGlide", polarData)
-        except:
-            pass
-
-        try:
-            self.changeOpPoint('slopeMaxGlide',CL_maxGlide)
-        except:
-            pass
 
     def generateOpPoints(self, numOpPoints, Cl_min, Cl_max, alpha_Cl_max):
         # get operating-conditions
@@ -743,6 +689,7 @@ class inputFile:
 
         #self.printOpPoints()#Debug
 
+
     # "start" and "end" are both fixed op-points. All op-points between
     # start and end shall be distributed equally.
     def distributeEqually(self, start, end):
@@ -793,16 +740,14 @@ class inputFile:
             end = fixed_opPoints[idx+1]
             self.distributeEqually(start, end)
 
-        #self.distributeEqually(0, self.idx_maxSpeed)
-        #self.distributeEqually(self.idx_maxSpeed, self.idx_maxGlide)
-        #self.distributeEqually(self.idx_maxGlide, self.idx_preClmax)
-
         #print(self.values["operating_conditions"])#Debug
         #print("Done.")#Debug
+
 
     def linearEquation(self, x1, x2, y1, y2, x):
         y = ((y2-y1)/(x2-x1)) * (x-x1) + y1
         return y
+
 
     def SetWeightings(self, params):
         # get operating-conditions
@@ -879,18 +824,6 @@ class inputFile:
                     print("adapted oppoint @ Cl = %0.3f, Type 1, Re = %d\n" % \
                           (Cl, int(polarData.maxRe)))
 
-    # shifts a list of oppoints by a certain difference. Does not change the
-    # target-values
-    def shiftOpPoints(self, diff, opPointList):
-         # shift all oppoints in list
-        for opPointName in opPointList:
-            try:
-                opPointValue = self.getOpPoint(opPointName)
-                opPointValue = opPointValue + diff
-                self.changeOpPoint(opPointName, opPointValue)
-            except:
-                print("opPoint %s was skipped" % opPointName)
-
 
     # scales the target-values of a list of oppoints by a certain factor.
     def scaleTargetValues(self, factor, opPointList):
@@ -935,176 +868,6 @@ class inputFile:
         # set new target-value of oppoint
         self.changeTargetValue(opPointName, targetValue)
 
-    # All "maxlift"-dependend opPoints in the inputfile will be "transferred"
-    # according to the polar of the strak-airfoil in polardata. The oppoints in
-    # the inputfile exactly match the polar of the root-airfoil. For physical
-    # reasons (lower Re-number) it is not possible to completely restore the
-    # polar of the root-airfoil at the Re-number of the strak-airfoil. But the
-    # polar should come as close as possible to the polar of the root-airfoil in
-    # some specified points. So the target opPoints for the strak-airfoil, that
-    # will be calculated here, are a mixture between the polar of the root-
-    # airfoil and the polar of the not optimized strak-airfoil.
-    def transferMaxLift(self, params, polarData):
-        # assign the polars to local variables
-        root_polar = params.merged_polars[0]
-        strak_polar = polarData
-
-        # is this the polar of the root-airfoil ?
-        if (root_polar == strak_polar):
-            # do nothing
-            return
-
-        # 'preClmax'
-        try:
-            # get type of op-point
-            op_type = self.getOpPointType('preClmax')
-
-            # get some polar values
-            alpha_root = root_polar.pre_alpha_maxLift
-            alpha_strak = strak_polar.pre_alpha_maxLift
-            CL_root = root_polar.pre_CL_maxLift
-            CD_root = root_polar.pre_CD_maxLift
-
-            if (op_type == 'spec-al'):
-                # calculate new value
-                target_alpha = ((alpha_root * params.maxLiftGain) +
-                                 (alpha_strak * (1.0 - params.maxLiftGain)))
-
-                # get according Cl from root-polar
-                target_CL = root_polar.find_CL(target_alpha)
-
-                # set new values
-                self.changeOpPoint("preClmax", target_alpha)
-                self.changeTargetValue("preClmax", target_CL)
-            #else:
-                # not implementeed yet
-##                # calculate new value
-##                target_alpha = ((alpha_root * params.maxLiftGain) +
-##                                 (alpha_strak * (1.0 - params.maxLiftGain)))
-##
-##                # get according Cl from root-polar
-##                target_CL = root_polar.find_CL(target_alpha)
-##
-##                # set new values
-##                self.changeOpPoint("preClmax", target_alpha)
-##                self.changeTargetValue("preClmax", target_CL)
-
-        except:
-            print("opPoint \'preClmax\' was skipped")
-
-        # 'alphaClmax'
-        try:
-            # get root-polar-values
-            alpha_root = root_polar.alpha_maxLift
-            CL_root = root_polar.CL_maxLift
-            CD_root = root_polar.CD_maxLift
-
-            # get strak-polar-values
-            alpha_strak = strak_polar.alpha_maxLift
-            CL_strak = strak_polar.CL_maxLift
-            CD_strak = strak_polar.CD_maxLift
-
-            # new value is value between root-polar and strak polar
-            target_CL = ((CL_root * params.maxLiftGain) +
-                                (CL_strak * (1.0 - params.maxLiftGain)))
-
-            target_alpha = ((alpha_root * params.maxLiftGain) +
-                             (alpha_strak * (1.0 - params.maxLiftGain)))
-
-            # set new values
-            self.changeOpPoint("alphaClmax", target_alpha)
-            self.changeTargetValue("alphaClmax", target_CL)
-
-        except:
-            print("opPoint \'alphaClmax\' was skipped")
-
-
-    # all target-values will be scaled "downward" according
-    # to the factor in CL_CD_MaxGlide between root-polar and strak-polar
-    def transferMaxGlide(self, params, polarData):
-        # assign the polars to local variables
-        root_polar = params.merged_polars[0]
-        strak_polar = polarData
-
-        # is this the polar of the root-airfoil ?
-        if (root_polar == strak_polar):
-            # do nothing
-            return
-
-        # calculate factor between root-polar maxGlide and strak-polar maxGlide,
-        # include an additional "loss" in max-glide that is a parameter
-        factor = (root_polar.CL_CD_maxGlide) / (strak_polar.CL_CD_maxGlide * (1.00 - params.maxGlideLoss))
-
-        # create List of opPoints to be affected. The target-values of these
-        # oppoints will be "shifted", according to the calculated difference
-        opPointList = ['preGlide','helperPreGlide', 'maxGlide','helperKeepGlide',
-                       'keepGlide', 'helperPreClmax', 'preClmax']
-
-        self.scaleTargetValues(factor, opPointList)
-
-
-    def transferMaxSpeed(self, params, polarData):
-        # assign the polars to local variables
-        root_polar = params.merged_polars[0]
-        strak_polar = polarData
-
-        # is this the polar of the root-airfoil ?
-        if (root_polar == strak_polar):
-            # do nothing
-            return
-
-        # op-point 'keepSpeed', if existing in input-file
-        try:
-            # get CL-value / op-Point
-            CL_keepSpeed = self.getOpPoint("keepSpeed")
-
-            # get polar-values (root and strak-polar)
-            CD_keepSpeed_root = root_polar.find_CD(CL_keepSpeed)
-            CD_keepSpeed_strak = strak_polar.find_CD(CL_keepSpeed)
-
-            # new target-value is value between root-polar and strak-polar
-            CD_keepSpeed_target = ((CD_keepSpeed_root * params.maxSpeedGain) + # part coming from root-airfoil
-                            (CD_keepSpeed_strak * (1.0 - params.maxSpeedGain)))# part coming from not optimized strak-airfoil
-
-            # set new target-value
-            self.changeTargetValue("keepSpeed", CD_keepSpeed_target)
-        except:
-            print("opPoint keepSpeed was skipped")
-
-        # op-point 'maxSpeed', if existing in input-file
-        try:
-            # get CL-value / op-Point
-            CL_maxSpeed = self.getOpPoint("maxSpeed")
-
-            # get polar-values (root and strak-polar)
-            CD_maxSpeed_root = root_polar.find_CD(CL_maxSpeed)
-            CD_maxSpeed_strak = strak_polar.find_CD(CL_maxSpeed)
-
-            # new target-value is value between root-polar and strak polar
-            CD_maxSpeed_target = ((CD_maxSpeed_root * params.maxSpeedGain) +
-                           (CD_maxSpeed_strak * (1.0 - params.maxSpeedGain)))
-
-            self.changeTargetValue("maxSpeed", CD_maxSpeed_target)
-        except:
-            print("opPoint maxSpeed was skipped")
-
-       # op-point 'preSpeed', if existing in input-file
-        try:
-            # get CL-value / op-Point
-            CL_preSpeed = self.getOpPoint("preSpeed")
-
-            # get polar-values (root and strak-polar)
-            CD_preSpeed_root = root_polar.find_CD(CL_preSpeed)
-            CD_preSpeed_strak = strak_polar.find_CD(CL_preSpeed)
-
-            # new target-value is value between root-polar and strak polar
-            CD_preSpeed_target = ((CD_preSpeed_root * params.maxSpeedGain) +
-                           (CD_preSpeed_strak * (1.0 - params.maxSpeedGain)))
-
-            self.changeTargetValue("preSpeed", CD_preSpeed_target)
-        except:
-            print("opPoint preSpeed was skipped")
-
 
     # adapt all target-values to the given polar-data
     def adaptAllOppointsToPolar(self, polarData):
@@ -1119,19 +882,6 @@ class inputFile:
 
         # adapt Re-numbers for Type2 / Type1 oppoints
         self.adaptReNumbers(polarData)
-
-
-    # transfer oppoints to a new polar, keeping the shape of the original polar/
-    # oppoints
-    def transferOppointsKeepShape(self, params, polarData):
-        # transfer maxLift-values
-        self.transferMaxLift(params, polarData)
-
-        # transfer maxGlide-values
-        self.transferMaxGlide(params, polarData)
-
-        # transfer maxSpeed-values
-        self.transferMaxSpeed(params, polarData)
 
 
     def deleteAllOpPoints(self, operatingConditions):
@@ -1269,7 +1019,7 @@ class strakData:
         self.strakType = "F3F"
         self.operatingMode = 'default'
         self.useAlwaysRootfoil = False
-        self.showOnlyRootPolarOpPoints = True
+        self.showTargetPolars = True
         self.adaptInitialPerturb = True
         self.seedFoilName = ""
         self.matchPolarFoilName = ""
@@ -1524,7 +1274,8 @@ class polarGraph:
         ax.imshow(image)
         ax.set_axis_off()
 
-    def plotLiftDragOptimizationPoints(self, ax, polar):
+    def plotLiftDragOptimizationPoints(self, ax, polar, opt_point_style,
+                                       linewidth, label):
         print("plotting CL over CD target-op-points for Re = %.0f...\n"\
               % (polar.Re))
 
@@ -1556,7 +1307,8 @@ class polarGraph:
                         (idx, op_name, x[idx], y[idx]))
 
         # plot
-        ax.plot(x, y, opt_point_style)
+        ax.plot(x, y, opt_point_style, linestyle=ls_targetPolar,
+                linewidth=linewidth, label = label)
 
         print("Done.\n\n")
 
@@ -1606,12 +1358,8 @@ class polarGraph:
             if (polar == rootPolar):
                 ax.plot(x, y, marker='o',color=cl_infotext)
                 ax.annotate('maxSpeed (root) @ Cl = %.2f, Cd = %.4f' % (y, x),
-                 xy=(x,y), xytext=(10,0), textcoords='offset points',
+                 xy=(x,y), xytext=(40,0), textcoords='offset points',
                       fontsize = fs_infotext, color=cl_infotext)
-            else:
-                if params.showOnlyRootPolarOpPoints == False:
-                    ax.plot(x, y, 'o', color=cl_infotext)
-
 
             # plot max_glide
             x = polar.CD[polar.maxGlide_idx]
@@ -1621,15 +1369,17 @@ class polarGraph:
             if (polar == rootPolar):
                 ax.plot(x, y, marker='o', color=cl_infotext)
                 ax.annotate('maxGlide (root) @ Cl = %.2f, Cd = %.4f' % (y, x),
-                 xy=(x,y), xytext=(10,0), textcoords='offset points',
+                 xy=(x,y), xytext=(40,0), textcoords='offset points',
                       fontsize = fs_infotext, color=cl_infotext)
-            else:
-                if params.showOnlyRootPolarOpPoints == False:
-                    ax.plot(x, y, 'o', color=cl_infotext)
 
             # plot max lift
             x = polar.CD[polar.maxLift_idx]
             y = polar.CL[polar.maxLift_idx]
+
+            #set style for optimization points
+            label = None
+            style = opt_point_style_root
+            linewidth = 0.0
 
             # additonal text for root polar only
             if (polar == rootPolar):
@@ -1638,17 +1388,20 @@ class polarGraph:
                   xy=(x,y), xytext=(-80,10), textcoords='offset points',
                     fontsize = fs_infotext, color=cl_infotext)
             else:
-                if params.showOnlyRootPolarOpPoints == False:
-                    ax.plot(x, y, 'o', color=cl_infotext)
+                style = opt_point_style_strak
+                linewidth = lw_targetPolar
+                if (polar == polars[1]):
+                    label = 'target-polar'
 
             # plot optimization points
-            if (polar == rootPolar) or (params.showOnlyRootPolarOpPoints == False):
-                self.plotLiftDragOptimizationPoints(ax, polar)
+            if (polar == rootPolar) or (params.showTargetPolars == True):
+                self.plotLiftDragOptimizationPoints(ax, polar, style, linewidth,
+                                                    label)
 
             ax.legend(loc='upper left', fontsize = fs_legend)
 
 
-    def plotLiftOverAlphaOptimizationPoints(self, ax, polar):
+    def plotLiftOverAlphaOptimizationPoints(self, ax, polar, opt_point_style):
         print("plotting CL over alpha target-op-points for Re = %.0f...\n"\
               % (polar.Re))
 
@@ -1674,7 +1427,7 @@ class polarGraph:
                 print("target-op-point[%d] \'%s\', alpha:%f, CL: %f,"\
                  % (idx, op_name, x, y))
                 # plot
-                ax.plot(x, y, 'y.')
+                ax.plot(x, y, opt_point_style)
 
         print("Done.\n\n")
 
@@ -1721,45 +1474,51 @@ class polarGraph:
             x = polar.alpha[polar.maxSpeed_idx]
             y = polar.CL[polar.maxSpeed_idx]
 
-            if (polar == rootPolar) or (params.showOnlyRootPolarOpPoints == False):
+            if (polar == rootPolar):
                 ax.plot(x, y, 'o', color=cl_infotext)
 
             # additonal text for root polar only
             if (polar == rootPolar):
                 ax.annotate('maxSpeed (root) @ alpha = %.2f, Cl = %.2f' %\
                   (x, y), xy=(x,y),
-                  xytext=(10,0), textcoords='offset points',
+                  xytext=(40,0), textcoords='offset points',
                   fontsize = fs_infotext, color=cl_infotext)
 
             # plot max Glide
             x = polar.alpha[polar.maxGlide_idx]
             y = polar.CL[polar.maxGlide_idx]
-            if (polar == rootPolar) or (params.showOnlyRootPolarOpPoints == False):
+            if (polar == rootPolar):
                ax.plot(x, y, 'o', color=cl_infotext)
 
             # additonal text for root polar only
             if (polar == rootPolar):
                 ax.annotate('maxGlide (root) @ alpha = %.2f, Cl = %.2f' %\
                   (x, y), xy=(x,y),
-                  xytext=(10,0), textcoords='offset points',
+                  xytext=(20,0), textcoords='offset points',
                   fontsize = fs_infotext, color=cl_infotext)
 
             # plot max lift
             x = polar.alpha[polar.maxLift_idx]
             y = polar.CL[polar.maxLift_idx]
 
-            if (polar == rootPolar) or (params.showOnlyRootPolarOpPoints == False):
+            if (polar == rootPolar):
                 ax.plot(x, y, 'o', color=cl_infotext)
+
             # additonal text for root polar only
             if (polar == rootPolar):
                 ax.annotate('maxLift (root) @ alpha = %.2f, Cl = %.2f' %\
                   (x, y), xy=(x,y),
-                  xytext=(-140,5), textcoords='offset points',
+                  xytext=(-140,10), textcoords='offset points',
                   fontsize = fs_infotext, color=cl_infotext)
 
-            # plot optimization-points
-            if (polar == rootPolar) or (params.showOnlyRootPolarOpPoints == False):
-                self.plotLiftOverAlphaOptimizationPoints(ax, polar)
+                #set style for optimization points
+                style = opt_point_style_root
+            else:
+                style = opt_point_style_strak
+
+            # plot optimizationPoints
+            if (polar == rootPolar) or (params.showTargetPolars == True):
+                self.plotLiftOverAlphaOptimizationPoints(ax, polar, style)
 
 
     def setAxesAndLabels(self, ax, title, xlabel, ylabel):
@@ -1773,10 +1532,11 @@ class polarGraph:
         ax.set_ylabel(ylabel, fontsize = 20, color="darkgrey")
 
         # customize grid
-        ax.grid(True, color='darkgrey',  linestyle='-.', linewidth=0.7)
+        ax.grid(True, color='dimgrey',  linestyle='dotted', linewidth=0.4)
 
 
-    def plotLiftDragOverLiftOptimizationPoints(self, ax, polar):
+    def plotLiftDragOverLiftOptimizationPoints(self, ax, polar, opt_point_style,
+                                               linewidth, label):
         print("plotting CL/CD over CL target-op-points for Re = %.0f...\n"\
               % (polar.Re))
 
@@ -1812,7 +1572,8 @@ class polarGraph:
                    (idx, op_name, x[idx], y[idx]))
 
         # plot
-        ax.plot(x, y, opt_point_style)
+        ax.plot(x, y, opt_point_style, linestyle=ls_targetPolar,
+                linewidth=linewidth, label = label)
 
         print("Done.\n\n")
 
@@ -1871,19 +1632,19 @@ class polarGraph:
             x = polar.CL[polar.maxSpeed_idx]
             y = polar.CL_CD[polar.maxSpeed_idx]
 
-            if (polar == rootPolar) or (params.showOnlyRootPolarOpPoints == False):
+            if (polar == rootPolar):
                 ax.plot(x, y, 'o', color=cl_infotext)
 
             # add text for root Polar only
             if (polar == rootPolar):
-                ax.annotate('maxSpeed (root) @ Cl = %.2f, Cl/Cd = %.2f' % (x, y), xy=(x,y),
-                   xytext=(10,0), textcoords='offset points', fontsize = fs_infotext, color=cl_infotext)
+                ax.annotate('maxSpeed (root) @\nCl = %.2f,\nCl/Cd = %.2f' % (x, y), xy=(x,y),
+                   xytext=(-80,0), textcoords='offset points', fontsize = fs_infotext, color=cl_infotext)
 
             # plot max_glide
             x = polar.CL[polar.maxGlide_idx]
             y = polar.CL_CD[polar.maxGlide_idx]
 
-            if (polar == rootPolar) or (params.showOnlyRootPolarOpPoints == False):
+            if (polar == rootPolar):
                 ax.plot(x, y, 'o', color=cl_infotext)
 
             # add text for root Polar only
@@ -1895,17 +1656,29 @@ class polarGraph:
             x = polar.CL[polar.maxLift_idx]
             y = polar.CL_CD[polar.maxLift_idx]
 
-            if (polar == rootPolar) or (params.showOnlyRootPolarOpPoints == False):
+            if (polar == rootPolar):
                 ax.plot(x, y, 'o', color=cl_infotext)
+
+            #set style for optimization points
+            label = None
+            style = opt_point_style_root
+            linewidth = 0.0
 
             # add text for root Polar only
             if (polar == rootPolar):
                 ax.annotate('maxLift (root) @\nCl = %.2f,\nCl/Cd = %.2f' % (x, y), xy=(x,y),
                    xytext=(10,0), textcoords='offset points', fontsize = fs_infotext, color=cl_infotext)
+            else:
+                style = opt_point_style_strak
+                linewidth = lw_targetPolar
+                if (polar == polars[1]):
+                    label = 'target-polar'
+
 
             # plot optimizationPoints
-            if (polar == rootPolar) or (params.showOnlyRootPolarOpPoints == False):
-                self.plotLiftDragOverLiftOptimizationPoints(ax, polar)
+            if (polar == rootPolar) or (params.showTargetPolars == True):
+                self.plotLiftDragOverLiftOptimizationPoints(ax, polar, style,
+                                                            linewidth, label)
 
 
     def draw(self, scriptDir, params):
@@ -2605,12 +2378,12 @@ def getParameters(dict):
         print ('max_weight not specified')
 
     try:
-        if (dict["showOnlyRootPolarOpPoints"] == 'true'):
-            params.showOnlyRootPolarOpPoints = True
+        if (dict["showTargetPolars"] == 'true'):
+            params.showTargetPolars = True
         else:
-            params.showOnlyRootPolarOpPoints = False
+            params.showTargetPolars = False
     except:
-        print ('showOnlyRootPolarOpPoints not specified')
+        print ('showTargetPolars not specified')
 
     try:
         if (dict["smoothSeedfoil"] == 'true'):
@@ -2794,19 +2567,6 @@ def generate_inputFiles(params):
 
         # set the importance / weightings of the op-points
         newFile.SetWeightings(params)
-
-##        if (params.operatingMode == 'matchpolarfoils'):
-##          # adapt op-points according to polar of match-polar-foil
-##            newFile.adaptAllOppointsToPolar(strakPolar)
-##            #newFile.printOpPoints()#Debug
-##        else:
-##            # as a first step always adapt op-points according to polar of
-##            # root-airfoil
-##            newFile.adaptAllOppointsToPolar(rootPolar)
-##
-##            # as a second step,change oppoints again, but only "shift" them
-##            # matching the polar of the strak-airfoil
-##            newFile.transferOppointsKeepShape(params, params.merged_polars[i])
 
         if params.adaptInitialPerturb:
             # also adapt the initial perturb according to the change in
