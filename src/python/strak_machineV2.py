@@ -66,6 +66,8 @@ opt_point_style_strak = 'y-'
 ls_targetPolar = 'dotted'
 lw_targetPolar = 0.6
 
+pre_CL_maxLift_factor = 0.96
+
 ################################################################################
 #
 # install missing packages
@@ -636,7 +638,7 @@ class inputFile:
             opPoint_maxSpeed = opPointNames[self.idx_maxSpeed]
 
         # change values
-        self.changeOpPoint(opPoint_preClmax, (pre_CL_maxLift*0.980))
+        self.changeOpPoint(opPoint_preClmax, (pre_CL_maxLift*pre_CL_maxLift_factor))
         self.changeOpPoint(opPoint_maxGlide, CL_maxGlide)
         self.changeOpPoint(opPoint_maxSpeed, CL_maxSpeed)
 
@@ -2180,6 +2182,15 @@ def generate_commandlines(params):
                         (iFile, ReList[i], previousFoilname,
                           strakFoilName.strip('.dat'))
         commandLines.append(commandline)
+
+        # smooth the airfoil
+        inputFilename = getPresetInputFileName('Smooth')
+
+        # compose commandline for smoothing the airfoil
+        commandline = "xfoil_worker.exe -w smooth -i %s -a %s -o %s\n" % \
+                       (inputFilename, strakFoilName, strakFoilName.strip('.dat'))
+        commandLines.append(commandline)
+
 
         #copy strak-airfoil to airfoil-folder
         commandline = ("copy %s %s" + bs +"%s\n") % \
