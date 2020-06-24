@@ -118,12 +118,12 @@ subroutine generate_polar_files (output_prefix, foil, npolars, polars, &
 
   do i = 1, npolars
 
-    write (*,'(1x,A,I1,A, I7,A)') 'Calculating polar Type ',polars(i)%re%type,' Re=',  &
+    write (*,'(/,1x,A,I1,A, I7,A)') 'Calculating polar Type ',polars(i)%re%type,' Re=',  &
           int(polars(i)%re%number), ' for '// polars(i)%airfoil_name
     call init_polar (polars(i))
     call calculate_polar (foil, polars(i), xfoil_geom_options, xfoil_options)
 
-    write (*,'(1x,A, F7.0,/)')    'Writing to '//trim(polars_subdirectory)//'/'//trim(polars(i)%file_name)
+    write (*,'(1x,A, F7.0)')    'Writing to '//trim(polars_subdirectory)//'/'//trim(polars(i)%file_name)
 
     open(unit=13, file= trim(polars_subdirectory)//'/'//trim(polars(i)%file_name), status='replace')
     call write_polar_header (13, polars(i))
@@ -377,6 +377,69 @@ subroutine read_smoothing_inputs  (input_file, spike_threshold, &
 
 end subroutine read_smoothing_inputs
 
+!=============================================================================
+! Read xoptfoil input file to get flap setting options
+!   (separated from read_inputs to be more modular)
+!=============================================================================
+
+subroutine read_flap_inputs  (input_file, x_flap, y_flap, y_flap_spec, ndegrees, flap_degrees) 
+
+  use airfoil_operations, only : my_stop
+  use input_output,       only : namelist_check
+
+  character(*), intent(in)      :: input_file
+  double precision , intent(out):: x_flap, y_flap
+  character(3), intent(out)     :: y_flap_spec
+  integer, intent(out)          :: ndegrees
+  double precision, dimension(:), intent(inout) :: flap_degrees
+
+  integer :: istat, iunit, i
+  logical                       :: use_flap
+
+  namelist /operating_conditions/ use_flap, x_flap, y_flap, y_flap_spec, flap_degrees
+
+  ! Init default values 
+
+  use_flap     = .true.                !currently dummy
+  x_flap       = 0.75d0
+  y_flap       = 0.d0
+  y_flap_spec  = 'y/c'
+  flap_degrees = 0d0
+  ndegrees     = 0
+
+  ! Open input file and read namelist from file
+
+  iunit = 12
+  open(unit=iunit, file=input_file, status='old', iostat=istat)
+
+  if (istat == 0) then
+    read (iunit, iostat=istat, nml=operating_conditions)
+    call namelist_check('operating_conditions', istat, 'warn')
+    close (iunit)
+  end if
+
+  call namelist_check('operating_conditions', istat, 'warn')
+
+  do i = size(flap_degrees), 1, -1
+    if (flap_degrees(i) /= 0d0) then
+      ndegrees = i
+      exit
+    end if
+  end do
+
+  ! Check Input 
+
+  if (ndegrees == 0) &
+    call my_stop ('No flap angles defined in input file')
+  if ((y_flap_spec  /= 'y/c') .and. (y_flap_spec  /= 'y/t')) &
+    call my_stop ("Vertical hinge definition must be 'y/c' or 'y/t'")
+  do i = 1, ndegrees
+    if (abs(flap_degrees(i)) > 70d0) &
+      call my_stop ('Flap angle must be less than 70 degrees')
+  end do
+
+
+end subroutine read_flap_inputs
 
 !=============================================================================
 ! Initialize polar data structure based calculated number of op_points

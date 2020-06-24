@@ -87,6 +87,13 @@ program xfoil_worker
 
       call repanel_smooth (input_file, output_prefix, foil, visualizer, .true.)
   
+    case ('flap')         ! Repaneland set flap into "<output_prefix>.dat"
+
+      if (trim(output_prefix) == '') & 
+        output_prefix = airfoil_filename (1:(index (airfoil_filename,'.') - 1))//'-flap'
+
+      call set_flap (input_file, output_prefix, foil, visualizer)
+
     case ('test')         ! Test for change max thickness location 
       
       call xfoil_set_airfoil (foil)
@@ -184,6 +191,97 @@ subroutine repanel_smooth (input_file, output_prefix, seed_foil, visualizer, do_
   end if 
 
 end subroutine repanel_smooth
+
+
+!-------------------------------------------------------------------------
+! Repanels and set flaps of foil based on settings in 'input file'
+!-------------------------------------------------------------------------
+
+subroutine set_flap (input_file, output_prefix, seed_foil, visualizer)
+
+  use vardef,             only : airfoil_type
+  use xfoil_driver,       only : xfoil_geom_options_type
+  use xfoil_driver,       only : xfoil_apply_flap_deflection, xfoil_reload_airfoil
+  use xfoil_driver,       only : xfoil_set_airfoil
+  use airfoil_operations, only : airfoil_write, transform_airfoil, get_split_points
+  use airfoil_operations, only : split_airfoil, assess_surface, smooth_it, rebuild_airfoil
+  use airfoil_operations, only : repanel_and_normalize_airfoil
+  use polar_operations,   only : read_xfoil_paneling_inputs, read_flap_inputs
+
+
+  character(*), intent(in)          :: input_file, output_prefix
+  type (airfoil_type), intent (inout)  :: seed_foil
+  logical, intent(in)               :: visualizer
+
+  double precision, dimension(:), allocatable :: xt, xb, zt, zb
+  type (airfoil_type) :: foil, foil_flapped
+  type (xfoil_geom_options_type) :: geom_options
+
+  double precision :: x_flap, y_flap
+  double precision, dimension(50) :: flap_degrees
+  character(3)  :: y_flap_spec
+  character(20) :: text_degrees
+  integer       :: ndegrees
+
+
+! Read inputs file to get xfoil paneling options  
+
+  write (*,*)
+  call read_xfoil_paneling_inputs  (input_file, geom_options)
+  call read_flap_inputs            (input_file, x_flap, y_flap, y_flap_spec, ndegrees, flap_degrees)
+
+! Repanel seed airfoil with xfoil PANGEN 
+
+  call repanel_and_normalize_airfoil (seed_foil, geom_options%npan, foil)
+
+! Now split and rebuild to add a real  LE point at 0,0 
+
+  call split_airfoil   (foil, xt, xb, zt, zb, .false.)
+  call rebuild_airfoil (xt, xb, zt, zb, foil)
+  call xfoil_set_airfoil(foil)
+
+! Write airfoil to _design_coordinates using Xoptfoil format for visualizer
+
+  if (visualizer) then 
+    foil%name   = output_prefix
+    call write_design_coordinates (output_prefix, 0, foil)
+  end if 
+
+! Now set flap to all requested angles
+
+  write (*,*)
+  do i = 1, ndegrees
+
+    if (int(flap_degrees(i))*10  == int(flap_degrees(i)*10d0)) then  !degree having decimal?
+      write (text_degrees,'(I3)') int (flap_degrees(i))
+    else
+      write (text_degrees,'(F6.1)') flap_degrees(i)
+    end if
+
+    write (*,'(1x,A,I2,A,F4.1,A)') 'Setting flaps at ', int (x_flap*1d2), '% ('//y_flap_spec//'=', &
+                                y_flap,') to '//trim(adjustl(text_degrees))//' degrees'
+
+    call xfoil_set_airfoil(foil)
+    call xfoil_apply_flap_deflection(x_flap, y_flap, y_flap_spec, flap_degrees(i))
+    call xfoil_reload_airfoil(foil_flapped)
+
+    if (ndegrees == 1) then 
+      foil_flapped%name   = output_prefix
+    else
+      foil_flapped%name   = trim(output_prefix) // '_' // trim(adjustl(text_degrees))
+    end if 
+    call airfoil_write   (trim(foil_flapped%name)//'.dat', trim(foil_flapped%name), foil_flapped)
+
+    ! Write airfoil to _design_coordinates using Xoptfoil format for visualizer
+  
+    if (visualizer) then 
+      call write_design_coordinates (output_prefix, i, foil_flapped)
+    end if 
+
+  end do
+
+
+end subroutine set_flap
 
 !-------------------------------------------------------------------------
 ! writes 'output_prefix'_design_coordinates for foil
@@ -368,6 +466,7 @@ subroutine print_worker_usage()
   write(*,'(A)') "  -w polars         Generate polars of 'airfoil_file'"
   write(*,'(A)') "  -w norm           Repanel, normalize 'airfoil_file'"
   write(*,'(A)') "  -w smooth         Repanel, normalize, smooth 'airfoil_file'"
+  write(*,'(A)') "  -w flap           Set flap of 'airfoil_file'"
   write(*,'(A)')
   write(*,'(A)') "Options:"
   write(*,'(A)') "  -i input_file     Specify an input file (default: 'inputs.txt')"
