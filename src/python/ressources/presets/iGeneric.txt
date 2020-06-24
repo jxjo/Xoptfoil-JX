@@ -1,6 +1,3 @@
-! Rocketeer-Strak 
-! strak airfoils  
-
 &optimization_options
   search_type      = 'global'
   global_search    = 'particle_swarm'
@@ -45,7 +42,6 @@
 /
 
 &xfoil_run_options
-  vaccel          = 0.004
-  reinitialize    = .true.                                 ! speed up a little (set true if too many no convergence) 
+  reinitialize    = .true.
 /
 

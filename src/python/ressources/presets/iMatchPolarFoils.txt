@@ -1,6 +1,3 @@
-! Rocketeer-Strak
-! strak airfoils
-
 &optimization_options
   search_type      = 'global'
   global_search    = 'particle_swarm'
@@ -22,7 +19,7 @@
   optimization_type = 'target-drag' ,'target-drag','target-drag','target-drag','target-drag'   ,'target-drag','target-lift'  ,'min-glide-slope' ,'target-drag'    ,'target-drag','target-drag'   ,'target-drag','target-lift'
   target_value      =  -1           ,-1           ,-1           ,-1           ,                , -1          ,0.6            ,                  ,                 ,-1           ,-1              ,1.0          ,1.2
   reynolds          =               ,             ,             ,             ,                ,             ,               ,                  ,                 ,             ,                ,             ,
-  weighting         =  0.7          ,0.9          ,1.0          ,1.0          ,1.0             , 1.5         ,0.0            , 0.0              , 1.0             ,1.0          ,1.0             ,1.4         ,2.0
+  weighting         =  0.7          ,0.9          ,1.0          ,1.0          ,1.5             , 1.0         ,0.0            , 0.0              , 1.5             ,1.0          ,1.0             ,1.4         ,2.0
 /
 
 &polar_generation
@@ -45,7 +42,6 @@
 /
 
 &xfoil_run_options
-  vaccel          = 0.004
-  reinitialize    = .true.                                 ! speed up a little (set true if too many no convergence)
+  reinitialize    = .true.
 /
 
