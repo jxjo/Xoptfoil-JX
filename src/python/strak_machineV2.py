@@ -1041,6 +1041,8 @@ class strakData:
         self.T1_polars = []
         self.T2_polars = []
         self.merged_polars = []
+        self.target_polars = []
+        self.inputFiles = []
         self.maxGlideLoss = [0.008]
         self.maxSpeedGain = [0.5]
         self.maxLiftGain = [0.3]
@@ -1397,7 +1399,7 @@ class polarGraph:
             if (polar == rootPolar):
                 ax.plot(x, y, marker='o', color=cl_infotext)
                 ax.annotate('maxLift (root) @ Cl = %.2f, Cd = %.4f' %(y,x),
-                  xy=(x,y), xytext=(-80,10), textcoords='offset points',
+                  xy=(x,y), xytext=(-20,10), textcoords='offset points',
                     fontsize = fs_infotext, color=cl_infotext)
             else:
                 style = opt_point_style_strak
@@ -1696,12 +1698,16 @@ class polarGraph:
     def draw(self, scriptDir, params):
         # get polars
         polars = params.merged_polars
+        T1_polars = params.T1_polars
+        T2_polars = params.T2_polars
+
 
         # get polar of root-airfoil
         rootPolar = polars[0]
+        rootPolar_T1 = T1_polars[0]
+        rootPolar_T2 = T2_polars[0]
 
-        print("plotting polar of airfoil %s at Re = %.0f..."
-                       % (rootPolar.airfoilname, rootPolar.Re))
+        print("plotting polars of airfoil %s..." % (params.seedFoilName))
 
         # set 'dark' style
         plt.style.use('dark_background')
@@ -1710,22 +1716,29 @@ class polarGraph:
         fig, (upper,lower) = plt.subplots(2,2)
 
         # compose diagram-title
-        text = ("Analysis of airfoil \"%s\" at " % rootPolar.airfoilname)
-
-        if (rootPolar.polarType == 2):
-            text = text + "ReSqrt(Cl) = "
-            polarType = '1/2'
-        else:
-            text = text + "Re = "
-            polarType = '1'
+        text = ("Analysis of airfoil \"%s\"\n" % params.seedFoilName)
+        text = text + "T1-polars, Re = "
 
         # add Re-numbers
-        for polar in polars:
-            text = text + ("%d, " %polar.Re)
+        num_polars = len(T1_polars)
+        for i in range(num_polars):
+            Re = T1_polars[i].Re
+            if (i == num_polars-1):
+                text = text + ("%d\n" % Re)
+            else:
+                text = text + ("%d, " % Re)
 
-        text = text + ("Type %s polars" % polarType)
+        text = text + "T2-polars, ReSqrt(Cl) = "
 
-        fig.suptitle(text, fontsize = 20, color="darkgrey", **csfont)
+         # add Re-numbers
+        for i in range(num_polars):
+            Re = T2_polars[i].Re
+            if (i == num_polars-1):
+                text = text + ("%d\n" % Re)
+            else:
+                text = text + ("%d, " % Re)
+
+        fig.suptitle(text, fontsize = 12, color="darkgrey", **csfont)
 
         # first figure, display strak-machine-logo
         self.plotLogo(upper[0], scriptDir)
@@ -1760,6 +1773,7 @@ class polarData:
         self.Re = 0
         self.maxRe = 0
         self.NCrit = 9.0
+        self.Mach = 0.0
         self.alpha = []
         self.CL = []
         self.CD = []
@@ -1844,15 +1858,18 @@ class polarData:
         polarType = self.polarType
         airfoilname = self.airfoilname
         Re = float(self.Re)/1000000
-        Mach = 0.0 #TODO get from polar
-        NCrit = 9.00 #TODO get from polar
+        Mach = self.Mach
+        NCrit = self.NCrit
 
         if (polarType == 1):
             ReString = 'fixed         '
             MachString = 'fixed'
+        elif(polarType == 2):
+            ReString = '~ 1/sqrt(CL)  '
+            MachString = '~ 1/sqrt(CL)'
         else:
-            ReString = 'T1_T2_mixed'#'~ 1/sqrt(CL)  '
-            MachString = 'T1_T2_mixed'#'~ 1/sqrt(CL)'
+            ReString = 'fixed / ~ 1/sqrt(CL)'
+            MachString = 'fixed / ~ 1/sqrt(CL)'
 
         print("writing polar to file %s...\n" %fileName)
 
@@ -1895,9 +1912,9 @@ class polarData:
         # create a new, empty polar
         mergedPolar = polarData()
 
-        # copy some information form mergePolar_1
+        # copy some information from mergePolar_1
         mergedPolar.airfoilname = self.airfoilname
-        mergedPolar.polarType = self.polarType
+        mergedPolar.polarType = 12
         mergedPolar.Re = self.Re
         mergedPolar.NCrit = self.NCrit
         mergedPolar.Cl_switchpoint_Type2_Type1_polar = switching_Cl
@@ -2261,7 +2278,7 @@ def generate_commandlines(params):
     commandLines.append(commandline)
 
     print("Done.")
-    return commandLines, ReList
+    return commandLines
 
 
 ################################################################################
@@ -2735,11 +2752,14 @@ def generate_inputFiles(params):
         # physically create the file
         newFile.writeToFile(params.inputFileNames[i])
 
+        # append to params
+        params.inputFiles.append(newFile)
+
     print("Done.")
 
 
 def generate_polars(params, workingDir, rootfoilName):
-# generate polars of seedfoil / root-airfoil:
+    # generate polars of seedfoil / root-airfoil:
     print("Generating polars for airfoil %s..." % rootfoilName)
 
     # compose polar-dir
@@ -2824,6 +2844,85 @@ def generate_polars(params, workingDir, rootfoilName):
 
     print("Done.")
 
+
+def setPolarDataFromInputFile(polarData, rootPolar, inputFile, airfoilname, Re):
+    polarData.polarName = 'target-polar for airfoil %s' % airfoilname
+    polarData.airfoilname = airfoilname
+    polarData.polarType = 12
+    polarData.Re = Re
+    polarData.NCrit = 0.0
+
+    # get operating-conditions from inputfile
+    operatingConditions = inputFile.getOperatingConditions()
+
+    target_values = operatingConditions["target_value"]
+    op_points = operatingConditions["op_point"]
+    op_modes =  operatingConditions["op_mode"]
+
+    numOpPoints = len(op_points)
+
+    for i in range(numOpPoints):
+        # check if the op-mode is 'spec-cl'
+        if (op_modes[i] == 'spec-cl'):
+            # get alpha from root-polar (dummy-value)
+            alpha = rootPolar.find_alpha(op_points[i])
+            polarData.alpha.append(alpha)
+            polarData.CL.append(op_points[i])
+            polarData.CD.append(target_values[i])
+        else:
+            # op_mode is 'spec-al'
+            polarData.alpha.append(op_points[i])
+            polarData.CL.append(target_values[i])
+            polarData.CD.append(0.0)
+
+        polarData.CDp.append(0.0)
+        polarData.Cm.append(0.0)
+        polarData.Top_Xtr.append(0.0)
+        polarData.Bot_Xtr.append(0.0)
+
+
+def generate_target_polars(params, workingDir):
+    # local variable
+    targetPolars = params.target_polars
+    inputFiles = params.inputFiles
+    Re = params.ReNumbers
+    numTargetPolars = len(Re)
+    rootPolar = params.merged_polars[0]
+
+    for i in range(numTargetPolars):
+        # get name of the airfoil
+        airfoilName = (get_FoilName(params, i)).strip('.dat')
+        # get inputfile
+        inputFile = inputFiles[i]
+
+        print("Generating target polar for airfoil %s..." % airfoilName)
+
+        # create new target polar
+        targetPolar = polarData()
+
+        # put the necessary data into the polar
+        setPolarDataFromInputFile(targetPolar, rootPolar, inputFile, airfoilName, Re[i])
+
+        # append the new target polar to list of target_polars
+        params.target_polars.append(targetPolar)
+
+        # compose polar-dir
+        polarDir = workingDir + bs + airfoilName + '_polars'
+
+        # check if output-folder exists. If not, create folder.
+        if not os.path.exists(polarDir):
+            os.makedirs(polarDir)
+
+        # compose filename and path
+        polarFileNameAndPath = polarDir + bs + airfoilName + '_target_polar.txt'
+        #print(polarFileNameAndPath) #Debug
+
+        # write polar to file
+        targetPolar.writeToFile(polarFileNameAndPath)
+
+    print("Done.")
+
+
 ################################################################################
 # Main program
 if __name__ == "__main__":
@@ -2907,8 +3006,11 @@ if __name__ == "__main__":
     # generate input-Files
     generate_inputFiles(params)
 
+    # generate target polars and write to file
+    generate_target_polars(params, workingDir)
+
     # generate Xoptfoil command-lines
-    commandlines, ReList = generate_commandlines(params)
+    commandlines = generate_commandlines(params)
 
     # change working-directory
     os.chdir(".." + bs)
