@@ -2910,13 +2910,14 @@ def generate_target_polars(params, workingDir):
     numTargetPolars = len(Re)
     rootPolar = params.merged_polars[0]
 
+    # get name of the root-airfoil
+    airfoilName = (get_FoilName(params, 0)).strip('.dat')
+    print("Generating target polars for airfoil %s..." % airfoilName)
+
     for i in range(numTargetPolars):
-        # get name of the airfoil
-        airfoilName = (get_FoilName(params, i)).strip('.dat')
+
         # get inputfile
         inputFile = inputFiles[i]
-
-        print("Generating target polar for airfoil %s..." % airfoilName)
 
         # create new target polar
         targetPolar = polarData()
@@ -2935,7 +2936,8 @@ def generate_target_polars(params, workingDir):
             os.makedirs(polarDir)
 
         # compose filename and path
-        polarFileNameAndPath = polarDir + bs + airfoilName + '_target_polar.txt'
+        ReString =("%03dk" % (Re[i]/1000))
+        polarFileNameAndPath = polarDir + bs + ('target_polar_%s.txt' % ReString)
         #print(polarFileNameAndPath) #Debug
 
         # write polar to file
