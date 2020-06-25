@@ -675,7 +675,13 @@ def plot_polars(seedfoil, designfoils, plotnum, firsttime=True, animation=False,
 
   if (plotnum > 0): 
     foil = designfoils[plotnum-1]
-    if (len(foil.alpha) == 0):  plot_polar   = False
+    if (len(foil.alpha) == 0):  
+      plot_polar   = False
+    else:
+      if (plotnum == 1):
+        prev_foil = seedfoil
+      else:
+        prev_foil = designfoils[plotnum-2]
   else:
     plot_polar   = False
 
@@ -698,16 +704,8 @@ def plot_polars(seedfoil, designfoils, plotnum, firsttime=True, animation=False,
     pfig.clear()
     pfig.subplots (2,3)
 
-
-#  for ax in axarr: 
-#    ax.clear()
-
   axarr = pfig.get_axes()
 
-
-  # Select requested airfoil or quit if polars are still not available
-
-  if plot_polar: foil = designfoils[plotnum-1]
 
   # Auto plotting bounds
 
@@ -821,14 +819,24 @@ def plot_polars(seedfoil, designfoils, plotnum, firsttime=True, animation=False,
     axarr[4].plot(foil.xtrb,      foil.alpha,     linestyle='--',color=nc, marker='s')
     axarr[2].plot(foil_x_values,  foil.glide,     linestyle='-', color=nc, marker='s')
     axarr[5].plot(foil_x_values,  foil.climb,     linestyle='-', color=nc, marker='s')
-    # show cd-value or flap anglein graph
+    
+    annotate_changes (axarr[0], prev_foil.alpha,prev_foil.cl,    foil.alpha,    foil.cl,    "y")
+    annotate_changes (axarr[1], prev_foil.cd,   prev_foil.cl,    foil.cd,       foil.cl,    "x")
+    annotate_changes (axarr[2], foil_x_values,  prev_foil.glide, foil_x_values, foil.glide, "y")
+    annotate_changes (axarr[3], prev_foil.alpha,prev_foil.cm,    foil.alpha,    foil.cm,    "y")
+    annotate_changes (axarr[4], prev_foil.xtrt, prev_foil.alpha, foil.xtrt,     foil.alpha, "x")
+    annotate_changes (axarr[4], prev_foil.xtrb, prev_foil.alpha, foil.xtrb,     foil.alpha, "x")
+    annotate_changes (axarr[5], foil_x_values,  prev_foil.climb, foil_x_values, foil.climb, "y")
+  
+    # show cd-value or flap anglein graph 
+
     for i in range(len(foil.cl)): 
       if ((len(foil.flapangle) > 0) and (foil.flapangle[i] != 0) and show_flap_angle):
         axarr[1].annotate(('f {:5.2f}'.format(foil.flapangle[i])), (cdmax - 0.29*cdrng, foil.cl[i]), 
                           fontsize = 8,color='dimgrey')
       elif (show_cd_value):
         axarr[1].annotate(('{:5.5f}'.format(foil.cd[i])), (foil.cd[i], foil.cl[i]),
-                          xytext = (10,-4), textcoords="offset points", fontsize = 8, color='dimgrey')
+                          xytext = (12,-3), textcoords="offset points", fontsize = 8, color='dimgrey')
 
   # set axis 
 
@@ -910,6 +918,43 @@ def plot_polars(seedfoil, designfoils, plotnum, firsttime=True, animation=False,
   return 
 
 
+#---------------------------------------------------------------------------------------
+# Annotate marker depending value increased or decreased
+#
+#    change_dir == "x""  watch the x- value - else watch the y_value for changes
+#
+#---------------------------------------------------------------------------------------
+def annotate_changes (axes, prev_x, prev_y, x, y, change_dir):
+
+  for i in range(len(x)):
+
+    if (change_dir == "x"):
+      rel_improv = (x[i] - prev_x[i]) / prev_x[i]
+    elif (change_dir == "y"):
+      rel_improv = (y[i] - prev_y[i]) / prev_y[i]
+    else:
+      rel_improv = 0 
+
+
+    if (abs(rel_improv) > 1e-4):            # show annotation only if delta > epsilon
+
+      if (change_dir == "x"):
+        if (rel_improv > 0.0):
+          axes.annotate('>', xy = (x[i], y[i]), 
+                xytext = (5,-2),   textcoords="offset points", fontsize = 8, color='dimgrey')
+        else:
+          axes.annotate('<', xy = (x[i], y[i]), 
+                xytext = (-12,-2), textcoords="offset points", fontsize = 8, color='dimgrey')
+      else:
+        if (rel_improv > 0.0):
+          axes.annotate('^', xy = (x[i], y[i]), 
+                xytext = (-3,3),   textcoords="offset points", fontsize = 8, color='dimgrey')
+        else:
+          axes.annotate('v', xy = (x[i], y[i]), 
+                xytext = (-2,-10), textcoords="offset points", fontsize = 8, color='dimgrey')
+
+
+
 ################################################################################
 # Plots optimization history
 ################################################################################
@@ -917,6 +962,8 @@ def plot_polars(seedfoil, designfoils, plotnum, firsttime=True, animation=False,
 def plot_optimization_history(steps, fmins, relfmins, rads, firsttime=True,
                               animation=False, prefix=None):
   global plotoptions
+
+  if (len(steps) == 0): return           # nothing to show
 
   # Set up optimization history plot. 
 
@@ -970,30 +1017,34 @@ def plot_optimization_history(steps, fmins, relfmins, rads, firsttime=True,
 #---------------------------------------------------------------------------------------
 def print_improvement (axes, steps, improvements):
 
+  if (len(steps) < 2): return            # nothing to show
+
   i_best = len(steps) - 1
   best_improve   = improvements [-1]
-  for i in reversed(range(len(steps)-1)):
-    if (improvements[i] < best_improve):
-      break
+
+  if (best_improve > 0): 
+    for i in reversed(range(len(steps)-1)):
+      if (improvements[i] < best_improve):
+        break
+      else:
+        i_best = i
+
+
+    my_marker = 7
+    y_text = 10
+    x_text = -4
+
+    axes.plot([steps[i_best]], [improvements[i_best]], marker=my_marker, markersize=7, color="red")
+    if (i_best == (len(steps) - 1)):
+      axes.annotate(('{:.5f}'.format(improvements[i_best])+'%'), 
+                    xy = (steps[i_best], improvements[i_best]), 
+                    xytext = (x_text,y_text), textcoords="offset points", ha = "center",
+                    fontsize='small', color='white', bbox = dict (facecolor="green"))
     else:
-      i_best = i
-
-
-  my_marker = 7
-  y_text = 10
-  x_text = -4
-
-  axes.plot([steps[i_best]], [improvements[i_best]], marker=my_marker, markersize=7, color="red")
-  if (i_best == (len(steps) - 1)):
-    axes.annotate(('{:.5f}'.format(improvements[i_best])+'%'), 
-                  xy = (steps[i_best], improvements[i_best]), 
-                  xytext = (x_text,y_text), textcoords="offset points", ha = "center",
-                  fontsize='small', color='white', bbox = dict (facecolor="green"))
-  else:
-    axes.annotate(('{:.5f}'.format(improvements[i_best])+'%'), 
-                  xy = (steps[i_best], improvements[i_best]), 
-                  xytext = (x_text,y_text), textcoords="offset points", ha = "center",
-                  fontsize='small', color='red')
+      axes.annotate(('{:.5f}'.format(improvements[i_best])+'%'), 
+                    xy = (steps[i_best], improvements[i_best]), 
+                    xytext = (x_text,y_text), textcoords="offset points", ha = "center",
+                    fontsize='small', color='red')
 
 ################################################################################
 # Input function that checks python version
@@ -1393,6 +1444,7 @@ def main_menu(initialchoice, seedfoil, designfoils, prefix):
   exitchoice = False
   rcParams['toolbar'] = 'None'    # Turn on matplotlib toolbar
   plt.style.use('seaborn-paper')
+  rcParams['lines.linewidth'] = 1.5
 
 
   while (not exitchoice):

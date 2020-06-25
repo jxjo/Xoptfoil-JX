@@ -188,7 +188,8 @@ subroutine xfoil_apply_flap_deflection(xflap, yflap, y_flap_spec, degrees)
 
 ! Apply flap deflection
 
-  call FLAP(xflap, yflap, y_flap_spec_int, degrees)
+  ! caution: FLAP will change y_flap a little --> ()
+  call FLAP((xflap), (yflap), y_flap_spec_int, degrees)
 
 end subroutine xfoil_apply_flap_deflection
 
