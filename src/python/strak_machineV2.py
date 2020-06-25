@@ -386,8 +386,6 @@ class inputFile:
          (ReDiff, perturb, pso_tol))
 
 
-# TODO use other function than linear interpolation!
-# this only works for certain maxSpeedGain-values
     def setNewTargetValues(self, start, end, rootPolar, x1, x2, y1, y2):
         # get operating-conditions from dictionary
         operatingConditions = self.values["operating_conditions"]
@@ -473,7 +471,7 @@ class inputFile:
         end = self.idx_maxGlide
 
         # now change all target-values of these op-points
-        y1 = factor_maxGlide#factor_maxSpeed
+        y1 = factor_maxSpeed
         y2 = factor_maxGlide
         x1 = CL_maxSpeed_strak
         x2 = CL_maxGlide
@@ -483,13 +481,15 @@ class inputFile:
         # determine start and end-index for all op-points between
         # maxGlide and pre_maxLift
         start = self.idx_maxGlide + 1
-        end = self.idx_preClmax + 1 #TEST
+        end = self.idx_preClmax + 1
 
         # now change all target-values of these op-points
         y1 = factor_maxGlide
-        y2 = factor_maxGlide
+        y2 = factor_maxGlide#factor_maxLift#
         x1 = CL_maxGlide
         x2 = pre_CL_maxLift_strak
+
+        #print(factor_maxSpeed, factor_maxGlide, factor_maxLift)#Debug
 
         self.setNewTargetValues(start, end, rootPolar, x1, x2, y1, y2)
 
@@ -1128,8 +1128,9 @@ class strakData:
     def calculateMainTargetValues(self):
         # get root-polar
         rootPolar = self.merged_polars[0]
+        num = len(self.merged_polars)
 
-        for idx in range(0, len(self.merged_polars)):
+        for idx in range(num):
             # get polar
             polar = self.merged_polars[idx]
 
@@ -1177,8 +1178,14 @@ class strakData:
 
             target_pre_alpha_maxLift = rootPolar.find_alpha(target_pre_CL_maxLift)
             target_pre_alpha_maxLift = round(target_pre_alpha_maxLift, Al_decimals)
+
+            # get corresponding CD-value from root-polar
+            rootPolar_pre_CD_maxLift = rootPolar.find_CD(target_pre_CL_maxLift)
+            # get corresponding CD-value from strak-polar
+            polar_pre_CD_maxLift = polar.find_CD(target_pre_CL_maxLift)
+
             target_pre_CD_maxLift  = self.calculate_CD_TargetValue(
-                 rootPolar.pre_CD_maxLift, polar.pre_CD_maxLift, maxLiftGain)#TODO kann derselbe Faktor genommen werden wie für CL ???
+                 rootPolar_pre_CD_maxLift, polar_pre_CD_maxLift, maxLiftGain)#TODO kann derselbe Faktor genommen werden wie für CL ???
 
             self.targets["pre_CL_maxLift"].append(target_pre_CL_maxLift)
             self.targets["pre_CD_maxLift"].append(target_pre_CD_maxLift)
@@ -1194,7 +1201,7 @@ class strakData:
             self.targets["alpha_maxLift"].append(target_alpha_maxLift)
             idx = idx+1
 
-        print(self.targets)
+        #print(self.targets)#Debug
         print("Done.")
 
     def correctOpPoint_left(self, opPoint, CL_maxSpeed_root,
@@ -1916,7 +1923,7 @@ class polarData:
         mergedPolar.airfoilname = self.airfoilname
         mergedPolar.polarType = 12
         mergedPolar.Re = self.Re
-        mergedPolar.NCrit = self.NCrit
+        mergedPolar.NCrit = 1.0
         mergedPolar.Cl_switchpoint_Type2_Type1_polar = switching_Cl
         mergedPolar.maxRe = maxRe
 
@@ -1987,6 +1994,8 @@ class polarData:
         # optimizer
         self.pre_CL_maxLift = self.CL_maxLift * 0.99
         self.pre_CD_maxLift = self.find_CD(self.pre_CL_maxLift)
+        print(self.Re, self.pre_CL_maxLift, self.pre_CD_maxLift) #Debug
+
         self.pre_maxLift_idx = self.find_index(self.pre_CL_maxLift)
         self.pre_alpha_maxLift = self.alpha[self.pre_maxLift_idx]
 
@@ -2007,19 +2016,26 @@ class polarData:
         # calculate corresponding CD
         # reduce list of CL, CD-values up to CL_max. No duplicate CL-values are
         # allowed!
-        x = []
-        y = []
-        for i in range(self.maxLift_idx):
-            x.append(self.CL[i])
-            y.append(self.CD[i])
+        for i in range(len(self.CL)):
+            if (self.CL[i] >= CL):
+                return self.CD[i]
+        return None
 
-        #double append the last value
-        x.append(self.CL[i])
-        y.append(self.CD[i])
+##        x = []
+##        y = []
+##        for i in range(self.maxLift_idx):
+##            x.append(self.CL[i])
+##            y.append(self.CD[i])
+##
+##
+##        #double append the last value
+##        x.append(self.CL[i])
+##        y.append(self.CD[i])
+##
+##        # interpolate the values
+##        CD = np.interp( CL, x, y)
+##        return CD
 
-        # interpolate the values
-        CD = np.interp( CL, x, y)
-        return CD
 
     def find_index(self, CL):
         for i in range(len(self.CL)):

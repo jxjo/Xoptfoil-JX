@@ -16,9 +16,9 @@
       "weighting_mode": "sinus",
       "min_weight": 0.7,
       "max_weight": 2.0,
-      "maxGlideLoss": [0.004, 0.004, 0.006, 0.010, 0.014, 0.050],
-      "maxSpeedGain": [0.3, 0.3, 0.3, 0.3, 0.3, 0.3],
-      "maxLiftGain": [0.025, 0.025, 0.025, 0.025, 0.025, 0.025],
+      "maxGlideLoss": [0.0, 0.004, 0.006, 0.010, 0.014, 0.050],
+      "maxSpeedGain": [0.0, 0.3, 0.3, 0.3, 0.3, 0.3],
+      "maxLiftGain": [0.0, 0.025, 0.025, 0.025, 0.025, 0.025],
       "maxReFactor": 2.0,
       "ReNumbers": [
             220000,
