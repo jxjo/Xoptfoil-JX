@@ -34,6 +34,6 @@ This optimization takes some time...
 
 --
 
-After the optimization the poalrs of the new airfoil are generated automatically using the tool Xfoil_worker
+After the optimization the polars of the new airfoil are generated automatically using the tool Xfoil_worker
 (have a look in the batch file make-JX-FXevo.bat) 
 

@@ -2,9 +2,27 @@
 
 All notable changes to this project are documented in this file.
 
+## [1.52.1] - 2020-06-25
+
+This is just a bugfix and maintenance release
+
+####  Xoptfoil-JX
+
+- Fix: When smoothing an exception occured when the number of spikes became 0
+- Fix: Typo 'highlow_treshold'.  
+**breakin change:** All occurences of `highlow_treshold` in input files have to be changed in `highlow_threshold`
+
+#### Xoptfoil_visualizer-JX
+
+- In polar view little markers will show the value changes during optimization
+
+#### Xfoil_worker
+
+- added new option "-w flap" to set flap at an airfoil and generate a new airfoil with flap set
+
 ## [1.52] - 2020-06-10
 
-### Xoptfoil-JX
+#### Xoptfoil-JX
 
 - Normalization of the airfoil - the optimized airfoil will be repaneled, moved, scaled and rotated to have the leading edge at 0,0 and the trailing edge at 1,0
   - depending on the repaneling result a new airfoil will have 200 or 201 points (if an additional leading edge point was added)
@@ -25,7 +43,7 @@ All notable changes to this project are documented in this file.
 - Fixes
   - Different methods were used to calculate thickness and camber. This is now consistent taking the more precise method
 
-### Xoptfoil_visualizer-JX
+#### Xoptfoil_visualizer-JX
 
 - Fixes
   - new plot objects were added at each refresh. This slowed down the visualizer more and more during long optimizations
@@ -35,7 +53,7 @@ Thanks to Tobias for testing and advices, Alexander for his hint regarding smoot
 
 ## [1.51.0] - 2020-05-24
 
-### Xoptfoil-JX
+#### Xoptfoil-JX
 
 - Revision of match_foils mode. Added ready to run examples to demonstrate the theoretical precision of Hicks-Henne or Camb-Thick based optimizations.
 - New geometric constraint 'max_te_curvature' to handle curvature problems at TE when using Hicks-Henne shape functions
@@ -45,7 +63,7 @@ Thanks to Tobias for testing and advices, Alexander for his hint regarding smoot
 - Fixed: When creating 'initial designs' the xfoil calculation isn't called anymore. This speeds up 'initial designs' heavily.
 - Code cleanings and minor bugs
 
-### Xoptfoil_visualizer-JX
+#### Xoptfoil_visualizer-JX
 
 - created short documentation (Xoptfoil_visualizer-JX Reference.pdf)
 - show points of transition laminar-turbulent in geometric view
