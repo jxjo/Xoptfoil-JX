@@ -950,29 +950,29 @@ class inputFile:
         return None
 
 
-    # add a "target-drag" oppoint to operating-conditions
-    def addTargetPolarOppoint(self, Cl, Cd):
-        self.addOppoint('target_polar', 'spec-cl', Cl, 'target-drag', Cd, 1.0)
-
-
-    # delete all existing oppoints and set new ones from polar-data
-    def SetOppointsFromPolar(self, polarData, numOppoints):
-        Cl_min = polarData.CL[0]
-        Cl_max = polarData.CL_maxLift
-        Cl_increment = (Cl_max - Cl_min) / numOppoints
-
-        # clear operating conditions
-        self.deleteAllOpPoints(self.values["operating_conditions"])
-
-        # clear any existing geo-targets
-        self.clearGeoTargets()
-
-        # add new oppoints
-        for i in range (numOppoints):
-            Cl = round(Cl_min + (i * Cl_increment), Cl_decimals)
-            Cd = round(polarData.find_CD(Cl), Cd_decimals)
-            #print "Cl:%f, Cd:%f" % (Cl, Cd) #Debug
-            self.addTargetPolarOppoint(Cl, Cd)
+##    # add a "target-drag" oppoint to operating-conditions
+##    def addTargetPolarOppoint(self, Cl, Cd):
+##        self.addOppoint('target_polar', 'spec-cl', Cl, 'target-drag', Cd, 1.0)
+##
+##
+##    # delete all existing oppoints and set new ones from polar-data
+##    def SetOppointsFromPolar(self, polarData, numOppoints):
+##        Cl_min = polarData.CL[0]
+##        Cl_max = polarData.CL_maxLift
+##        Cl_increment = (Cl_max - Cl_min) / numOppoints
+##
+##        # clear operating conditions
+##        self.deleteAllOpPoints(self.values["operating_conditions"])
+##
+##        # clear any existing geo-targets
+##        self.clearGeoTargets()
+##
+##        # add new oppoints
+##        for i in range (numOppoints):
+##            Cl = round(Cl_min + (i * Cl_increment), Cl_decimals)
+##            Cd = round(polarData.find_CD(Cl), Cd_decimals)
+##            #print "Cl:%f, Cd:%f" % (Cl, Cd) #Debug
+##            self.addTargetPolarOppoint(Cl, Cd)
 
 
     def getOperatingConditions(self):
@@ -1041,9 +1041,9 @@ class strakData:
         self.T1_polars = []
         self.T2_polars = []
         self.merged_polars = []
-        self.maxGlideLoss = 0.008
-        self.maxSpeedGain = 0.5
-        self.maxLiftGain = 0.3
+        self.maxGlideLoss = [0.008]
+        self.maxSpeedGain = [0.5]
+        self.maxLiftGain = [0.3]
         self.targets ={
                         "CL_maxSpeed": [],
                         "CD_maxSpeed": [],
@@ -1127,7 +1127,20 @@ class strakData:
         # get root-polar
         rootPolar = self.merged_polars[0]
 
-        for polar in self.merged_polars:
+        for idx in range(0, len(self.merged_polars)):
+            # get polar
+            polar = self.merged_polars[idx]
+
+            # get gain and loss values
+            if (polar == rootPolar):
+                # no gain / loss for root-polar
+                maxSpeedGain = 0.0
+                maxGlideLoss = 0.0
+                maxLiftGain = 0.0
+            else:
+                maxSpeedGain = params.maxSpeedGain[idx]
+                maxGlideLoss = params.maxGlideLoss[idx]
+                maxLiftGain = params.maxLiftGain[idx]
 
             #---------------------- maxSpeed-targets --------------------------
             # keep Cl-max-speed equal for all airfoils along the strak
@@ -1135,7 +1148,7 @@ class strakData:
 
             # calculate CD-max-speed target-value for each airfoil along the strak
             target_CD_maxSpeed = self.calculate_CD_TargetValue(
-                 rootPolar.CD_maxSpeed, polar.CD_maxSpeed, params.maxSpeedGain)
+                 rootPolar.CD_maxSpeed, polar.CD_maxSpeed, maxSpeedGain)
 
             self.targets["CD_maxSpeed"].append(target_CD_maxSpeed)
 
@@ -1145,11 +1158,7 @@ class strakData:
             self.targets["CL_maxGlide"].append(rootPolar.CL_maxGlide)
 
             # calculate CL/CD-target-value for each airfoil along the strak
-            if (polar == rootPolar):
-                # no maxGlide loss for root-polar
-                factor = 1.00
-            else:
-                factor = 1.00 - params.maxGlideLoss
+            factor = 1.00 - maxGlideLoss
             target_CL_CD_maxGlide =  polar.CL_CD_maxGlide * factor
 
             # CL_CD = CL/CD -> CD = CL/CL_CD
@@ -1162,25 +1171,26 @@ class strakData:
 
             #---------------------- maxLift-targets --------------------------
             target_pre_CL_maxLift = self.calculate_CL_TargetValue(
-             rootPolar.pre_CL_maxLift, polar.pre_CL_maxLift, params.maxLiftGain)
+             rootPolar.pre_CL_maxLift, polar.pre_CL_maxLift, maxLiftGain)
 
             target_pre_alpha_maxLift = rootPolar.find_alpha(target_pre_CL_maxLift)
             target_pre_alpha_maxLift = round(target_pre_alpha_maxLift, Al_decimals)
             target_pre_CD_maxLift  = self.calculate_CD_TargetValue(
-                 rootPolar.pre_CD_maxLift, polar.pre_CD_maxLift, params.maxLiftGain)#TODO kann derselbe Faktor genommen werden wie für CL ???
+                 rootPolar.pre_CD_maxLift, polar.pre_CD_maxLift, maxLiftGain)#TODO kann derselbe Faktor genommen werden wie für CL ???
 
             self.targets["pre_CL_maxLift"].append(target_pre_CL_maxLift)
             self.targets["pre_CD_maxLift"].append(target_pre_CD_maxLift)
             self.targets["pre_alpha_maxLift"].append(target_pre_alpha_maxLift)
 
             target_CL_maxLift = self.calculate_CL_TargetValue(
-                  rootPolar.CL_maxLift, polar.CL_maxLift, params.maxLiftGain)
+                  rootPolar.CL_maxLift, polar.CL_maxLift, maxLiftGain)
 
             target_alpha_maxLift = rootPolar.find_alpha(target_CL_maxLift)
             target_alpha_maxLift = round(target_alpha_maxLift, Al_decimals)
 
             self.targets["CL_maxLift"].append(target_CL_maxLift)
             self.targets["alpha_maxLift"].append(target_alpha_maxLift)
+            idx = idx+1
 
         print(self.targets)
         print("Done.")
@@ -1829,6 +1839,55 @@ class polarData:
         fileHandle.close()
         print("done.\n")
 
+    def writeToFile(self, fileName):
+        # get some local variables
+        polarType = self.polarType
+        airfoilname = self.airfoilname
+        Re = float(self.Re)/1000000
+        Mach = 0.0 #TODO get from polar
+        NCrit = 9.00 #TODO get from polar
+
+        if (polarType == 1):
+            ReString = 'fixed         '
+            MachString = 'fixed'
+        else:
+            ReString = 'T1_T2_mixed'#'~ 1/sqrt(CL)  '
+            MachString = 'T1_T2_mixed'#'~ 1/sqrt(CL)'
+
+        print("writing polar to file %s...\n" %fileName)
+
+        # open file
+        fileHandle = open(fileName, 'w+')
+
+        # write header
+        fileHandle.write("Xoptfoil-JX\n\n")
+        fileHandle.write(" Calculated polar for: %s\n\n" % airfoilname)
+        fileHandle.write(" %d %d Reynolds number %s Mach number %s\n\n" %\
+         (polarType, polarType, ReString, MachString))
+
+        fileHandle.write(" xtrf =   1.000 (top)        1.000 (bottom)\n")
+        fileHandle.write(" Mach = %7.3f     Re = %9.3f e 6     Ncrit = %7.3f\n\n" %\
+                        (Mach, Re, NCrit))
+
+        fileHandle.write("  alpha     CL        CD       CDp       Cm    Top Xtr Bot Xtr \n")
+        fileHandle.write(" ------- -------- --------- --------- -------- ------- ------- \n")
+
+        # more local variables
+        alpha = self.alpha
+        CL = self.CL
+        CD = self.CD
+        CDp = self.CDp
+        Cm = self.Cm
+        Top_Xtr = self.Top_Xtr
+        Bot_Xtr = self.Bot_Xtr
+
+        # write data
+        for i in range(len(alpha)):
+            fileHandle.write(" %7.3f %8.4f %9.5f %9.5f %8.4f %7.4f %7.4f\n"\
+            % (alpha[i], CL[i], CD[i], CDp[i], Cm[i], Top_Xtr[i], Bot_Xtr[i]))
+
+        fileHandle.close()
+        print("done.\n")
 
     def merge(self, mergePolar_1, switching_Cl, maxRe):
         print ("merging polars at Cl = %s.." % switching_Cl)
@@ -2149,13 +2208,13 @@ def generate_commandlines(params):
     ReList = params.get_ReList()
 
     # change current working dir to output folder
-    commandline = "cd %s\n" % params.outputFolder
+    commandline = "cd %s\n\n" % params.outputFolder
     commandLines.append(commandline)
 
     if (params.operatingMode != 'matchpolarfoils'):
         # copy root-foil to airfoil-folder as it can be used
         # as the root airfoil without optimization
-        commandline = ("copy %s %s" + bs + "%s\n") % \
+        commandline = ("copy %s %s" + bs + "%s\n\n") % \
         (get_FoilName(params, 0), params.airfoilFolder, get_FoilName(params, 0))
         commandLines.append(commandline)
 
@@ -2193,7 +2252,7 @@ def generate_commandlines(params):
 
 
         #copy strak-airfoil to airfoil-folder
-        commandline = ("copy %s %s" + bs +"%s\n") % \
+        commandline = ("copy %s %s" + bs +"%s\n\n") % \
             (strakFoilName , params.airfoilFolder, strakFoilName)
         commandLines.append(commandline)
 
@@ -2221,6 +2280,64 @@ def generate_batchfile(batchFileName, commandlines):
 
     # close the outputfile
     outputfile.close()
+
+################################################################################
+# function that gets commandlines to generate one strak-airfoil
+def get_strak_commandlines(params, commandlines, idx):
+    strak_commandlines = []
+    Re = str(params.ReNumbers[idx])
+
+    # change current working dir to output folder
+    strak_commandlines.append("cd %s\n\n" % params.outputFolder)
+
+    for line_idx in range(len(commandlines)):
+        if (idx == 0):
+            # root-airfoil
+            if (commandlines[line_idx].find("copy ")>=0):
+                # append only one line
+                strak_commandlines.append(commandlines[line_idx])
+                # everything found
+                break
+        else:
+            if (commandlines[line_idx].find(Re)>=0):
+                # append three lines
+                strak_commandlines.append(commandlines[line_idx])
+                strak_commandlines.append(commandlines[line_idx+1])
+                strak_commandlines.append(commandlines[line_idx+2])
+                # everything found
+                break
+
+    # change back directory
+    strak_commandlines.append("cd..")
+    return strak_commandlines
+
+
+################################################################################
+# function that generates a Xoptfoil-batchfile for one strak airfoil
+def generate_strak_batchfiles(params, commandlines):
+    if (params.operatingMode == 'matchpolarfoils'):
+        # nothing to do
+        return
+
+    for i in range(0, len(params.ReNumbers)):
+        k_Re = (params.ReNumbers[i]/1000)
+        batchFileName = "make_%dk.bat" % (k_Re)
+
+        try:
+            # create a new file
+            outputfile = open(batchFileName, "w+")
+        except:
+            print ('Error, file %s could not be opened' % batchFileName)
+            return
+        # get commandlines to generate the strak-airfoil
+        strak_commandlines = get_strak_commandlines(params, commandlines, i)
+
+        # write commandlines to outputfile
+        for element in strak_commandlines:
+            outputfile.write(element)
+
+        # close the outputfile
+        outputfile.close()
 
 
 def generate_visu_batchfiles(params):
@@ -2288,23 +2405,26 @@ def getParameters(dict):
     try:
         params.inputFolder = dict["inputFolder"]
     except:
-        print ('inputFolder not specified, assuming no input-folder shall be used.')
+        print ('inputFolder not specified, using default-value \'%s\''\
+         % params.inputFolder)
 
     try:
         params.outputFolder = dict["outputFolder"]
     except:
-        print ('outputFolder not specified, assuming no output-folder shall be used.')
+        print ('outputFolder not specified, using default-value \'%s\''\
+         % params.outputFolder)
 
     try:
         params.batchfileName = dict["batchfileName"]
     except:
-        print ('batchfileName not found, setting default-filename \'%s\'.'\
+        print ('batchfileName not specified, setting default-filename \'%s\'.'\
                 % params.batchfileName)
 
     try:
         params.xmlFileName = dict["XMLfileName"]
     except:
         print ('XMLfileName not specified, assuming no xml-file shall be used.')
+        params.xmlFileName = None
 
     try:
         params.strakInputFileName = dict["strakInputFileName"]
@@ -2315,12 +2435,14 @@ def getParameters(dict):
     try:
         params.ReNumbers = dict["ReNumbers"]
     except:
-        print ('ReNumbers not specified, using no list of ReNumbers')
+        print ('Error, ReNumbers not specified!')
+        exit(1)
 
     try:
         params.additionalOpPoints[0] = dict["additionalOpPoints"]
     except:
-        print ('additionalOpPoints not specified, using no additional op-points')
+        print ('additionalOpPoints not specified, using no additional'
+               'op-points')
 
     try:
         params.maxReFactor = dict["maxReFactor"]
@@ -2331,17 +2453,20 @@ def getParameters(dict):
     try:
         params.seedFoilName = dict["seedFoilName"]
     except:
-        print ('seedFoilName not specified')
+        print ('Error, seedFoilName not specified!')
+        exit(1)
 
     try:
         params.strakType = dict["strakType"]
     except:
-        print ('strakType not specified')
+        print ('Error, strakType not specified!')
+        exit(1)
 
     try:
         params.operatingMode = dict["operatingMode"]
     except:
-        print ('operatingMode not specified')
+        print ('operatingMode not specified, using default value \'%s\'.'\
+                % params.operatingMode)
 
     # get matchpolarfoilname only, if operating-mode is set to "matchpolarfoils"
     if (params.operatingMode == 'matchpolarfoils'):
@@ -2349,7 +2474,8 @@ def getParameters(dict):
             params.matchPolarFoilName = dict["matchPolarFoilName"]
             params.useAlwaysRootfoil = True
         except:
-            print ('matchPolarFoilName not specified')
+            print ('Error, matchPolarFoilName not specified!')
+            exit(1)
     else:
         try:
             if (dict["useAlwaysRootfoil"] == 'true'):
@@ -2357,7 +2483,12 @@ def getParameters(dict):
             else:
                 params.useAlwaysRootfoil = False
         except:
-            print ('useAlwaysRootfoil not specified')
+            if params.useAlwaysRootfoil:
+                string = 'True'
+            else:
+                string = 'False'
+            print ('useAlwaysRootfoil not specified, using default value \'%s\'.'\
+                    % string)
 
     try:
         if (dict["adaptInitialPerturb"] == 'true'):
@@ -2365,7 +2496,12 @@ def getParameters(dict):
         else:
             params.adaptInitialPerturb = False
     except:
-        print ('adaptInitialPerturb not specified')
+        if params.adaptInitialPerturb:
+            string = 'True'
+        else:
+            string = 'False'
+        print ('adaptInitialPerturb not specifiedusing default value \'%s\'.'\
+                    % string)
 
     try:
         params.weighting_mode = dict["weighting_mode"]
@@ -2437,7 +2573,8 @@ def getParameters(dict):
     try:
         params.Cl_min = dict["Cl_min"]
     except:
-        print ('Cl_min not specified')
+        print ('Cl_min not specified, using default value \'%f\'.'\
+                    % params.Cl_min)
 
     return params
 
@@ -2678,6 +2815,13 @@ def generate_polars(params, workingDir, rootfoilName):
         # add merged polar to params
         params.merged_polars.append(mergedPolar)
 
+        # write merged polars to file
+        polarFileNameAndPath = polarDir + bs + polarFileName_T1.strip('.txt') +\
+                               '_' +polarFileName_T2
+        print(polarFileNameAndPath) #Debug
+
+        mergedPolar.writeToFile(polarFileNameAndPath)
+
     print("Done.")
 
 ################################################################################
@@ -2776,6 +2920,8 @@ if __name__ == "__main__":
         generate_batchfile(params.batchfileName, commandlines)
         print ('generating visu-batchfiles')
         generate_visu_batchfiles(params)
+        print ('generating batchfiles for each single airfoil of the strak')
+        generate_strak_batchfiles(params, commandlines)
     print("Done.")
 
     # show graph
