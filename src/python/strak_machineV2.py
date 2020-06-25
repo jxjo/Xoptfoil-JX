@@ -1714,7 +1714,12 @@ class polarGraph:
         rootPolar_T1 = T1_polars[0]
         rootPolar_T2 = T2_polars[0]
 
-        print("plotting polars of airfoil %s..." % (params.seedFoilName))
+        if (params.operatingMode == 'matchpolarfoils'):
+            airfoilName = params.matchPolarFoilName
+        else:
+            airfoilName = params.seedFoilName
+
+        print("plotting polars of airfoil %s..." % (airfoilName))
 
         # set 'dark' style
         plt.style.use('dark_background')
@@ -1723,7 +1728,7 @@ class polarGraph:
         fig, (upper,lower) = plt.subplots(2,2)
 
         # compose diagram-title
-        text = ("Analysis of airfoil \"%s\"\n" % params.seedFoilName)
+        text = ("Analysis of airfoil \"%s\"\n" % airfoilName)
         text = text + "T1-polars, Re = "
 
         # add Re-numbers
