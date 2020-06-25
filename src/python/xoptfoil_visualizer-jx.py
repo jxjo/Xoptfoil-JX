@@ -928,9 +928,9 @@ def annotate_changes (axes, prev_x, prev_y, x, y, change_dir):
 
   for i in range(len(x)):
 
-    if (change_dir == "x"):
+    if   (change_dir == "x") and (prev_x[i] != 0):
       rel_improv = (x[i] - prev_x[i]) / prev_x[i]
-    elif (change_dir == "y"):
+    elif (change_dir == "y") and (prev_y[i] != 0):
       rel_improv = (y[i] - prev_y[i]) / prev_y[i]
     else:
       rel_improv = 0 
