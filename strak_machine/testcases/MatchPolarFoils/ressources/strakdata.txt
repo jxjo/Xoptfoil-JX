@@ -1,6 +1,6 @@
 {
       "operatingMode": "matchpolarfoils",
-      "xoptfoilTemplate": "MatchPolarFoils",
+      "xoptfoilTemplate": "Generic",
       "xoptfoilInputFileName": "imatch.txt",
       "batchfileName": "match.bat",
       "seedFoilName": "SD",
