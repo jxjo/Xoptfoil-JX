@@ -1027,7 +1027,7 @@ class strakData:
         self.inputFolder = 'ressources'
         self.outputFolder = 'build'
         self.airfoilFolder = 'airfoils'
-        self.xoptfoilInputFileName = 'i-strak.txt'
+        self.xoptfoilInputFileName = 'istrak.txt'
         self.ReSqrtCl = 150000
         self.numOpPoints = 16
         self.weightingMode = 'sinus'
@@ -1883,7 +1883,7 @@ class polarData:
                     self.Bot_Xtr.append(float(splittedLine[7]))
 
         fileHandle.close()
-        #DoneMsg()
+        DoneMsg()
 
     def writeToFile(self, fileName):
         # get some local variables
@@ -1936,7 +1936,7 @@ class polarData:
             % (alpha[i], CL[i], CD[i], CDp[i], Cm[i], Top_Xtr[i], Bot_Xtr[i]))
 
         fileHandle.close()
-        #DoneMsg()
+        DoneMsg()
 
     def merge(self, mergePolar_1, switching_CL, maxRe):
         print ("merging polars at CL = %s" % switching_CL)
@@ -2207,7 +2207,7 @@ def get_FoilName(params, index):
         else:
             suffix = '-strak'
 
-        foilName = (foilName + "%s-%03dk.dat") % (suffix,(Re/1000))
+        foilName = (foilName + "%s-%s.dat") % (suffix ,get_ReString(Re))
 
     return (foilName)
 
@@ -2357,9 +2357,8 @@ def generate_strak_batchfiles(params, commandlines):
         # nothing to do
         return
 
-    for i in range(0, len(params.ReNumbers)):
-        k_Re = (params.ReNumbers[i]/1000)
-        batchFileName = "make_%dk.bat" % (k_Re)
+    for i in range(1, len(params.ReNumbers)):
+        batchFileName = "make_%s.bat" % (get_ReString(params.ReNumbers[i]))
 
         try:
             # create a new file
@@ -2386,7 +2385,7 @@ def generate_visu_batchfiles(params):
         startidx = 1
 
     for i in range(startidx, len(params.ReNumbers)):
-        visuFileName = "visu_%dk.bat" % (params.ReNumbers[i]/1000)
+        visuFileName = "visu_%s.bat" % (get_ReString(params.ReNumbers[i]))
         airfoilName = get_FoilName(params, i)
         airfoilName = airfoilName.strip('.dat')
 
@@ -2406,7 +2405,7 @@ def generate_visu_batchfiles(params):
 
 ################################################################################
 # function that gets the name of the strak-machine-data-file
-def getInFileName(args):
+def get_InFileName(args):
 
     if args.input:
         inFileName = args.input
@@ -2420,18 +2419,80 @@ def getInFileName(args):
 
 
 ################################################################################
+# function that gets the filenname of the first polar to merge
+def get_workerAction(args):
+    if args.work:
+        return args.work
+    else:
+        return None
+
+################################################################################
+# function that gets the filenname of the first polar to merge
+def get_firstMergePolarFileName(args):
+    if args.p1:
+        return args.p1
+    else:
+        return None
+
+################################################################################
+# function that gets the filename of the second polar to merge
+def get_secondMergePolarFileName(args):
+    if args.p2:
+        return args.p2
+    else:
+        return None
+
+################################################################################
+# function that gets the filenname of the first polar to merge
+def get_mergedPolarFileName(args):
+    if args.m:
+        return args.m
+    else:
+        return None
+
+################################################################################
+# function that gets the filenname of the first polar to merge
+def get_mergeCL(args):
+    if args.c:
+        return float(args.c)
+    else:
+        return None
+
+################################################################################
 # function that gets arguments from the commandline
-def getArguments():
+def get_Arguments():
 
     # initiate the parser
     parser = argparse.ArgumentParser('')
 
-    parser.add_argument("-input", "-i", help="filename of strak-machine input"\
-                        "-file (e.g. strak_data)")
+    helptext = "filename of strak-machine input-file (e.g. strak_data)"
+    parser.add_argument("-input", "-i", help = helptext)
+
+    helptext = "worker action, e.g. -w merge (to merge two polars)"
+    parser.add_argument("-work", "-w", help = helptext)
+
+    helptext = "filename of first polar to merge)"
+    parser.add_argument("-p1", help = helptext)
+
+    helptext = "filename of second polar to merge)"
+    parser.add_argument("-p2", help = helptext)
+
+    helptext = "filename of merged polar"
+    parser.add_argument("-m", help = helptext)
+
+    helptext = "CL-value at which to merge the two polars"
+    parser.add_argument("-c", help = helptext)
 
     # read arguments from the command line
     args = parser.parse_args()
-    return (getInFileName(args))
+
+    return (get_InFileName(args),
+            get_workerAction(args),
+            get_firstMergePolarFileName(args),
+            get_secondMergePolarFileName(args),
+            get_mergedPolarFileName(args),
+            get_mergeCL(args))
+
 
 
 ################################################################################
@@ -2761,6 +2822,10 @@ def generate_inputFiles(params):
         params.inputFiles.append(newFile)
 
 
+def get_ReString(Re):
+    return ("%03dk" % (Re/1000))
+
+
 def generate_polars(params, workingDir, rootfoilName):
     # generate polars of seedfoil / root-airfoil:
     print("Generating polars for airfoil %s..." % rootfoilName)
@@ -2786,7 +2851,7 @@ def generate_polars(params, workingDir, rootfoilName):
 
         # generate inputfilename from Re-number
         inputFilename = params.xoptfoilInputFileName.strip('.txt')
-        inputFilename = inputFilename + ("_%03dk.txt" % (Re/1000))
+        inputFilename = inputFilename + ("_%s.txt" % get_ReString(Re))
         params.inputFileNames.append(inputFilename)
 
         # compose string for system-call of XFOIL-worker for T1-polar generation
@@ -2839,9 +2904,9 @@ def generate_polars(params, workingDir, rootfoilName):
         params.merged_polars.append(mergedPolar)
 
         # write merged polars to file
-        polarFileNameAndPath = polarDir + bs + polarFileName_T1.strip('.txt') +\
-                               '_' +polarFileName_T2
-        #print(polarFileNameAndPath) #Debug
+        polarFileNameAndPath = polarDir + bs + ('merged_polar_%3s.txt' %\
+                              get_ReString(newPolar_T2.Re))
+        print(polarFileNameAndPath) #Debug
 
         mergedPolar.writeToFile(polarFileNameAndPath)
 
@@ -2918,8 +2983,8 @@ def generate_target_polars(params, workingDir):
             os.makedirs(polarDir)
 
         # compose filename and path
-        ReString =("%03dk" % (Re[i]/1000))
-        polarFileNameAndPath = polarDir + bs + ('target_polar_%s.txt' % ReString)
+        polarFileNameAndPath = polarDir + bs + ('target_polar_%s.txt' %\
+                               get_ReString(Re[i]))
         #print(polarFileNameAndPath) #Debug
 
         # write polar to file
@@ -2928,13 +2993,50 @@ def generate_target_polars(params, workingDir):
     DoneMsg()
 
 
+# merge two polar files, the merging-point will be specified as a CL-value.
+# generate a new file containing the data of the merged polar
+def mergePolars(polarFile_1, polarFile_2 , mergedPolarFile, mergeCL):
+    # import polars from file
+    try:
+        polar_1 = polarData()
+        polar_1.importFromFile(polarFile_1)
+    except:
+        ErrorMsg("polarfile \'%s\' could not be imported" % polarFile_1)
+        exit(-1)
+
+    try:
+        polar_2 = polarData()
+        polar_2.importFromFile(polarFile_2)
+    except:
+        ErrorMsg("polarfile \'%s\' could not be imported" % polarFile_2)
+        exit(-1)
+
+    # merge polars and write to file.
+    # lower part (CL_min..mergeCL) comes from polar_1.
+    # upper part (mergeCL..CL_max) comes from polar_2.
+    # the merged values will be stored in mergedPolar.
+    try:
+        mergedPolar = polar_2.merge(polar_1, mergeCL, 0)
+        mergedPolar.writeToFile(mergedPolarFile)
+    except:
+        ErrorMsg("polarfile \'%s\' could not be generated" % mergedPolarFile)
+        exit(-1)
+
+
 ################################################################################
 # Main program
 if __name__ == "__main__":
     init()
 
     # get command-line-arguments or user-input
-    strakDataFileName = getArguments()
+    (strakDataFileName, workerAction, polarFile_1, polarFile_2,
+      mergedPolarFile, mergeCL) = get_Arguments()
+
+    # decide what action to perform.
+    if (workerAction == 'merge'):
+        # do nothing else but merging the polars
+        mergePolars(polarFile_1, polarFile_2 , mergedPolarFile, mergeCL)
+        exit(0)
 
     # get real path of the script
     pathname = os.path.dirname(sys.argv[0])
