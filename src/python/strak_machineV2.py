@@ -37,7 +37,7 @@ from termcolor import colored
 bs = "\\"
 presetsPath = 'ressources' + bs + 'presets'
 imagesPath = 'ressources' + bs + 'images'
-logoName = 'strakmachine.png'
+logoName = 'strakmachine.jpg'
 
 # fixed filenames
 T1_polarInputFile = 'iPolars_T1.txt'
