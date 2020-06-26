@@ -1,30 +1,9 @@
 {
-      "inputFolder": "ressources",
-      "outputFolder": "build",
-      "operatingMode": "default",
-      "numOpPoints": 16,
-      "strakType": "Generic",
-      "batchfileName": "make_strak.bat",
-      "strakInputFileName": "istrak.txt",
+      "xoptfoilTemplate": "Generic",
       "seedFoilName": "SD", 
-      "smoothSeedFoil": "true",
-      "useAlwaysRootfoil": "false",
-      "adaptInitialPerturb": "false",
-      "generateBatchfile": "true",
-      "Cl_min" : -0.01,
-      "weighting_mode": "sinus",
-      "min_weight": 0.7,
-      "max_weight": 1.5,
       "maxGlideLoss": [0.0, 0.004, 0.006, 0.020, 0.045, 0.060],
       "maxSpeedGain": [0.0, 0.3, 0.3, 0.3, 0.3, 0.3],
       "maxLiftGain": [0.00, 0.025, 0.025, 0.025, 0.025, 0.025],
-      "maxReFactor": 2.0,
-      "ReNumbers": [
-            220000,
-            190000, 
-            160000, 
-            130000, 
-            100000,
-            70500
-      ] 
+      "maxReynoldsFactor": 2.0,
+      "reynolds": [220000, 190000, 160000, 130000, 100000, 70500] 
 }
