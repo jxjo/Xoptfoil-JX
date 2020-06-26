@@ -970,31 +970,6 @@ class inputFile:
         return None
 
 
-##    # add a "target-drag" oppoint to operating-conditions
-##    def addTargetPolarOppoint(self, Cl, Cd):
-##        self.addOppoint('target_polar', 'spec-cl', Cl, 'target-drag', Cd, 1.0)
-##
-##
-##    # delete all existing oppoints and set new ones from polar-data
-##    def SetOppointsFromPolar(self, polarData, numOppoints):
-##        CL_min = polarData.CL[0]
-##        CL_max = polarData.CL_maxLift
-##        Cl_increment = (CL_max - CL_min) / numOppoints
-##
-##        # clear operating conditions
-##        self.deleteAllOpPoints(self.values["operating_conditions"])
-##
-##        # clear any existing geo-targets
-##        self.clearGeoTargets()
-##
-##        # add new oppoints
-##        for i in range (numOppoints):
-##            Cl = round(CL_min + (i * Cl_increment), CL_decimals)
-##            Cd = round(polarData.find_CD(Cl), CD_decimals)
-##            #print "Cl:%f, Cd:%f" % (Cl, Cd) #Debug
-##            self.addTargetPolarOppoint(Cl, Cd)
-
-
     def getOperatingConditions(self):
          # get operating-conditions from dictionary
         operatingConditions = self.values["operating_conditions"]
@@ -1028,32 +1003,33 @@ class strakData:
         self.outputFolder = 'build'
         self.airfoilFolder = 'airfoils'
         self.xoptfoilInputFileName = 'istrak.txt'
+        self.weightingMode = 'sinus'
+        self.batchfileName = 'make_strak.bat'
+        self.xoptfoilTemplate = "Generic"
+        self.operatingMode = 'default'
+        self.seedFoilName = ""
+        self.matchPolarFoilName = ""
         self.ReSqrtCl = 150000
         self.numOpPoints = 16
-        self.weightingMode = 'sinus'
         self.minWeight = 0.7
         self.maxWeight = 1.5
+        self.CL_min = -0.1
+        self.CL_switchpoint_Type2_Type1_polar = 0.05
+        self.maxReFactor = 2.0
         self.generateBatch = True
-        self.batchfileName = 'make_strak.bat'
         self.xmlFileName = None
         self.wingData = None
         self.useWingPlanform = True
-        self.xoptfoilTemplate = "Generic"
-        self.operatingMode = 'default'
         self.useAlwaysRootfoil = False
         self.showTargetPolars = True
         self.adaptInitialPerturb = False
-        self.seedFoilName = ""
-        self.matchPolarFoilName = ""
         self.smoothSeedfoil = True
+        self.smoothStrakFoils = False
         self.smoothMatchPolarFoil = True
         self.ReNumbers = []
         self.additionalOpPoints = [[]]
-        self.CL_min = -0.1
         self.chordLengths = []
-        self.maxReFactor = 2.0
         self.maxReNumbers = []
-        self.CL_switchpoint_Type2_Type1_polar = 0.05
         self.polarFileNames = []
         self.polarFileNames_T1 = []
         self.polarFileNames_T2 = []
@@ -1084,6 +1060,12 @@ class strakData:
     # function that returns a list of Re-numbers
     def get_ReList(params):
         return params.ReNumbers
+
+
+    ############################################################################
+    # function that returns a list of max Re-numbers
+    def get_maxReList(params):
+        return params.maxReNumbers
 
 
     ############################################################################
@@ -1127,9 +1109,6 @@ class strakData:
         self.CL_switchpoint_Type2_Type1_polar =\
                    ((self.ReNumbers[0] * self.ReNumbers[0]))/\
                    ((self.maxReNumbers[0])*(self.maxReNumbers[0]))
-
-        #print("polar-generation will switch vom type2 to type1 at CL = %.3f\n"\
-        # % self.CL_switchpoint_Type2_Type1_polar)#Debug
 
 
     def calculate_CD_TargetValue(self, root, strak, gain):
@@ -2244,17 +2223,11 @@ def generate_commandlines(params):
 
     numFoils = get_NumberOfAirfoils(params)#TODO refactor
     ReList = params.get_ReList()
+    maxReList = params.get_maxReList()
 
     # change current working dir to output folder
     commandline = "cd %s\n\n" % params.outputFolder
     commandLines.append(commandline)
-
-    if (params.operatingMode != 'matchpolarfoils'):
-        # copy root-foil to airfoil-folder as it can be used
-        # as the root airfoil without optimization
-        commandline = ("copy %s %s" + bs + "%s\n\n") % \
-        (get_FoilName(params, 0), params.airfoilFolder, get_FoilName(params, 0))
-        commandLines.append(commandline)
 
     # store rootfoilname
     strakFoilName = rootfoilName
@@ -2280,16 +2253,50 @@ def generate_commandlines(params):
                           strakFoilName.strip('.dat'))
         commandLines.append(commandline)
 
-        # smooth the airfoil
-        inputFilename = getPresetInputFileName('Smooth')
+        if (params.smoothStrakFoils):
+            # smooth the airfoil
+            inputFilename = getPresetInputFileName('Smooth')
 
-        # compose commandline for smoothing the airfoil
-        commandline = "xfoil_worker.exe -w smooth -i %s -a %s -o %s\n" % \
+            # compose commandline for smoothing the airfoil
+            commandline = "xfoil_worker.exe -w smooth -i %s -a %s -o %s\n" % \
                        (inputFilename, strakFoilName, strakFoilName.strip('.dat'))
+            commandLines.append(commandline)
+
+        # generate polars
+        strakFoilName.strip('.dat')
+        polarFileName_T1 = params.polarFileNames_T1[i]
+        polarFileName_T2 = params.polarFileNames_T2[i]
+        polarDir = strakFoilName.strip('.dat') + '_polars'
+        mergedPolarFileName =  polarDir + bs +\
+                     ('merged_polar_%s.txt' % get_ReString(ReList[i]))
+
+        # T1-polar
+        inputFilename = getPresetInputFileName('iPolars_T1')
+        commandline = "xfoil_worker.exe -i \"%s\" -a \"%s\" -w polar -o \"%s\" -r %d\n" %\
+                                 (inputFilename, strakFoilName,
+                                  strakFoilName.strip('.dat'), maxReList[i])
         commandLines.append(commandline)
+        print(commandline)#Debug
+
+        # T2-polar
+        inputFilename = getPresetInputFileName('iPolars_T2')
+        commandline = "xfoil_worker.exe -i \"%s\" -a \"%s\" -w polar -o \"%s\" -r %d\n" %\
+                                 (inputFilename, strakFoilName,
+                                  strakFoilName.strip('.dat'), ReList[i])
+        commandLines.append(commandline)
+        print(commandline)#Debug
+
+        # merge polars
+        scriptName = "strak_machineV2.py"# __file__
+        commandline = scriptName + " -w merge -p1 \"%s\"  -p2 \"%s\""\
+                     " -m \"%s\" -c %f\n" %\
+                  (polarFileName_T1, polarFileName_T2, mergedPolarFileName,
+                   params.CL_switchpoint_Type2_Type1_polar)
+        commandLines.append(commandline)
+        print(commandline)#Debug
 
 
-        #copy strak-airfoil to airfoil-folder
+        # copy strak-airfoil to airfoil-folder
         commandline = ("copy %s %s" + bs +"%s\n\n") % \
             (strakFoilName , params.airfoilFolder, strakFoilName)
         commandLines.append(commandline)
@@ -2327,23 +2334,20 @@ def get_strak_commandlines(params, commandlines, idx):
 
     # change current working dir to output folder
     strak_commandlines.append("cd %s\n\n" % params.outputFolder)
+    start = False
 
     for line_idx in range(len(commandlines)):
-        if (idx == 0):
-            # root-airfoil
-            if (commandlines[line_idx].find("copy ")>=0):
-                # append only one line
-                strak_commandlines.append(commandlines[line_idx])
-                # everything found
-                break
-        else:
-            if (commandlines[line_idx].find(Re)>=0):
-                # append three lines
-                strak_commandlines.append(commandlines[line_idx])
-                strak_commandlines.append(commandlines[line_idx+1])
-                strak_commandlines.append(commandlines[line_idx+2])
-                # everything found
-                break
+        if (commandlines[line_idx].find(Re)>=0):
+            start = True
+
+        if (start and (commandlines[line_idx].find('copy')>=0)):
+            # everything found, append last line
+            strak_commandlines.append(commandlines[line_idx])
+            break
+
+        if (start):
+            # append line
+            strak_commandlines.append(commandlines[line_idx])
 
     # change back directory
     strak_commandlines.append("cd..")
@@ -2650,6 +2654,9 @@ def get_Parameters(dict):
     params.smoothSeedfoil = get_booleanParameterFromDict(dict,
                              "smoothSeedfoil", params.smoothSeedfoil)
 
+    params.smoothStrakFoils = get_booleanParameterFromDict(dict,
+                             "smoothStrakFoils", params.smoothStrakFoils)
+
     params.smoothMatchPolarFoil = get_booleanParameterFromDict(dict,
                              "smoothMatchPolarFoil", params.smoothMatchPolarFoil)
     DoneMsg()
@@ -2831,7 +2838,8 @@ def generate_polars(params, workingDir, rootfoilName):
     print("Generating polars for airfoil %s..." % rootfoilName)
 
     # compose polar-dir
-    polarDir = workingDir + bs + rootfoilName + '_polars'
+    #polarDir = workingDir + bs + rootfoilName + '_polars'
+    polarDir = '.' + bs + rootfoilName + '_polars'
 
     # create polars, polar-file-Names and input-file-names from Re-Numbers
     for ReIdx in range(len(params.ReNumbers)):
@@ -3098,6 +3106,13 @@ if __name__ == "__main__":
         rootfoilName = copy_matchpolarfoils(params)
     else:
         rootfoilName = generate_rootfoil(params)
+        # copy root-foil to airfoil-folder, as it can be used
+        # as the root airfoil without optimization
+        systemString = ("copy %s %s" + bs + "%s\n\n") % \
+        (rootfoilName+'.dat', params.airfoilFolder, rootfoilName+'.dat')
+        os.system(systemString)
+
+
 
     # generate polars of root-airfoil, also analyze
     generate_polars(params, workingDir, rootfoilName)
