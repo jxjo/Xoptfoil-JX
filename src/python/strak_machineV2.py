@@ -944,7 +944,8 @@ class strakData:
         self.CL_min = -0.1
         self.CL_switchpoint_Type2_Type1_polar = 0.05
         self.maxReFactor = 2.0
-        self.maxLift_distance = 0.05
+        self.maxLiftDistance = 0.05
+        self.maxSpeedSearchRadius = 0.15
         self.generateBatch = True
         self.xmlFileName = None
         self.wingData = None
@@ -1805,8 +1806,18 @@ class polarData:
     # analyses a polar
     def analyze(self, params):
         # yy_sg = savgol_filter(itp(xx), window_size, poly_order) TODO smoothing
-        print("analysing polar...")
-        self.determine_MaxSpeed()
+        print("analysing polar \'%s\'..." % self.polarName)
+
+        # get root-polar for reference
+        rootPolar = params.merged_polars[0]
+
+        # is this polar the root-polar?
+        if (self == rootPolar):
+            self.determine_MaxSpeed()
+        else:
+            self.determine_MaxSpeedWithinRadius(rootPolar.CL_maxSpeed,
+                                          params.maxSpeedSearchRadius)
+
         self.determine_MaxGlide()
         self.determine_MaxLift(params)
         DoneMsg()
@@ -1829,6 +1840,7 @@ class polarData:
         mergedPolar.NCrit = 1.0
         mergedPolar.CL_switchpoint_Type2_Type1_polar = switching_CL
         mergedPolar.maxRe = maxRe
+        mergedPolar.polarName = 'merged_polar_%s' % get_ReString(self.Re)
 
         # merge first polar from start Cl to switching_Cl
         for idx in range(len(mergePolar_1.CL)):
@@ -1862,19 +1874,28 @@ class polarData:
     # determines the overall minimum CL-value of a given polar and some
     # corresponding values
     def determine_MaxSpeed(self):
-        self.CL_maxSpeed = 0.0
-        self.CD_maxSpeed = 1000000.0
-        self.maxSpeed_idx = 0
+        self.CD_maxSpeed = min(self.CD)
+        self.maxSpeed_idx = self.find_index_From_CD(self.CD_maxSpeed)
+        self.CL_maxSpeed = self.CL[self.maxSpeed_idx]
 
-        # find absolute minimum of Cd
-        for idx in range(len(self.CD)):
-            if (self.CD[idx] < self.CD_maxSpeed):
-                self.CD_maxSpeed = self.CD[idx]
-                self.CL_maxSpeed = self.CL[idx]
-                self.maxSpeed_idx = idx
-        print("max Speed, CD = %f @ CL = %f" %
+        print("max Speed, CD = %f @ CL = %f" %\
                                   (self.CD_maxSpeed, self.CL_maxSpeed))
 
+
+    # determines the minimum CL-value of a given polar within a certain
+    # radius
+    def determine_MaxSpeedWithinRadius(self, CL_MaxSpeedRootPolar,
+                                       searchRadius):
+        # find local minimum of CD within search-radius
+        start = self.find_index_From_CL(CL_MaxSpeedRootPolar - searchRadius)
+        end = self.find_index_From_CL(CL_MaxSpeedRootPolar + searchRadius)
+
+        self.CD_maxSpeed = min(self.CD[start:end])
+        self.maxSpeed_idx = self.find_index_From_CD(self.CD_maxSpeed)
+        self.CL_maxSpeed = self.CL[self.maxSpeed_idx]
+
+        print("max Speed, CD = %f @ CL = %f" %\
+                                  (self.CD_maxSpeed, self.CL_maxSpeed))
 
     # determines the overall max-value for Cl/Cd (max glide) of a given polar
     # and some corresponding values
@@ -1899,7 +1920,7 @@ class polarData:
 
         # also calculate opPoint before maxLift that can be reached by the
         # optimizer
-        self.CL_pre_maxLift = self.CL_maxLift - params.maxLift_distance
+        self.CL_pre_maxLift = self.CL_maxLift - params.maxLiftDistance
         self.CD_pre_maxLift = self.find_CD_From_CL(self.CL_pre_maxLift)
         #print(self.Re, self.CL_pre_maxLift, self.CD_pre_maxLift) #Debug
 
@@ -1914,6 +1935,12 @@ class polarData:
     def find_index_From_CL(self, CL):
         for i in range(len(self.CL)):
             if (self.CL[i] >= CL):
+                return i
+        return None
+
+    def find_index_From_CD(self, CD):
+        for i in range(len(self.CD)):
+            if (self.CD[i] == CD):
                 return i
         return None
 
@@ -2512,8 +2539,8 @@ def get_Parameters(dict):
     params.maxWeight = get_ParameterFromDict(dict, "maxWeight",
                                                   params.maxWeight)
 
-    params.maxLift_distance = get_ParameterFromDict(dict, "maxLiftDistance",
-                                                params.maxLift_distance)
+    params.maxLiftDistance = get_ParameterFromDict(dict, "maxLiftDistance",
+                                                params.maxLiftDistance)
 
     params.maxGlideLoss = get_ParameterFromDict(dict, "maxGlideLoss",
                                                 params.maxGlideLoss)
@@ -2780,15 +2807,15 @@ def generate_Polars(params, workingDir, rootfoilName):
         mergedPolar = newPolar_T2.merge(newPolar_T1,
                          params.CL_switchpoint_Type2_Type1_polar, maxRe)
 
+        # add merged polar to params
+        params.merged_polars.append(mergedPolar)
+
         # analyze merged polar
         mergedPolar.analyze(params)
 
-        # set name
-        mergedPolar.polarName = 'mergedPolar T1/T2, ReSqrt(Cl) = %.0f, Re = %0.f' %\
-                (newPolar_T2.Re, newPolar_T1.Re)
-
-        # add merged polar to params
-        params.merged_polars.append(mergedPolar)
+##        # set name
+##        mergedPolar.polarName = 'mergedPolar T1/T2, ReSqrt(Cl) = %.0f, Re = %0.f' %\
+##                (newPolar_T2.Re, newPolar_T1.Re)
 
         # write merged polars to file
         polarFileNameAndPath = polarDir + bs + ('merged_polar_%3s.txt' %\
