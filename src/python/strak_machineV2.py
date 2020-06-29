@@ -1305,8 +1305,22 @@ class polarGraph:
         # get number of polars to plot
         numPolars = len(polars)
 
+        # get maximum CD-value that shall be visible in the plot
+        max_CD = round(rootPolar.CD_maxLift * 1.1, CD_decimals)
+
+        # set x-axis manually
+        ax.set_xlim(right = max_CD)
+
         # set y-axis manually
         ax.set_ylim(min(rootPolar.CL) - 0.2, max(rootPolar.CL) + 0.2)
+
+        # determine some text-offsets
+        maxSpeedTextOffset_x = polars[0].CD_maxSpeed * 1.1
+        maxSpeedTextOffset_y = rootPolar.CL_maxSpeed
+        maxGlideTextOffset_x = polars[0].find_CD(rootPolar.CL_maxGlide) * 1.1
+        maxGlideTextOffset_y = rootPolar.CL_maxGlide
+
+        print (maxSpeedTextOffset_x) #Debug
 
         # all polars
         for polarIdx in range(numPolars):
@@ -1345,8 +1359,9 @@ class polarGraph:
             if (polar == rootPolar):
                 ax.plot(x, y, marker='o',color=cl_infotext)
                 ax.annotate('maxSpeed (root) @ CL = %.2f, CD = %.4f' % (y, x),
-                 xy=(x,y), xytext=(40,0), textcoords='offset points',
-                      fontsize = fs_infotext, color=cl_infotext)
+                 xy=(x,y), xytext=(maxSpeedTextOffset_x, maxSpeedTextOffset_y),
+                 textcoords='data', fontsize = fs_infotext,
+                 color=cl_infotext)
 
             # plot max_glide
             x = polar.CD[polar.maxGlide_idx]
@@ -1356,8 +1371,8 @@ class polarGraph:
             if (polar == rootPolar):
                 ax.plot(x, y, marker='o', color=cl_infotext)
                 ax.annotate('maxGlide (root) @ CL = %.2f, CD = %.4f' % (y, x),
-                 xy=(x,y), xytext=(40,0), textcoords='offset points',
-                      fontsize = fs_infotext, color=cl_infotext)
+                 xy=(x,y), xytext=(maxGlideTextOffset_x, maxGlideTextOffset_y),
+                  textcoords='data', fontsize = fs_infotext, color=cl_infotext)
 
             # plot max lift
             x = polar.CD[polar.maxLift_idx]
@@ -1367,7 +1382,7 @@ class polarGraph:
             if (polar == rootPolar):
                 ax.plot(x, y, marker='o', color=cl_infotext)
                 ax.annotate('maxLift (root) @ CL = %.2f, CD = %.4f' %(y,x),
-                  xy=(x,y), xytext=(-20,10), textcoords='offset points',
+                  xy=(x,y), xytext=(-160,10), textcoords='offset points',
                     fontsize = fs_infotext, color=cl_infotext)
 
             # plot target-polar
@@ -1390,9 +1405,10 @@ class polarGraph:
                 x = targetPolar.CD
                 y = targetPolar.CL
 
-                # plot
-                ax.plot(x, y, style, linestyle = ls_targetPolar,
-                        linewidth = linewidth, label = label)
+
+            ax.plot(x, y, style, linestyle = ls_targetPolar,
+                            linewidth = linewidth, label = label)
+
 
             ax.legend(loc='upper left', fontsize = fs_legend)
 
@@ -1715,6 +1731,7 @@ class polarData:
         self.maxGlide_idx = 0
         self.alpha_maxGlide= 0.0
         self.CL_maxGlide = 0.0
+        self.CD_maxGlide = 0.0
         self.CL_maxLift = 0.0
         self.CD_maxLift = 0.0
         self.alpha_maxLift = 0.0
@@ -1735,7 +1752,7 @@ class polarData:
         airfoilNameTag = "Calculated polar for:"
         ReTag = "Re ="
         parseInDataPoints = 0
-        print("importing polar %s...\n" %fileName)
+        print("importing polar %s..." %fileName)
 
         # open file
         fileHandle = open(fileName)
@@ -1798,7 +1815,7 @@ class polarData:
             ReString = 'fixed / ~ 1/sqrt(CL)'
             MachString = 'fixed / ~ 1/sqrt(CL)'
 
-        print("writing polar to file %s...\n" %fileName)
+        print("writing polar to file %s..." %fileName)
 
         # open file
         fileHandle = open(fileName, 'w+')
@@ -1896,6 +1913,7 @@ class polarData:
         peak_height = 2.0
         self.maxGlide_idx = findPeak(self.CL_CD, peak_height)
         self.CL_maxGlide = self.CL[self.maxGlide_idx]
+        self.CD_maxGlide = self.CD[self.maxGlide_idx]
         self.alpha_maxGlide = self.alpha[self.maxGlide_idx]
         self.CL_CD_maxGlide = self.CL_CD[self.maxGlide_idx]
 
@@ -1908,6 +1926,7 @@ class polarData:
         peak_height = 0.025
         self.maxLift_idx = findPeak(self.CL, peak_height)
         self.CL_maxLift = self.CL[self.maxLift_idx]
+        self.CD_maxLift = self.CD[self.maxLift_idx]
         self.alpha_maxLift = self.alpha[self.maxLift_idx]
 
         # also calculate opPoint before maxLift that can be reached by the
