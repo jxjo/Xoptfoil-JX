@@ -242,7 +242,7 @@ class inputFile:
         pathname = os.path.dirname(sys.argv[0])
         scriptPath = os.path.abspath(pathname)
         presetInputFiles = getListOfFiles(scriptPath + bs + presetsPath)
-        self.getInputFileName(presetInputFiles, xoptfoilTemplate)
+        self.get_InputFileName(presetInputFiles, xoptfoilTemplate)
 
         # read input-file as a Fortan namelist
         self.values = f90nml.read(self.presetInputFileName)
@@ -250,11 +250,66 @@ class inputFile:
         #print (operatingConditions)#Debug
 
         # clean-up file
-        self.removeDeactivatedOpPoints() #TODO remove
+        self.remove_DeactivatedOpPoints() #TODO remove
+
+
+    # prints all op-points for debugging-purposes
+    def print_OpPoints(self):
+        # get operating-conditions
+        operatingConditions = self.values["operating_conditions"]
+        opPointNames = operatingConditions["name"]
+        opPoints = operatingConditions["op_point"]
+        targetValues = operatingConditions["target_value"]
+
+        print(opPointNames)
+        print(opPoints)
+        print(targetValues)
+
+
+    # local helper-function to perform a linear-interpolation
+    def interpolate(self, x1, x2, y1, y2, x):
+        y = ((y2-y1)/(x2-x1)) * (x-x1) + y1
+        return y
+
+
+    def write_ToFile(self, fileName):
+        # delete 'name'
+        operatingConditions = self.values["operating_conditions"]
+        operatingConditionsBackup = operatingConditions.copy()
+        del(operatingConditions['name'])
+        self.values["operating_conditions"] = operatingConditions
+
+        # write to file
+        print("writing input-file %s..." % fileName)
+        f90nml.write(self.values, fileName, True)
+
+        # restore 'name'
+        self.values["operating_conditions"] = operatingConditionsBackup.copy()
+        DoneMsg()
+
+
+    # deletes all existing op-points in operating-conditions, but keeps
+    # the keys of the dictionary (empty lists)
+    def delete_AllOpPoints(self, operatingConditions):
+        # clear operating conditions
+        operatingConditions["name"] = []
+        operatingConditions["op_mode"] = []
+        operatingConditions["op_point"] = []
+        operatingConditions["optimization_type"] = []
+        operatingConditions["target_value"] = []
+        operatingConditions["weighting"] = []
+        operatingConditions["reynolds"] = []
+        operatingConditions['noppoint'] = 0
+
+
+    # deletes the key 'geometry_targets' in dictionary
+    def clear_GeoTargets(self):
+        if 'geometry_targets' in self.values:
+            del self.values['geometry_targets']
 
 
     # removes an op-Point if weighting is beyond a certain limit
-    def removeDeactivatedOpPoints(self):
+    def remove_DeactivatedOpPoints(self):
         # get operating-conditions
         operatingConditions = self.values["operating_conditions"]
 
@@ -262,7 +317,7 @@ class inputFile:
         newOperatingConditions = operatingConditions.copy()
 
         # clear all opPoints of the copy
-        self.deleteAllOpPoints(newOperatingConditions)
+        self.delete_AllOpPoints(newOperatingConditions)
 
        # walk through the opPoints
         for idx in range(len(operatingConditions["weighting"])):
@@ -282,15 +337,7 @@ class inputFile:
         self.values["operating_conditions"] = newOperatingConditions
 
 
-    def getInputFileName(self, fileList, xoptfoilTemplate):
-        # search the whole list of files for the desired strak-type
-        for name in fileList:
-            if name.find(xoptfoilTemplate) >= 0:
-                self.presetInputFileName = name
-                return
-
-
-    def changeTargetValue(self, keyName, targetValue):
+    def change_TargetValue(self, keyName, targetValue):
         # get operating-conditions from dictionary
         operatingConditions = self.values["operating_conditions"]
         # get OpPoint-names
@@ -318,7 +365,7 @@ class inputFile:
             idx = idx + 1
 
 
-    def changeOpPoint(self, keyName, op_point):
+    def change_OpPoint(self, keyName, op_point):
         # get operating-conditions from dictionary
         operatingConditions = self.values["operating_conditions"]
         # get OpPoint-names
@@ -345,7 +392,7 @@ class inputFile:
             idx = idx + 1
 
 
-    def changeWeighting(self, idx, new_weighting):
+    def change_Weighting(self, idx, new_weighting):
         # get operating-conditions from dictionary
         operatingConditions = self.values["operating_conditions"]
 
@@ -353,8 +400,22 @@ class inputFile:
         operatingConditions['weighting'][idx] = new_weighting
 
 
+    def get_InputFileName(self, fileList, xoptfoilTemplate):
+        # search the whole list of files for the desired template
+        for name in fileList:
+            if name.find(xoptfoilTemplate) >= 0:
+                self.presetInputFileName = name
+                return
 
-    def getOpPoint(self, keyName):
+
+    def get_OperatingConditions(self):
+         # get operating-conditions from dictionary
+        operatingConditions = self.values["operating_conditions"]
+
+        return operatingConditions
+
+
+    def get_OpPoint(self, keyName):
         # get operating-conditions from dictionary
         operatingConditions = self.values["operating_conditions"]
         # get OpPoint-names
@@ -367,7 +428,19 @@ class inputFile:
             idx = idx + 1
 
 
-    def getTargetValue(self, keyName):
+    # returns name and index of the last op-point of operating-conditions
+    def get_LastOpPoint(self):
+        # get operating-conditions
+        operatingConditions = self.values["operating_conditions"]
+        numOpPoints = len(operatingConditions["op_point"])
+
+        # return last opPoint
+        name = operatingConditions["name"][numOpPoints-1]
+        idx = numOpPoints-1
+        return (name, idx)
+
+
+    def get_TargetValue(self, keyName):
         # get operating-conditions from dictionary
         operatingConditions = self.values["operating_conditions"]
         # get OpPoint-names
@@ -381,7 +454,7 @@ class inputFile:
 
 
     # gets the type of an opPoint ('spec-cl' or 'spec-al')
-    def getOpPointType(self, keyName):
+    def get_OpPointType(self, keyName):
         # get operating-conditions from dictionary
         operatingConditions = self.values["operating_conditions"]
         # get OpPoint-names
@@ -394,7 +467,7 @@ class inputFile:
             idx = idx + 1
 
 
-    def setInitialPerturb(self, ReDiff):
+    def set_InitialPerturb(self, ReDiff):
         ReDiffList =  [(150000/5), 150000]
         perturbList = [(0.01/5), 0.01]
         pso_tolList = [(0.0015/5), 0.0015]
@@ -412,7 +485,7 @@ class inputFile:
          (ReDiff, perturb, pso_tol))
 
 
-    def setNewTargetValues(self, start, end, rootPolar, x1, x2, y1, y2):
+    def set_NewTargetValues(self, start, end, rootPolar, x1, x2, y1, y2):
         # get operating-conditions from dictionary
         operatingConditions = self.values["operating_conditions"]
 
@@ -429,17 +502,17 @@ class inputFile:
 
             # determine the factor for scaling the CD-values by
             # linear interpolation
-            factor = self.linearEquation(x1, x2, y1, y2, opPoint)
+            factor = self.interpolate(x1, x2, y1, y2, opPoint)
 
             # calculate new target-value
             CL_CD_new = round((CL_CD * factor) , CL_CD_decimals)
             CD_new = opPoint / CL_CD_new
 
             # set new target-value
-            self.changeTargetValue(opPointNames[idx], CD_new)
+            self.change_TargetValue(opPointNames[idx], CD_new)
 
 
-    def SetIntermediateOpPointTargetValues(self, targets, rootPolar,
+    def set_IntermediateOpPointTargetValues(self, targets, rootPolar,
                                            strakPolar, i):
         # determine factors (CL/CD) for the main op-points
         # maxGlide
@@ -487,7 +560,7 @@ class inputFile:
         x1 = params.CL_min
         x2 = CL_maxSpeed_strak
 
-        self.setNewTargetValues(start, end, rootPolar, x1, x2, y1, y2)
+        self.set_NewTargetValues(start, end, rootPolar, x1, x2, y1, y2)
 
         # determine start and end-index for all op-points between
         # maxSpeed and maxGlide
@@ -500,7 +573,7 @@ class inputFile:
         x1 = CL_maxSpeed_strak
         x2 = CL_maxGlide
 
-        self.setNewTargetValues(start, end, rootPolar, x1, x2, y1, y2)
+        self.set_NewTargetValues(start, end, rootPolar, x1, x2, y1, y2)
 
         # determine start and end-index for all op-points between
         # maxGlide and pre_maxLift
@@ -515,15 +588,190 @@ class inputFile:
 
         #print(factor_maxSpeed, factor_maxGlide, factor_maxLift)#Debug
 
-        self.setNewTargetValues(start, end, rootPolar, x1, x2, y1, y2)
+        self.set_NewTargetValues(start, end, rootPolar, x1, x2, y1, y2)
 
 
-    def generateOpPoints(self, numOpPoints, CL_min, CL_max, alpha_CL_max):
+    # Set weighting of all op-points according to the parameters
+    # 'weightingMode', 'minWeight' and 'maxWeight'
+    def set_Weightings(self, params):
+        # get operating-conditions
+        operatingConditions = self.values["operating_conditions"]
+        opPoints = operatingConditions["op_point"]
+
+        # determine min and max weight
+        maxWeigth = params.maxWeight
+        minWeight = params.minWeight
+
+        # set weight of alpha_pre_CLmax to maxWeight
+        self.change_Weighting(self.idx_alpha_preClmax, maxWeigth)
+
+        # evaluate the weighting-mode
+        if (params.weightingMode == 'constant'):
+            # set every op-point to constant minWeight (but not alpha_preClmax)
+            for idx in range((self.idx_alpha_preClmax)):
+                self.change_Weighting(idx, minWeight)
+
+        elif (params.weightingMode == 'linear_progression'):
+            # increment weighting from minWeight to maxWeight
+            # do not change alpha_preClmax
+            num_intervals = self.idx_alpha_preClmax
+            diff = (maxWeigth - minWeight) / num_intervals
+
+            for idx in range(num_intervals):
+                weight = round(minWeight + (idx*diff), 2)
+                self.change_Weighting(idx, weight)
+
+        elif (params.weightingMode == 'sinus'):
+            # change weighting with a sinusoidal shape
+            # do not change alpha_preClmax
+
+            # all op-points from Cl-min up to maxGlide
+            for idx in range(self.idx_maxGlide):
+                # set up x/y-points for linear-interpolation.
+                # x-values are CL-values of op-points
+                # y-values are 0..pi/2 for sinus- calculation
+                x1 = opPoints[0]
+                x2 = opPoints[self.idx_maxGlide]
+                y1 = 0.0
+                y2 = math.pi/2
+
+                # calculate y by linear interpolation
+                y = self.interpolate(x1, x2, y1, y2, opPoints[idx])
+
+                # calculate sinus-function. The result is a "delta-" value
+                # that will be added to minWeight
+                diff = (maxWeigth - minWeight) * math.sin(y)
+
+                # calculate new weight
+                weight = round((minWeight + diff), 2)
+
+                # set the new weighting for the op-point now
+                self.change_Weighting(idx, weight)
+
+            # all op-points from maxGlide up to Clmax
+            for idx in range(self.idx_maxGlide, self.idx_preClmax+1):
+                x1 = opPoints[self.idx_maxGlide]
+                x2 = opPoints[self.idx_preClmax]
+                y1 = math.pi/2
+                y2 = 0.0
+                y = self.interpolate(x1, x2, y1, y2, opPoints[idx])
+
+                diff = (maxWeigth - minWeight) * math.sin(y)
+                weight = round((minWeight + diff), 2)
+                self.change_Weighting(idx, weight)
+
+        #print(operatingConditions["weighting"])#Debug
+        #print("Done.")#Debug
+
+
+    # adapts 'reynolds'-value of all op-points, that are below a certain
+    # CL-value. These op-points will be treated as "type1"-polar op-points.
+    # All op-points above the CL-value will be treated as "type2"-polar
+    # op-points.
+    # "type2" op-points will have no 'reynolds' value, as the default-reSqrt(CL)
+    # value for all "type2" op-points will be passed to xoptfoil via commandline
+    def adapt_ReNumbers(self, polarData):
+        # get operating-conditions
+        operatingConditions = self.values["operating_conditions"]
+        reynolds = operatingConditions["reynolds"]
+        op_points = operatingConditions["op_point"]
+        op_modes = operatingConditions["op_mode"]
+
+        # get number of op-points
+        num = len(op_points)
+
+       # walk through the opPoints
+        for idx in range(num):
+            if(op_modes[idx] == 'spec-cl'):
+                # check the op-point-value
+                CL = op_points[idx]
+                # is the CL below the CL-switchpoint T1/T2-polar ?
+                if (CL <= polarData.CL_switchpoint_Type2_Type1_polar):
+                    # yes, adapt maxRe --> Type 1 oppoint
+                    reynolds[idx] = int(polarData.maxRe)
+                    print("adapted oppoint @ Cl = %0.3f, Type 1, Re = %d\n" % \
+                          (CL, int(polarData.maxRe)))
+
+
+    def find_ClosestClOpPoint(self, Cl):
+        # get operating-conditions
+        operatingConditions = self.values["operating_conditions"]
+        numOpPoints = len(operatingConditions["op_point"])
+        name = None
+        idx = -1
+
+        for i in range(1, numOpPoints):
+            value_left = operatingConditions["op_point"][i-1]
+            value_right = operatingConditions["op_point"][i]
+            name_left = operatingConditions["name"][i-1]
+            name_right = operatingConditions["name"][i]
+
+            if (Cl >= value_left) & (Cl <= value_right):
+                # we found the correct interval. Which one is closer ?
+                diff_To_left = Cl - value_left
+                diff_To_right = value_right - Cl
+
+                if (diff_To_left < diff_To_right):
+                    return (name_left, i-1)
+                else:
+                    return (name_right, i)
+
+        return (name, idx)
+
+
+    # insert a new oppoint at the end of the list
+    def add_Oppoint(self, name, op_mode, op_point, optimization_type,
+                                            target_value, weighting, reynolds):
+         # get operating-conditions from dictionary
+        operatingConditions = self.values["operating_conditions"]
+
+        # append new oppoint
+        operatingConditions["name"].append(name)
+        operatingConditions["op_mode"].append(op_mode)
+        operatingConditions["op_point"].append(op_point)
+        operatingConditions["optimization_type"].append(optimization_type)
+        operatingConditions["target_value"].append(target_value)
+        operatingConditions["weighting"].append(weighting)
+        operatingConditions["reynolds"].append(reynolds)
+        operatingConditions['noppoint'] = operatingConditions['noppoint'] + 1
+
+
+    # insert a new oppoint in the list
+    def insert_OpPoint(self, name, op_mode, op_point, optimization_type,
+                                            target_value, weighting, reynolds):
+         # get operating-conditions from dictionary
+        operatingConditions = self.values["operating_conditions"]
+
+        # find index
+        num_opPoints = len(operatingConditions["op_point"])
+
+        for idx in range(num_opPoints):
+            op_mode_list = operatingConditions["op_mode"][idx]
+            op_point_list = operatingConditions["op_point"][idx]
+
+            if ((op_mode_list== 'spec-cl') & (op_point_list >= op_point)):
+
+                # insert new oppoint
+                operatingConditions["name"].insert(idx, name)
+                operatingConditions["op_mode"].insert(idx, op_mode)
+                operatingConditions["op_point"].insert(idx, op_point)
+                operatingConditions["optimization_type"].insert(idx, optimization_type)
+                operatingConditions["target_value"].insert(idx, target_value)
+                operatingConditions["weighting"].insert(idx, weighting)
+                operatingConditions["reynolds"].insert(idx, reynolds)
+                operatingConditions['noppoint'] = operatingConditions['noppoint'] + 1
+
+                return idx
+
+        return None
+
+
+    def generate_OpPoints(self, numOpPoints, CL_min, CL_max, alpha_CL_max):
         # get operating-conditions
         operatingConditions = self.values["operating_conditions"]
 
         # clear operating conditions
-        self.deleteAllOpPoints(operatingConditions)
+        self.delete_AllOpPoints(operatingConditions)
 
         # calculate the intervall
         diff = (CL_max - CL_min) / (numOpPoints-1)
@@ -552,182 +800,22 @@ class inputFile:
                 op_point_value = round(op_point, CL_decimals)
 
             # add new opPoint to dictionary
-            self.addOppoint(name, op_mode, op_point_value, optimization_type,
+            self.add_Oppoint(name, op_mode, op_point_value, optimization_type,
                                             target_value, weighting, reynolds)
             # increment op-point
             op_point = op_point + diff
 
 
-    def findClosestClOpPoint(self, Cl):
-        # get operating-conditions
-        operatingConditions = self.values["operating_conditions"]
-        numOpPoints = len(operatingConditions["op_point"])
-        name = None
-        idx = -1
-
-        for i in range(1, numOpPoints):
-            value_left = operatingConditions["op_point"][i-1]
-            value_right = operatingConditions["op_point"][i]
-            name_left = operatingConditions["name"][i-1]
-            name_right = operatingConditions["name"][i]
-
-            if (Cl >= value_left) & (Cl <= value_right):
-                # we found the correct interval. Which one is closer ?
-                diff_To_left = Cl - value_left
-                diff_To_right = value_right - Cl
-
-                if (diff_To_left < diff_To_right):
-                    return (name_left, i-1)
-                else:
-                    return (name_right, i)
-
-        return (name, idx)
-
-
-    # returns name and index of the last op-point of operating-conditions
-    def getLastOpPoint(self):
-        # get operating-conditions
-        operatingConditions = self.values["operating_conditions"]
-        numOpPoints = len(operatingConditions["op_point"])
-
-        # return last opPoint
-        name = operatingConditions["name"][numOpPoints-1]
-        idx = numOpPoints-1
-        return (name, idx)
-
-
-    # prints all op-points for debug-purposes
-    def printOpPoints(self):
-        # get operating-conditions
-        operatingConditions = self.values["operating_conditions"]
-        opPointNames = operatingConditions["name"]
-        opPoints = operatingConditions["op_point"]
-        targetValues = operatingConditions["target_value"]
-
-        print(opPointNames)
-        print(opPoints)
-        print(targetValues)
-
-
-    # distributes main-oppoints
-    def distributeMainOpPoints(self, targets, i):
-
-        # get all op-points and target-values
-        CL_maxSpeed = targets["CL_maxSpeed"][i]
-        CD_maxSpeed = targets["CD_maxSpeed"][i]
-        CL_maxGlide = targets["CL_maxGlide"][i]
-        CD_maxGlide = targets["CD_maxGlide"][i]
-        CL_pre_maxLift = targets["CL_pre_maxLift"][i]
-        CD_pre_maxLift = targets["CD_pre_maxLift"][i]
-        alpha_pre_maxLift = targets["alpha_pre_maxLift"][i]
-
-        # get operating-conditions
-        operatingConditions = self.values["operating_conditions"]
-        opPointNames = operatingConditions["name"]
-        opPoints = operatingConditions["op_point"]
-
-        # get opPoint
-        (opPoint_maxLift, self.idx_alpha_preClmax) = self.getLastOpPoint()
-
-        # change value
-        self.changeOpPoint(opPoint_maxLift, alpha_pre_maxLift)
-        self.changeTargetValue(opPoint_maxLift, CL_pre_maxLift)
-
-        self.idx_preClmax = self.idx_alpha_preClmax-1
-        opPoint_preClmax = opPointNames[self.idx_preClmax]
-
-        # get opPoint
-        (opPoint_maxGlide, self.idx_maxGlide) =\
-                            self.findClosestClOpPoint(CL_maxGlide)
-
-        # correct oppoint, if necessary
-        if (self.idx_maxGlide >= self.idx_preClmax):
-            self.idx_maxGlide = self.idx_preClmax -1
-            opPoint_maxGlide = opPointNames[self.idx_maxGlide]
-
-        # get opPoint
-        (opPoint_maxSpeed, self.idx_maxSpeed) =\
-                                 self.findClosestClOpPoint(CL_maxSpeed)
-
-        # correct oppoint, if necessary
-        if (self.idx_maxSpeed >= self.idx_maxGlide):
-            self.idx_maxSpeed = self.idx_maxGlide -1
-            opPoint_maxSpeed = opPointNames[self.idx_maxSpeed]
-
-        # change values
-        self.changeOpPoint(opPoint_preClmax, CL_pre_maxLift)
-        self.changeOpPoint(opPoint_maxGlide, CL_maxGlide)
-        self.changeOpPoint(opPoint_maxSpeed, CL_maxSpeed)
-
-
-        # set ramaining target-values of main-op-points
-        # target-value of CL_pre_maxLift will be set later
-        self.changeTargetValue(opPoint_maxGlide, CD_maxGlide)
-        self.changeTargetValue(opPoint_maxSpeed, CD_maxSpeed)
-
-        # change names
-        opPointNames[self.idx_alpha_preClmax] = 'alphaPreClmax'
-        opPointNames[self.idx_preClmax] = 'preClmax'
-        opPointNames[self.idx_maxGlide] = 'maxGlide'
-        opPointNames[self.idx_maxSpeed] = 'maxSpeed'
-
-
-    # insert a new oppoint at the end of the list
-    def addOppoint(self, name, op_mode, op_point, optimization_type,
-                                            target_value, weighting, reynolds):
-         # get operating-conditions from dictionary
-        operatingConditions = self.values["operating_conditions"]
-
-        # append new oppoint
-        operatingConditions["name"].append(name)
-        operatingConditions["op_mode"].append(op_mode)
-        operatingConditions["op_point"].append(op_point)
-        operatingConditions["optimization_type"].append(optimization_type)
-        operatingConditions["target_value"].append(target_value)
-        operatingConditions["weighting"].append(weighting)
-        operatingConditions["reynolds"].append(reynolds)
-        operatingConditions['noppoint'] = operatingConditions['noppoint'] + 1
-
-
-    # insert a new oppoint in the list
-    def insertOpPoint(self, name, op_mode, op_point, optimization_type,
-                                            target_value, weighting, reynolds):
-         # get operating-conditions from dictionary
-        operatingConditions = self.values["operating_conditions"]
-
-        # find index
-        num_opPoints = len(operatingConditions["op_point"])
-
-        for idx in range(num_opPoints):
-            op_mode_list = operatingConditions["op_mode"][idx]
-            op_point_list = operatingConditions["op_point"][idx]
-
-            if ((op_mode_list== 'spec-cl') & (op_point_list >= op_point)):
-
-                # insert new oppoint
-                operatingConditions["name"].insert(idx, name)
-                operatingConditions["op_mode"].insert(idx, op_mode)
-                operatingConditions["op_point"].insert(idx, op_point)
-                operatingConditions["optimization_type"].insert(idx, optimization_type)
-                operatingConditions["target_value"].insert(idx, target_value)
-                operatingConditions["weighting"].insert(idx, weighting)
-                operatingConditions["reynolds"].insert(idx, reynolds)
-                operatingConditions['noppoint'] = operatingConditions['noppoint'] + 1
-
-                return idx
-
-        return None
-
     # Inserts additional op-points, that are passed by a list, into
     # operating-conditions.
     # The idx-values of fixed op-points will be corrected, if necessary
-    def insertAdditionalOpPoints(self, opPoints):
+    def insert_AdditionalOpPoints(self, opPoints):
         if len(opPoints) == 0:
             # nothing to do
             return
 
         num = 0
-        #self.printOpPoints()#Debug
+        #self.print_OpPoints()#Debug
 
         for opPoint in opPoints:
 
@@ -735,7 +823,7 @@ class inputFile:
             name = "add_op_%s" % num
 
             # insert new op-Point, get index
-            idx = self.insertOpPoint(name, 'spec-cl', opPoint, 'target-drag',
+            idx = self.insert_OpPoint(name, 'spec-cl', opPoint, 'target-drag',
                                      0.0, 1.0, None)
 
             # correct idx of main op-points
@@ -755,13 +843,13 @@ class inputFile:
             self.idx_additionalOpPoints.append(idx)
             num = num + 1
 
-        #self.printOpPoints()#Debug
+        #self.print_OpPoints()#Debug
 
 
     # All op-points between start and end shall be distributed equally.
     # Equally means: the difference in CL will be constant
     # "start" and "end" are both fixed op-points.
-    def distributeOpPointsEqually(self, start, end):
+    def distribute_OpPointsEqually(self, start, end):
         # get operating-conditions
         operatingConditions = self.values["operating_conditions"]
 
@@ -786,183 +874,99 @@ class inputFile:
             num = num + 1
 
 
+    # distributes main-oppoints
+    def distribute_MainOpPoints(self, targets, i):
+
+        # get all op-points and target-values
+        CL_maxSpeed = targets["CL_maxSpeed"][i]
+        CD_maxSpeed = targets["CD_maxSpeed"][i]
+        CL_maxGlide = targets["CL_maxGlide"][i]
+        CD_maxGlide = targets["CD_maxGlide"][i]
+        CL_pre_maxLift = targets["CL_pre_maxLift"][i]
+        CD_pre_maxLift = targets["CD_pre_maxLift"][i]
+        alpha_pre_maxLift = targets["alpha_pre_maxLift"][i]
+
+        # get operating-conditions
+        operatingConditions = self.values["operating_conditions"]
+        opPointNames = operatingConditions["name"]
+        opPoints = operatingConditions["op_point"]
+
+        # get opPoint
+        (opPoint_maxLift, self.idx_alpha_preClmax) = self.get_LastOpPoint()
+
+        # change value
+        self.change_OpPoint(opPoint_maxLift, alpha_pre_maxLift)
+        self.change_TargetValue(opPoint_maxLift, CL_pre_maxLift)
+
+        self.idx_preClmax = self.idx_alpha_preClmax-1
+        opPoint_preClmax = opPointNames[self.idx_preClmax]
+
+        # get opPoint
+        (opPoint_maxGlide, self.idx_maxGlide) =\
+                            self.find_ClosestClOpPoint(CL_maxGlide)
+
+        # correct oppoint, if necessary
+        if (self.idx_maxGlide >= self.idx_preClmax):
+            self.idx_maxGlide = self.idx_preClmax -1
+            opPoint_maxGlide = opPointNames[self.idx_maxGlide]
+
+        # get opPoint
+        (opPoint_maxSpeed, self.idx_maxSpeed) =\
+                                 self.find_ClosestClOpPoint(CL_maxSpeed)
+
+        # correct oppoint, if necessary
+        if (self.idx_maxSpeed >= self.idx_maxGlide):
+            self.idx_maxSpeed = self.idx_maxGlide -1
+            opPoint_maxSpeed = opPointNames[self.idx_maxSpeed]
+
+        # change values
+        self.change_OpPoint(opPoint_preClmax, CL_pre_maxLift)
+        self.change_OpPoint(opPoint_maxGlide, CL_maxGlide)
+        self.change_OpPoint(opPoint_maxSpeed, CL_maxSpeed)
+
+
+        # set ramaining target-values of main-op-points
+        # target-value of CL_pre_maxLift will be set later
+        self.change_TargetValue(opPoint_maxGlide, CD_maxGlide)
+        self.change_TargetValue(opPoint_maxSpeed, CD_maxSpeed)
+
+        # change names
+        opPointNames[self.idx_alpha_preClmax] = 'alphaPreClmax'
+        opPointNames[self.idx_preClmax] = 'preClmax'
+        opPointNames[self.idx_maxGlide] = 'maxGlide'
+        opPointNames[self.idx_maxSpeed] = 'maxSpeed'
+
+
     # Distribute all intermediate-oppoints
-    def distributeIntermediateOpPoints(self, polarData):
+    def distribute_IntermediateOpPoints(self, polarData):
         # get operating-conditions
         operatingConditions = self.values["operating_conditions"]
 
         # first generate a index (!) list of all fixed op-points
-        all_opPoints = []
-        all_opPoints.append(self.idx_maxSpeed)
-        all_opPoints.append(self.idx_maxGlide)
-        all_opPoints.append(self.idx_preClmax)
+        fixed_opPoints = []
+        fixed_opPoints.append(self.idx_maxSpeed)
+        fixed_opPoints.append(self.idx_maxGlide)
+        fixed_opPoints.append(self.idx_preClmax)
 
-        # append index-values of additional op-points to list of fixed op-points.
-        # after that the list will be unsorted.
+        # append the index-values of additional op-points (defined by the user)
+        # to the list of fixed op-points. After this the list of indices may be
+        # unsorted.
         for idx in self.idx_additionalOpPoints:
-            all_opPoints.append(idx)
+            fixed_opPoints.append(idx)
 
         # now sort the list again
-        all_opPoints.sort()
-        #print (all_opPoints) Debug
+        fixed_opPoints.sort()
+        #print (fixed_opPoints) Debug
 
-        # distribute the opPoints between the fixed opPoints equally
-        for idx in range(len(all_opPoints)-1):
-            start = all_opPoints[idx]
-            end = all_opPoints[idx+1]
-            self.distributeOpPointsEqually(start, end)
-
-
-    # local helper-function to perform a linear-interpolation
-    def linearEquation(self, x1, x2, y1, y2, x):
-        y = ((y2-y1)/(x2-x1)) * (x-x1) + y1
-        return y
-
-
-    # Set weighting of all op-points according to the parameters
-    # 'weightingMode', 'minWeight' and 'maxWeight'
-    def SetWeightings(self, params):
-        # get operating-conditions
-        operatingConditions = self.values["operating_conditions"]
-        opPoints = operatingConditions["op_point"]
-
-        # determine min and max weight
-        maxWeigth = params.maxWeight
-        minWeight = params.minWeight
-
-        # set weight of alpha_pre_CLmax to maxWeight
-        self.changeWeighting(self.idx_alpha_preClmax, maxWeigth)
-
-        # evaluate the weighting-mode
-        if (params.weightingMode == 'constant'):
-            # set every op-point to constant minWeight (but not alpha_preClmax)
-            for idx in range((self.idx_alpha_preClmax)):
-                self.changeWeighting(idx, minWeight)
-
-        elif (params.weightingMode == 'linear_progression'):
-            # increment weighting from minWeight to maxWeight
-            # do not change alpha_preClmax
-            num_intervals = self.idx_alpha_preClmax
-            diff = (maxWeigth - minWeight) / num_intervals
-
-            for idx in range(num_intervals):
-                weight = round(minWeight + (idx*diff), 2)
-                self.changeWeighting(idx, weight)
-
-        elif (params.weightingMode == 'sinus'):
-            # change weighting with a sinusoidal shape
-            # do not change alpha_preClmax
-
-            # all op-points from Cl-min up to maxGlide
-            for idx in range(self.idx_maxGlide):
-                # set up x/y-points for linear-interpolation.
-                # x-values are CL-values of op-points
-                # y-values are 0..pi/2 for sinus- calculation
-                x1 = opPoints[0]
-                x2 = opPoints[self.idx_maxGlide]
-                y1 = 0.0
-                y2 = math.pi/2
-
-                # calculate y by linear interpolation
-                y = self.linearEquation(x1, x2, y1, y2, opPoints[idx])
-
-                # calculate sinus-function. The result is a "delta-" value
-                # that will be added to minWeight
-                diff = (maxWeigth - minWeight) * math.sin(y)
-
-                # calculate new weight
-                weight = round((minWeight + diff), 2)
-
-                # set the new weighting for the op-point now
-                self.changeWeighting(idx, weight)
-
-            # all op-points from maxGlide up to Clmax
-            for idx in range(self.idx_maxGlide, self.idx_preClmax+1):
-                x1 = opPoints[self.idx_maxGlide]
-                x2 = opPoints[self.idx_preClmax]
-                y1 = math.pi/2
-                y2 = 0.0
-                y = self.linearEquation(x1, x2, y1, y2, opPoints[idx])
-
-                diff = (maxWeigth - minWeight) * math.sin(y)
-                weight = round((minWeight + diff), 2)
-                self.changeWeighting(idx, weight)
-
-        #print(operatingConditions["weighting"])#Debug
-        #print("Done.")#Debug
-
-
-    # adapts 'reynolds'-value of all op-points, that are below a certain
-    # CL-value. These op-points will be treated as "type1"-polar op-points.
-    # All op-points above the CL-value will be treated as "type2"-polar
-    # op-points.
-    # "type2" op-points will have no 'reynolds' value, as the default-reSqrt(CL)
-    # value for all "type2" op-points will be passed to xoptfoil via commandline
-    def adaptReNumbers(self, polarData):
-        # get operating-conditions
-        operatingConditions = self.values["operating_conditions"]
-        reynolds = operatingConditions["reynolds"]
-        op_points = operatingConditions["op_point"]
-        op_modes = operatingConditions["op_mode"]
-
-        # get number of op-points
-        num = len(op_points)
-
-       # walk through the opPoints
-        for idx in range(num):
-            if(op_modes[idx] == 'spec-cl'):
-                # check the op-point-value
-                CL = op_points[idx]
-                # is the CL below the CL-switchpoint T1/T2-polar ?
-                if (CL <= polarData.CL_switchpoint_Type2_Type1_polar):
-                    # yes, adapt maxRe --> Type 1 oppoint
-                    reynolds[idx] = int(polarData.maxRe)
-                    print("adapted oppoint @ Cl = %0.3f, Type 1, Re = %d\n" % \
-                          (CL, int(polarData.maxRe)))
-
-
-    # deletes all existing op-points in operating-conditions, but keeps
-    # the keys of the dictionary (empty lists)
-    def deleteAllOpPoints(self, operatingConditions):
-        # clear operating conditions
-        operatingConditions["name"] = []
-        operatingConditions["op_mode"] = []
-        operatingConditions["op_point"] = []
-        operatingConditions["optimization_type"] = []
-        operatingConditions["target_value"] = []
-        operatingConditions["weighting"] = []
-        operatingConditions["reynolds"] = []
-        operatingConditions['noppoint'] = 0
-
-
-    # deletes the key 'geometry_targets' in dictionary
-    def clearGeoTargets(self):
-        if 'geometry_targets' in self.values:
-            del self.values['geometry_targets']
-
-
-    def getOperatingConditions(self):
-         # get operating-conditions from dictionary
-        operatingConditions = self.values["operating_conditions"]
-
-        return operatingConditions
-
-
-    def writeToFile(self, fileName):
-        # delete 'name'
-        operatingConditions = self.values["operating_conditions"]
-        operatingConditionsBackup = operatingConditions.copy()
-        del(operatingConditions['name'])
-        self.values["operating_conditions"] = operatingConditions
-
-        # write to file
-        print("writing input-file %s..." % fileName)
-        f90nml.write(self.values, fileName, True)
-
-        # restore 'name'
-        self.values["operating_conditions"] = operatingConditionsBackup.copy()
-        DoneMsg()
-
+        # now distribute the intermediate opPoints between the fixed opPoints
+        # equally. Therefore set up an interval from one fixed op-point to the
+        # next one. Every intermediate op-point between "start" and "end"
+        # will get the same distance to the op-point before and the op-point
+        # afterwards.
+        for idx in range(len(fixed_opPoints)-1):
+            start = fixed_opPoints[idx]
+            end = fixed_opPoints[idx+1]
+            self.distribute_OpPointsEqually(start, end)
 
 ################################################################################
 #
@@ -1828,7 +1832,7 @@ class polarData:
         fileHandle.close()
         DoneMsg()
 
-    def writeToFile(self, fileName):
+    def write_ToFile(self, fileName):
         # get some local variables
         polarType = self.polarType
         airfoilname = self.airfoilname
@@ -2751,27 +2755,27 @@ def generate_inputFiles(params):
         alpha_pre_maxLift = targets["alpha_pre_maxLift"][i]
 
         # generate op-points in the range CL_min..CL_max
-        newFile.generateOpPoints(params.numOpPoints, params.CL_min,
+        newFile.generate_OpPoints(params.numOpPoints, params.CL_min,
                                CL_pre_maxLift, alpha_pre_maxLift)
 
         # distribute main opPoints, also set the target-values
-        newFile.distributeMainOpPoints(targets, i)
+        newFile.distribute_MainOpPoints(targets, i)
 
         # insert additional opPoints (if there are any):
         if len(params.additionalOpPoints[0])>0:
-            newFile.insertAdditionalOpPoints(params.additionalOpPoints[i])
+            newFile.insert_AdditionalOpPoints(params.additionalOpPoints[i])
 
         # now distribute the opPoints between the main opPoints and additional
         # oppoints equally
-        newFile.distributeIntermediateOpPoints(rootPolar)
-        #newFile.printOpPoints()#debug
+        newFile.distribute_IntermediateOpPoints(rootPolar)
+        #newFile.print_OpPoints()#debug
 
         # set the target-values of all intermediate-op-points now
-        newFile.SetIntermediateOpPointTargetValues(targets, rootPolar,
+        newFile.set_IntermediateOpPointTargetValues(targets, rootPolar,
                                                     strakPolar, i)
 
         # set the importance / weightings of the op-points
-        newFile.SetWeightings(params)
+        newFile.set_Weightings(params)
 
         if params.adaptInitialPerturb:
             # also adapt the initial perturb according to the change in
@@ -2783,14 +2787,14 @@ def generate_inputFiles(params):
                 # difference calculated to Re-number of previous-airfoil
                 ReDiff = params.ReNumbers[i-1] - params.ReNumbers[i]
 
-            newFile.setInitialPerturb(ReDiff)
+            newFile.set_InitialPerturb(ReDiff)
 
         # copy operating-conditions to polar, so they can be plotted in the graph
-        opConditions = newFile.getOperatingConditions()
+        opConditions = newFile.get_OperatingConditions()
         strakPolar.addOperatingConditions(opConditions)
 
         # physically create the file
-        newFile.writeToFile(params.inputFileNames[i])
+        newFile.write_ToFile(params.inputFileNames[i])
 
         # append to params
         params.inputFiles.append(newFile)
@@ -2877,7 +2881,7 @@ def generate_polars(params, workingDir, rootfoilName):
         # write merged polars to file
         polarFileNameAndPath = polarDir + bs + ('merged_polar_%3s.txt' %\
                               get_ReString(newPolar_T2.Re))
-        mergedPolar.writeToFile(polarFileNameAndPath)
+        mergedPolar.write_ToFile(polarFileNameAndPath)
 
     DoneMsg()
 
@@ -2891,7 +2895,7 @@ def setPolarDataFromInputFile(polarData, rootPolar, params, inputFile,
     polarData.NCrit = 0.0
 
     # get operating-conditions from inputfile
-    operatingConditions = inputFile.getOperatingConditions()
+    operatingConditions = inputFile.get_OperatingConditions()
 
     target_values = operatingConditions["target_value"]
     op_points = operatingConditions["op_point"]
@@ -2962,7 +2966,7 @@ def generate_target_polars(params, workingDir):
                                get_ReString(Re[i]))
 
         # write polar to file
-        targetPolar.writeToFile(polarFileNameAndPath)
+        targetPolar.write_ToFile(polarFileNameAndPath)
 
     DoneMsg()
 
@@ -2991,7 +2995,7 @@ def mergePolars(polarFile_1, polarFile_2 , mergedPolarFile, mergeCL):
     # the merged values will be stored in mergedPolar.
     try:
         mergedPolar = polar_2.merge(polar_1, mergeCL, 0)
-        mergedPolar.writeToFile(mergedPolarFile)
+        mergedPolar.write_ToFile(mergedPolarFile)
     except:
         ErrorMsg("polarfile \'%s\' could not be generated" % mergedPolarFile)
         exit(-1)
