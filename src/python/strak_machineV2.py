@@ -128,55 +128,6 @@ def getPresetInputFileName(xoptfoilTemplate):
         if name.find(xoptfoilTemplate) >= 0:
             return name
 
-
-#TODO improve !! e.g. use linear interpolation etc.
-# helper function that finds a peak in a list of values
-def findPeak(list, height):
-        # init peak-searcher
-        peak_max = 0.0
-        peak_max_idx = 0
-        peak_left_idx = 0
-        peak_right_idx = 0
-        searchLeftBorder = True
-        searchRightBorder = False
-
-        #first: find absolute maximum
-        idx = 0
-        for value in list:
-            if value > peak_max:
-                peak_max = value
-                peak_max_idx = idx
-            idx = idx+1
-
-        peak_limit = peak_max - height
-
-        # second: find left and right border
-        idx = 0
-
-        # walk through the list
-        for value in list:
-            if (searchLeftBorder == True):
-                #searching for peak_left_idx
-                if value >= peak_limit:
-                    peak_left_idx = idx
-                    peak_right_idx = idx
-                    searchLeftBorder = False
-                    searchRightBorder = True
-            if (searchRightBorder == True):
-                #searching for peak_right_idx
-                if value <= peak_limit:
-                    peak_right_idx = idx
-                    searchRightBorder = False
-            idx = idx + 1
-
-         # calculate new maximum idx as the idx in the middle between the borders
-        #print (peak_max_idx) #Debug
-        #peak_max_idx = (peak_right_idx + peak_left_idx)/2 Debug
-        #print (peak_max_idx, peak_left_idx, peak_right_idx) #Debug
-
-        return peak_max_idx
-
-
 ################################################################################
 #
 # example-dictionary for creating .json-file
@@ -498,7 +449,7 @@ class inputFile:
             opPoint = opPoints[idx]
 
             # find CD value of root-polar
-            CL_CD = rootPolar.find_CL_CD(opPoint)
+            CL_CD = rootPolar.find_CL_CD_From_CL(opPoint)
 
             # determine the factor for scaling the CD-values by
             # linear interpolation
@@ -1046,7 +997,7 @@ class strakData:
 
     ############################################################################
     # function that calculates dependend values
-    def calculateDependendValues(self):
+    def calculate_DependendValues(self):
 
         # calculate List of Re-numers, if wingdata available
         if (self.wingData != None):
@@ -1100,7 +1051,7 @@ class strakData:
         return round(target, CL_decimals)
 
 
-    def calculateMainTargetValues(self):
+    def calculate_MainTargetValues(self):
         # get root-polar
         rootPolar = self.merged_polars[0]
         num = len(self.merged_polars)
@@ -1151,13 +1102,13 @@ class strakData:
             target_CL_pre_maxLift = self.calculate_CL_TargetValue(
              rootPolar.CL_pre_maxLift, polar.CL_pre_maxLift, maxLiftGain)
 
-            target_alpha_pre_maxLift = rootPolar.find_alpha(target_CL_pre_maxLift)
+            target_alpha_pre_maxLift = rootPolar.find_alpha_From_CL(target_CL_pre_maxLift)
             target_alpha_pre_maxLift = round(target_alpha_pre_maxLift, AL_decimals)
 
             # get corresponding CD-value from root-polar
-            rootPolar_CD_pre_maxLift = rootPolar.find_CD(target_CL_pre_maxLift)
+            rootPolar_CD_pre_maxLift = rootPolar.find_CD_From_CL(target_CL_pre_maxLift)
             # get corresponding CD-value from strak-polar
-            polar_CD_pre_maxLift = polar.find_CD(target_CL_pre_maxLift)
+            polar_CD_pre_maxLift = polar.find_CD_From_CL(target_CL_pre_maxLift)
 
             target_CD_pre_maxLift  = self.calculate_CD_TargetValue(
                  rootPolar_CD_pre_maxLift, polar_CD_pre_maxLift, maxLiftGain)
@@ -1207,7 +1158,7 @@ class strakData:
 
 
     # correct additional op-Points for strak-airfoils
-    def calculateAdditionalOpPoints(self):
+    def calculate_AdditionalOpPoints(self):
         # get and additional op-points of root
         rootAddOpPoints = self.additionalOpPoints[0]
 
@@ -1317,7 +1268,7 @@ class polarGraph:
         # determine some text-offsets
         maxSpeedTextOffset_x = polars[0].CD_maxSpeed * 1.1
         maxSpeedTextOffset_y = rootPolar.CL_maxSpeed
-        maxGlideTextOffset_x = polars[0].find_CD(rootPolar.CL_maxGlide) * 1.1
+        maxGlideTextOffset_x = polars[0].find_CD_From_CL(rootPolar.CL_maxGlide) * 1.1
         maxGlideTextOffset_y = rootPolar.CL_maxGlide
 
         print (maxSpeedTextOffset_x) #Debug
@@ -1744,10 +1695,8 @@ class polarData:
         self.CL_switchpoint_Type2_Type1_polar = 999999
         self.T2_T1_switchIdx = 0
 
-    def addOperatingConditions(self, opConditions):
-        self.operatingConditions = opConditions.copy()
 
-    def importFromFile(self, fileName):
+    def import_FromFile(self, fileName):
         BeginOfDataSectionTag = "-------"
         airfoilNameTag = "Calculated polar for:"
         ReTag = "Re ="
@@ -1797,6 +1746,8 @@ class polarData:
         fileHandle.close()
         DoneMsg()
 
+
+    # write polar to file with a given filename (and -path)
     def write_ToFile(self, fileName):
         # get some local variables
         polarType = self.polarType
@@ -1850,6 +1801,21 @@ class polarData:
         fileHandle.close()
         DoneMsg()
 
+
+    # analyses a polar
+    def analyze(self, params):
+        # yy_sg = savgol_filter(itp(xx), window_size, poly_order) TODO smoothing
+        print("analysing polar...")
+        self.determine_MaxSpeed()
+        self.determine_MaxGlide()
+        self.determine_MaxLift(params)
+        DoneMsg()
+
+
+    # merge two polars at a certain CL-value, return a merged-polar
+    # mergePolar_1 will be the "lower" part of the merged-polar from
+    # minimum CL up to the CL-value where the merge happens.
+    # "self" will be the upper part of the merged-polar
     def merge(self, mergePolar_1, switching_CL, maxRe):
         print ("merging polars at CL = %s" % switching_CL)
 
@@ -1893,7 +1859,9 @@ class polarData:
         return mergedPolar
 
 
-    def determineMaxSpeed(self):
+    # determines the overall minimum CL-value of a given polar and some
+    # corresponding values
+    def determine_MaxSpeed(self):
         self.CL_maxSpeed = 0.0
         self.CD_maxSpeed = 1000000.0
         self.maxSpeed_idx = 0
@@ -1908,84 +1876,81 @@ class polarData:
                                   (self.CD_maxSpeed, self.CL_maxSpeed))
 
 
-    def determineMaxGlide(self):
-        # determine max-value for Cl/Cd (max glide) and corresponding Cl
-        peak_height = 2.0
-        self.maxGlide_idx = findPeak(self.CL_CD, peak_height)
+    # determines the overall max-value for Cl/Cd (max glide) of a given polar
+    # and some corresponding values
+    def determine_MaxGlide(self):
+        self.CL_CD_maxGlide = max(self.CL_CD)
+        self.maxGlide_idx = self.find_index_From_CL_CD(self.CL_CD_maxGlide)
         self.CL_maxGlide = self.CL[self.maxGlide_idx]
         self.CD_maxGlide = self.CD[self.maxGlide_idx]
         self.alpha_maxGlide = self.alpha[self.maxGlide_idx]
-        self.CL_CD_maxGlide = self.CL_CD[self.maxGlide_idx]
 
         print("max Glide, CL/CD = %f @ CL = %f" %
                                   (self.CL_CD_maxGlide, self.CL_maxGlide))
 
 
-    def determineMaxLift(self, params):
-        # determine max lift-value and corresponding alpha
-        peak_height = 0.025
-        self.maxLift_idx = findPeak(self.CL, peak_height)
-        self.CL_maxLift = self.CL[self.maxLift_idx]
+    # determines the max-value for Cl (max lift) of a given polar and some
+    # corresponding values
+    def determine_MaxLift(self, params):
+        self.CL_maxLift = max(self.CL)
+        self.maxLift_idx = self.find_index_From_CL(self.CL_maxLift)
         self.CD_maxLift = self.CD[self.maxLift_idx]
         self.alpha_maxLift = self.alpha[self.maxLift_idx]
 
         # also calculate opPoint before maxLift that can be reached by the
         # optimizer
         self.CL_pre_maxLift = self.CL_maxLift - params.maxLift_distance
-        self.CD_pre_maxLift = self.find_CD(self.CL_pre_maxLift)
+        self.CD_pre_maxLift = self.find_CD_From_CL(self.CL_pre_maxLift)
         #print(self.Re, self.CL_pre_maxLift, self.CD_pre_maxLift) #Debug
 
-        self.pre_maxLift_idx = self.find_index(self.CL_pre_maxLift)
+        self.pre_maxLift_idx = self.find_index_From_CL(self.CL_pre_maxLift)
         self.alpha_pre_maxLift = self.alpha[self.pre_maxLift_idx]
 
         print("max Lift, CL = %f @ alpha = %f" %
                                   (self.CL_maxLift, self.alpha_maxLift))
 
 
-    def analyze(self, params):
-        # yy_sg = savgol_filter(itp(xx), window_size, poly_order) TODO smoothing
-        print("analysing polar...")
-        self.determineMaxSpeed()
-        self.determineMaxGlide()
-        self.determineMaxLift(params)
-        DoneMsg()
-
-    def find_CD(self, CL):
-        for i in range(len(self.CL)):
-            if (self.CL[i] >= CL):
-                return self.CD[i]
-        return None
-
-    def find_index(self, CL):
+    # local helper-functions
+    def find_index_From_CL(self, CL):
         for i in range(len(self.CL)):
             if (self.CL[i] >= CL):
                 return i
         return None
 
-    def find_CL(self, alpha):
+    def find_index_From_CL_CD(self, CL_CD):
+        for i in range(len(self.CL_CD)):
+            if (self.CL_CD[i] >= CL_CD):
+                return i
+        return None
+
+    def find_CD_From_CL(self, CL):
+        for i in range(len(self.CL)):
+            if (self.CL[i] >= CL):
+                return self.CD[i]
+        return None
+
+    def find_CL_From_alpha(self, alpha):
         for i in range(len(self.alpha)):
             if (self.alpha[i] >= alpha):
                 return self.CL[i]
 
-    def find_alpha(self, CL):
+    def find_alpha_From_CL(self, CL):
         for i in range(len(self.CL)):
             if (self.CL[i] >= CL):
                 return self.alpha[i]
         return None
 
-    def find_CL_CD(self, CL):
-        # calculate corresponding CL_CD
-        # reduce list of CL, CL_CD-values up to CL_max. No duplicate CL-values are
-        # allowed!
+    # calculate corresponding CL_CD by interpolation (!)
+    # it is not suitable to only search for a CL_CD-value
+    def find_CL_CD_From_CL(self, CL):
+        # reduce list of CL, CL_CD-values up to CL_max.
+        # No duplicate CL-values are allowed, otherwise the interpolation
+        # will fail!
         x = []
         y = []
         for i in range(self.maxLift_idx):
             x.append(self.CL[i])
             y.append(self.CL_CD[i])
-
-        #double append the last value
-        x.append(self.CL[i])
-        y.append(self.CL_CD[i])
 
         # interpolate the values
         CL_CD = np.interp(CL, x, y)
@@ -2126,7 +2091,7 @@ def get_NumberOfAirfoils(params):
 
 ################################################################################
 # function that generates commandlines to run Xoptfoil
-def generate_commandlines(params):
+def generate_Commandlines(params):
     print("Generating commandlines...")
 
     # create an empty list of commandlines
@@ -2230,7 +2195,7 @@ def generate_commandlines(params):
 
 ################################################################################
 # function that generates a Xoptfoil-batchfile
-def generate_batchfile(batchFileName, commandlines):
+def generate_Batchfile(batchFileName, commandlines):
     try:
         # create a new file
         outputfile = open(batchFileName, "w+")
@@ -2275,7 +2240,7 @@ def get_strak_commandlines(params, commandlines, idx):
 
 ################################################################################
 # function that generates a Xoptfoil-batchfile for one strak airfoil
-def generate_strak_batchfiles(params, commandlines):
+def generate_StrakBatchfiles(params, commandlines):
     if (params.operatingMode == 'matchpolarfoils'):
         # nothing to do
         return
@@ -2300,7 +2265,7 @@ def generate_strak_batchfiles(params, commandlines):
         outputfile.close()
 
 
-def generate_visu_batchfiles(params):
+def generate_VisuBatchfiles(params):
    # determine start-index
     if (params.operatingMode == 'matchpolarfoils'):
         startidx = 0
@@ -2607,7 +2572,7 @@ def getListOfFiles(dirName):
     return allFiles
 
 
-def getwingDataFromXML(params):
+def get_WingDataFromXML(params):
 
     xmlFileName = params.inputFolder + '/' + params.xmlFileName
     try:
@@ -2644,7 +2609,7 @@ def copyAndSmoothAirfoil(srcName, srcPath, destName, smooth):
         DoneMsg()
 
 
-def copy_matchpolarfoils(params):
+def copy_Matchpolarfoils(params):
     # get the name of the matchfoil
     matchfoilName = params.matchPolarFoilName
 
@@ -2682,7 +2647,7 @@ def generate_rootfoil(params):
     return rootfoilName
 
 
-def generate_inputFiles(params):
+def generate_InputFiles(params):
     print("Generating inputfiles...")
 
     # get root-polar
@@ -2740,10 +2705,6 @@ def generate_inputFiles(params):
 
             newFile.set_InitialPerturb(ReDiff)
 
-        # copy operating-conditions to polar, so they can be plotted in the graph
-        opConditions = newFile.get_OperatingConditions()
-        strakPolar.addOperatingConditions(opConditions)
-
         # physically create the file
         newFile.write_ToFile(params.inputFileNames[i])
 
@@ -2751,7 +2712,7 @@ def generate_inputFiles(params):
         params.inputFiles.append(newFile)
 
 
-def generate_polars(params, workingDir, rootfoilName):
+def generate_Polars(params, workingDir, rootfoilName):
     # generate polars of seedfoil / root-airfoil:
     print("Generating polars for airfoil %s..." % rootfoilName)
 
@@ -2794,24 +2755,24 @@ def generate_polars(params, workingDir, rootfoilName):
         # import polar type 1
         newPolar_T1 = polarData()
         try:
-            newPolar_T1.importFromFile(polarFileNameAndPath_T1)
+            newPolar_T1.import_FromFile(polarFileNameAndPath_T1)
         except:
             # execute xfoil-worker / create T1 polar-file
             print("Generating polar %s" % polarFileName_T1)
             os.system(systemString_T1)
-            newPolar_T1.importFromFile(polarFileNameAndPath_T1)
+            newPolar_T1.import_FromFile(polarFileNameAndPath_T1)
 
         params.T1_polars.append(newPolar_T1)
 
         # import polar type 2
         newPolar_T2 = polarData()
         try:
-            newPolar_T2.importFromFile(polarFileNameAndPath_T2)
+            newPolar_T2.import_FromFile(polarFileNameAndPath_T2)
         except:
             # execute xfoil-worker / create T2 polar-file
             print("Generating polar %s" % polarFileName_T2)
             os.system(systemString_T2)
-            newPolar_T2.importFromFile(polarFileNameAndPath_T2)
+            newPolar_T2.import_FromFile(polarFileNameAndPath_T2)
 
         params.T2_polars.append(newPolar_T2)
 
@@ -2860,7 +2821,7 @@ def set_PolarDataFromInputFile(polarData, rootPolar, params, inputFile,
         # check if the op-mode is 'spec-cl'
         if (op_modes[i] == 'spec-cl'):
             # op_mode is 'spec-al', get alpha from root-polar
-            alpha = rootPolar.find_alpha(op_points[i])
+            alpha = rootPolar.find_alpha_From_CL(op_points[i])
 
             # get CL, CD
             CL = op_points[i]
@@ -2887,7 +2848,7 @@ def set_PolarDataFromInputFile(polarData, rootPolar, params, inputFile,
         polarData.Bot_Xtr.append(0.0)
 
 
-def generate_target_polars(params, workingDir):
+def generate_TargetPolars(params, workingDir):
     # local variable
     targetPolars = params.target_polars
     inputFiles = params.inputFiles
@@ -2936,18 +2897,18 @@ def generate_target_polars(params, workingDir):
 
 # merge two polar files, the merging-point will be specified as a CL-value.
 # generate a new file containing the data of the merged polar
-def mergePolars(polarFile_1, polarFile_2 , mergedPolarFile, mergeCL):
+def merge_Polars(polarFile_1, polarFile_2 , mergedPolarFile, mergeCL):
     # import polars from file
     try:
         polar_1 = polarData()
-        polar_1.importFromFile(polarFile_1)
+        polar_1.import_FromFile(polarFile_1)
     except:
         ErrorMsg("polarfile \'%s\' could not be imported" % polarFile_1)
         exit(-1)
 
     try:
         polar_2 = polarData()
-        polar_2.importFromFile(polarFile_2)
+        polar_2.import_FromFile(polarFile_2)
     except:
         ErrorMsg("polarfile \'%s\' could not be imported" % polarFile_2)
         exit(-1)
@@ -2976,7 +2937,7 @@ if __name__ == "__main__":
     # decide what action to perform.
     if (workerAction == 'merge'):
         # do nothing else but merging the polars
-        mergePolars(polarFile_1, polarFile_2 , mergedPolarFile, mergeCL)
+        merge_Polars(polarFile_1, polarFile_2 , mergedPolarFile, mergeCL)
         exit(0)
 
     # get real path of the script
@@ -3004,10 +2965,10 @@ if __name__ == "__main__":
 
     # read plane-data from XML-File, if requested //TODO: only wing-data
     if (params.xmlFileName != None):
-        params.wingData = getwingDataFromXML(params)
+        params.wingData = get_WingDataFromXML(params)
 
     # calculate further values like max Re-numbers etc.
-    params.calculateDependendValues()
+    params.calculate_DependendValues()
 
     # get current working dir
     workingDir = os.getcwd()
@@ -3028,7 +2989,7 @@ if __name__ == "__main__":
 
     # get name of root-airfoil according to operating-mode
     if (params.operatingMode == 'matchpolarfoils'):
-        rootfoilName = copy_matchpolarfoils(params)
+        rootfoilName = copy_Matchpolarfoils(params)
     else:
         rootfoilName = generate_rootfoil(params)
         # copy root-foil to airfoil-folder, as it can be used
@@ -3038,22 +2999,22 @@ if __name__ == "__main__":
         os.system(systemString)
 
     # generate polars of root-airfoil, also analyze
-    generate_polars(params, workingDir, rootfoilName)
+    generate_Polars(params, workingDir, rootfoilName)
 
     # calculate target-values for the main op-points
-    params.calculateMainTargetValues()
+    params.calculate_MainTargetValues()
 
     # calculate the additional op-points
-    params.calculateAdditionalOpPoints()
+    params.calculate_AdditionalOpPoints()
 
     # generate input-Files
-    generate_inputFiles(params)
+    generate_InputFiles(params)
 
     # generate target polars and write to file
-    generate_target_polars(params, workingDir)
+    generate_TargetPolars(params, workingDir)
 
     # generate Xoptfoil command-lines
-    commandlines = generate_commandlines(params)
+    commandlines = generate_Commandlines(params)
 
     # change working-directory
     os.chdir(".." + bs)
@@ -3062,11 +3023,11 @@ if __name__ == "__main__":
     print("Generating batchfiles...")
     if (params.generateBatch == True):
         print ('generating batchfile \'%s\'' % params.batchfileName)
-        generate_batchfile(params.batchfileName, commandlines)
+        generate_Batchfile(params.batchfileName, commandlines)
         print ('generating visu-batchfiles')
-        generate_visu_batchfiles(params)
+        generate_VisuBatchfiles(params)
         print ('generating batchfiles for each single airfoil of the strak')
-        generate_strak_batchfiles(params, commandlines)
+        generate_StrakBatchfiles(params, commandlines)
     DoneMsg()
 
     # create an instance of polar graph
