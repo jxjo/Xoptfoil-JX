@@ -580,9 +580,10 @@ class inputFile:
         start = self.idx_maxGlide + 1
         end = self.idx_preClmax + 1
 
+        temp = factor_maxGlide / factor_maxLift
         # now change all target-values of these op-points
         y1 = factor_maxGlide
-        y2 = factor_maxGlide#factor_maxLift
+        y2 = factor_maxGlide#temp#factor_maxLift
         x1 = CL_maxGlide
         x2 = CL_pre_maxLift_strak
 
@@ -1256,68 +1257,67 @@ class polarGraph:
     def __init__(self):
         return
 
-    def plotLogo(self, ax, scriptDir):
+
+    def set_AxesAndLabels(self, ax, title, xlabel, ylabel):
+
+        # set title of the plot
+        text = (title)
+        #ax.set_title(text, fontsize = 30, color="darkgrey")
+
+        # set axis-labels
+        ax.set_xlabel(xlabel, fontsize = 20, color="darkgrey")
+        ax.set_ylabel(ylabel, fontsize = 20, color="darkgrey")
+
+        # customize grid
+        ax.grid(True, color='dimgrey',  linestyle='dotted', linewidth=0.4)
+
+
+    # reverts list and returns reverted list
+    def get_ReverseList(self, list):
+        reverseList = []
+        idx = len(list)-1
+
+        for element in list:
+            reverseList.append(list[idx])
+            idx = idx -1
+
+        return reverseList
+
+    # plots an image
+    def plot_Logo(self, ax, scriptDir):
         image = mpimg.imread(scriptDir + bs + imagesPath + bs + logoName)
         ax.imshow(image)
         ax.set_axis_off()
 
-    def plotLiftDragOptimizationPoints(self, ax, polar, opt_point_style,
-                                       linewidth, label):
-        print("plotting CL over CD target-op-points for Re = %.0f...\n"\
-              % (polar.Re))
 
-        # check if there are operationg-conditions available
-        if (polar.operatingConditions == None):
-            return
-        else:
-            operatingConditions = polar.operatingConditions
-            numOpPoints = len(operatingConditions["op_point"])
-
-        x = []
-        y = []
-
-        for idx in range(numOpPoints):
-            # get op-mode and type
-            op_mode = operatingConditions["op_mode"][idx]
-            op_type = operatingConditions["optimization_type"][idx]
-            op_name = operatingConditions["name"][idx]
-
-            if (op_mode == 'spec-cl') and (op_type != 'min-glide-slope'):
-
-                # get CD from target-value
-                x.append(operatingConditions["target_value"][idx])
-
-                # get CL
-                y.append(operatingConditions["op_point"][idx])
-
-                print("target-op-point[%d] \'%s\', CL: %f, CD:%f" % \
-                        (idx, op_name, x[idx], y[idx]))
-
-        # plot
-        ax.plot(x, y, opt_point_style, linestyle=ls_targetPolar,
-                linewidth=linewidth, label = label)
-
-        DoneMsg()
-
-
-    def plotLiftDragPolar(self, ax, polars):
+    # plots lift/drag-polars (Xfoil-worker-polars and target-polars)
+    def plot_LiftDragPolars(self, ax, polars, targetPolars):
         # set axes and labels
-        self.setAxesAndLabels(ax, 'CL, CD', 'CD', 'CL')
+        self.set_AxesAndLabels(ax, 'CL, CD', 'CD', 'CL')
 
         # get polar of root-airfoil
         rootPolar = polars[0]
 
-        # revert List of polars
-        polars = self.getReverseList(polars)
+        # revert List of polars (for graphical reasons: plot root-polar last)
+        polars = self.get_ReverseList(polars)
+        targetPolars = self.get_ReverseList(targetPolars)
+
+        # get number of polars to plot
+        numPolars = len(polars)
 
         # set y-axis manually
         ax.set_ylim(min(rootPolar.CL) - 0.2, max(rootPolar.CL) + 0.2)
 
         # all polars
-        for polar in polars:
+        for polarIdx in range(numPolars):
+            #  get polar and target-polar to plot
+            polar = polars[polarIdx]
+            targetPolar = targetPolars[polarIdx]
+
             # determine idx for changing colors
             switchIdx = polar.T2_T1_switchIdx
 
+            # set label only for root-polar
             if (polar == rootPolar):
                 T1_label = 'T1-polar'
                 T2_label = 'T2-polar'
@@ -1363,77 +1363,65 @@ class polarGraph:
             x = polar.CD[polar.maxLift_idx]
             y = polar.CL[polar.maxLift_idx]
 
-            #set style for optimization points
-            label = None
-            style = opt_point_style_root
-            linewidth = 0.0
-
             # additonal text for root polar only
             if (polar == rootPolar):
                 ax.plot(x, y, marker='o', color=cl_infotext)
                 ax.annotate('maxLift (root) @ CL = %.2f, CD = %.4f' %(y,x),
                   xy=(x,y), xytext=(-20,10), textcoords='offset points',
                     fontsize = fs_infotext, color=cl_infotext)
+
+            # plot target-polar
+            label = None
+            if (polar == rootPolar):
+                # style for target-polar of root-airfoil
+                style = opt_point_style_root
+                linewidth = 0.0
             else:
+                # style for target-polar of strak-airfoil
                 style = opt_point_style_strak
                 linewidth = lw_targetPolar
+
+                # set label only for one of the strak-polars tp avoid multiple
+                # labels that are all the same
                 if (polar == polars[1]):
                     label = 'target-polar'
 
-            # plot optimization points
             if (polar == rootPolar) or (params.showTargetPolars == True):
-                self.plotLiftDragOptimizationPoints(ax, polar, style, linewidth,
-                                                    label)
+                x = targetPolar.CD
+                y = targetPolar.CL
+
+                # plot
+                ax.plot(x, y, style, linestyle = ls_targetPolar,
+                        linewidth = linewidth, label = label)
 
             ax.legend(loc='upper left', fontsize = fs_legend)
 
 
-    def plotLiftOverAlphaOptimizationPoints(self, ax, polar, opt_point_style):
-        print("plotting CL over alpha target-op-points for Re = %.0f...\n"\
-              % (polar.Re))
-
-        # check if there are operationg-conditions available
-        if (polar.operatingConditions == None):
-            return
-        else:
-            operatingConditions = polar.operatingConditions
-            numOpPoints = len(operatingConditions["op_point"])
-
-        for idx in range(numOpPoints):
-            # get op-mode
-            op_mode = operatingConditions["op_mode"][idx]
-            op_name = operatingConditions["name"][idx]
-
-            if (op_mode == 'spec-al'):
-                # get CL
-                x = operatingConditions["op_point"][idx]
-
-                # get alpha from target-value
-                y = operatingConditions["target_value"][idx]
-
-                print("target-op-point[%d] \'%s\', alpha:%f, CL: %f,"\
-                 % (idx, op_name, x, y))
-                # plot
-                ax.plot(x, y, opt_point_style)
-
-        DoneMsg()
-
-    def plotLiftOverAlphaPolar(self, ax, polars):
+    # plots lift/alpha-polars (Xfoil-worker-polars and target-polars)
+    def plot_LiftAlphaPolars(self, ax, polars, targetPolars):
         # set axes and labels
-        self.setAxesAndLabels(ax, 'CL, alpha', 'alpha', 'CL')
+        self.set_AxesAndLabels(ax, 'CL, alpha', 'alpha', 'CL')
 
         # get polar of root-airfoil
         rootPolar = polars[0]
 
-        # revert List of polars
-        polars = self.getReverseList(polars)
+        # revert List of polars (for graphical reasons: plot root-polar last)
+        polars = self.get_ReverseList(polars)
+        targetPolars = self.get_ReverseList(targetPolars)
 
         # set y-axis manually
         ax.set_ylim(min(rootPolar.CL) - 0.1, max(rootPolar.CL) + 0.2)
 
-        # all polars
-        for polar in polars:
+        # get number of polars to plot
+        numPolars = len(polars)
 
+        # all polars
+        for polarIdx in range(numPolars):
+            #  get polar and target-polar to plot
+            polar = polars[polarIdx]
+            targetPolar = targetPolars[polarIdx]
+
+            # set label only for root-polar
             if (polar == rootPolar):
                 T1_label = 'T1-polar'
                 T2_label = 'T2-polar'
@@ -1498,100 +1486,47 @@ class polarGraph:
                   xytext=(-140,10), textcoords='offset points',
                   fontsize = fs_infotext, color=cl_infotext)
 
-                #set style for optimization points
+            # plot target-polar, root-polar only
+            label = None
+            if (polar == rootPolar):
+                # style for target-polar of root-airfoil
                 style = opt_point_style_root
-            else:
-                style = opt_point_style_strak
+                linewidth = 0.0
 
-            # plot optimizationPoints
-            if (polar == rootPolar) or (params.showTargetPolars == True):
-                self.plotLiftOverAlphaOptimizationPoints(ax, polar, style)
+                x = targetPolar.alpha
+                y = targetPolar.CL
 
-
-    def setAxesAndLabels(self, ax, title, xlabel, ylabel):
-
-        # set title of the plot
-        text = (title)
-        #ax.set_title(text, fontsize = 30, color="darkgrey")
-
-        # set axis-labels
-        ax.set_xlabel(xlabel, fontsize = 20, color="darkgrey")
-        ax.set_ylabel(ylabel, fontsize = 20, color="darkgrey")
-
-        # customize grid
-        ax.grid(True, color='dimgrey',  linestyle='dotted', linewidth=0.4)
+                # plot
+                ax.plot(x, y, style, linestyle = ls_targetPolar,
+                        linewidth = linewidth, label = label)
 
 
-    def plotLiftDragOverLiftOptimizationPoints(self, ax, polar, opt_point_style,
-                                               linewidth, label):
-        print("plotting CL/CD over CL target-op-points for Re = %.0f...\n"\
-              % (polar.Re))
-
-        # check if there are operationg-conditions available
-        if (polar.operatingConditions == None):
-            return
-        else:
-            operatingConditions =polar.operatingConditions
-            numOpPoints = len(operatingConditions["op_point"])
-        x = []
-        y = []
-
-        for idx in range(numOpPoints):
-            # get op-mode and -type
-            op_mode = operatingConditions["op_mode"][idx]
-            op_type = operatingConditions["optimization_type"][idx]
-            op_name = operatingConditions["name"][idx]
-
-            if (op_mode == 'spec-cl') and (op_type != 'min-glide-slope'):
-                # get CL
-                x.append(operatingConditions["op_point"][idx])
-
-                # get CD from target-value
-                Cd = operatingConditions["target_value"][idx]
-
-                # calculate Cl/Cd
-                if (Cd == 0):
-                    ErrorMsg("CD is zero, op-point:%s" % op_name)
-
-                y.append(x[idx]/Cd)
-
-                print("target-op-point[%d] \'%s\', CL/CD: %f, CL:%f" %\
-                   (idx, op_name, x[idx], y[idx]))
-
-        # plot
-        ax.plot(x, y, opt_point_style, linestyle=ls_targetPolar,
-                linewidth=linewidth, label = label)
-
-        DoneMsg()
-
-
-    def getReverseList(self, list):
-        reverseList = []
-        idx = len(list)-1
-
-        for element in list:
-            reverseList.append(list[idx])
-            idx = idx -1
-
-        return reverseList
-
-
-    def plotLiftDragOverLiftPolar(self, ax, polars):
+    # plots glide-polars (Xfoil-worker-polars and target-polars)
+    def plot_GlidePolars(self, ax, polars, targetPolars):
         # set axes and labels
-        self.setAxesAndLabels(ax, 'CL/CD, CL', 'CL', 'CL/CD')
+        self.set_AxesAndLabels(ax, 'CL/CD, CL', 'CL', 'CL/CD')
 
         # get polar of root-airfoil
         rootPolar = polars[0]
 
-        # revert List of polars
-        polars = self.getReverseList(polars)
+        # revert List of polars (for graphical reasons: plot root-polar last)
+        polars = self.get_ReverseList(polars)
+        targetPolars = self.get_ReverseList(targetPolars)
+
+
+        # get number of polars to plot
+        numPolars = len(polars)
 
         # set y-axis manually
         ax.set_ylim(min(rootPolar.CL_CD) - 10, max(rootPolar.CL_CD) + 10)
 
         # all polars
-        for polar in polars:
+        for polarIdx in range(numPolars):
+            #  get polar and target-polar to plot
+            polar = polars[polarIdx]
+            targetPolar = targetPolars[polarIdx]
 
+            # set label only for root-polar
             if (polar == rootPolar):
                 T1_label = 'T1-polar'
                 T2_label = 'T2-polar'
@@ -1624,8 +1559,9 @@ class polarGraph:
 
             # add text for root Polar only
             if (polar == rootPolar):
-                ax.annotate('maxSpeed (root) @\nCL = %.2f,\nCL/CD = %.2f' % (x, y), xy=(x,y),
-                   xytext=(-80,0), textcoords='offset points', fontsize = fs_infotext, color=cl_infotext)
+                ax.annotate('maxSpeed (root) @\nCL = %.2f,\nCL/CD = %.2f' %\
+                 (x, y), xy=(x,y), xytext=(-80,0), textcoords='offset points',
+                  fontsize = fs_infotext, color=cl_infotext)
 
             # plot max_glide
             x = polar.CL[polar.maxGlide_idx]
@@ -1636,8 +1572,9 @@ class polarGraph:
 
             # add text for root Polar only
             if (polar == rootPolar):
-                ax.annotate('maxGlide (root) @ CL = %.2f, CL/CD = %.2f' % (x, y), xy=(x,y),
-                   xytext=(-60,7), textcoords='offset points', fontsize = fs_infotext, color=cl_infotext)
+                ax.annotate('maxGlide (root) @ CL = %.2f, CL/CD = %.2f' %\
+                  (x, y), xy=(x,y), xytext=(-60,7), textcoords='offset points',
+                   fontsize = fs_infotext, color=cl_infotext)
 
             # plot max Lift
             x = polar.CL[polar.maxLift_idx]
@@ -1646,34 +1583,45 @@ class polarGraph:
             if (polar == rootPolar):
                 ax.plot(x, y, 'o', color=cl_infotext)
 
-            #set style for optimization points
-            label = None
-            style = opt_point_style_root
-            linewidth = 0.0
-
             # add text for root Polar only
             if (polar == rootPolar):
-                ax.annotate('maxLift (root) @\nCL = %.2f,\nCL/CD = %.2f' % (x, y), xy=(x,y),
-                   xytext=(10,0), textcoords='offset points', fontsize = fs_infotext, color=cl_infotext)
+                ax.annotate('maxLift (root) @\nCL = %.2f,\nCL/CD = %.2f' %\
+                 (x, y), xy=(x,y), xytext=(10,0), textcoords='offset points',
+                  fontsize = fs_infotext, color=cl_infotext)
+
+
+            # plot target-polar
+            label = None
+            if (polar == rootPolar):
+                # style for target-polar of root-airfoil
+                style = opt_point_style_root
+                linewidth = 0.0
             else:
+                # style for target-polar of strak-airfoil
                 style = opt_point_style_strak
                 linewidth = lw_targetPolar
+
+                # set label only for one of the strak-polars tp avoid multiple
+                # labels that are all the same
                 if (polar == polars[1]):
                     label = 'target-polar'
 
-
-            # plot optimizationPoints
             if (polar == rootPolar) or (params.showTargetPolars == True):
-                self.plotLiftDragOverLiftOptimizationPoints(ax, polar, style,
-                                                            linewidth, label)
+                x = targetPolar.CL
+                y = targetPolar.CL_CD
+
+                # plot
+                ax.plot(x, y, style, linestyle = ls_targetPolar,
+                        linewidth = linewidth, label = label)
 
 
+    # draw the graph
     def draw(self, scriptDir, params):
         # get polars
         polars = params.merged_polars
+        targetPolars = params.target_polars
         T1_polars = params.T1_polars
         T2_polars = params.T2_polars
-
 
         # get polar of root-airfoil
         rootPolar = polars[0]
@@ -1719,16 +1667,16 @@ class polarGraph:
         fig.suptitle(text, fontsize = 12, color="darkgrey", **csfont)
 
         # first figure, display strak-machine-logo
-        self.plotLogo(upper[0], scriptDir)
+        self.plot_Logo(upper[0], scriptDir)
 
         # second figure, display the Lift / Drag-Polar
-        self.plotLiftDragPolar(lower[0], polars)
+        self.plot_LiftDragPolars(lower[0], polars, targetPolars)
 
         # third figure, display the Lift / alpha-Polar
-        self.plotLiftOverAlphaPolar(upper[1], polars)
+        self.plot_LiftAlphaPolars(upper[1], polars, targetPolars)
 
-        # fourth figure, display the lift/drag /Lift polar
-        self.plotLiftDragOverLiftPolar(lower[1], polars)
+        # fourth figure, display the Glide polar
+        self.plot_GlidePolars(lower[1], polars, targetPolars)
 
         # maximize window
         figManager = plt.get_current_fig_manager()
@@ -2024,22 +1972,6 @@ class polarData:
         CL_CD = np.interp(CL, x, y)
         return CL_CD
 
-
-
-################################################################################
-# Input function that checks python version
-def my_input(message):
-
-  # Check python version
-
-  python_version = version_info[0]
-
-  # Issue correct input command
-
-  if (python_version == 2):
-    return raw_input(message)
-  else:
-    return input(message)
 
 
 ################################################################################
@@ -2743,7 +2675,7 @@ def generate_inputFiles(params):
         # get strak-polar
         strakPolar = params.merged_polars[i]
 
-        # create new inputfile
+        # create new inputfile from template
         newFile = inputFile(params.xoptfoilTemplate)
 
         # generate a fresh list of equally distributed op-Points
@@ -2886,8 +2818,9 @@ def generate_polars(params, workingDir, rootfoilName):
     DoneMsg()
 
 
-def setPolarDataFromInputFile(polarData, rootPolar, params, inputFile,
+def set_PolarDataFromInputFile(polarData, rootPolar, params, inputFile,
                               airfoilname, Re, idx):
+    # set some variables in the polar-header
     polarData.polarName = 'target-polar for airfoil %s' % airfoilname
     polarData.airfoilname = airfoilname
     polarData.polarType = 12
@@ -2901,23 +2834,34 @@ def setPolarDataFromInputFile(polarData, rootPolar, params, inputFile,
     op_points = operatingConditions["op_point"]
     op_modes =  operatingConditions["op_mode"]
 
+    # get the number of op-points
     numOpPoints = len(op_points)
 
     for i in range(numOpPoints):
         # check if the op-mode is 'spec-cl'
         if (op_modes[i] == 'spec-cl'):
-            # get alpha from root-polar (dummy-value)
+            # op_mode is 'spec-al', get alpha from root-polar
             alpha = rootPolar.find_alpha(op_points[i])
-            polarData.alpha.append(alpha)
-            polarData.CL.append(op_points[i])
-            polarData.CD.append(target_values[i])
-        else:
-            # op_mode is 'spec-al'
-            polarData.alpha.append(op_points[i])
-            polarData.CL.append(target_values[i])
-            # get CD from target-values
-            polarData.CD.append(params.targets["CD_pre_maxLift"][idx])
 
+            # get CL, CD
+            CL = op_points[i]
+            CD = target_values[i]
+        else:
+            # op_mode is 'spec-al', get alpha form input-file
+            alpha = (op_points[i])
+
+            # get CL, CD
+            CL = target_values[i]
+            CD = params.targets["CD_pre_maxLift"][idx]#TODO
+
+        # calculate CL/CD
+        CL_CD = CL/CD
+
+        # append values to polar
+        polarData.alpha.append(alpha)
+        polarData.CL.append(CL)
+        polarData.CD.append(CD)
+        polarData.CL_CD.append(CL_CD)
         polarData.CDp.append(0.0)
         polarData.Cm.append(0.0)
         polarData.Top_Xtr.append(0.0)
@@ -2948,7 +2892,7 @@ def generate_target_polars(params, workingDir):
         strakPolar = params.merged_polars[i]
 
         # put the necessary data into the polar
-        setPolarDataFromInputFile(targetPolar, rootPolar, params, inputFile,
+        set_PolarDataFromInputFile(targetPolar, rootPolar, params, inputFile,
                                   airfoilName, Re[i], i)
 
         # append the new target polar to list of target_polars
