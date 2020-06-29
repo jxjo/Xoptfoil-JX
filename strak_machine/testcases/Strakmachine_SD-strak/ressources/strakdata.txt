@@ -1,8 +1,8 @@
 {
       "xoptfoilTemplate": "Generic",
       "seedFoilName": "SD", 
-      "maxGlideLoss": [0.0, 0.004, 0.006, 0.020, 0.045, 0.060],
-      "maxSpeedGain": [0.0, 0.1, 0.1, 0.1, 0.1, 0.1],
+      "maxGlideGain": [0.0, -0.03, -0.04, -0.06, -0.08, -0.1],
+      "maxSpeedGain": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
       "maxLiftGain": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
       "maxReynoldsFactor": 2.0,
       "reynolds": [220000, 190000, 160000, 130000, 100000, 70500] 

@@ -1,28 +1,11 @@
 {
-      "inputFolder": "ressources",
-      "outputFolder": "build",
-      "operatingMode": "default",
-      "numOpPoints": 16,
       "xoptfoilTemplate": "Generic",
-      "seedFoilName": "rg15", 
-      "smoothSeedFoil": "true",
-      "useAlwaysRootfoil": "false",
-      "adaptInitialPerturb": "false",
-      "generateBatchfile": "false",
-      "CLMin" : -0.01,
-      "weighting_mode": "sinus",
-      "minWeight": 0.7,
-      "maxWeight": 2.0,
-      "maxGlideLoss": [0.0, 0.004, 0.006, 0.010, 0.014, 0.050],
-      "maxSpeedGain": [0.0, 0.3, 0.3, 0.3, 0.3, 0.3],
-      "maxLiftGain": [0.0, 0.025, 0.025, 0.025, 0.025, 0.025],
-      "maxReynoldsFactor": 2.0,
-      "reynolds": [
-            220000,
-            190000, 
-            160000, 
-            130000, 
-            100000,
-            70500
-      ] 
+      "seedFoilName": "JX", 
+      "smoothSeedFoil": "false",
+      "additionalOpPoints": [0.07],
+      "maxGlideGain": [0.0, -0.03, -0.04, -0.06],
+      "maxSpeedGain": [0.0, 0.0, 0.0, 0.0],
+      "maxLiftGain": [0.00, 0.0, 0.0, 0.0],
+      "maxReynoldsFactor": 4.0,
+      "reynolds": [150000, 120000, 90000, 60000] 
 }

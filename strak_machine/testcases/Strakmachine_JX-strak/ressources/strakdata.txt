@@ -3,9 +3,9 @@
       "seedFoilName": "JX", 
       "smoothSeedFoil": "false",
       "additionalOpPoints": [0.07],
-      "maxGlideLoss": [0.0, 0.004, 0.006, 0.020],
-      "maxSpeedGain": [0.0, 0.1, 0.1, 0.1],
-      "maxLiftGain": [0.00, 0.01, 0.01, 0.01],
+      "maxGlideGain": [0.0, -0.03, -0.04, -0.06],
+      "maxSpeedGain": [0.0, 0.2, 0.2, 0.2],
+      "maxLiftGain": [0.00, 0.1, 0.1, 0.1],
       "maxReynoldsFactor": 4.0,
       "reynolds": [150000, 120000, 90000, 60000] 
 }
