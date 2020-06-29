@@ -2883,35 +2883,19 @@ def set_PolarDataFromInputFile(polarData, rootPolar, inputFile,
             # get CL, CD
             CL = op_points[i]
             CD = target_values[i]
-        else:
-            # if op_mode is 'spec-al', this is the last op-point of the
-            # input-file. get alpha from op-point
-            alpha = (op_points[i])
 
-            # check CL of last op-point and the op-point before last op-point
-            if (op_points[i-1] != target_values[i]):
-                ErrorMsg("op-point before the last op-point and last-op-point"\
-                " must have same CL!")
+            # calculate CL/CD
+            CL_CD = CL/CD
 
-            # get CL from target-value
-            CL = target_values[i]
-
-            # get CD from previous op-point (caution !) as CL of the last
-            # op-point and previous op-point must be the same
-            CD = target_values[i-1]
-
-        # calculate CL/CD
-        CL_CD = CL/CD
-
-        # append values to polar
-        polarData.alpha.append(alpha)
-        polarData.CL.append(CL)
-        polarData.CD.append(CD)
-        polarData.CL_CD.append(CL_CD)
-        polarData.CDp.append(0.0)
-        polarData.Cm.append(0.0)
-        polarData.Top_Xtr.append(0.0)
-        polarData.Bot_Xtr.append(0.0)
+            # append values to polar
+            polarData.alpha.append(alpha)
+            polarData.CL.append(CL)
+            polarData.CD.append(CD)
+            polarData.CL_CD.append(CL_CD)
+            polarData.CDp.append(0.0)
+            polarData.Cm.append(0.0)
+            polarData.Top_Xtr.append(0.0)
+            polarData.Bot_Xtr.append(0.0)
 
 
 def generate_TargetPolars(params, workingDir):
