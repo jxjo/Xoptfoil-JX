@@ -31,6 +31,7 @@ import f90nml
 from copy import deepcopy
 from colorama import init
 from termcolor import colored
+import change_airfoilname
 #from scipy.signal import savgol_filter
 
 # paths and separators
@@ -115,18 +116,31 @@ def get_ReString(Re):
 
 # get the name and absolute path of an template xoptfoil-input-file, that
 # resides in the 'presets'-folder.
-def getPresetInputFileName(xoptfoilTemplate):
+def get_PresetInputFileName(xoptfoilTemplate, params):
     # get real path of the script
     pathname = os.path.dirname(sys.argv[0])
     scriptPath = os.path.abspath(pathname)
 
-    # get list of all existing files
-    fileList = getListOfFiles(scriptPath + bs + presetsPath)
+    searchPaths = []
+    searchPaths.append(scriptPath + bs + presetsPath)
+    searchPaths.append('..' + bs + params.inputFolder)
+    searchPaths.append('..' + bs + params.inputFolder)
 
-    # search the whole list of files for the desired template-file
-    for name in fileList:
-        if name.find(xoptfoilTemplate) >= 0:
-            return name
+    for path in searchPaths:
+        try:
+            fileList = get_ListOfFiles(path)
+            # search the whole list of files for the desired template-file
+            for name in fileList:
+                if name.find(xoptfoilTemplate) >= 0:
+                    return name
+        except:
+            NoteMsg("xoptfoil-template-file not found, tying different directory for"\
+            " searching xoptfoil-template-files")
+
+
+    ErrorMsg("could not find xoptfoil-template-file %s" % xoptfoilTemplate)
+    exit(-1)
+
 
 ################################################################################
 #
@@ -180,7 +194,7 @@ strakdata = {
 #
 ################################################################################
 class inputFile:
-    def __init__(self, xoptfoilTemplate):
+    def __init__(self, params):
         self.values = {}
         self.presetInputFileName = ""
         self.idx_maxSpeed = 0
@@ -192,8 +206,10 @@ class inputFile:
         # get real path of the script
         pathname = os.path.dirname(sys.argv[0])
         scriptPath = os.path.abspath(pathname)
-        presetInputFiles = getListOfFiles(scriptPath + bs + presetsPath)
-        self.get_InputFileName(presetInputFiles, xoptfoilTemplate)
+
+        # get name and path of xoptfoil-inputfile
+        self.presetInputFileName = get_PresetInputFileName(params.xoptfoilTemplate,
+                                                           params)
 
         # read input-file as a Fortan namelist
         self.values = f90nml.read(self.presetInputFileName)
@@ -349,14 +365,6 @@ class inputFile:
 
          # set new weighting
         operatingConditions['weighting'][idx] = new_weighting
-
-
-    def get_InputFileName(self, fileList, xoptfoilTemplate):
-        # search the whole list of files for the desired template
-        for name in fileList:
-            if name.find(xoptfoilTemplate) >= 0:
-                self.presetInputFileName = name
-                return
 
 
     def get_OperatingConditions(self):
@@ -1004,7 +1012,6 @@ class strakData:
     ############################################################################
     # function that calculates dependend values
     def calculate_DependendValues(self):
-
         # calculate List of Re-numers, if wingdata available
         if (self.wingData != None):
             # clear the list of chord-lenghts
@@ -1043,12 +1050,6 @@ class strakData:
                    ((self.ReNumbers[0] * self.ReNumbers[0]))/\
                    ((self.maxReNumbers[0])*(self.maxReNumbers[0]))
 
-
-    def calculate_CD_TargetValue(self, root, strak, gain):
-        target = (  (root * gain)           # part coming from root-airfoil
-                  + (strak * (1.0 - gain))) # part coming from strak-airfoil
-
-        return round(target, CD_decimals)
 
     def calculate_CL_CD_TargetValue(self, root, strak, gain):
         target = (  (root * gain)           # part coming from root-airfoil
@@ -1124,14 +1125,15 @@ class strakData:
 
             #---------------------- maxLift-targets --------------------------
             # CL_CD values for pre_maxLift op-point for root- and strak-polar
-            rootPolar_CL_CD_pre_maxLift = rootPolar.CL_pre_maxLift / rootPolar.CD_pre_maxLift
+            rootPolar_CD = rootPolar.find_CD_From_CL(polar.CL_pre_maxLift)
+            rootPolar_CL_CD = polar.CL_pre_maxLift / rootPolar_CD
             polar_CL_CD_pre_maxLift = polar.CL_pre_maxLift / polar.CD_pre_maxLift
 
             # calculate the new target-value in CL_CD-diagram, keeping CL of
             # polar constant
             target_CL_pre_maxLift = polar.CL_pre_maxLift
             target_CL_CD_pre_maxLift = self.calculate_CL_CD_TargetValue(
-            rootPolar_CL_CD_pre_maxLift, polar_CL_CD_pre_maxLift, maxLiftGain)
+            rootPolar_CL_CD, polar_CL_CD_pre_maxLift, maxLiftGain)
 
             # now calculate CD-value
             target_CD_pre_maxLift = target_CL_pre_maxLift / target_CL_CD_pre_maxLift
@@ -1147,8 +1149,8 @@ class strakData:
 
             idx = idx + 1
 
-        print(self.targets)#Debug
-        DoneMsg()#Debug
+        #print(self.targets)#Debug
+        #DoneMsg()#Debug
 
 
     def correctOpPoint_left(self, opPoint, CL_maxSpeed_root,
@@ -1264,10 +1266,24 @@ class polarGraph:
         return reverseList
 
     # plots an image
-    def plot_Logo(self, ax, scriptDir):
-        image = mpimg.imread(scriptDir + bs + imagesPath + bs + logoName)
-        ax.imshow(image)
-        ax.set_axis_off()
+    def plot_Logo(self, ax, scriptDir, params):
+        searchPaths = []
+        searchPaths.append(scriptDir + bs + imagesPath + bs + logoName)
+        searchPaths.append('.' + bs + params.inputFolder + bs + logoName)
+        searchPaths.append('..' + bs + params.inputFolder + bs + logoName)
+
+        for path in searchPaths:
+            try:
+                image = mpimg.imread(path)
+            except:
+                NoteMsg("strak-machine-image was not found in path %s,"\
+                         "trying different path" % path)
+        try:
+            ax.imshow(image)
+            ax.set_axis_off()
+        except:
+            ErrorMsg("could not find strak-machine-image, plotting of image was"
+                     " skipped")
 
 
     # plots lift/drag-polars (Xfoil-worker-polars and target-polars)
@@ -1661,7 +1677,7 @@ class polarGraph:
         fig.suptitle(text, fontsize = 12, color="darkgrey", **csfont)
 
         # first figure, display strak-machine-logo
-        self.plot_Logo(upper[0], scriptDir)
+        self.plot_Logo(upper[0], scriptDir, params)
 
         # second figure, display the Lift / Drag-Polar
         self.plot_LiftDragPolars(lower[0], polars, targetPolars)
@@ -2195,7 +2211,7 @@ def generate_Commandlines(params):
 
         if (params.smoothStrakFoils):
             # smooth the airfoil
-            inputFilename = getPresetInputFileName('Smooth')
+            inputFilename = get_PresetInputFileName('Smooth', params)
 
             # compose commandline for smoothing the airfoil
             commandline = "xfoil_worker.exe -w smooth -i %s -a %s -o %s\n" % \
@@ -2215,14 +2231,14 @@ def generate_Commandlines(params):
                      ('merged_polar_%s.txt' % get_ReString(ReList[i]))
 
         # T1-polar
-        inputFilename = getPresetInputFileName('iPolars_T1')
+        inputFilename = get_PresetInputFileName('iPolars_T1', params)
         commandline = "xfoil_worker.exe -i \"%s\" -a \"%s\" -w polar -o \"%s\" -r %d\n" %\
                                  (inputFilename, strakFoilName,
                                   strakFoilName.strip('.dat'), maxReList[i])
         commandLines.append(commandline)
 
         # T2-polar
-        inputFilename = getPresetInputFileName('iPolars_T2')
+        inputFilename = get_PresetInputFileName('iPolars_T2', params)
         commandline = "xfoil_worker.exe -i \"%s\" -a \"%s\" -w polar -o \"%s\" -r %d\n" %\
                                  (inputFilename, strakFoilName,
                                   strakFoilName.strip('.dat'), ReList[i])
@@ -2614,7 +2630,7 @@ def get_Parameters(dict):
     return params
 
 
-def getListOfFiles(dirName):
+def get_ListOfFiles(dirName):
     # create a list of files in the given directory
     listOfFile = os.listdir(dirName)
     allFiles = list()
@@ -2641,14 +2657,14 @@ def get_WingDataFromXML(params):
     return planeData[0]
 
 
-def copyAndSmoothAirfoil(srcName, srcPath, destName, smooth):
+def copyAndSmooth_Airfoil(srcName, srcPath, destName, smooth):
     srcfoilNameAndPath = srcPath + bs + srcName + '.dat'
 
     if (smooth):
         print("Smoothing airfoil \'%s\', creating airfoil \'%s\'\n" %\
                        (srcName, destName))
         # smooth, rename and copy the airfoil
-        inputFilename = getPresetInputFileName('Smooth')
+        inputFilename = get_PresetInputFileName('Smooth', params)
 
         # compose system-string for smoothing the seed-airfoil
         systemString = "xfoil_worker.exe -w smooth -i %s -a %s -o %s" % \
@@ -2659,9 +2675,7 @@ def copyAndSmoothAirfoil(srcName, srcPath, destName, smooth):
     else:
         print("Renaming airfoil \'%s\' to \'%s\'\n" % (srcName, destName))
         # only reanme and copy the airfoil
-        systemString = "change_airfoilname.py -i %s -o %s" %\
-                              (srcfoilNameAndPath, destName + '.dat')
-        os.system(systemString)
+        change_airfoilName (srcfoilNameAndPath, destName + '.dat')
         DoneMsg()
 
 
@@ -2676,11 +2690,11 @@ def copy_Matchpolarfoils(params):
     srcPath = ".." + bs + params.inputFolder
 
     # copy and smooth the matchfoil
-    copyAndSmoothAirfoil(matchfoilName, srcPath, matchfoilName,
+    copyAndSmooth_Airfoil(matchfoilName, srcPath, matchfoilName,
                                              params.smoothMatchPolarFoil)
 
     # copy and smooth the seedfoil
-    copyAndSmoothAirfoil(seedFoilName, srcPath, seedFoilName,
+    copyAndSmooth_Airfoil(seedFoilName, srcPath, seedFoilName,
                                              params.smoothSeedfoil)
 
     return matchfoilName
@@ -2697,7 +2711,7 @@ def generate_rootfoil(params):
     srcPath = ".." + bs + params.inputFolder
 
     # copy and smooth the airfoil, also rename
-    copyAndSmoothAirfoil(seedFoilName, srcPath, rootfoilName,
+    copyAndSmooth_Airfoil(seedFoilName, srcPath, rootfoilName,
                                            params.smoothSeedfoil)
 
     return rootfoilName
@@ -2716,7 +2730,7 @@ def generate_InputFiles(params):
         strakPolar = params.merged_polars[i]
 
         # create new inputfile from template
-        newFile = inputFile(params.xoptfoilTemplate)
+        newFile = inputFile(params)
 
         # generate a fresh list of equally distributed op-Points
         num_opPoints = params.numOpPoints + len(params.additionalOpPoints)
@@ -2799,12 +2813,12 @@ def generate_Polars(params, workingDir, rootfoilName):
 
         # compose string for system-call of XFOIL-worker for T1-polar generation
         airfoilName = rootfoilName + '.dat'
-        inputFilename = getPresetInputFileName(T1_polarInputFile)
+        inputFilename = get_PresetInputFileName(T1_polarInputFile, params)
         systemString_T1 = "xfoil_worker.exe -i \"%s\" -o \"%s\" -w polar -a \"%s\" -r %d" %\
                               (inputFilename, rootfoilName, airfoilName, maxRe)
 
         # compose string for system-call of XFOIL-worker for T2-polar generation
-        inputFilename = getPresetInputFileName(T2_polarInputFile)
+        inputFilename = get_PresetInputFileName(T2_polarInputFile, params)
         systemString_T2 = "xfoil_worker.exe -i \"%s\" -o \"%s\" -w polar -a \"%s\" -r %d" %\
                                  (inputFilename, rootfoilName, airfoilName, Re)
 
