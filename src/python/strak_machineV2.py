@@ -959,6 +959,7 @@ class strakData:
         self.CL_switchpoint_Type2_Type1_polar = 0.05
         self.maxReFactor = 2.0
         self.maxLiftDistance = 0.05
+        self.scriptsAsExe = False
         self.generateBatch = True
         self.xmlFileName = None
         self.wingData = None
@@ -2245,7 +2246,10 @@ def generate_Commandlines(params):
         commandLines.append(commandline)
 
         # merge polars
-        scriptName = "strak_machineV2.py"# __file__
+        if (params.scriptsAsExe):
+            scriptName = "strak_machineV2.exe"
+        else:
+            scriptName = "strak_machineV2.py"# __file__
         commandline = scriptName + " -w merge -p1 \"%s\"  -p2 \"%s\""\
                      " -m \"%s\" -c %f\n" %\
                   (polarFileNameAndPath_T1, polarFileNameAndPath_T2,
@@ -2358,7 +2362,10 @@ def generate_VisuBatchfiles(params):
 
         # write commandlines
         outputfile.write("cd build\n")
-        outputfile.write("xoptfoil_visualizer-jx.py -o 3 -c %s\n" % airfoilName)
+        if (params.scriptsAsExe):
+            outputfile.write("xoptfoil_visualizer-jx.exe -o 3 -c %s\n" % airfoilName)
+        else:
+            outputfile.write("xoptfoil_visualizer-jx.py -o 3 -c %s\n" % airfoilName)
 
         # close the outputfile
         outputfile.close()
@@ -2601,6 +2608,9 @@ def get_Parameters(dict):
                                                    params.additionalOpPoints[0])
 
      # get optional boolean parameters
+    params.scriptsAsExe = get_booleanParameterFromDict(dict,
+                             "scriptsAsExe", params.scriptsAsExe)
+
     params.useAlwaysRootfoil = get_booleanParameterFromDict(dict,
                              "useAlwaysRootfoil", params.useAlwaysRootfoil)
 
