@@ -1,11 +1,11 @@
 {
       "xoptfoilTemplate": "Generic",
-      "seedFoilName": "JX", 
+      "seedFoilName": "AM1", 
       "smoothSeedFoil": "false",
-      "additionalOpPoints": [0.07],
-      "maxGlideGain": [0.0, -0.03, -0.04, -0.06],
-      "maxSpeedGain": [0.0, 0.0, 0.0, 0.0],
-      "maxLiftGain": [0.00, 0.0, 0.0, 0.0],
-      "maxReynoldsFactor": 4.0,
-      "reynolds": [150000, 120000, 90000, 60000] 
+      "maxGlideShift": [0.0, 0.02, 0.04, 0.05],
+      "maxGlideGain": [0.0, 0.5, 0.00, 0.00],
+      "maxSpeedGain": [0.0, 0.2, 0.0, 0.0],
+      "maxLiftGain": [0.00, 0.5, 0.0, 0.0],
+      "maxReynoldsFactor": 2.8,
+      "reynolds": [150000, 137000] 
 }
