@@ -11,6 +11,9 @@
   show_details     = .false.                         
 /  
 
+&operating_conditions
+  re_default_as_resqrtcl = .true.
+
   noppoint          = 2,
   name              = 'op_1', 'op_2',
   op_mode           = 'spec-cl', 'spec-cl',
