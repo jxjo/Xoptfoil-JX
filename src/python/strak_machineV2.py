@@ -118,7 +118,11 @@ def get_ReString(Re):
 
 # helper-function to perform a linear-interpolation
 def interpolate(x1, x2, y1, y2, x):
-    y = ((y2-y1)/(x2-x1)) * (x-x1) + y1
+    try:
+        y = ((y2-y1)/(x2-x1)) * (x-x1) + y1
+    except:
+        ErrorMsg("Division by zero, x1:%f, x2:%f", (x1, x2))
+        y = 0.0
     return y
 
 # get the name and absolute path of an template xoptfoil-input-file, that
@@ -1982,33 +1986,50 @@ class polarData:
         return mergedPolar
 
     # generate a new shifted polar. The max-glide-point (this means maximum CL/CD)
-    # will be shifted left or right.
-    def get_shiftedPolar(self, shiftValue):
+    # will be shifted left or right. The max Lift point will remain the same.
+    # The max Speed-point will be influenced in some kind.
+    # The alpha_CL0 point will remain the same
+    def get_shiftedPolar(self, shiftValue, params):
         # copy existing polar
         shiftedPolar = deepcopy(self)
 
-        # shift all CL-values before max glide point
-        startIdx = 0
-        endIdx = shiftedPolar.maxGlide_idx
-        y1 = 0
-        y2 = shiftValue
+       # check whether to shift the polar
+        if abs(shiftValue) < 0.000001:
+            # nothing to do
+            return shiftedPolar
 
-        for idx in range (startIdx, endIdx+1):
-            diff = interpolate(startIdx, endIdx, y1, y2, idx)
-            shiftedPolar.CL[idx] = shiftedPolar.CL[idx] + diff
-            #print (startIdx, idx, shiftedPolar.maxGlide_idx) #Debug
+        # determine stretch-factor to strech the complete polar
+        CL_factor = (self.CL_maxGlide + shiftValue) / self.CL_maxGlide
 
-        # shift all CL-values after max glide point
-        startIdx = endIdx+1
-        endIdx = len(shiftedPolar.CL)-1
-        y1 = shiftValue
-        y2 = 0
-        for idx in range (startIdx, endIdx+1):
-            diff = interpolate(startIdx, endIdx, y1, y2, idx)
-            shiftedPolar.CL[idx] = shiftedPolar.CL[idx] + diff
-            #print (startIdx, idx, endIdx) #Debug
+        # determine number of values
+        num = len(shiftedPolar.CL)
 
-        #print(self.CL[self.maxGlide_idx], shiftedPolar.CL[shiftedPolar.maxGlide_idx], shiftValue) #Debug
+        # stretch the whole polar by factor, changing CL-values
+        for i in range(num):
+            shiftedPolar.CL[i] = shiftedPolar.CL[i] * CL_factor
+            # invalidate alpha
+            shiftedPolar.alpha[i] = 0
+            # calculate new drag-value
+            CD_old = shiftedPolar.CD[i]
+            shiftedPolar.CD[i] = shiftedPolar.CL[i] / shiftedPolar.CL_CD[i]
+            #print(CD_old, shiftedPolar.CD[i])#Debug
+
+        # analyze streched-polar, determine max-lift
+        shiftedPolar.analyze(params)
+
+        # determine factor to correct aerea between max-glide and maxLift,
+        # so max-lift has the same value than before stretching
+        maxLift_factor = self.CL_maxLift / shiftedPolar.CL_maxLift
+
+        y1 = 1.0
+        y2 = maxLift_factor
+
+        # now linear correct all CL-values after maxGlide, get the same max-lift as before
+        for i in range(shiftedPolar.maxGlide_idx, num):
+            factor = interpolate(shiftedPolar.maxGlide_idx, shiftedPolar.maxLift_idx, y1, y2, i)
+            shiftedPolar.CL[i] = shiftedPolar.CL[i] * factor
+            # calculate new drag-value
+            shiftedPolar.CD[i] = shiftedPolar.CL[i] / shiftedPolar.CL_CD[i]
 
         # return the polar
         return shiftedPolar
@@ -3026,7 +3047,13 @@ def generate_Polars(params, workingDir, rootfoilName):
         shiftValue = params.maxGlideShift[ReIdx]
 
         # shift the max-glide-point now, create a new polar
-        shiftedPolar = rootPolar.get_shiftedPolar(shiftValue)
+        shiftedPolar = rootPolar.get_shiftedPolar(shiftValue, params)
+
+## Debug
+##        # write shifted polar to file
+##        polarFileNameAndPath = polarDir + bs + ('shifted_polar_%3s_%d.txt' %\
+##                              (get_ReString(rootPolar.Re), ReIdx))
+##        shiftedPolar.write_ToFile(polarFileNameAndPath)
 
         # also update values like maxSpeed, maxGlide etc.
         shiftedPolar.analyze(params)
@@ -3053,10 +3080,6 @@ def set_PolarDataFromInputFile(polarData, rootPolar, inputFile,
     target_values = operatingConditions["target_value"]
     op_points = operatingConditions["op_point"]
     op_modes =  operatingConditions["op_mode"]
-
-    print (target_values)
-    print (op_points)
-    print (op_modes)
 
     # get the number of op-points
     numOpPoints = len(op_points)
