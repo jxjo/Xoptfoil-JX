@@ -69,6 +69,9 @@ opt_point_style_strak = 'y-'
 ls_targetPolar = 'dotted'
 lw_targetPolar = 0.6
 
+# switch on unstretching the aerea after maxGlide (keep aerea stretched)
+unstretch = True
+
 ################################################################################
 #
 # install missing packages
@@ -481,17 +484,25 @@ class inputFile:
     def set_IntermediateOpPointTargetValues(self, targets, shifted_rootPolar,
                                            strakPolar, i):
         # determine factors (CL/CD) for the main op-points
+
+        # CL_min
+        CL_min_strak = targets["CL_min"][i]
+        CD_min_strak = targets["CD_min"][i]
+        CL_CD_min_root = shifted_rootPolar.CL_min / shifted_rootPolar.CD_min
+        CL_CD_min_strak = CL_min_strak / CD_min_strak
+        factor_min = CL_CD_min_strak / CL_CD_min_root
+
         # maxGlide
         CL_maxGlide_strak = targets["CL_maxGlide"][i]
         CD_maxGlide_strak = targets["CD_maxGlide"][i]
-        CL_CD_maxGlide_root = shifted_rootPolar.CL_CD_maxGlide#CL_maxGlide_root / CD_maxGlide_root
+        CL_CD_maxGlide_root = shifted_rootPolar.CL_CD_maxGlide
         CL_CD_maxGlide_strak = CL_maxGlide_strak / CD_maxGlide_strak
         factor_maxGlide = CL_CD_maxGlide_strak / CL_CD_maxGlide_root
 
         # maxSpeed
         CL_maxSpeed_strak = targets["CL_maxSpeed"][i]
         CD_maxSpeed_strak = targets["CD_maxSpeed"][i]
-        CL_CD_maxSpeed_root = shifted_rootPolar.CL_CD_maxSpeed#CL_maxSpeed_root / CD_maxSpeed_root
+        CL_CD_maxSpeed_root = shifted_rootPolar.CL_CD_maxSpeed
         CL_CD_maxSpeed_strak = CL_maxSpeed_strak / CD_maxSpeed_strak
         factor_maxSpeed = CL_CD_maxSpeed_strak / CL_CD_maxSpeed_root
 
@@ -523,7 +534,7 @@ class inputFile:
         end = self.idx_maxSpeed
 
         # now change all target-values of these op-points
-        y1 = factor_maxSpeed
+        y1 = factor_min
         y2 = factor_maxSpeed
         x1 = params.CL_min
         x2 = CL_maxSpeed_strak
@@ -1006,11 +1017,14 @@ class strakData:
         self.shifted_rootPolars = []
         self.target_polars = []
         self.inputFiles = []
-        self.maxGlideShift = [0.0]
-        self.maxGlideGain = [0.0]
-        self.maxSpeedGain = [0.0]
-        self.maxLiftGain = [0.0]
+        self.minCLGain = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+        self.maxGlideShift = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+        self.maxGlideGain = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+        self.maxSpeedGain = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+        self.maxLiftGain = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
         self.targets ={
+                        "CL_min": [],
+                        "CD_min": [],
                         "CL_maxSpeed": [],
                         "CD_maxSpeed": [],
                         "CL_maxGlide": [],
@@ -1096,15 +1110,38 @@ class strakData:
             # get gain and loss values
             if (polar == rootPolar):
                 # no gain / loss / shift for root-polar
+                minCLGain = 0.0
                 maxSpeedGain = 0.0
                 maxGlideGain = 0.0
                 maxGlideShift = 0.0
                 maxLiftGain = 0.0
             else:
+                minCLGain = params.minCLGain[idx]
                 maxSpeedGain = params.maxSpeedGain[idx]
                 maxGlideGain = params.maxGlideGain[idx]
                 maxGlideShift = params.maxGlideShift[idx]
                 maxLiftGain = params.maxLiftGain[idx]
+
+            #---------------------- CL_min-targets ----------------------------
+            # CL_CD values for min op-point for root- and strak-polar
+            rootPolar_CL_CD_min = rootPolar.CL_min / rootPolar.CD_min
+            polar_CL_CD_min = (rootPolar.CL_min /
+                                polar.find_CD_From_CL(rootPolar.CL_min))
+
+            # keep Cl-min equal for all airfoils along the strak
+            target_CL_min = rootPolar.CL_min
+
+            # calculate the new target-value in CL_CD-diagram, keeping CL of
+            # root-polar constant
+            target_CL_CD_min = self.calculate_CL_CD_TargetValue(
+            rootPolar_CL_CD_min, polar_CL_CD_min, minCLGain)
+
+            # now calculate CD-value
+            target_CD_min = target_CL_min / target_CL_CD_min
+
+            # append the targets
+            self.targets["CL_min"].append(target_CL_min)
+            self.targets["CD_min"].append(target_CD_min)
 
             #---------------------- maxSpeed-targets --------------------------
 
@@ -1788,6 +1825,8 @@ class polarData:
         self.Cm = []
         self.Top_Xtr = []
         self.Bot_Xtr= []
+        self.CD_min = 0.0
+        self.CL_min = 0.0
         self.CD_maxSpeed = 0.0
         self.CL_maxSpeed = 0.0
         self.CL_CD_maxSpeed = 0.0
@@ -1932,6 +1971,7 @@ class polarData:
         else:
             self.determine_MaxSpeedOfStrakPolar(rootPolar.CL_maxSpeed)
 
+        self.determine_CLmin(params)
         self.determine_MaxGlide()
         self.determine_MaxLift(params)
         self.determine_alpha_CL0(params)
@@ -2017,6 +2057,9 @@ class polarData:
         # analyze streched-polar, determine max-lift
         shiftedPolar.analyze(params)
 
+        if unstretch == False:
+            return shiftedPolar
+
         # determine factor to correct aerea between max-glide and maxLift,
         # so max-lift has the same value than before stretching
         maxLift_factor = self.CL_maxLift / shiftedPolar.CL_maxLift
@@ -2058,6 +2101,14 @@ class polarData:
         print("max Speed, CD = %f @ CL = %f" %\
                                   (self.CD_maxSpeed, self.CL_maxSpeed))
 
+##    def determine_CLminOfStrakPolar(self, CL_minRootPolar):
+##        self.CL_min_idx = self.find_index_From_CL(CL_minRootPolar)
+##        self.CD_min = self.CD[self.CL_min_idx]
+##        self.CL_min = self.CL[self.CL_min_idx]
+##        self.CL_CD_min = self.CL_min / self.CD_min
+##
+##        print("CL_min, CD = %f @ CL = %f" %\
+##                                  (self.CD_min, self.CL_min))
 
     # determines the overall max-value for Cl/Cd (max glide) of a given polar
     # and some corresponding values
@@ -2071,6 +2122,9 @@ class polarData:
         print("max Glide, CL/CD = %f @ CL = %f" %
                                   (self.CL_CD_maxGlide, self.CL_maxGlide))
 
+    def determine_CLmin(self, params):
+        self.CL_min = params.CL_min
+        self.CD_min = self.find_CD_From_CL(params.CL_min)
 
     # determines the max-value for Cl (max lift) of a given polar and some
     # corresponding values
@@ -2743,6 +2797,9 @@ def get_Parameters(dict):
 
     params.maxGlideGain = get_ParameterFromDict(dict, "maxGlideGain",
                                                 params.maxGlideGain)
+
+    params.minCLGain  = get_ParameterFromDict(dict, "minCLGain",
+                                                params.minCLGain)
 
     params.maxGlideShift = get_ParameterFromDict(dict, "maxGlideShift",
                                                 params.maxGlideShift)
