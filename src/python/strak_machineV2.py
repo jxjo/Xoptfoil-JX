@@ -467,15 +467,13 @@ class inputFile:
 
             # find CD value of root-polar
             CD = rootPolar.find_CD_From_CL(opPoint)
-            CL_CD = opPoint / CD
 
             # determine the factor for scaling the CD-values by
             # linear interpolation
             factor = interpolate(x1, x2, y1, y2, opPoint)
 
             # calculate new target-value
-            CL_CD_new = round((CL_CD * factor) , CL_CD_decimals)
-            CD_new = opPoint / CL_CD_new
+            CD_new = CD * factor
 
             # set new target-value
             self.change_TargetValue(opPointNames[idx], CD_new)
@@ -483,42 +481,40 @@ class inputFile:
 
     def set_IntermediateOpPointTargetValues(self, targets, shifted_rootPolar,
                                            strakPolar, i):
-        # determine factors (CL/CD) for the main op-points
 
+        # shift the CD-values of the root-polar according to change in CD at the
+        # maxGlide-point
+        target_CD = round(targets["CD_maxGlide"][i], CD_decimals)
+        CD_shiftValue = target_CD - shifted_rootPolar.CD_maxGlide
+        shifted_rootPolar.shift_CD(CD_shiftValue)
+
+        # determine factors for the main op-points
         # CL_min
         CL_min_strak = targets["CL_min"][i]
         CD_min_strak = targets["CD_min"][i]
-        CL_CD_min_root = shifted_rootPolar.CL_min / shifted_rootPolar.CD_min
-        CL_CD_min_strak = CL_min_strak / CD_min_strak
-        factor_min = CL_CD_min_strak / CL_CD_min_root
+        CD_min_root = shifted_rootPolar.find_CD_From_CL(CL_min_strak)
+        factor_min = CD_min_strak / CD_min_root
 
         # maxGlide
         CL_maxGlide_strak = targets["CL_maxGlide"][i]
         CD_maxGlide_strak = targets["CD_maxGlide"][i]
-        CL_CD_maxGlide_root = shifted_rootPolar.CL_CD_maxGlide
-        CL_CD_maxGlide_strak = CL_maxGlide_strak / CD_maxGlide_strak
-        factor_maxGlide = CL_CD_maxGlide_strak / CL_CD_maxGlide_root
+        # factor for maxGlide is alway 1.0, because this correction in the polar
+        # was done by shifting the whole polar.
+        factor_maxGlide = 1.0
 
         # maxSpeed
         CL_maxSpeed_strak = targets["CL_maxSpeed"][i]
         CD_maxSpeed_strak = targets["CD_maxSpeed"][i]
-        CL_CD_maxSpeed_root = shifted_rootPolar.CL_CD_maxSpeed
-        CL_CD_maxSpeed_strak = CL_maxSpeed_strak / CD_maxSpeed_strak
-        factor_maxSpeed = CL_CD_maxSpeed_strak / CL_CD_maxSpeed_root
+        CD_strak = targets["CD_maxSpeed"][i]
+        CD_maxSpeed_root = shifted_rootPolar.find_CD_From_CL(CL_maxSpeed_strak)
+        factor_maxSpeed = CD_maxSpeed_strak / CD_maxSpeed_root
 
         # maxLift
         # get strak-polar-values (target-values)
         CL_pre_maxLift_strak = targets["CL_pre_maxLift"][i]
         CD_pre_maxLift_strak = targets["CD_pre_maxLift"][i]
-        CL_CD_pre_maxLift_strak = CL_pre_maxLift_strak / CD_pre_maxLift_strak
-
-        # get root-polar-values, set CL the same value as strak
-        CL_root = CL_pre_maxLift_strak
-        CD_root = shifted_rootPolar.find_CD_From_CL(CL_root)
-        CL_CD_root = CL_root / CD_root
-
-        # calculate factor now
-        factor_maxLift = CL_CD_pre_maxLift_strak / CL_CD_root
+        CD_pre_maxLift_root = shifted_rootPolar.find_CD_From_CL(CL_pre_maxLift_strak)
+        factor_maxLift = CD_pre_maxLift_strak / CD_pre_maxLift_root
 
         # get operating-conditions from dictionary
         operatingConditions = self.values["operating_conditions"]
@@ -1187,6 +1183,11 @@ class strakData:
             self.targets["CL_maxGlide"].append(target_CL_maxGlide)
             self.targets["CD_maxGlide"].append(target_CD_maxGlide)
             self.targets["CL_CD_maxGlide"].append(target_CL_CD_maxGlide)
+
+##            # now shift the CD-values
+##            CD_shiftValue = round(target_CD_maxGlide, CD_decimals) - rootPolar.CD_maxGlide
+##            shifted_root_polar.shift_CD(CD_shiftValue)
+
 
             #---------------------- maxLift-targets --------------------------
             # CL_CD values for pre_maxLift op-point for root- and strak-polar
@@ -2076,6 +2077,18 @@ class polarData:
 
         # return the polar
         return shiftedPolar
+
+
+    # all CD-values will be shifted by the given shiftValue.
+    # all CL_CD-values will be recalculated
+    def shift_CD(self, shiftValue):
+        # determine number of values
+        num = len(self.CD)
+
+        # now shift all CD-values, recalculate CL_CD
+        for i in range(num):
+            self.CD[i] = self.CD[i] + shiftValue
+            self.CL_CD[i] = self.CL[i] / self.CD[i]
 
 
     # determines the overall minimum CL-value of a given polar and some
@@ -3325,20 +3338,28 @@ if __name__ == "__main__":
         (rootfoilName+'.dat', params.airfoilFolder, rootfoilName+'.dat')
         os.system(systemString)
 
-    # generate polars of root-airfoil, also analyze
-    generate_Polars(params, workingDir, rootfoilName)
+    if (params.operatingMode == 'fromtargetpolar'):
+        ErrorMsg("Not implemented yet")
+        exit(-1)
+        # TODO implement
+        # read target-polars from file
+        # generate input-Files directly from target-polars
+        # (no) plotting option (?)
+    else:
+        # generate polars of root-airfoil, also analyze
+        generate_Polars(params, workingDir, rootfoilName)
 
-    # calculate target-values for the main op-points
-    params.calculate_MainTargetValues()
+        # calculate target-values for the main op-points
+        params.calculate_MainTargetValues()
 
-    # calculate the additional op-points
-    params.calculate_AdditionalOpPoints()
+        # calculate the additional op-points
+        params.calculate_AdditionalOpPoints()
 
-    # generate input-Files
-    generate_InputFiles(params)
+        # generate input-Files
+        generate_InputFiles(params)
 
-    # generate target polars and write to file
-    generate_TargetPolars(params, workingDir)
+        # generate target polars and write to file
+        generate_TargetPolars(params, workingDir)
 
     # generate Xoptfoil command-lines
     commandlines = generate_Commandlines(params)
