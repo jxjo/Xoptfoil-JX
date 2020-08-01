@@ -68,6 +68,8 @@ opt_point_style_root = 'y.'
 opt_point_style_strak = 'y-'
 ls_targetPolar = 'dotted'
 lw_targetPolar = 0.6
+ls_strakPolar = 'dashdot'
+lw_strakPolar  = 0.4
 
 ################################################################################
 #
@@ -1001,6 +1003,7 @@ class strakData:
         self.smoothSeedfoil = True
         self.smoothStrakFoils = False
         self.smoothMatchPolarFoil = True
+        self.plotStrakPolars= False
         self.ReNumbers = []
         self.additionalOpPoints = [[]]
         self.chordLengths = []
@@ -1014,6 +1017,7 @@ class strakData:
         self.merged_polars = []
         self.shifted_rootPolars = []
         self.target_polars = []
+        self.strak_polars = []
         self.inputFiles = []
         self.minCLGain = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
         self.maxGlideShift = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
@@ -1443,12 +1447,27 @@ class polarGraph:
                 x = targetPolar.CD
                 y = targetPolar.CL
 
-
             ax.plot(x, y, style, linestyle = ls_targetPolar,
                             linewidth = linewidth, label = label)
 
-
             ax.legend(loc='upper left', fontsize = fs_legend)
+
+        # plot strak-polars
+        if params.plotStrakPolars:
+            strakPolars = params.strak_polars
+            numPolars = len(strakPolars)
+
+            for i in range(numPolars):
+                # set style
+                style = "r-"
+                linewidth = lw_strakPolar
+                x = strakPolars[i].CD
+                y = strakPolars[i].CL
+
+                ax.plot(x, y, style, linestyle = ls_strakPolar,
+                                linewidth = lw_strakPolar, label = label)
+
+                ax.legend(loc='upper left', fontsize = fs_legend)
 
 
     # plots lift/alpha-polars (Xfoil-worker-polars and target-polars)
@@ -1693,6 +1712,23 @@ class polarGraph:
                 # plot
                 ax.plot(x, y, style, linestyle = ls_targetPolar,
                         linewidth = linewidth, label = label)
+
+        # plot strak-polars
+        if params.plotStrakPolars:
+            strakPolars = params.strak_polars
+            numPolars = len(strakPolars)
+
+            for i in range(numPolars):
+                # set style
+                style = "r-"
+
+                x = strakPolars[i].CL
+                y = strakPolars[i].CL_CD
+
+                ax.plot(x, y, style, linestyle = ls_strakPolar,
+                                linewidth = lw_strakPolar, label = label)
+
+                ax.legend(loc='upper left', fontsize = fs_legend)
 
 
     # draw the graph
@@ -2872,6 +2908,9 @@ def get_Parameters(dict):
 
     params.smoothMatchPolarFoil = get_booleanParameterFromDict(dict,
                              "smoothMatchPolarFoil", params.smoothMatchPolarFoil)
+
+    params.plotStrakPolars = get_booleanParameterFromDict(dict,
+                             "plotStrakPolars", params.plotStrakPolars)
     DoneMsg()
 
     # perform parameter-checks now
@@ -3148,6 +3187,24 @@ def generate_Polars(params, workingDir, rootfoilName):
     DoneMsg()
 
 
+def import_strakPolars(params):
+    for i in range(1, len(params.ReNumbers)-1):
+        # get name of the strak-airfoil
+        strakFoilName = get_FoilName(params, i)
+
+        # compose polar-dir of strak-airfoil-polars
+        polarDir = '.' + bs + strakFoilName.strip('.dat') + '_polars'
+        fileName = "merged_polar_%s.txt" % get_ReString(params.ReNumbers[i+1])
+        polarFileNameAndPath = polarDir + bs + fileName
+
+        try:
+            newPolar = polarData()
+            newPolar.import_FromFile(polarFileNameAndPath)
+            params.strak_polars.append(newPolar)
+        except:
+            pass
+
+
 def set_PolarDataFromInputFile(polarData, rootPolar, inputFile,
                               airfoilname, Re, idx):
     # set some variables in the polar-header
@@ -3361,6 +3418,9 @@ if __name__ == "__main__":
     else:
         # generate polars of root-airfoil, also analyze
         generate_Polars(params, workingDir, rootfoilName)
+
+        # import polars of strak-airfoils, if they exist
+        import_strakPolars(params)
 
         # calculate target-values for the main op-points
         params.calculate_MainTargetValues()
