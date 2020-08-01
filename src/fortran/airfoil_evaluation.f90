@@ -523,9 +523,16 @@ function aero_objective_function(designvars, include_penalty, evaluate_only_geom
 
     elseif (trim(optimization_type(i)) == 'target-drag') then
 
-! jx-mod Minimize difference between target cd value and current value 
+! Minimize difference between target cd value and current value 
     
       increment = (target_value(i) + ABS (target_value(i)-drag(i))) * scale_factor(i)
+      cur_value = drag(i) 
+
+    elseif (trim(optimization_type(i)) == 'target-max-drag') then
+
+! try to reach at least maximum drag defined in target value 
+    
+      increment = (target_value(i) + max(target_value(i),drag(i)) - target_value(i)) * scale_factor(i)
       cur_value = drag(i) 
 
     elseif (trim(optimization_type(i)) == 'target-lift') then

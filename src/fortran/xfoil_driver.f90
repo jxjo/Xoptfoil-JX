@@ -235,7 +235,7 @@ subroutine run_xfoil(foil, geom_options, operating_points, op_modes,           &
   double precision :: newpoint
 
 
-  if (xfoil_options%show_details) write (*,'(31x)',advance = 'no') 
+  if (xfoil_options%show_details) write (*,'(22x,A)',advance = 'no') 'Xfoil    '
 
 ! Check to make sure xfoil is initialized
 

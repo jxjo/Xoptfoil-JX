@@ -300,8 +300,9 @@ subroutine check_seed()
            (trim(opt_type) /= 'max-xtr') .and.                                 &
             ! jx-mod - allow geo target and min-lift-slope, min-glide-slope
            (trim(opt_type) /= 'target-drag') .and.                             &
+           (trim(opt_type) /= 'target-max-drag') .and.                            &
            (trim(opt_type) /= 'min-lift-slope') .and.                          &
-           (trim(opt_type) /= 'min-glide-slope') .and.                          &
+           (trim(opt_type) /= 'min-glide-slope') .and.                         &
            (trim(opt_type) /= 'max-lift-slope') ) then
         write(*,*) "Error: operating point "//trim(text)//" is at Cl = 0. "//  &
                  "Cannot use '"//trim(opt_type)//"' optimization in this case."
@@ -472,14 +473,20 @@ subroutine check_seed()
       checkval   = drag(i)
       seed_value = drag(i) 
 
-    ! jx-mod New op point type 'target-....'
+    ! Op point type 'target-....'
     !      - minimize the difference between current value and target value
     !      - target_value negative?  --> take current seed value * |target_value| 
 
     elseif (trim(optimization_type(i)) == 'target-drag') then
       if (target_value(i) < 0.d0) target_value(i) = drag(i) * abs(target_value(i))
-      ! add a base value to the drag difference so the relative change won't be to high
+ 
       checkval   = target_value(i) + ABS (target_value(i)-drag(i))
+      seed_value = drag(i)
+
+    elseif (trim(optimization_type(i)) == 'target-max-drag') then
+      if (target_value(i) < 0.d0) target_value(i) = drag(i) * abs(target_value(i))
+
+      checkval = max(target_value(i),drag(i))
       seed_value = drag(i)
 
     elseif (trim(optimization_type(i)) == 'target-lift') then

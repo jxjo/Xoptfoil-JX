@@ -1013,6 +1013,7 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
 !                       min-lift-slope, min-glide-slope, target-lift
       trim(optimization_type(i)) /= 'target-moment' .and.                      &
       trim(optimization_type(i)) /= 'target-drag' .and.                        &
+      trim(optimization_type(i)) /= 'target-max-drag' .and.                    &
       trim(optimization_type(i)) /= 'target-lift' .and.                        &
       trim(optimization_type(i)) /= 'max-xtr' .and.                            &
       trim(optimization_type(i)) /= 'min-lift-slope' .and.                     &
@@ -1021,7 +1022,7 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
       call my_stop("optimization_type must be 'min-drag', 'max-glide', "//     &
                    "'min-sink', 'max-lift', 'max-xtr', 'target-moment', "//    &
                    "'target-drag', 'min-lift-slope', , 'min-glide-slope',"//   &
-                   "'target-drag' or 'max-lift-slope'.")
+                   "'target-max-drag' or 'max-lift-slope'.")
     if ((trim(optimization_type(i)) == 'max-lift-slope') .and. (noppoint == 1))&
       call my_stop("at least two operating points are required for to "//      &
                    "maximize lift curve slope.")
@@ -1045,6 +1046,10 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
         (target_value(i)) == -1.d3) )                                         &
       call my_stop("No 'target-value' defined for "//  &
                      "for optimization_type 'target-drag'")
+    if (((trim(optimization_type(i)) == 'target-max-drag') .and.                 &
+        (target_value(i)) == -1.d3) )                                         &
+      call my_stop("No 'target-value' defined for "//  &
+                    "for optimization_type 'maximum-drag'")
     if (((trim(optimization_type(i)) == 'target-lift') .and.                  &
         (target_value(i)) == -1.d3) )                                         &
       call my_stop("No 'target-value' defined for "//  &
