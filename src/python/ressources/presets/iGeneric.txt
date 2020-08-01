@@ -2,7 +2,7 @@
   search_type      = 'global'
   global_search    = 'particle_swarm'
   seed_airfoil     = 'from_file'
-  shape_functions  = 'camb-thick-plus'
+  shape_functions  = 'camb-thick'
   initial_perturb  = 0.01
   write_designs    = .true.
   show_details     = .false.
@@ -24,7 +24,7 @@
 
 &particle_swarm_options
   pso_pop         = 40
-  pso_tol         = 0.0005  
+  pso_tol         = 0.00015  
   pso_convergence_profile = 'quick_camb_thick'
   pso_maxit       = 140
 /

@@ -24,13 +24,8 @@ def getArguments():
     args = parser.parse_args()
     return (args.input, args.output)
 
-def main():
-    # get command-line-arguments
-    (old, new) = getArguments()
 
-   #old = 'ressources\\rg15.dat' #debug
-   #new = 'ressources\\new.dat' #debug
-
+def change_airfoilName(old, new):
     oldfile = open(old, 'r')
     oldfile_content = oldfile.readlines()
     oldfile.close()
@@ -57,6 +52,14 @@ def main():
             i = i+1
 
     newfile.close()
+
+
+def main():
+    # get command-line-arguments
+    (old, new) = getArguments()
+    change_airfoilName(old, new)
+
+
 
 
 
