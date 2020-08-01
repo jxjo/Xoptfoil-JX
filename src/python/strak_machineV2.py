@@ -69,9 +69,6 @@ opt_point_style_strak = 'y-'
 ls_targetPolar = 'dotted'
 lw_targetPolar = 0.6
 
-# switch on unstretching the aerea after maxGlide (keep aerea stretched)
-unstretch = True
-
 ################################################################################
 #
 # install missing packages
@@ -112,11 +109,16 @@ def DoneMsg():
 #
 ################################################################################
 
+# function that rounds Re and returns a rounded decimal number
+def round_Re(Re):
+    floatRe = Re/1000.0
+    decRe = round(floatRe, 0)
+    return int(decRe)
+
+
 # transform reynolds-number into a string e.g. Re = 123500 -> string = 124k
 def get_ReString(Re):
-    floatRe = (Re/1000.0)
-    decRe = round(floatRe, 0)
-    return ("%03dk" % decRe)
+    return ("%03dk" % round_Re(Re))
 
 
 # helper-function to perform a linear-interpolation
@@ -1337,6 +1339,8 @@ class polarGraph:
         ax.set_ylim(min(rootPolar.CL) - 0.2, max(rootPolar.CL) + 0.2)
 
         # determine some text-offsets
+        CL0TextOffset_x = polars[0].find_CD_From_CL(0.0) * 1.1
+        CL0TextOffset_y = 0
         maxSpeedTextOffset_x = polars[0].CD_maxSpeed * 1.1
         maxSpeedTextOffset_y = rootPolar.CL_maxSpeed
         maxGlideTextOffset_x = polars[0].find_CD_From_CL(rootPolar.CL_maxGlide) * 1.1
@@ -1380,8 +1384,9 @@ class polarGraph:
 
             # additonal text for root polar only
             if (polar == rootPolar):
-                ax.annotate('CL=0 (root) @ CL = %.2f, CD = %.4f' % (y,x), xy=(x,y),
-                  xytext=(20,0), textcoords='offset points',
+                ax.annotate('CL=0 (root) @ CD = %.4f' % x, xy=(x,y),
+                  xytext=(CL0TextOffset_x, CL0TextOffset_y),
+                  textcoords='data',
                   fontsize = fs_infotext, color=cl_infotext)
 
             # plot max_speed
@@ -1503,7 +1508,7 @@ class polarGraph:
 
             # additonal text for root polar only
             if (polar == rootPolar):
-                ax.annotate('CL=0 (root) @ alpha = %.2f, CL = %.2f' % (x,y),
+                ax.annotate('CL=0 (root) @ alpha = %.2f' % x,
                   xy=(x,y), xytext=(20,-5), textcoords='offset points',
                   fontsize = fs_infotext, color=cl_infotext)
 
@@ -1621,8 +1626,7 @@ class polarGraph:
 
             # additonal text for root polar only
             if (polar == rootPolar):
-                ax.annotate('CL=0 (root) @ CL = %.2f, CL/CD = %.2f' %\
-                 (x,y), xy=(x,y),
+                ax.annotate('CL=0 (root) @ CL/CD = %.2f' % y, xy=(x,y),
                   xytext=(20,-5), textcoords='offset points',
                   fontsize = fs_infotext, color=cl_infotext)
 
@@ -2016,9 +2020,6 @@ class polarData:
         # analyze streched-polar, determine max-lift
         shiftedPolar.analyze(params)
 
-        if unstretch == False:
-            return shiftedPolar
-
         # determine factor to correct aerea between max-glide and maxLift,
         # so max-lift has the same value than before stretching
         maxLift_factor = self.CL_maxLift / shiftedPolar.CL_maxLift
@@ -2331,7 +2332,50 @@ def get_NumberOfAirfoils(params):
 
 
 ################################################################################
-# function that generates commandlines to run Xoptfoil
+# function that generates commandlines to create and merge polars
+def generate_polarCreationCommandLines(commandlines, params, strakFoilName, maxRe, Re):
+
+    polarDir = strakFoilName.strip('.dat') + '_polars'
+
+    polarFileName_T1 = "T1_Re0.%03d_M0.00_N9.0.txt" % round_Re(maxRe)
+    polarFileNameAndPath_T1 = polarDir + bs + polarFileName_T1
+
+    polarFileName_T2 = "T2_Re0.%03d_M0.00_N9.0.txt" % round_Re(Re)
+    polarFileNameAndPath_T2 = polarDir + bs + polarFileName_T2
+
+    mergedPolarFileName =  polarDir + bs +\
+                 ('merged_polar_%s.txt' % get_ReString(Re))
+
+    # T1-polar
+    inputFilename = get_PresetInputFileName('iPolars_T1', params)
+    commandline = "xfoil_worker.exe -i \"%s\" -a \"%s\" -w polar -o \"%s\" -r %d\n" %\
+                             (inputFilename, strakFoilName,
+                              strakFoilName.strip('.dat'), maxRe)
+    commandlines.append(commandline)
+
+    # T2-polar
+    inputFilename = get_PresetInputFileName('iPolars_T2', params)
+    commandline = "xfoil_worker.exe -i \"%s\" -a \"%s\" -w polar -o \"%s\" -r %d\n" %\
+                             (inputFilename, strakFoilName,
+                              strakFoilName.strip('.dat'), Re)
+    commandlines.append(commandline)
+
+    # merge polars
+    if (params.scriptsAsExe):
+        scriptName = "strak_machineV2.exe"
+    else:
+        scriptName = "strak_machineV2.py"# __file__
+
+    commandline = scriptName + " -w merge -p1 \"%s\"  -p2 \"%s\""\
+                 " -m \"%s\" -c %f\n" %\
+              (polarFileNameAndPath_T1, polarFileNameAndPath_T2,
+               mergedPolarFileName, params.CL_switchpoint_Type2_Type1_polar)
+    commandlines.append(commandline)
+
+
+################################################################################
+# function that generates commandlines to run Xoptfoil, create and merge polars
+# etc.
 def generate_Commandlines(params):
     print("Generating commandlines...")
 
@@ -2378,6 +2422,8 @@ def generate_Commandlines(params):
                           strakFoilName.strip('.dat'))
         commandLines.append(commandline)
 
+        # check wheather the strak-airfoils shall be smoothed after their
+        # creation
         if (params.smoothStrakFoils):
             # smooth the airfoil
             inputFilename = get_PresetInputFileName('Smooth', params)
@@ -2387,46 +2433,59 @@ def generate_Commandlines(params):
                        (inputFilename, strakFoilName, strakFoilName.strip('.dat'))
             commandLines.append(commandline)
 
-        # generate polars
-        polarDir = strakFoilName.strip('.dat') + '_polars'
+        # create T1 / T2 / merged polars for the specified Re-numbers of the
+        # generated strak-airfoil
+        generate_polarCreationCommandLines(commandLines, params, strakFoilName,
+                                           maxReList[i], ReList[i])
 
-        floatRe = maxReList[i]/1000.0
-        decRe = round(floatRe, 0)
-        polarFileName_T1 = "T1_Re0.%03d_M0.00_N9.0.txt" % decRe
-        polarFileNameAndPath_T1 = polarDir + bs + polarFileName_T1
+        if ((i<numFoils-1)):
+            # if not being the last strak-airfoil, also create T1 / T2 / merged
+            # polars for the Re-numbers that were specified for the next
+            # strak-airfoil, to have a kind of "benchmark" or at least
+            # orientation for the next strak-airfoil
+            generate_polarCreationCommandLines(commandLines, params, strakFoilName,
+                                               maxReList[i+1], ReList[i+1])
 
-        floatRe = ReList[i]/1000.0
-        decRe = round(floatRe, 0)
-        polarFileName_T2 = "T2_Re0.%03d_M0.00_N9.0.txt" % decRe
-        polarFileNameAndPath_T2 = polarDir + bs + polarFileName_T2
-
-        mergedPolarFileName =  polarDir + bs +\
-                     ('merged_polar_%s.txt' % get_ReString(ReList[i]))
-
-        # T1-polar
-        inputFilename = get_PresetInputFileName('iPolars_T1', params)
-        commandline = "xfoil_worker.exe -i \"%s\" -a \"%s\" -w polar -o \"%s\" -r %d\n" %\
-                                 (inputFilename, strakFoilName,
-                                  strakFoilName.strip('.dat'), maxReList[i])
-        commandLines.append(commandline)
-
-        # T2-polar
-        inputFilename = get_PresetInputFileName('iPolars_T2', params)
-        commandline = "xfoil_worker.exe -i \"%s\" -a \"%s\" -w polar -o \"%s\" -r %d\n" %\
-                                 (inputFilename, strakFoilName,
-                                  strakFoilName.strip('.dat'), ReList[i])
-        commandLines.append(commandline)
-
-        # merge polars
-        if (params.scriptsAsExe):
-            scriptName = "strak_machineV2.exe"
-        else:
-            scriptName = "strak_machineV2.py"# __file__
-        commandline = scriptName + " -w merge -p1 \"%s\"  -p2 \"%s\""\
-                     " -m \"%s\" -c %f\n" %\
-                  (polarFileNameAndPath_T1, polarFileNameAndPath_T2,
-                   mergedPolarFileName, params.CL_switchpoint_Type2_Type1_polar)
-        commandLines.append(commandline)
+## TODO remove, if the new function was testet
+##        polarDir = strakFoilName.strip('.dat') + '_polars'
+##
+##        floatRe = maxReList[i]/1000.0
+##        decRe = round(floatRe, 0)
+##        polarFileName_T1 = "T1_Re0.%03d_M0.00_N9.0.txt" % decRe
+##        polarFileNameAndPath_T1 = polarDir + bs + polarFileName_T1
+##
+##        floatRe = ReList[i]/1000.0
+##        decRe = round(floatRe, 0)
+##        polarFileName_T2 = "T2_Re0.%03d_M0.00_N9.0.txt" % decRe
+##        polarFileNameAndPath_T2 = polarDir + bs + polarFileName_T2
+##
+##        mergedPolarFileName =  polarDir + bs +\
+##                     ('merged_polar_%s.txt' % get_ReString(ReList[i]))
+##
+##        # T1-polar
+##        inputFilename = get_PresetInputFileName('iPolars_T1', params)
+##        commandline = "xfoil_worker.exe -i \"%s\" -a \"%s\" -w polar -o \"%s\" -r %d\n" %\
+##                                 (inputFilename, strakFoilName,
+##                                  strakFoilName.strip('.dat'), maxReList[i])
+##        commandLines.append(commandline)
+##
+##        # T2-polar
+##        inputFilename = get_PresetInputFileName('iPolars_T2', params)
+##        commandline = "xfoil_worker.exe -i \"%s\" -a \"%s\" -w polar -o \"%s\" -r %d\n" %\
+##                                 (inputFilename, strakFoilName,
+##                                  strakFoilName.strip('.dat'), ReList[i])
+##        commandLines.append(commandline)
+##
+##        # merge polars
+##        if (params.scriptsAsExe):
+##            scriptName = "strak_machineV2.exe"
+##        else:
+##            scriptName = "strak_machineV2.py"# __file__
+##        commandline = scriptName + " -w merge -p1 \"%s\"  -p2 \"%s\""\
+##                     " -m \"%s\" -c %f\n" %\
+##                  (polarFileNameAndPath_T1, polarFileNameAndPath_T2,
+##                   mergedPolarFileName, params.CL_switchpoint_Type2_Type1_polar)
+##        commandLines.append(commandline)
 
         # copy strak-airfoil to airfoil-folder
         commandline = ("copy %s %s" + bs +"%s\n\n") % \
@@ -2458,6 +2517,7 @@ def generate_Batchfile(batchFileName, commandlines):
     # close the outputfile
     outputfile.close()
 
+
 ################################################################################
 # function that gets commandlines to generate one strak-airfoil
 def get_strak_commandlines(params, commandlines, idx):
@@ -2469,7 +2529,9 @@ def get_strak_commandlines(params, commandlines, idx):
     start = False
 
     for line_idx in range(len(commandlines)):
-        if (commandlines[line_idx].find(Re)>=0):
+        # determine start-line
+        if ((commandlines[line_idx].find(Re)>=0) and
+            (commandlines[line_idx].find( 'xoptfoil')>=0)):
             start = True
 
         if (start and (commandlines[line_idx].find('copy')>=0)):
@@ -2513,6 +2575,9 @@ def generate_StrakBatchfiles(params, commandlines):
         outputfile.close()
 
 
+################################################################################
+# function that generates a batchfile to start the visualizer for one
+# strak airfoil
 def generate_VisuBatchfiles(params):
    # determine start-index
     if (params.operatingMode == 'matchpolarfoils'):
@@ -2541,6 +2606,7 @@ def generate_VisuBatchfiles(params):
 
         # close the outputfile
         outputfile.close()
+
 
 ################################################################################
 # function that gets the name of the strak-machine-data-file
@@ -2704,7 +2770,7 @@ def check_operatingMode(params, dict):
 
         WarningMsg('operatingMode = \'%s\' is not valid, setting operatingMode'\
         ' to \'default\'' % params.operatingMode)
-        params.operatingMode = 'constant'
+        params.operatingMode = 'default'
 
     # get matchpolarfoilname only if operating-mode is set to "matchpolarfoils"
     if (params.operatingMode == 'matchpolarfoils'):
@@ -2992,16 +3058,12 @@ def generate_Polars(params, workingDir, rootfoilName):
         maxRe = params.maxReNumbers[ReIdx]
 
         # create polar-file-Name T1-polar from maxRe-Number
-        floatRe = maxRe/1000.0
-        decRe = round(floatRe, 0)
-        polarFileName_T1 = "T1_Re0.%03d_M0.00_N9.0.txt" % decRe
+        polarFileName_T1 = "T1_Re0.%03d_M0.00_N9.0.txt" % round_Re(maxRe)
         polarFileNameAndPath_T1 = polarDir + bs + polarFileName_T1
         params.polarFileNames_T1.append(polarFileNameAndPath_T1)
 
         # create polar-file-Name T2-polar from Re-Number
-        floatRe = Re/1000.0
-        decRe = round(floatRe, 0)
-        polarFileName_T2 = "T2_Re0.%03d_M0.00_N9.0.txt" % decRe
+        polarFileName_T2 = "T2_Re0.%03d_M0.00_N9.0.txt" % round_Re(Re)
         polarFileNameAndPath_T2 = polarDir + bs + polarFileName_T2
         params.polarFileNames_T2.append(polarFileNameAndPath_T2)
 
@@ -3077,18 +3139,11 @@ def generate_Polars(params, workingDir, rootfoilName):
         # shift the max-glide-point now, create a new polar
         shiftedPolar = rootPolar.get_shiftedPolar(shiftValue, params)
 
-## Debug
-##        # write shifted polar to file
-##        polarFileNameAndPath = polarDir + bs + ('shifted_polar_%3s_%d.txt' %\
-##                              (get_ReString(rootPolar.Re), ReIdx))
-##        shiftedPolar.write_ToFile(polarFileNameAndPath)
-
         # also update values like maxSpeed, maxGlide etc.
         shiftedPolar.analyze(params)
 
         # append the new, shifted root-polar to params
         params.shifted_rootPolars.append(shiftedPolar)
-
 
     DoneMsg()
 
