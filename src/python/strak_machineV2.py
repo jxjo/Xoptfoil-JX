@@ -1003,7 +1003,7 @@ class strakData:
         self.smoothSeedfoil = True
         self.smoothStrakFoils = False
         self.smoothMatchPolarFoil = True
-        self.plotStrakPolars= False
+        self.plotStrakPolars = True
         self.ReNumbers = []
         self.additionalOpPoints = [[]]
         self.chordLengths = []
@@ -1464,6 +1464,13 @@ class polarGraph:
                 x = strakPolars[i].CD
                 y = strakPolars[i].CL
 
+                # set label only for one of the strak-polars tp avoid multiple
+                # labels that are all the same
+                if (i == 0):
+                    label = 'polar of previous strak-airfoil'
+                else:
+                    label = None
+
                 ax.plot(x, y, style, linestyle = ls_strakPolar,
                                 linewidth = lw_strakPolar, label = label)
 
@@ -1724,6 +1731,13 @@ class polarGraph:
 
                 x = strakPolars[i].CL
                 y = strakPolars[i].CL_CD
+
+                # set label only for one of the strak-polars tp avoid multiple
+                # labels that are all the same
+                if (i == 0):
+                    label = 'polar of previous strak-airfoil'
+                else:
+                    label = None
 
                 ax.plot(x, y, style, linestyle = ls_strakPolar,
                                 linewidth = lw_strakPolar, label = label)
