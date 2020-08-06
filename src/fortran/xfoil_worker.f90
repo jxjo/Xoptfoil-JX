@@ -22,6 +22,7 @@ program xfoil_worker
 
   use vardef,             only : airfoil_type
   use memory_util,        only : deallocate_airfoil
+  use os_util,            only:  print_error
   use airfoil_operations, only : load_airfoil, my_stop, airfoil_write
   use xfoil_driver,       only : xfoil_init, xfoil_cleanup 
   use xfoil_driver,       only : xfoil_set_airfoil, xfoil_reload_airfoil
@@ -103,6 +104,8 @@ program xfoil_worker
 
     case default
 
+      write (*,*)
+      call print_error ("Unknown action '"//trim(action)//"' defined for paramter '-w'")
       call print_worker_usage()
 
   end select 
@@ -463,7 +466,7 @@ subroutine print_worker_usage()
   write(*,'(A)')
   write(*,'(A)') "Usage: Xfoil_worker -w worker_action [Options]"
   write(*,'(A)')
-  write(*,'(A)') "  -w polars         Generate polars of 'airfoil_file'"
+  write(*,'(A)') "  -w polar          Generate polars of 'airfoil_file'"
   write(*,'(A)') "  -w norm           Repanel, normalize 'airfoil_file'"
   write(*,'(A)') "  -w smooth         Repanel, normalize, smooth 'airfoil_file'"
   write(*,'(A)') "  -w flap           Set flap of 'airfoil_file'"
