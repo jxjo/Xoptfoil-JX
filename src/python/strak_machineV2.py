@@ -837,20 +837,35 @@ class inputFile:
         #self.print_OpPoints()#Debug
 
     def insert_alpha_CL0_oppoint(self, params, strakPolar, i):
+        # get maxRe of root
+        maxRe_root = params.maxReNumbers[0]
+
+        # TODO, is it necessary to check the Re-Factor?
+        # check the change in Re-numbers between root- and strak-airfoil
+        ReFactor = 1.0#float(strakPolar.maxRe)/ float(maxRe_root)
+
+        # if Re of strak-airfoil is less than 0.5 times Re of root-airfoil
+        # do not insert alpha@CL=0 - target, as this most probably cannot be
+        # achieved by the optimizer
+        if (ReFactor < 0.5):
+            NoteMsg("Re-number of strak-airfoil is %.1f times smaller than "
+             "Re-number of root-airfoil, alpha_CL0-target will be skipped"\
+              % ReFactor)
+        else:
         # get alpha@CL=0 - target
-        alpha = round(params.targets["alpha_CL0"][i], AL_decimals)
+            alpha = round(params.targets["alpha_CL0"][i], AL_decimals)
 
-        # set weighting to 2 times maxWeight
-        weighting = 2*params.maxWeight
+            # set weighting to 2 times maxWeight
+            weighting = 2*params.maxWeight
 
-        # limit to maxRe
-        reynolds = strakPolar.maxRe
+            # limit to maxRe
+            reynolds = strakPolar.maxRe
 
-        # insert op-Point, get index
-        idx = self.insert_OpPoint('alpha_CL0', 'spec-al', alpha, 'target-lift',
-                                     0.0, weighting, reynolds)
+            # insert op-Point, get index
+            idx = self.insert_OpPoint('alpha_CL0', 'spec-al', alpha, 'target-lift',
+                                         0.0, weighting, reynolds)
 
-        print (idx)#Debug
+            #print (idx)#Debug
 
 
     # All op-points between start and end shall be distributed equally.
@@ -1000,6 +1015,7 @@ class strakData:
         self.useAlwaysRootfoil = False
         self.showTargetPolars = True
         self.adaptInitialPerturb = False
+        self.useTipAirfoilWorkaround = False
         self.smoothSeedfoil = True
         self.smoothStrakFoils = False
         self.smoothMatchPolarFoil = True
@@ -1082,7 +1098,7 @@ class strakData:
 
         # calculate list of max Re-numbers
         for Re in self.ReNumbers:
-            ReMax = Re * self.maxReFactor
+            ReMax = int(round(Re * self.maxReFactor, 0))
             self.maxReNumbers.append(ReMax)
 
         # calculate Cl where polar-generation is going to switch from
@@ -2457,8 +2473,12 @@ def generate_Commandlines(params):
     for i in range (firstIdx, numFoils):
 
         if (params.useAlwaysRootfoil == False):
-            # store previous airfoil-name
-            previousFoilname = strakFoilName
+            # Workaround for non-feasible-Designs at tip-airfoil:
+            # do not use previous airfoil, but airfoil even before
+            # the previous airfoil
+            if not (params.useTipAirfoilWorkaround and (i == numFoils-1)):
+                # store previous airfoil-name
+                previousFoilname = strakFoilName
 
         # get name of the airfoil
         strakFoilName = get_FoilName(params, i)
@@ -2910,6 +2930,9 @@ def get_Parameters(dict):
 
     params.adaptInitialPerturb = get_booleanParameterFromDict(dict,
                              "adaptInitialPerturb", params.adaptInitialPerturb)
+
+    params.useTipAirfoilWorkaround = get_booleanParameterFromDict(dict,
+                    "useTipAirfoilWorkaround", params.useTipAirfoilWorkaround)
 
     params.showTargetPolars = get_booleanParameterFromDict(dict,
                              "showTargetPolars", params.showTargetPolars)
