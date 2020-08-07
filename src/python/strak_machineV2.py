@@ -1015,9 +1015,8 @@ class strakData:
         self.useAlwaysRootfoil = False
         self.showTargetPolars = True
         self.adaptInitialPerturb = False
-        self.useTipAirfoilWorkaround = False
         self.smoothSeedfoil = True
-        self.smoothStrakFoils = False
+        self.smoothStrakFoils = True
         self.smoothMatchPolarFoil = True
         self.plotStrakPolars = True
         self.ReNumbers = []
@@ -2473,12 +2472,8 @@ def generate_Commandlines(params):
     for i in range (firstIdx, numFoils):
 
         if (params.useAlwaysRootfoil == False):
-            # Workaround for non-feasible-Designs at tip-airfoil:
-            # do not use previous airfoil, but airfoil even before
-            # the previous airfoil
-            if not (params.useTipAirfoilWorkaround and (i == numFoils-1)):
-                # store previous airfoil-name
-                previousFoilname = strakFoilName
+            # store previous airfoil-name
+            previousFoilname = strakFoilName
 
         # get name of the airfoil
         strakFoilName = get_FoilName(params, i)
@@ -2930,9 +2925,6 @@ def get_Parameters(dict):
 
     params.adaptInitialPerturb = get_booleanParameterFromDict(dict,
                              "adaptInitialPerturb", params.adaptInitialPerturb)
-
-    params.useTipAirfoilWorkaround = get_booleanParameterFromDict(dict,
-                    "useTipAirfoilWorkaround", params.useTipAirfoilWorkaround)
 
     params.showTargetPolars = get_booleanParameterFromDict(dict,
                              "showTargetPolars", params.showTargetPolars)
