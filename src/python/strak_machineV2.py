@@ -2772,7 +2772,7 @@ def get_booleanParameterListFromDict(dict, key, default):
                 valueList.append(False)
     except:
         NoteMsg('parameter \'%s\' not specified, using' \
-        ' default-value \'%s\'' % (key, str(value)))
+        ' default-value \'%s\'' % (key, str(default[0])))
         valueList = default
 
     return valueList
