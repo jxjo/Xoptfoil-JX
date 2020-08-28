@@ -233,6 +233,9 @@ subroutine read_polar_inputs  (input_file, foil_name, npolars, polars, xfoil_opt
   if (( op_point_range(1) + op_point_range(3)) >= op_point_range(2) ) then 
     call my_stop ("Start of polar op_point_range + increment should be end of op_point_range.")
   end if
+  if (polar_reynolds(1) == 0d0) then 
+    call my_stop ("No Reynolds number found - either in input file nor as command line parameter.")
+  end if
 
 ! Put xfoil options into derived types
 
