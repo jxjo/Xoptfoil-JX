@@ -147,6 +147,7 @@ def get_PresetInputFileName(xoptfoilTemplate, params):
     for path in searchPaths:
         try:
             fileList = get_ListOfFiles(path)
+
             # search the whole list of files for the desired template-file
             for name in fileList:
                 if name.find(xoptfoilTemplate) >= 0:
@@ -439,10 +440,13 @@ class inputFile:
             idx = idx + 1
 
 
-    def set_InitialPerturb(self, ReDiff):
+    def set_InitialPerturb(self, Re, ReDiff, ReFactor):
         ReDiffList =  [(150000/5), 150000]
         perturbList = [(0.01/5), 0.01]
         pso_tolList = [(0.0015/5), 0.0015]
+        #ReFactorList =  [0.67, 0.95] #TODO
+        #perturbList = [(0.01/5), 0.0005]
+        #pso_tolList = [(0.0015/5), 0.0015]
 
         # calculate corresponding perturb
         perturb = np.interp(ReDiff, ReDiffList, perturbList)
@@ -1019,6 +1023,7 @@ class strakData:
         self.target_polars = []
         self.strak_polars = []
         self.inputFiles = []
+        self.optimizeAlphaCl0 = [False, False, False, False, False, False, False, False, False, False, False, False]
         self.minCLGain = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
         self.maxGlideShift = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
         self.maxGlideGain = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
@@ -2496,47 +2501,6 @@ def generate_Commandlines(params):
             generate_polarCreationCommandLines(commandLines, params, strakFoilName,
                                                maxReList[i+1], ReList[i+1])
 
-## TODO remove, if the new function was testet
-##        polarDir = strakFoilName.strip('.dat') + '_polars'
-##
-##        floatRe = maxReList[i]/1000.0
-##        decRe = round(floatRe, 0)
-##        polarFileName_T1 = "T1_Re0.%03d_M0.00_N9.0.txt" % decRe
-##        polarFileNameAndPath_T1 = polarDir + bs + polarFileName_T1
-##
-##        floatRe = ReList[i]/1000.0
-##        decRe = round(floatRe, 0)
-##        polarFileName_T2 = "T2_Re0.%03d_M0.00_N9.0.txt" % decRe
-##        polarFileNameAndPath_T2 = polarDir + bs + polarFileName_T2
-##
-##        mergedPolarFileName =  polarDir + bs +\
-##                     ('merged_polar_%s.txt' % get_ReString(ReList[i]))
-##
-##        # T1-polar
-##        inputFilename = get_PresetInputFileName('iPolars_T1', params)
-##        commandline = "xfoil_worker.exe -i \"%s\" -a \"%s\" -w polar -o \"%s\" -r %d\n" %\
-##                                 (inputFilename, strakFoilName,
-##                                  strakFoilName.strip('.dat'), maxReList[i])
-##        commandLines.append(commandline)
-##
-##        # T2-polar
-##        inputFilename = get_PresetInputFileName('iPolars_T2', params)
-##        commandline = "xfoil_worker.exe -i \"%s\" -a \"%s\" -w polar -o \"%s\" -r %d\n" %\
-##                                 (inputFilename, strakFoilName,
-##                                  strakFoilName.strip('.dat'), ReList[i])
-##        commandLines.append(commandline)
-##
-##        # merge polars
-##        if (params.scriptsAsExe):
-##            scriptName = "strak_machineV2.exe"
-##        else:
-##            scriptName = "strak_machineV2.py"# __file__
-##        commandline = scriptName + " -w merge -p1 \"%s\"  -p2 \"%s\""\
-##                     " -m \"%s\" -c %f\n" %\
-##                  (polarFileNameAndPath_T1, polarFileNameAndPath_T2,
-##                   mergedPolarFileName, params.CL_switchpoint_Type2_Type1_polar)
-##        commandLines.append(commandline)
-
         # copy strak-airfoil to airfoil-folder
         commandline = ("copy %s %s" + bs +"%s\n\n") % \
             (strakFoilName , params.airfoilFolder, strakFoilName)
@@ -2779,6 +2743,25 @@ def get_booleanParameterFromDict(dict, key, default):
         ' default-value \'%s\'' % (key, str(value)))
     return value
 
+################################################################################
+# function that gets a single boolean parameter from dictionary and returns a
+#  default value in case of error
+def get_booleanParameterListFromDict(dict, key, default):
+    valueList = []
+    try:
+        stringList = dict[key]
+        for string in stringList:
+            if (string == 'true'):
+                valueList.append(True)
+            else:
+                valueList.append(False)
+    except:
+        NoteMsg('parameter \'%s\' not specified, using' \
+        ' default-value \'%s\'' % (key, str(value)))
+        valueList = default
+
+    return valueList
+
 
 ################################################################################
 # function that gets a single mandatory parameter from dictionary and exits, if
@@ -2902,6 +2885,9 @@ def get_Parameters(dict):
                                                    params.additionalOpPoints[0])
 
      # get optional boolean parameters
+    params.optimizeAlphaCl0 = get_booleanParameterListFromDict(dict,
+                             "optimizeAlphaCl0", params.optimizeAlphaCl0)
+
     params.scriptsAsExe = get_booleanParameterFromDict(dict,
                              "scriptsAsExe", params.scriptsAsExe)
 
@@ -3075,19 +3061,23 @@ def generate_InputFiles(params):
         newFile.adapt_ReNumbers(strakPolar)
 
         # insert oppoint for alpha @ CL = 0
-        newFile.insert_alpha_CL0_oppoint(params, strakPolar,i )
+        if params.optimizeAlphaCl0[i]:
+            newFile.insert_alpha_CL0_oppoint(params, strakPolar,i)
 
         if params.adaptInitialPerturb:
             # also adapt the initial perturb according to the change in
             # Re-number
             if (params.useAlwaysRootfoil):
-                # difference always calculated to Re-number of root-airfoil
+                # difference calculated to Re-number of root-airfoil
                 ReDiff = params.ReNumbers[0] - params.ReNumbers[i]
+                # factor caclulated to Re-number of root-airfoil
+                ReFactor = params.ReNumbers[i] / params.ReNumbers[0]
             else:
                 # difference calculated to Re-number of previous-airfoil
                 ReDiff = params.ReNumbers[i-1] - params.ReNumbers[i]
+                ReFactor = params.ReNumbers[i] / params.ReNumbers[i-1]
 
-            newFile.set_InitialPerturb(ReDiff)
+            newFile.set_InitialPerturb(params.ReNumbers[i], ReDiff, ReFactor)
 
         # physically create the file
         newFile.write_ToFile(params.inputFileNames[i])
