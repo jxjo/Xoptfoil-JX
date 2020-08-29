@@ -1049,7 +1049,7 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
     if (((trim(optimization_type(i)) == 'target-max-drag') .and.                 &
         (target_value(i)) == -1.d3) )                                         &
       call my_stop("No 'target-value' defined for "//  &
-                    "for optimization_type 'maximum-drag'")
+                    "for optimization_type 'target-max-drag'")
     if (((trim(optimization_type(i)) == 'target-lift') .and.                  &
         (target_value(i)) == -1.d3) )                                         &
       call my_stop("No 'target-value' defined for "//  &

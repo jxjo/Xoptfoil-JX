@@ -22,7 +22,8 @@ mkdir %WIN_RELEASE%
 xcopy windows\bin\*.exe    %WIN_RELEASE%\windows\bin   /s /i /q
 xcopy windows\bin\x*.py    %WIN_RELEASE%\windows\bin   /s /i /q
 
-xcopy doc\*.pdf            %WIN_RELEASE%\doc           /s /i /q
+xcopy doc\x*.pdf           %WIN_RELEASE%\doc              /i /q
+xcopy doc\change*.pdf      %WIN_RELEASE%                  /i /q
 xcopy examples             %WIN_RELEASE%\examples      /s /i /q
 
 rem ----- zip with powershell ------------

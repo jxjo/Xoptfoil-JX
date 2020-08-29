@@ -1,1 +1,1 @@
-xoptfoil-jx -i imatch-hicks-henne.txt -o matched-hicks-henne
+xoptfoil-JX -i imatch-hicks-henne.txt -o matched-hicks-henne
