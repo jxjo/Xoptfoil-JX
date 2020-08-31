@@ -20,13 +20,11 @@
 # imports
 import xml.etree.ElementTree as ET
 import argparse
-import json
-import sys, os
+from json import load
+from os import listdir, path, system, makedirs, chdir, getcwd
 from matplotlib import pyplot as plt
-import matplotlib.image as mpimg
-import numpy as np
-import math
-import pip
+from matplotlib import image as mpimg
+from math import pi, sin
 import f90nml
 from copy import deepcopy
 from colorama import init
@@ -556,14 +554,14 @@ class inputFile:
                 x1 = opPoints[0]
                 x2 = opPoints[self.idx_maxGlide]
                 y1 = 0.0
-                y2 = math.pi/2
+                y2 = pi/2
 
                 # calculate y by linear interpolation
                 y = interpolate(x1, x2, y1, y2, opPoints[idx])
 
                 # calculate sinus-function. The result is a "delta-" value
                 # that will be added to minWeight
-                diff = (maxWeigth - minWeight) * math.sin(y)
+                diff = (maxWeigth - minWeight) * sin(y)
 
                 # calculate new weight
                 weight = round((minWeight + diff), 2)
@@ -575,11 +573,11 @@ class inputFile:
             for idx in range(self.idx_maxGlide, self.idx_preClmax+1):
                 x1 = opPoints[self.idx_maxGlide]
                 x2 = opPoints[self.idx_preClmax]
-                y1 = math.pi/2
+                y1 = pi/2
                 y2 = 0.0
                 y = interpolate(x1, x2, y1, y2, opPoints[idx])
 
-                diff = (maxWeigth - minWeight) * math.sin(y)
+                diff = (maxWeigth - minWeight) * sin(y)
                 weight = round((minWeight + diff), 2)
                 self.change_Weighting(idx, weight)
 
@@ -2880,13 +2878,13 @@ def get_Parameters(dict):
 
 def get_ListOfFiles(dirName):
     # create a list of files in the given directory
-    listOfFile = os.listdir(dirName)
+    listOfFile = listdir(dirName)
     allFiles = list()
 
     # Iterate over all the entries
     for entry in listOfFile:
         # Create full path
-        fullPath = os.path.join(dirName, entry)
+        fullPath = path.join(dirName, entry)
         allFiles.append(fullPath)
 
     return allFiles
@@ -2919,7 +2917,7 @@ def copyAndSmooth_Airfoil(srcName, srcPath, destName, smooth):
                        (inputFilename, srcfoilNameAndPath, destName)
 
         # execute xfoil-worker / create the smoothed root-airfoil
-        os.system(systemString)
+        system(systemString)
     else:
         print("Renaming airfoil \'%s\' to \'%s\'\n" % (srcName, destName))
         # only reanme and copy the airfoil
@@ -3087,7 +3085,7 @@ def generate_Polars(params, rootfoilName):
         except:
             # execute xfoil-worker / create T1 polar-file
             print("Generating polar %s" % polarFileName_T1)
-            os.system(systemString_T1)
+            system(systemString_T1)
             newPolar_T1.import_FromFile(polarFileNameAndPath_T1)
 
         params.T1_polars.append(newPolar_T1)
@@ -3099,7 +3097,7 @@ def generate_Polars(params, rootfoilName):
         except:
             # execute xfoil-worker / create T2 polar-file
             print("Generating polar %s" % polarFileName_T2)
-            os.system(systemString_T2)
+            system(systemString_T2)
             newPolar_T2.import_FromFile(polarFileNameAndPath_T2)
 
         params.T2_polars.append(newPolar_T2)
@@ -3251,8 +3249,8 @@ def generate_TargetPolars(params):
         polarDir = params.buildDir + bs + airfoilName + '_polars'
 
         # check if output-folder exists. If not, create folder.
-        if not os.path.exists(polarDir):
-            os.makedirs(polarDir)
+        if not path.exists(polarDir):
+            makedirs(polarDir)
 
         # compose filename and path
         polarFileNameAndPath = polarDir + bs + ('target_polar_%s.txt' %\
@@ -3317,7 +3315,7 @@ if __name__ == "__main__":
 
     # load dictionary from .json-file
     try:
-        strakdata = json.load(strakDataFile)
+        strakdata = load(strakDataFile)
         strakDataFile.close()
     except:
         ErrorMsg('failed to read data from file %s' % strakDataFileName)
@@ -3336,21 +3334,21 @@ if __name__ == "__main__":
     params.calculate_DependendValues()
 
     # get current working dir
-    params.workingDir = os.getcwd()
+    params.workingDir = getcwd()
 
     # check if output-folder exists. If not, create folder.
-    if not os.path.exists(buildPath):
-        os.makedirs(buildPath)
+    if not path.exists(buildPath):
+        makedirs(buildPath)
 
     # check if airfoil-folder exists. If not, create folder.
-    if not os.path.exists(buildPath + bs + airfoilPath):
-        os.makedirs(buildPath + bs + airfoilPath)
+    if not path.exists(buildPath + bs + airfoilPath):
+        makedirs(buildPath + bs + airfoilPath)
 
     # change working-directory to output-directory
-    os.chdir(params.workingDir + bs + buildPath)
+    chdir(params.workingDir + bs + buildPath)
 
     # get current working dir again
-    params.buildDir = os.getcwd()
+    params.buildDir = getcwd()
 
     # get name of root-airfoil according to operating-mode
     if (params.operatingMode == 'matchpolarfoils'):
@@ -3361,7 +3359,7 @@ if __name__ == "__main__":
         # as the root airfoil without optimization
         systemString = ("copy %s %s" + bs + "%s\n\n") % \
         (rootfoilName +'.dat', airfoilPath, rootfoilName + '.dat')
-        os.system(systemString)
+        system(systemString)
 
     if (params.operatingMode == 'fromtargetpolar'):
         ErrorMsg("Not implemented yet")
@@ -3393,7 +3391,7 @@ if __name__ == "__main__":
     commandlines = generate_Commandlines(params)
 
     # change working-directory
-    os.chdir(".." + bs)
+    chdir(".." + bs)
 
     # generate batchfile
     print("Generating batchfiles...")
