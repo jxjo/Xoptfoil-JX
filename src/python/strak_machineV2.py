@@ -1015,18 +1015,18 @@ class strakData:
     ############################################################################
     # function that calculates dependend values
     def calculate_DependendValues(self):
-        # setup tool-names
+        # setup tool-calls
+        exeCallString =  " .." + bs + exePath + bs
+        pythonCallString = pythonInterpreterName + ' ..' + bs + scriptPath + bs
+
+        self.xfoilWorkerCall = exeCallString + xfoilWorkerName + '.exe'
+        self.xoptfoilCall = exeCallString + xoptfoilName + '.exe'
+
         if (params.scriptsAsExe):
-            exeCallString =  " .." + bs + exePath + bs
             self.strakMachineCall = exeCallString + strakMachineName + '.exe'
-            self.xfoilWorkerCall = exeCallString + xfoilWorkerName + '.exe'
-            self.xoptfoilCall = exeCallString + xoptfoilName + '.exe'
             self.xoptfoilVisualizerCall = exeCallString + xoptfoilVisualizerName + '.exe'
         else:
-            pythonCallString = pythonInterpreterName + ' ..' + bs + scriptPath + bs
             self.strakMachineCall = pythonCallString + strakMachineName + '.py'
-            self.xfoilWorkerCall = xfoilWorkerName + '.exe'
-            self.xoptfoilCall = xoptfoilName + '.exe'
             self.xoptfoilVisualizerCall = pythonCallString + xoptfoilVisualizerName + '.py'
 
         # calculate List of Re-numers, if wingdata available
