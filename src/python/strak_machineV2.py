@@ -1783,7 +1783,11 @@ class polarGraph:
 
         # maximize window
         figManager = plt.get_current_fig_manager()
-        figManager.window.showMaximized()
+        figManager.window.state('zoomed')
+        #figManager.window.Maximize(True)
+        #figManager.window.show()
+        #figManager.window.showMaximized()
+        #figManager.window
 
         # show diagram
         plt.show()
