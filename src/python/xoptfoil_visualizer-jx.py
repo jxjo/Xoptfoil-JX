@@ -70,7 +70,7 @@ class Airfoil:
     self.glide = np.zeros((0))
     self.climb = np.zeros((0))
     self.flapangle = np.zeros((0))
-    
+
   def setCoordinates(self, x, y):
     self.x = x
     self.y = y
@@ -81,8 +81,8 @@ class Airfoil:
     self.deriv2 = deriv2
     self.deriv3 = deriv3
     iLE = np.argmin(self.x)
-    self.deriv2[0:iLE] = np.multiply(self.deriv2[0:iLE], -1)   
-    self.deriv3[0:iLE] = np.multiply(self.deriv3[0:iLE], -1) 
+    self.deriv2[0:iLE] = np.multiply(self.deriv2[0:iLE], -1)
+    self.deriv3[0:iLE] = np.multiply(self.deriv3[0:iLE], -1)
 
   def setGeometryInfo(self, maxt, xmaxt, maxc, xmaxc):
     self.maxt = maxt
@@ -101,9 +101,9 @@ class Airfoil:
     # jx-mod additional glide and climb ratio
     self.glide = self.cl / self.cd
     self.climb = np.zeros((len(cl)))
-    for i in range(len(cl)): 
-      if cl[i] > 0.0: 
-        self.climb[i] = (cl[i]**1.5)/cd[i] 
+    for i in range(len(cl)):
+      if cl[i] > 0.0:
+        self.climb[i] = (cl[i]**1.5)/cd[i]
     self.flapangle = flapangle
 
 ################################################################################
@@ -125,7 +125,7 @@ def read_airfoil_coordinates(filename, zonetitle, designnum):
   # Try to open the file
 
   try:
-    f = open(filename) 
+    f = open(filename)
   except IOError:
     ioerror = 1
     return x, y, maxt, xmaxt, maxc, xmaxc, ioerror, deriv2, deriv3
@@ -147,7 +147,7 @@ def read_airfoil_coordinates(filename, zonetitle, designnum):
           checkdesign = int(checkline[1])
           if (checkdesign == designnum): zonefound = True
         else: zonefound = True
-    
+
       if zonefound:
         splitline = textline.split(",")
         if len(splitline) > 2:
@@ -201,13 +201,13 @@ def read_airfoil_polars(filename, zonetitle):
   cm = []
   xtrt = []
   xtrb = []
-  #jx-mod Read also flap angle from polar file  
+  #jx-mod Read also flap angle from polar file
   flapangle = []
 
   # Try to open the file
 
   try:
-    f = open(filename) 
+    f = open(filename)
   except IOError:
     ioerror = 1
     return alpha, cl, cd, cm, xtrt, xtrb, flapangle, ioerror
@@ -224,7 +224,7 @@ def read_airfoil_polars(filename, zonetitle):
       # Check for the zone we are looking for
 
       if (textline[0:zonelen] == zonetitle):
-    
+
         zonefound = True
 
     else:
@@ -274,7 +274,7 @@ def read_optimization_history(step):
   # Try to open the file
 
   try:
-    f = open('optimization_history.dat') 
+    f = open('optimization_history.dat')
   except IOError:
     ioerror = 1
     return fmin, relfmin, rad, ioerror
@@ -299,7 +299,7 @@ def read_optimization_history(step):
         fmin = float(splitline[1])
         relfmin = float(splitline[2])
         rad = float(splitline[3])
-    
+
   # Error if step has not been found after reading the file
 
   if (not stepfound):
@@ -364,7 +364,7 @@ def load_airfoils_from_file(coordfilename, polarfilename):
       currfoil = Airfoil()
       currfoil.setCoordinates(np.array(x), np.array(y))
       currfoil.setGeometryInfo(maxt, xmaxt, maxc, xmaxc)
-      
+
       # jx-mod additional 2nd and 3rd derivative
       currfoil.setDerivatives(deriv2, deriv3)
 
@@ -407,8 +407,8 @@ def load_airfoils_from_file(coordfilename, polarfilename):
       read_finished = True
       ioerror = 0
     else:
-      designfoils[counter-1].setPolars(np.array(alpha), np.array(cl), 
-                                       np.array(cd), np.array(cm), 
+      designfoils[counter-1].setPolars(np.array(alpha), np.array(cl),
+                                       np.array(cd), np.array(cm),
                                        np.array(xtrt), np.array(xtrb),
                                        np.array(flapangle))
       counter += 1
@@ -416,7 +416,7 @@ def load_airfoils_from_file(coordfilename, polarfilename):
   print("   Found " + str(counter-1) + " airfoil polars plus seed airfoil.")
   if (counter != numfoils+1):
     print("Error: number of airfoil coordinates and polars does not match.")
-    ioerror = 3 
+    ioerror = 3
     return seedfoil, designfoils, ioerror
 
   return seedfoil, designfoils, ioerror
@@ -428,7 +428,7 @@ def load_airfoils_from_file(coordfilename, polarfilename):
 # Plots airfoil coordinates
 ################################################################################
 
-def plot_airfoil_coordinates(seedfoil, matchfoil, designfoils, plotnum, firsttime=True, 
+def plot_airfoil_coordinates(seedfoil, matchfoil, designfoils, plotnum, firsttime=True,
                              animation=False, prefix=None):
   global plotoptions
 
@@ -437,12 +437,12 @@ def plot_airfoil_coordinates(seedfoil, matchfoil, designfoils, plotnum, firsttim
   plot_2nd_deriv  = True                 # Plot of curvature / 2nd derivative of polyline
   plot_3rd_deriv  = False                # Plot of 3nd derivative of polyline
   plot_delta_y    = True                 # Plot delta of y ("z") value between current and seed
-  plot_matchfoil  = True                 # Plot the matchfoil and the delta from current to match 
+  plot_matchfoil  = True                 # Plot the matchfoil and the delta from current to match
   plot_seedfoil   =     plotoptions["show_seed_airfoil_only"] or plotoptions["show_seed_airfoil"]
   plot_foil       = not plotoptions["show_seed_airfoil_only"]
 
   show_info       = plotoptions["show_airfoil_info"]
-  show_transition = False                 # show transition points 
+  show_transition = False                 # show transition points
 
   sc = plotoptions["color_for_seed"]
   nc = plotoptions["color_for_new_designs"]
@@ -453,33 +453,41 @@ def plot_airfoil_coordinates(seedfoil, matchfoil, designfoils, plotnum, firsttim
 
   if (plotnum > 0): foil = designfoils[plotnum-1]
 
-  plot_foil      = plot_foil and (plotnum > 0) 
+  plot_foil      = plot_foil and (plotnum > 0)
   if not (plot_seedfoil or plot_foil): return
 
-  plot_2nd_deriv  = plot_2nd_deriv  and (len(seedfoil.deriv2) > 0)  
-  plot_3rd_deriv  = plot_3rd_deriv  and (len(seedfoil.deriv3) > 0) 
-  plot_3rd_deriv  = plot_3rd_deriv  and (not plot_2nd_deriv) 
+  plot_2nd_deriv  = plot_2nd_deriv  and (len(seedfoil.deriv2) > 0)
+  plot_3rd_deriv  = plot_3rd_deriv  and (len(seedfoil.deriv3) > 0)
+  plot_3rd_deriv  = plot_3rd_deriv  and (not plot_2nd_deriv)
   plot_matchfoil  = plot_matchfoil and (matchfoil.npt > 0)
-  plot_delta_y    = plot_foil and plot_delta_y and plot_seedfoil and (not plot_matchfoil)          
-  plot_delta_y    = plot_delta_y and (np.array_equal(seedfoil.x, foil.x))       
-  show_transition = plot_foil and show_transition and (len(foil.xtrt > 0))        
+  plot_delta_y    = plot_foil and plot_delta_y and plot_seedfoil and (not plot_matchfoil)
+  plot_delta_y    = plot_delta_y and (np.array_equal(seedfoil.x, foil.x))
+  show_transition = plot_foil and show_transition and (len(foil.xtrt > 0))
 
   # Set up coordinates plot, create figure and axes
 
   window_name = "Geometry  " + str(prefix)
 
-  if firsttime: 
+  if firsttime:
     plt.close(window_name)
     cfig = plt.figure(num= window_name)
-    if plot_matchfoil:                          # in this case bigger window
-      plt.get_current_fig_manager().window.setGeometry(600,400,1300,550)
+    if plot_matchfoil:
+      try:                          # in this case bigger window
+          plt.get_current_fig_manager().window.setGeometry(600,400,1300,550)
+      except:
+        # not supported in this specific python-version, skip
+        pass
     else:
-      plt.get_current_fig_manager().window.setGeometry(850,630,1000,400)
+      try:
+         plt.get_current_fig_manager().window.setGeometry(850,630,1000,400)
+      except:
+        # not supported in this specific python-version, skip
+        pass
     ax = plt.subplot(111)
     mirrorax = ax.twinx()
-  else: 
+  else:
     cfig = plt.figure(num= window_name)
-    if (len(cfig.get_axes()) > 0):                   
+    if (len(cfig.get_axes()) > 0):
       ax = cfig.get_axes()[0]
     else:                                       # Window closed by user?
       exit()
@@ -524,7 +532,7 @@ def plot_airfoil_coordinates(seedfoil, matchfoil, designfoils, plotnum, firsttim
   if plot_foil:
     ax.plot(foil.x, foil.y, color=nc)
 
-  # Plot specials like delta or derivatives 
+  # Plot specials like delta or derivatives
 
   if plot_2nd_deriv:
     ax.set_ylim([-ymax,ymax])       # achieve ax.plot and mirrorax.plot is aligned in x-axis
@@ -557,8 +565,8 @@ def plot_airfoil_coordinates(seedfoil, matchfoil, designfoils, plotnum, firsttim
     ax.plot(foil.x, (foil.y - matchfoil.y) * 10, color='green', linewidth=0.8, linestyle='-.')
     ax.axhline(0, color='grey', linewidth=0.5)
 
-  # show points of transition for the operating points 
-  if show_transition: 
+  # show points of transition for the operating points
+  if show_transition:
     iLE = np.argmin(seedfoil.x)
     plot_points_of_transition (ax, foil.x[0:iLE], foil.y[0:iLE], foil.xtrt, upperside = True)
     plot_points_of_transition (ax, foil.x[-iLE:] , foil.y[-iLE:], foil.xtrb, upperside = False)
@@ -571,39 +579,39 @@ def plot_airfoil_coordinates(seedfoil, matchfoil, designfoils, plotnum, firsttim
                 "   at x/c: " + str(seedfoil.xmaxt) + '\n' +
                 "Camber: " + str(seedfoil.maxc) + '\n' +
                 "   at x/c: " + str(seedfoil.xmaxc))
-      ax.text(0.02, 0.02, mytext, color=sc, verticalalignment='bottom', horizontalalignment='left', 
+      ax.text(0.02, 0.02, mytext, color=sc, verticalalignment='bottom', horizontalalignment='left',
               transform=ax.transAxes, fontsize='small')
     if plot_foil:
       mytext = ("Thickness: " + str(foil.maxt) + '\n' +
                 "   at x/c: " + str(foil.xmaxt) + '\n' +
                 "Camber: " + str(foil.maxc) + '\n' +
                 "   at x/c: " + str(foil.xmaxc))
-      ax.text(0.98, 0.02, mytext, color=nc, verticalalignment='bottom', horizontalalignment='right', 
+      ax.text(0.98, 0.02, mytext, color=nc, verticalalignment='bottom', horizontalalignment='right',
               transform=ax.transAxes, fontsize='small')
 
   # Legend for coordinates plot
 
   lines = []
-  if plot_seedfoil:   lines.append(plt.Line2D((0,1),(0,0), color=sc, 
+  if plot_seedfoil:   lines.append(plt.Line2D((0,1),(0,0), color=sc,
                                   label="Seed airfoil"))
   # if plot_matchfoil:  lines.append(plt.Line2D((0,1),(0,0), color='green', linewidth=0.8,
   #                                label="Match airfoil"))
-  if plot_foil:       lines.append(plt.Line2D((0,1),(0,0), color=nc, 
+  if plot_foil:       lines.append(plt.Line2D((0,1),(0,0), color=nc,
                                   label="Design number " + str(plotnum)))
-  if plot_delta_y:    lines.append(plt.Line2D((0,1),(0,0), color='green', linewidth=0.8, linestyle=':', 
+  if plot_delta_y:    lines.append(plt.Line2D((0,1),(0,0), color='green', linewidth=0.8, linestyle=':',
                                   label="   delta y *5 "))
-  if plot_matchfoil:  lines.append(plt.Line2D((0,1),(0,0), color='green', linewidth=0.8, linestyle='-.', 
+  if plot_matchfoil:  lines.append(plt.Line2D((0,1),(0,0), color='green', linewidth=0.8, linestyle='-.',
                                   label="   delta y to match *10 "))
-  if plot_2nd_deriv:  lines.append(plt.Line2D((0,1),(0,0), color=nc, linewidth=0.8, linestyle='--', 
+  if plot_2nd_deriv:  lines.append(plt.Line2D((0,1),(0,0), color=nc, linewidth=0.8, linestyle='--',
                                   label="   curvature"))
-  if plot_3rd_deriv:  lines.append(plt.Line2D((0,1),(0,0), color='magenta', linewidth=0.8, linestyle='--', 
+  if plot_3rd_deriv:  lines.append(plt.Line2D((0,1),(0,0), color='magenta', linewidth=0.8, linestyle='--',
                                   label="   3rd derivative"))
 
   # Create legend
 
   labels = [l.get_label() for l in lines]
   ax.legend(lines, labels, loc="upper right", numpoints=1)
-    
+
   # Update plot for animation only (for others, plt.show() must be called
   # separately)
 
@@ -623,13 +631,13 @@ def plot_airfoil_coordinates(seedfoil, matchfoil, designfoils, plotnum, firsttim
   cfig.canvas.draw()
 
 #---------------------------------------------------------------------------------------
-# Plot points of transition xtrs along polyline x,y 
+# Plot points of transition xtrs along polyline x,y
 #---------------------------------------------------------------------------------------
 def plot_points_of_transition (axes, x, y, xtrs, upperside = True):
 
   for i in range(len(xtrs)):
     xtr = xtrs[i]
-    # get best coordinate point wihich is closest to xtr point 
+    # get best coordinate point wihich is closest to xtr point
     i_nearest = np.where(abs(x-xtr)==abs(x-xtr).min())[0][0]
 
     if upperside:
@@ -640,7 +648,7 @@ def plot_points_of_transition (axes, x, y, xtrs, upperside = True):
       y_text = -13
 
     axes.plot([x[i_nearest]], [y[i_nearest]], marker=my_marker, markersize=7, color="grey")
-    axes.annotate(('{:d}'.format(i+1)), xy = (x[i_nearest], y[i_nearest]), 
+    axes.annotate(('{:d}'.format(i+1)), xy = (x[i_nearest], y[i_nearest]),
                   xytext = (-3,y_text), textcoords="offset points", fontsize = 8, color='dimgrey')
 
 
@@ -657,7 +665,7 @@ def plot_polars(seedfoil, designfoils, plotnum, firsttime=True, animation=False,
 
   # Set plot options ------
 
-  plot_polar       = True                 # Plot polar of current  
+  plot_polar       = True                 # Plot polar of current
   plot_seed_polar  = plotoptions["show_seed_polar_only"] or plotoptions["show_seed_polar"]
   plot_vs_lift     = plotoptions["drag_plot_type"] == "vs. lift"
 
@@ -673,9 +681,9 @@ def plot_polars(seedfoil, designfoils, plotnum, firsttime=True, animation=False,
 
   if (len(seedfoil.alpha) == 0):  plot_seed_polar   = False
 
-  if (plotnum > 0): 
+  if (plotnum > 0):
     foil = designfoils[plotnum-1]
-    if (len(foil.alpha) == 0):  
+    if (len(foil.alpha) == 0):
       plot_polar   = False
     else:
       if (plotnum == 1):
@@ -688,16 +696,20 @@ def plot_polars(seedfoil, designfoils, plotnum, firsttime=True, animation=False,
   if not (plot_seed_polar or plot_polar): return
 
 
-  # Set up polars plot. 
+  # Set up polars plot.
 
   window_name = "Polars  " + str(prefix)
 
-  if firsttime: 
+  if firsttime:
     plt.close(window_name)
     pfig, dummy = plt.subplots(2, 3, num= window_name)
     pfig.subplots_adjust(hspace=0.3, wspace=0.3)
     pfig.set_size_inches(11, 8, forward=True)
-    plt.get_current_fig_manager().window.setGeometry(100,30,1300,550)
+    try:
+        plt.get_current_fig_manager().window.setGeometry(100,30,1300,550)
+    except:
+        # not supported in this specific python-version, skip
+        pass
   else:
     pfig = plt.figure(num= window_name)
     if (len(pfig.get_axes()) == 0): exit()     # User closed the window - stop
@@ -788,12 +800,12 @@ def plot_polars(seedfoil, designfoils, plotnum, firsttime=True, animation=False,
     climbmin = 0.0
   glideclmin = clmin
   if (glideclmin < 0.0):
-    glideclmin = 0.0 
+    glideclmin = 0.0
 
 
   # Plot polars
 
-  if plot_vs_lift: 
+  if plot_vs_lift:
     if plot_seed_polar: seed_x_values = seedfoil.cl
     if plot_polar:      foil_x_values = foil.cl
     x_label = 'Lift coefficient'
@@ -819,7 +831,7 @@ def plot_polars(seedfoil, designfoils, plotnum, firsttime=True, animation=False,
     axarr[4].plot(foil.xtrb,      foil.alpha,     linestyle='--',color=nc, marker='s')
     axarr[2].plot(foil_x_values,  foil.glide,     linestyle='-', color=nc, marker='s')
     axarr[5].plot(foil_x_values,  foil.climb,     linestyle='-', color=nc, marker='s')
-    
+
     annotate_changes (axarr[0], prev_foil.alpha,prev_foil.cl,    foil.alpha,    foil.cl,    "y")
     annotate_changes (axarr[1], prev_foil.cd,   prev_foil.cl,    foil.cd,       foil.cl,    "x")
     annotate_changes (axarr[2], foil_x_values,  prev_foil.glide, foil_x_values, foil.glide, "y")
@@ -827,18 +839,18 @@ def plot_polars(seedfoil, designfoils, plotnum, firsttime=True, animation=False,
     annotate_changes (axarr[4], prev_foil.xtrt, prev_foil.alpha, foil.xtrt,     foil.alpha, "x")
     annotate_changes (axarr[4], prev_foil.xtrb, prev_foil.alpha, foil.xtrb,     foil.alpha, "x")
     annotate_changes (axarr[5], foil_x_values,  prev_foil.climb, foil_x_values, foil.climb, "y")
-  
-    # show cd-value or flap anglein graph 
 
-    for i in range(len(foil.cl)): 
+    # show cd-value or flap anglein graph
+
+    for i in range(len(foil.cl)):
       if ((len(foil.flapangle) > 0) and (foil.flapangle[i] != 0) and show_flap_angle):
-        axarr[1].annotate(('f {:5.2f}'.format(foil.flapangle[i])), (cdmax - 0.29*cdrng, foil.cl[i]), 
+        axarr[1].annotate(('f {:5.2f}'.format(foil.flapangle[i])), (cdmax - 0.29*cdrng, foil.cl[i]),
                           fontsize = 8,color='dimgrey')
       elif (show_cd_value):
         axarr[1].annotate(('{:5.5f}'.format(foil.cd[i])), (foil.cd[i], foil.cl[i]),
                           xytext = (12,-3), textcoords="offset points", fontsize = 8, color='dimgrey')
 
-  # set axis 
+  # set axis
 
   axarr[0].set_xlabel('Angle of attack')
   axarr[0].set_ylabel('Lift coefficient')
@@ -877,7 +889,7 @@ def plot_polars(seedfoil, designfoils, plotnum, firsttime=True, animation=False,
   if plot_vs_lift:
     axarr[2].set_xlim([glideclmin,clmax])
     axarr[5].set_xlim([glideclmin,clmax])
-  else: 
+  else:
     axarr[2].set_xlim([almin,almax])
     axarr[5].set_xlim([almin,almax])
 
@@ -889,13 +901,13 @@ def plot_polars(seedfoil, designfoils, plotnum, firsttime=True, animation=False,
     fakeline = plt.Line2D((0,1),(0,0), linestyle='-', color=sc, marker='o', label="Seed airfoil")
     lines.append(fakeline)
 
-  if plot_polar: 
+  if plot_polar:
     fakeline = plt.Line2D((0,1),(0,0), linestyle='-', color=nc, marker='s', label="Design number " + str(plotnum))
     lines.append(fakeline)
-  
+
   bbox_loc = (0.5, 1.00)
   labels = [l.get_label() for l in lines]
-  pfig.legend(lines, labels, loc="upper center", 
+  pfig.legend(lines, labels, loc="upper center",
               bbox_to_anchor=bbox_loc, numpoints=1)
 
   # Update plot for animation only (for others, plt.show() must be called separately)
@@ -904,7 +916,7 @@ def plot_polars(seedfoil, designfoils, plotnum, firsttime=True, animation=False,
     if (firsttime): pfig.show()
 
     # Save animation frames if requested
-  
+
     if plotoptions["save_animation_frames"]:
       if (prefix == None):
         print("Error: no file prefix specified - cannot save animation frames.")
@@ -915,7 +927,7 @@ def plot_polars(seedfoil, designfoils, plotnum, firsttime=True, animation=False,
 
   pfig.canvas.draw()
 
-  return 
+  return
 
 
 #---------------------------------------------------------------------------------------
@@ -933,24 +945,24 @@ def annotate_changes (axes, prev_x, prev_y, x, y, change_dir):
     elif (change_dir == "y") and (prev_y[i] != 0):
       rel_improv = (y[i] - prev_y[i]) / prev_y[i]
     else:
-      rel_improv = 0 
+      rel_improv = 0
 
 
     if (abs(rel_improv) > 1e-4):            # show annotation only if delta > epsilon
 
       if (change_dir == "x"):
         if (rel_improv > 0.0):
-          axes.annotate('>', xy = (x[i], y[i]), 
+          axes.annotate('>', xy = (x[i], y[i]),
                 xytext = (5,-2),   textcoords="offset points", fontsize = 8, color='dimgrey')
         else:
-          axes.annotate('<', xy = (x[i], y[i]), 
+          axes.annotate('<', xy = (x[i], y[i]),
                 xytext = (-12,-2), textcoords="offset points", fontsize = 8, color='dimgrey')
       else:
         if (rel_improv > 0.0):
-          axes.annotate('^', xy = (x[i], y[i]), 
+          axes.annotate('^', xy = (x[i], y[i]),
                 xytext = (-3,3),   textcoords="offset points", fontsize = 8, color='dimgrey')
         else:
-          axes.annotate('v', xy = (x[i], y[i]), 
+          axes.annotate('v', xy = (x[i], y[i]),
                 xytext = (-2,-10), textcoords="offset points", fontsize = 8, color='dimgrey')
 
 
@@ -965,16 +977,20 @@ def plot_optimization_history(steps, fmins, relfmins, rads, firsttime=True,
 
   if (len(steps) == 0): return           # nothing to show
 
-  # Set up optimization history plot. 
+  # Set up optimization history plot.
 
   window_name = "Optimization History  " + str(prefix)
 
-  if firsttime: 
+  if firsttime:
     plt.close(window_name)
     ofig, dummy  = plt.subplots(2, 1, num= window_name)
     axarr = ofig.get_axes()
     mirrorax0   = axarr[0].twinx()
-    plt.get_current_fig_manager().window.setGeometry(1420,70,480,380)
+    try:
+        plt.get_current_fig_manager().window.setGeometry(1420,70,480,380)
+    except:
+        # not supported in this specific python-version, skip
+        pass
   else:
     ofig  = plt.figure(num= window_name)
     axarr = ofig.get_axes()
@@ -1010,7 +1026,7 @@ def plot_optimization_history(steps, fmins, relfmins, rads, firsttime=True,
 
   ofig.canvas.draw()
 
-  return 
+  return
 
 #---------------------------------------------------------------------------------------
 # Print actual improvement in history plot
@@ -1022,7 +1038,7 @@ def print_improvement (axes, steps, improvements):
   i_best = len(steps) - 1
   best_improve   = improvements [-1]
 
-  if (best_improve > 0): 
+  if (best_improve > 0):
     for i in reversed(range(len(steps)-1)):
       if (improvements[i] < best_improve):
         break
@@ -1036,13 +1052,13 @@ def print_improvement (axes, steps, improvements):
 
     axes.plot([steps[i_best]], [improvements[i_best]], marker=my_marker, markersize=7, color="red")
     if (i_best == (len(steps) - 1)):
-      axes.annotate(('{:.5f}'.format(improvements[i_best])+'%'), 
-                    xy = (steps[i_best], improvements[i_best]), 
+      axes.annotate(('{:.5f}'.format(improvements[i_best])+'%'),
+                    xy = (steps[i_best], improvements[i_best]),
                     xytext = (x_text,y_text), textcoords="offset points", ha = "center",
                     fontsize='small', color='white', bbox = dict (facecolor="green"))
     else:
-      axes.annotate(('{:.5f}'.format(improvements[i_best])+'%'), 
-                    xy = (steps[i_best], improvements[i_best]), 
+      axes.annotate(('{:.5f}'.format(improvements[i_best])+'%'),
+                    xy = (steps[i_best], improvements[i_best]),
                     xytext = (x_text,y_text), textcoords="offset points", ha = "center",
                     fontsize='small', color='red')
 
@@ -1080,7 +1096,7 @@ def plotting_menu(seedfoil, designfoils):
 
     # Return to main menu
 
-    if (plotnum == 0): 
+    if (plotnum == 0):
       validchoice = True
       plotting_complete = True
 
@@ -1102,7 +1118,7 @@ def plotting_menu(seedfoil, designfoils):
       if (plotoptions["plot_optimization_history"] and steps.shape[0] > 0):
         plot_optimization_history(steps, fmins, relfmins, rads, firsttime=True)
       plt.show(block=False)
-      plotting_complete = False 
+      plotting_complete = False
 
   return plotting_complete
 
@@ -1132,9 +1148,9 @@ def read_new_airfoil_data(seedfoil, designfoils, prefix):
       nextdesign = len(designfoils) + 1
       zonetitle = 'zone t="Airfoil'
       foilstr = 'design number ' + str(nextdesign)
-  
+
     # Read data from coordinate file
-  
+
     x, y, maxt, xmaxt, maxc, xmaxc, ioerror, deriv2, deriv3 = read_airfoil_coordinates(
                                            coordfilename, zonetitle, nextdesign)
     if (ioerror == 1):
@@ -1151,17 +1167,17 @@ def read_new_airfoil_data(seedfoil, designfoils, prefix):
       foil.setDerivatives (deriv2, deriv3)
       # jx-mod additional 2nd and 3rd deriv
       foil.setGeometryInfo(maxt, xmaxt, maxc, xmaxc)
-  
+
     # Set zone title for polars
-  
+
     if (foilstr == 'seed'):
       zonetitle = 'zone t="Seed airfoil polar"'
     else:
       zonetitle = 'zone t="Polars", SOLUTIONTIME=' + str(nextdesign)
-  
+
     # Read data from polar file (not: negative error code means coordinates were
     # read but not polars)
-  
+
     alpha, cl, cd, cm, xtrt, xtrb, flapangle, ioerror = read_airfoil_polars(polarfilename,
                                                                       zonetitle)
 
@@ -1185,9 +1201,9 @@ def read_new_airfoil_data(seedfoil, designfoils, prefix):
       print("Read polars for " + foilstr + ".")
       foil.setPolars(np.array(alpha), np.array(cl), np.array(cd), np.array(cm),
                      np.array(xtrt), np.array(xtrb), np.array(flapangle))
-  
+
     # Copy data to output objects
-  
+
     if (foilstr == 'seed'): seedfoil = foil
     else: designfoils.append(foil)
 
@@ -1195,13 +1211,13 @@ def read_new_airfoil_data(seedfoil, designfoils, prefix):
 
 
 ################################################################################
-# Reads match airfoil coordinates 
+# Reads match airfoil coordinates
 def read_matchfoil (coordfilename):
 
   matchfoil = Airfoil()
   zonetitle = 'zone t="Match airfoil"'
   foilstr = 'Match'
-  
+
   # Read data from coordinate file
   x, y, maxt, xmaxt, maxc, xmaxc, ioerror, deriv2, deriv3 = read_airfoil_coordinates(
                                           coordfilename, zonetitle, 0)
@@ -1221,7 +1237,7 @@ def read_matchfoil (coordfilename):
 
 ################################################################################
 # Reads new optimization history data for updates during optimization
-def read_new_optimization_history(steps=None, fmins=None, relfmins=None, 
+def read_new_optimization_history(steps=None, fmins=None, relfmins=None,
                                   rads=None):
 
   if ((steps is None) or steps.shape[0] == 0):
@@ -1230,7 +1246,7 @@ def read_new_optimization_history(steps=None, fmins=None, relfmins=None,
     relfmins = np.zeros((0))
     rads = np.zeros((0))
     currstep = 0
-  else: 
+  else:
     numsteps = steps.shape[0]
     currstep = steps[numsteps-1]
 
@@ -1243,9 +1259,9 @@ def read_new_optimization_history(steps=None, fmins=None, relfmins=None,
     else:
       numsteps = steps.shape[0]
       nextstep = steps[numsteps-1] + 1
-  
+
     # Read data from optimization history file
-  
+
     fmin, relfmin, rad, ioerror = read_optimization_history(nextstep)
     if (ioerror == 1):
       print("optimization_history.dat not available yet.")
@@ -1254,9 +1270,9 @@ def read_new_optimization_history(steps=None, fmins=None, relfmins=None,
       reading = False
       if (nextstep - 1 > currstep):
         print("Read optimization data to step " + str(nextstep-1) + ".")
-    else: 
+    else:
       # Copy data to output objects
-  
+
       steps = np.append(steps, nextstep)
       fmins = np.append(fmins, fmin)
       relfmins = np.append(relfmins, relfmin)
@@ -1377,7 +1393,7 @@ def options_menu():
   # Status variable
 
   options_complete = False
- 
+
   # Print list of plotting options
 
   print("")
@@ -1395,7 +1411,7 @@ def options_menu():
 
   if ( (key == "show_seed_airfoil") or (key == "show_seed_airfoil_only") or
        (key == "show_seed_polar") or (key == "show_seed_polar_only") or
-       (key == "save_animation_frames") or (key == "plot_airfoils") or 
+       (key == "save_animation_frames") or (key == "plot_airfoils") or
        (key == "plot_polars") or (key == "show_airfoil_info") or
        (key == "plot_optimization_history") ):
     options_complete = False
@@ -1421,12 +1437,12 @@ def options_menu():
 
   # Exit options menu
 
-  elif (key == "0"): 
+  elif (key == "0"):
     options_complete = True
 
   # Error for invalid input
 
-  else: 
+  else:
     options_complete = False
     print("Unrecognized plot option.")
 
@@ -1448,7 +1464,7 @@ def main_menu(initialchoice, seedfoil, designfoils, prefix):
 
 
   while (not exitchoice):
-    
+
     if initialchoice:
       choice = initialchoice
     else:
@@ -1485,7 +1501,7 @@ def main_menu(initialchoice, seedfoil, designfoils, prefix):
       exitchoice = False
 
       # Close all current windows
-      plt.close('all') 
+      plt.close('all')
 
       # Number of digits in design counter string
 
@@ -1497,12 +1513,12 @@ def main_menu(initialchoice, seedfoil, designfoils, prefix):
 
       # Loop through designs, updating plot
 
-      # Show history window 
+      # Show history window
       if plotoptions["plot_optimization_history"]:
 
         steps, fmins, relfmins, rads = read_new_optimization_history()
 
-        plot_optimization_history(steps, fmins, relfmins, rads, 
+        plot_optimization_history(steps, fmins, relfmins, rads,
                   firsttime=True, prefix = prefix, animation=True)
 
       for i in range(0, numfoils):
@@ -1512,7 +1528,7 @@ def main_menu(initialchoice, seedfoil, designfoils, prefix):
         if (plotoptions["save_animation_frames"]):
 
           # Determine number of zeroes to pad with and image file prefix
-  
+
           currwidth = int(floor(log10(float(i+1)))) - 1
           numzeroes = width - currwidth
           imagepref = prefix + numzeroes*'0' + str(i+1)
@@ -1525,8 +1541,8 @@ def main_menu(initialchoice, seedfoil, designfoils, prefix):
           plot_airfoil_coordinates(seedfoil, matchfoil, designfoils, i+1, firsttime=init,
                                    animation=True, prefix=imagepref)
         if plotoptions["plot_polars"]:
-          plot_polars(seedfoil, designfoils, i+1, 
-                             firsttime=init, animation=True, prefix=imagepref) 
+          plot_polars(seedfoil, designfoils, i+1,
+                             firsttime=init, animation=True, prefix=imagepref)
 
         plt.pause(0.1)
 
@@ -1536,7 +1552,7 @@ def main_menu(initialchoice, seedfoil, designfoils, prefix):
       exitchoice = False
 
       # Close all current windows
-      plt.close('all') 
+      plt.close('all')
 
       print ()
       print('Monitoring optimization progress. To stop, enter the command ' +
@@ -1553,7 +1569,7 @@ def main_menu(initialchoice, seedfoil, designfoils, prefix):
 
       if not initialchoice:                       # if choice from command line do not re-read data
         seedfoil, designfoils, ioerror = load_airfoils_from_file(coordfilename, polarfilename)
-      
+
       steps, fmins, relfmins, rads = read_new_optimization_history()
 
       # Periodically read data and update plot
@@ -1566,16 +1582,16 @@ def main_menu(initialchoice, seedfoil, designfoils, prefix):
 
         # Update plot
 
-        if (ioerror != 1): 
+        if (ioerror != 1):
           numfoils = len(designfoils)
           if plotoptions["plot_airfoils"]:
-            plot_airfoil_coordinates(seedfoil, matchfoil, designfoils, numfoils, 
+            plot_airfoil_coordinates(seedfoil, matchfoil, designfoils, numfoils,
                                       firsttime=init, animation=True, prefix = prefix)
           if plotoptions["plot_polars"]:
             plot_polars(seedfoil, designfoils, numfoils,
                                       firsttime=init, animation=True, prefix = prefix)
           if plotoptions["plot_optimization_history"]:
-            plot_optimization_history(steps, fmins, relfmins, rads, 
+            plot_optimization_history(steps, fmins, relfmins, rads,
                                       firsttime=init, prefix = prefix, animation=True)
 
           init = False
@@ -1609,9 +1625,9 @@ def main_menu(initialchoice, seedfoil, designfoils, prefix):
           f = open('run_control', 'w')
           for command in commands:
             if command != "stop_monitoring":
-              f.write(command + '\n') 
+              f.write(command + '\n')
           f.close()
- 
+
       # Change save_animation_frames back to original setting when done
 
       plotoptions["save_animation_frames"] = temp_save_frames
@@ -1638,7 +1654,7 @@ if __name__ == "__main__":
   # Read command line arguments
 
 # jx-mod Implementation of command line arguments - start
-# 
+#
 #  Following registry keys must be set to handle command line arguments to python.exe
 #        HKEY_CLASSES_ROOT\Applications\python.exe\shell\open\command --> "xx:\Anaconda3\python.exe" "%1" %*
 #        HKEY_CLASSES_ROOT\py_auto_file\shell\open\command            --> "xx:\Anaconda3\python.exe" "%1" %*
@@ -1678,7 +1694,7 @@ if __name__ == "__main__":
   if (ioerror == 0):
     plotoptions["plot_polars"] = False
     plotoptions["plot_optimization_history"] = False
-    
+
     print ("")
     print ("Match airfoil detected in design_coordinates.")
     print ("      Polar plot will be switched off as no polars are generated in this case")
