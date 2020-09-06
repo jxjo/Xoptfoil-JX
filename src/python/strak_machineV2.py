@@ -1783,11 +1783,13 @@ class polarGraph:
 
         # maximize window
         figManager = plt.get_current_fig_manager()
-        figManager.window.state('zoomed')
-        #figManager.window.Maximize(True)
-        #figManager.window.show()
-        #figManager.window.showMaximized()
-        #figManager.window
+        try:
+            figManager.window.state('zoomed')
+        except:
+            try:
+                figManager.window.Maximize(True)
+            except:
+                pass
 
         # show diagram
         plt.show()
@@ -2475,6 +2477,10 @@ def generate_Commandlines(params):
 
     # change current working dir back
     commandline = "cd..\n"
+    commandLines.append(commandline)
+
+    # pause in the end
+    commandline = "pause\n"
     commandLines.append(commandline)
 
     DoneMsg()
