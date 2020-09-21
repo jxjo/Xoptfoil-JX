@@ -73,7 +73,7 @@ cl_T2_polar = 'b'
 # styles
 opt_point_style_root = 'y.'
 opt_point_style_strak = 'y-'
-ls_targetPolar = 'dotted'
+ls_targetPolar = 'solid'
 lw_targetPolar = 0.6
 ls_strakPolar = 'dashdot'
 lw_strakPolar  = 0.4
