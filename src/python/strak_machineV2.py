@@ -777,34 +777,25 @@ class inputFile:
 
         #self.print_OpPoints()#Debug
 
-    def insert_alpha_CL0_oppoint(self, params, strakPolar, i):
+    def insert_alpha0_oppoint(self, params, strakPolar, i):
         # get maxRe of root
         maxRe_root = params.maxReNumbers[0]
 
-        # TODO, is it necessary to check the Re-Factor?
-        # check the change in Re-numbers between root- and strak-airfoil
-        ReFactor = 1.0#float(strakPolar.maxRe)/ float(maxRe_root)
+        # get alpha0 - target
+        alpha = round(params.targets["alpha0"][i], AL_decimals)
 
-        # if Re of strak-airfoil is less than 0.5 times Re of root-airfoil
-        # do not insert alpha@CL=0 - target, as this most probably cannot be
-        # achieved by the optimizer
-        if (ReFactor < 0.5):
-            NoteMsg("Re-number of strak-airfoil is %.1f times smaller than "
-             "Re-number of root-airfoil, alpha_CL0-target will be skipped"\
-              % ReFactor)
+        # set weighting to 2 times maxWeight
+        weighting = 2*params.maxWeight
+
+        # set reynolds
+        if params.ReAlpha0 > 0:
+            reynolds = params.ReAlpha0
         else:
-        # get alpha@CL=0 - target
-            alpha = round(params.targets["alpha_CL0"][i], AL_decimals)
+            reynolds = maxRe_root
 
-            # set weighting to 2 times maxWeight
-            weighting = 2*params.maxWeight
-
-            # limit to maxRe
-            reynolds = strakPolar.maxRe
-
-            # insert op-Point, get index
-            idx = self.insert_OpPoint('alpha_CL0', 'spec-al', alpha, 'target-lift',
-                                         0.0, weighting, reynolds)
+        # insert op-Point, get index
+        idx = self.insert_OpPoint('alpha0', 'spec-al', alpha, 'target-lift',
+                                     0.0, weighting, reynolds)
 
             #print (idx)#Debug
 
@@ -944,7 +935,8 @@ class strakData:
         self.seedFoilName = ""
         self.matchPolarFoilName = ""
         self.ReSqrtCl = 150000
-        self.numOpPoints = 16
+        self.ReAlpha0 = 0
+        self.numOpPoints = 13
         self.minWeight = 0.7
         self.maxWeight = 1.5
         self.CL_min = -0.1
@@ -978,7 +970,7 @@ class strakData:
         self.target_polars = []
         self.strak_polars = []
         self.inputFiles = []
-        self.optimizeAlphaCl0 = [False, False, False, False, False, False, False, False, False, False, False, False]
+        self.optimizeAlpha0 = [False, False, False, False, False, False, False, False, False, False, False, False]
         self.minCLGain = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
         self.maxGlideShift = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
         self.maxGlideGain = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
@@ -994,7 +986,7 @@ class strakData:
                         "CD_maxGlide": [],
                         "CL_pre_maxLift": [],
                         "CD_pre_maxLift": [],
-                        "alpha_CL0": [],
+                        "alpha0": [],
                        }
 
 
@@ -1148,7 +1140,7 @@ class strakData:
             self.targets["CD_pre_maxLift"].append(target_CD_pre_maxLift)
 
             # append alpha_CL0-target
-            self.targets["alpha_CL0"].append(rootPolar.alpha_CL0)
+            self.targets["alpha0"].append(rootPolar.alpha_CL0)
 
             idx = idx + 1
 
@@ -2796,7 +2788,10 @@ def get_Parameters(dict):
     params.xoptfoilTemplate = get_MandatoryParameterFromDict(dict, 'xoptfoilTemplate')
 
     # get optional parameters
-    params.batchfileName = get_ParameterFromDict(dict, "batchfileName",
+    params.ReAlpha0 = get_ParameterFromDict(dict, "ReAlpha0",
+                                                   params.ReAlpha0)
+
+    params.batchfileName = get_ParameterFromDict(dict, "batchfileName",#TODO remove
                                               params.batchfileName)
 
     params.xoptfoilInputFileName = get_ParameterFromDict(dict, "xoptfoilInputFileName",
@@ -2843,13 +2838,12 @@ def get_Parameters(dict):
     params.maxLiftGain = get_ParameterFromDict(dict, "maxLiftGain",
                                                 params.maxLiftGain)
 
-
     params.additionalOpPoints[0] = get_ParameterFromDict(dict, "additionalOpPoints",
                                                    params.additionalOpPoints[0])
 
      # get optional boolean parameters
-    params.optimizeAlphaCl0 = get_booleanParameterListFromDict(dict,
-                             "optimizeAlphaCl0", params.optimizeAlphaCl0)
+    params.optimizeAlpha0 = get_booleanParameterListFromDict(dict,
+                             "optimizeAlpha0", params.optimizeAlpha0)
 
     params.scriptsAsExe = get_booleanParameterFromDict(dict,
                              "scriptsAsExe", params.scriptsAsExe)
@@ -3024,8 +3018,8 @@ def generate_InputFiles(params):
         newFile.adapt_ReNumbers(strakPolar)
 
         # insert oppoint for alpha @ CL = 0
-        if params.optimizeAlphaCl0[i]:
-            newFile.insert_alpha_CL0_oppoint(params, strakPolar,i)
+        if params.optimizeAlpha0[i]:
+            newFile.insert_alpha0_oppoint(params, strakPolar,i)
 
         if params.adaptInitialPerturb:
             # also adapt the initial perturb according to the change in
