@@ -2846,9 +2846,6 @@ def get_Parameters(dict):
     params.adaptInitialPerturb = get_booleanParameterFromDict(dict,
                              "adaptInitialPerturb", params.adaptInitialPerturb)
 
-    params.showTargetPolars = get_booleanParameterFromDict(dict,
-                             "showTargetPolars", params.showTargetPolars)
-
     params.smoothSeedfoil = get_booleanParameterFromDict(dict,
                              "smoothSeedfoil", params.smoothSeedfoil)
 
