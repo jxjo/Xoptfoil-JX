@@ -2783,22 +2783,31 @@ def get_Parameters(dict):
     print("getting parameters..\n")
 
     # get mandatory parameters first
-    params.ReNumbers = get_MandatoryParameterFromDict(dict, 'reynolds')
+
     params.seedFoilName = get_MandatoryParameterFromDict(dict, 'seedFoilName')
+
     params.xoptfoilTemplate = get_MandatoryParameterFromDict(dict, 'xoptfoilTemplate')
 
+    params.ReNumbers = get_MandatoryParameterFromDict(dict, 'reynolds')
+
+    params.maxReFactor = get_MandatoryParameterFromDict(dict, "maxReynoldsFactor")
+
+    params.maxGlideGain = get_MandatoryParameterFromDict(dict, "maxGlideGain")
+
+    params.minCLGain  = get_MandatoryParameterFromDict(dict, "minCLGain")
+
+    params.maxGlideShift = get_MandatoryParameterFromDict(dict, "maxGlideShift")
+
+    params.maxSpeedGain = get_MandatoryParameterFromDict(dict, "maxSpeedGain")
+
+    params.maxLiftGain = get_MandatoryParameterFromDict(dict, "maxLiftGain")
+
     # get optional parameters
+    params.additionalOpPoints[0] = get_ParameterFromDict(dict, "additionalOpPoints",
+                                                   params.additionalOpPoints[0])
+
     params.ReAlpha0 = get_ParameterFromDict(dict, "ReAlpha0",
                                                    params.ReAlpha0)
-
-    params.batchfileName = get_ParameterFromDict(dict, "batchfileName",#TODO remove
-                                              params.batchfileName)
-
-    params.xoptfoilInputFileName = get_ParameterFromDict(dict, "xoptfoilInputFileName",
-                                              params.xoptfoilInputFileName)
-
-    params.maxReFactor = get_ParameterFromDict(dict, "maxReynoldsFactor",
-                                              params.maxReFactor)
 
     params.operatingMode = get_ParameterFromDict(dict, "operatingMode",
                                               params.operatingMode)
@@ -2823,23 +2832,6 @@ def get_Parameters(dict):
     params.maxLiftDistance = get_ParameterFromDict(dict, "maxLiftDistance",
                                                 params.maxLiftDistance)
 
-    params.maxGlideGain = get_ParameterFromDict(dict, "maxGlideGain",
-                                                params.maxGlideGain)
-
-    params.minCLGain  = get_ParameterFromDict(dict, "minCLGain",
-                                                params.minCLGain)
-
-    params.maxGlideShift = get_ParameterFromDict(dict, "maxGlideShift",
-                                                params.maxGlideShift)
-
-    params.maxSpeedGain = get_ParameterFromDict(dict, "maxSpeedGain",
-                                                params.maxSpeedGain)
-
-    params.maxLiftGain = get_ParameterFromDict(dict, "maxLiftGain",
-                                                params.maxLiftGain)
-
-    params.additionalOpPoints[0] = get_ParameterFromDict(dict, "additionalOpPoints",
-                                                   params.additionalOpPoints[0])
 
      # get optional boolean parameters
     params.optimizeAlpha0 = get_booleanParameterListFromDict(dict,
