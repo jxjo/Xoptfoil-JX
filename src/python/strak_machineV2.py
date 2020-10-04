@@ -20,29 +20,36 @@
 # imports
 import xml.etree.ElementTree as ET
 import argparse
-import json
-import sys, os
+from json import load
+from os import listdir, path, system, makedirs, chdir, getcwd
 from matplotlib import pyplot as plt
-import matplotlib.image as mpimg
-import numpy as np
-import math
-import pip
+from matplotlib import image as mpimg
+from math import pi, sin
 import f90nml
 from copy import deepcopy
 from colorama import init
 from termcolor import colored
 import change_airfoilname
-#from scipy.signal import savgol_filter
 
 # paths and separators
 bs = "\\"
-presetsPath = 'ressources' + bs + 'presets'
-imagesPath = 'ressources' + bs + 'images'
-logoName = 'strakmachine.jpg'
+ressourcesPath = 'ressources'
+buildPath = 'build'
+airfoilPath = 'airfoils'
+scriptPath = 'scripts'
+exePath = 'bin'
 
 # fixed filenames
+pythonInterpreterName = "python"
+strakMachineName = "strak_machineV2"
+xfoilWorkerName = "xfoil_worker"
+xoptfoilName = "xoptfoil-jx"
+xoptfoilVisualizerName = "xoptfoil_visualizer-jx"
+logoName = 'strakmachine.jpg'
+strakMachineInputFileName = 'strakdata.txt'
 T1_polarInputFile = 'iPolars_T1.txt'
 T2_polarInputFile = 'iPolars_T2.txt'
+smoothInputFile = 'iSmooth.txt'
 
 # fonts
 csfont = {'fontname':'Segoe Print'}
@@ -66,25 +73,10 @@ cl_T2_polar = 'b'
 # styles
 opt_point_style_root = 'y.'
 opt_point_style_strak = 'y-'
-ls_targetPolar = 'dotted'
+ls_targetPolar = 'solid'
 lw_targetPolar = 0.6
 ls_strakPolar = 'dashdot'
 lw_strakPolar  = 0.4
-
-################################################################################
-#
-# install missing packages
-#
-################################################################################
-def install_and_import(package):
-    import importlib
-    try:
-        importlib.import_module(package)
-    except ImportError:
-        import pip
-        pip.main(['install', package])
-    finally:
-        globals()[package] = importlib.import_module(package)
 
 
 ################################################################################
@@ -132,17 +124,12 @@ def interpolate(x1, x2, y1, y2, x):
         y = 0.0
     return y
 
+
 # get the name and absolute path of an template xoptfoil-input-file, that
 # resides in the 'presets'-folder.
 def get_PresetInputFileName(xoptfoilTemplate, params):
-    # get real path of the script
-    pathname = os.path.dirname(sys.argv[0])
-    scriptPath = os.path.abspath(pathname)
-
     searchPaths = []
-    searchPaths.append(scriptPath + bs + presetsPath)
-    searchPaths.append('..' + bs + params.inputFolder)
-    searchPaths.append('..' + bs + params.inputFolder)
+    searchPaths.append(".." + bs + ressourcesPath)
 
     for path in searchPaths:
         try:
@@ -156,55 +143,9 @@ def get_PresetInputFileName(xoptfoilTemplate, params):
             NoteMsg("xoptfoil-template-file not found, tying different directory for"\
             " searching xoptfoil-template-files")
 
-
     ErrorMsg("could not find xoptfoil-template-file %s" % xoptfoilTemplate)
     exit(-1)
 
-
-################################################################################
-#
-# example-dictionary for creating .json-file
-#
-################################################################################
-strakdata = {
-            # folder containing the inputs-files
-            "inputFolder": 'ressources',
-            # folder containing the output / result-files
-            "outputFolder": 'build',
-            # name of XFLR5-xml-file
-            "XMLfileName": 'wing.xml',
-            # ReSqrt(Cl)-numbers of the strak
-            "ReNumbers": [220000, 190000, 160000, 130000, 100000, 70500],
-            # determines max Re-number to use for Type2 polar. Will switch to
-            # Type1-polar at maxReFactor * ReNumber[i]
-            "maxReFactor": 2.5,
-            # list of chord-lenghts
-            "chordlengths": [],
-            # ReSqrt(Cl) of root airfoil if using chord-lenghts instead of Re-numbers
-            "ReSqrtCl": '150000',
-            # root airfoil name
-            "seedFoilName": 'rg15.dat',
-            # type of the strak that shall be developed
-            "xoptfoilTemplate":  'Generic',
-             # name of the xoptfoil-inputfile for strak-airfoil(s)
-            "xoptfoilInputFileName": 'istrak.txt',
-            # generate batchfile for running Xoptfoil
-            "generateBatchfile" : 'true',
-            # name of the batchfile
-            "batchfileName" : 'make_strak.bat',
-            # operating-mode for strakmachine
-            "operatingMode" : 'default',
-            # use always root-airfoil or use predecessing airfoil
-            "useAlwaysRootfoil" : 'false',
-            # adapt initial_perturb in input file according to differenc in Re-numbers
-            "adaptInitialPerturb": 'true',
-            # projected maxGlide loss (percent), absolte value
-            "maxGlideGain": 0.008,
-            # projected maxSpeed gain between root and strak-airfoil (percent)
-            "maxSpeedGain": 0.5,
-            # projected maxLift gain between root and strak-airfoil (percent)
-            "maxLiftGain": 0.3
-            }
 
 
 ################################################################################
@@ -221,10 +162,6 @@ class inputFile:
         self.idx_preClmax = 0
         self.idx_alpha_preClmax = 0
         self.idx_additionalOpPoints = []
-
-        # get real path of the script
-        pathname = os.path.dirname(sys.argv[0])
-        scriptPath = os.path.abspath(pathname)
 
         # get name and path of xoptfoil-inputfile
         self.presetInputFileName = get_PresetInputFileName(params.xoptfoilTemplate,
@@ -617,14 +554,14 @@ class inputFile:
                 x1 = opPoints[0]
                 x2 = opPoints[self.idx_maxGlide]
                 y1 = 0.0
-                y2 = math.pi/2
+                y2 = pi/2
 
                 # calculate y by linear interpolation
                 y = interpolate(x1, x2, y1, y2, opPoints[idx])
 
                 # calculate sinus-function. The result is a "delta-" value
                 # that will be added to minWeight
-                diff = (maxWeigth - minWeight) * math.sin(y)
+                diff = (maxWeigth - minWeight) * sin(y)
 
                 # calculate new weight
                 weight = round((minWeight + diff), 2)
@@ -636,11 +573,11 @@ class inputFile:
             for idx in range(self.idx_maxGlide, self.idx_preClmax+1):
                 x1 = opPoints[self.idx_maxGlide]
                 x2 = opPoints[self.idx_preClmax]
-                y1 = math.pi/2
+                y1 = pi/2
                 y2 = 0.0
                 y = interpolate(x1, x2, y1, y2, opPoints[idx])
 
-                diff = (maxWeigth - minWeight) * math.sin(y)
+                diff = (maxWeigth - minWeight) * sin(y)
                 weight = round((minWeight + diff), 2)
                 self.change_Weighting(idx, weight)
 
@@ -840,34 +777,25 @@ class inputFile:
 
         #self.print_OpPoints()#Debug
 
-    def insert_alpha_CL0_oppoint(self, params, strakPolar, i):
+    def insert_alpha0_oppoint(self, params, strakPolar, i):
         # get maxRe of root
         maxRe_root = params.maxReNumbers[0]
 
-        # TODO, is it necessary to check the Re-Factor?
-        # check the change in Re-numbers between root- and strak-airfoil
-        ReFactor = 1.0#float(strakPolar.maxRe)/ float(maxRe_root)
+        # get alpha0 - target
+        alpha = round(params.targets["alpha0"][i], AL_decimals)
 
-        # if Re of strak-airfoil is less than 0.5 times Re of root-airfoil
-        # do not insert alpha@CL=0 - target, as this most probably cannot be
-        # achieved by the optimizer
-        if (ReFactor < 0.5):
-            NoteMsg("Re-number of strak-airfoil is %.1f times smaller than "
-             "Re-number of root-airfoil, alpha_CL0-target will be skipped"\
-              % ReFactor)
+        # set weighting to 2 times maxWeight
+        weighting = 2*params.maxWeight
+
+        # set reynolds
+        if params.ReAlpha0 > 0:
+            reynolds = params.ReAlpha0
         else:
-        # get alpha@CL=0 - target
-            alpha = round(params.targets["alpha_CL0"][i], AL_decimals)
+            reynolds = maxRe_root
 
-            # set weighting to 2 times maxWeight
-            weighting = 2*params.maxWeight
-
-            # limit to maxRe
-            reynolds = strakPolar.maxRe
-
-            # insert op-Point, get index
-            idx = self.insert_OpPoint('alpha_CL0', 'spec-al', alpha, 'target-lift',
-                                         0.0, weighting, reynolds)
+        # insert op-Point, get index
+        idx = self.insert_OpPoint('alpha0', 'spec-al', alpha, 'target-lift',
+                                     0.0, weighting, reynolds)
 
             #print (idx)#Debug
 
@@ -993,9 +921,12 @@ class inputFile:
 ################################################################################
 class strakData:
     def __init__(self):
-        self.inputFolder = 'ressources'
-        self.outputFolder = 'build'
-        self.airfoilFolder = 'airfoils'
+        self.buildDir = ''
+        self.workingDir = ''
+        self.strakMachineCall = "strak_machineV2.py"
+        self.xfoilWorkerCall = "xfoil_worker.exe"
+        self.xoptfoilCall = "xoptfoil-jx.exe"
+        self.xoptfoilVisualizerCall = "xoptfoil_visualizer-jx.exe"
         self.xoptfoilInputFileName = 'istrak.txt'
         self.weightingMode = 'sinus'
         self.batchfileName = 'make_strak.bat'
@@ -1004,6 +935,7 @@ class strakData:
         self.seedFoilName = ""
         self.matchPolarFoilName = ""
         self.ReSqrtCl = 150000
+        self.ReAlpha0 = 0
         self.numOpPoints = 16
         self.minWeight = 0.7
         self.maxWeight = 1.5
@@ -1038,7 +970,7 @@ class strakData:
         self.target_polars = []
         self.strak_polars = []
         self.inputFiles = []
-        self.optimizeAlphaCl0 = [False, False, False, False, False, False, False, False, False, False, False, False]
+        self.optimizeAlpha0 = [True, True, True, True, True, True, True, True, True, True, True, True]
         self.minCLGain = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
         self.maxGlideShift = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
         self.maxGlideGain = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
@@ -1054,7 +986,7 @@ class strakData:
                         "CD_maxGlide": [],
                         "CL_pre_maxLift": [],
                         "CD_pre_maxLift": [],
-                        "alpha_CL0": [],
+                        "alpha0": [],
                        }
 
 
@@ -1073,6 +1005,20 @@ class strakData:
     ############################################################################
     # function that calculates dependend values
     def calculate_DependendValues(self):
+        # setup tool-calls
+        exeCallString =  " .." + bs + exePath + bs
+        pythonCallString = pythonInterpreterName + ' ..' + bs + scriptPath + bs
+
+        self.xfoilWorkerCall = exeCallString + xfoilWorkerName + '.exe'
+        self.xoptfoilCall = exeCallString + xoptfoilName + '.exe'
+
+        if (params.scriptsAsExe):
+            self.strakMachineCall = exeCallString + strakMachineName + '.exe'
+            self.xoptfoilVisualizerCall = exeCallString + xoptfoilVisualizerName + '.exe'
+        else:
+            self.strakMachineCall = pythonCallString + strakMachineName + '.py'
+            self.xoptfoilVisualizerCall = pythonCallString + xoptfoilVisualizerName + '.py'
+
         # calculate List of Re-numers, if wingdata available
         if (self.wingData != None):
             # clear the list of chord-lenghts
@@ -1194,7 +1140,7 @@ class strakData:
             self.targets["CD_pre_maxLift"].append(target_CD_pre_maxLift)
 
             # append alpha_CL0-target
-            self.targets["alpha_CL0"].append(rootPolar.alpha_CL0)
+            self.targets["alpha0"].append(rootPolar.alpha_CL0)
 
             idx = idx + 1
 
@@ -1318,11 +1264,10 @@ class polarGraph:
         return reverseList
 
     # plots an image
-    def plot_Logo(self, ax, scriptDir, params):
+    def plot_Logo(self, ax, params):
         searchPaths = []
-        searchPaths.append(scriptDir + bs + imagesPath + bs + logoName)
-        searchPaths.append('.' + bs + params.inputFolder + bs + logoName)
-        searchPaths.append('..' + bs + params.inputFolder + bs + logoName)
+        searchPaths.append(ressourcesPath + bs + logoName)
+        # further Search-paths can be added here
 
         for path in searchPaths:
             try:
@@ -1766,7 +1711,7 @@ class polarGraph:
 
 
     # draw the graph
-    def draw(self, scriptDir, params):
+    def draw(self, params):
         # get polars
         polars = params.merged_polars
         targetPolars = params.target_polars
@@ -1817,7 +1762,7 @@ class polarGraph:
         fig.suptitle(text, fontsize = 12, color="darkgrey", **csfont)
 
         # first figure, display strak-machine-logo
-        self.plot_Logo(upper[0], scriptDir, params)
+        self.plot_Logo(upper[0], params)
 
         # second figure, display the Lift / Drag-Polar
         self.plot_LiftDragPolars(lower[0], polars, targetPolars)
@@ -1830,7 +1775,13 @@ class polarGraph:
 
         # maximize window
         figManager = plt.get_current_fig_manager()
-        figManager.window.showMaximized()
+        try:
+            figManager.window.state('zoomed')
+        except:
+            try:
+                figManager.window.Maximize(True)
+            except:
+                pass
 
         # show diagram
         plt.show()
@@ -2418,25 +2369,20 @@ def generate_polarCreationCommandLines(commandlines, params, strakFoilName, maxR
 
     # T1-polar
     inputFilename = get_PresetInputFileName('iPolars_T1', params)
-    commandline = "xfoil_worker.exe -i \"%s\" -a \"%s\" -w polar -o \"%s\" -r %d\n" %\
+    commandline = params.xfoilWorkerCall + " -i \"%s\" -a \"%s\" -w polar -o \"%s\" -r %d\n" %\
                              (inputFilename, strakFoilName,
                               strakFoilName.strip('.dat'), maxRe)
     commandlines.append(commandline)
 
     # T2-polar
     inputFilename = get_PresetInputFileName('iPolars_T2', params)
-    commandline = "xfoil_worker.exe -i \"%s\" -a \"%s\" -w polar -o \"%s\" -r %d\n" %\
+    commandline = params.xfoilWorkerCall + " -i \"%s\" -a \"%s\" -w polar -o \"%s\" -r %d\n" %\
                              (inputFilename, strakFoilName,
                               strakFoilName.strip('.dat'), Re)
     commandlines.append(commandline)
 
     # merge polars
-    if (params.scriptsAsExe):
-        scriptName = "strak_machineV2.exe"
-    else:
-        scriptName = "strak_machineV2.py"# __file__
-
-    commandline = scriptName + " -w merge -p1 \"%s\"  -p2 \"%s\""\
+    commandline = params.strakMachineCall + " -w merge -p1 \"%s\"  -p2 \"%s\""\
                  " -m \"%s\" -c %f\n" %\
               (polarFileNameAndPath_T1, polarFileNameAndPath_T2,
                mergedPolarFileName, params.CL_switchpoint_Type2_Type1_polar)
@@ -2465,7 +2411,7 @@ def generate_Commandlines(params):
     maxReList = params.get_maxReList()
 
     # change current working dir to output folder
-    commandline = "cd %s\n\n" % params.outputFolder
+    commandline = "cd %s\n\n" % buildPath
     commandLines.append(commandline)
 
     # store rootfoilname
@@ -2487,7 +2433,7 @@ def generate_Commandlines(params):
         iFile = params.inputFileNames[i]
 
         # generate Xoptfoil-commandline
-        commandline = "xoptfoil-jx -i %s -r %d -a %s -o %s\n" %\
+        commandline = params.xoptfoilCall + " -i %s -r %d -a %s -o %s\n" %\
                         (iFile, ReList[i], previousFoilname,
                           strakFoilName.strip('.dat'))
         commandLines.append(commandline)
@@ -2496,10 +2442,10 @@ def generate_Commandlines(params):
         # creation
         if (params.smoothStrakFoils):
             # smooth the airfoil
-            inputFilename = get_PresetInputFileName('Smooth', params)
+            inputFilename = get_PresetInputFileName(smoothInputFile, params)
 
             # compose commandline for smoothing the airfoil
-            commandline = "xfoil_worker.exe -w smooth -i %s -a %s -o %s\n" % \
+            commandline = params.xfoilWorkerCall + " -w smooth -i %s -a %s -o %s\n" % \
                        (inputFilename, strakFoilName, strakFoilName.strip('.dat'))
             commandLines.append(commandline)
 
@@ -2518,11 +2464,15 @@ def generate_Commandlines(params):
 
         # copy strak-airfoil to airfoil-folder
         commandline = ("copy %s %s" + bs +"%s\n\n") % \
-            (strakFoilName , params.airfoilFolder, strakFoilName)
+            (strakFoilName , airfoilPath, strakFoilName)
         commandLines.append(commandline)
 
     # change current working dir back
     commandline = "cd..\n"
+    commandLines.append(commandline)
+
+    # pause in the end
+    commandline = "pause\n"
     commandLines.append(commandline)
 
     DoneMsg()
@@ -2554,7 +2504,7 @@ def get_strak_commandlines(params, commandlines, idx):
     Re = str(params.ReNumbers[idx])
 
     # change current working dir to output folder
-    strak_commandlines.append("cd %s\n\n" % params.outputFolder)
+    strak_commandlines.append("cd %s\n\n" % buildPath)
     start = False
 
     for line_idx in range(len(commandlines)):
@@ -2628,10 +2578,7 @@ def generate_VisuBatchfiles(params):
 
         # write commandlines
         outputfile.write("cd build\n")
-        if (params.scriptsAsExe):
-            outputfile.write("xoptfoil_visualizer-jx.exe -o 3 -c %s\n" % airfoilName)
-        else:
-            outputfile.write("xoptfoil_visualizer-jx.py -o 3 -c %s\n" % airfoilName)
+        outputfile.write(params.xoptfoilVisualizerCall + " -o 3 -c %s\n" % airfoilName)
 
         # close the outputfile
         outputfile.close()
@@ -2645,9 +2592,8 @@ def get_InFileName(args):
         inFileName = args.input
     else:
         # use Default-name
-        inFileName = 'ressources/strakdata'
+        inFileName = '.' + bs + ressourcesPath + bs + strakMachineInputFileName
 
-    inFileName = inFileName + '.txt'
     print("filename for strak-machine input-data is: %s\n" % inFileName)
     return inFileName
 
@@ -2837,25 +2783,31 @@ def get_Parameters(dict):
     print("getting parameters..\n")
 
     # get mandatory parameters first
-    params.ReNumbers = get_MandatoryParameterFromDict(dict, 'reynolds')
+
     params.seedFoilName = get_MandatoryParameterFromDict(dict, 'seedFoilName')
+
     params.xoptfoilTemplate = get_MandatoryParameterFromDict(dict, 'xoptfoilTemplate')
 
+    params.ReNumbers = get_MandatoryParameterFromDict(dict, 'reynolds')
+
+    params.maxReFactor = get_MandatoryParameterFromDict(dict, "maxReynoldsFactor")
+
+    params.maxGlideGain = get_MandatoryParameterFromDict(dict, "maxGlideGain")
+
+    params.minCLGain  = get_MandatoryParameterFromDict(dict, "minCLGain")
+
+    params.maxGlideShift = get_MandatoryParameterFromDict(dict, "maxGlideShift")
+
+    params.maxSpeedGain = get_MandatoryParameterFromDict(dict, "maxSpeedGain")
+
+    params.maxLiftGain = get_MandatoryParameterFromDict(dict, "maxLiftGain")
+
     # get optional parameters
-    params.inputFolder = get_ParameterFromDict(dict, "inputFolder",
-                                              params.inputFolder)
+    params.additionalOpPoints[0] = get_ParameterFromDict(dict, "additionalOpPoints",
+                                                   params.additionalOpPoints[0])
 
-    params.outputFolder = get_ParameterFromDict(dict, "outputFolder",
-                                              params.outputFolder)
-
-    params.batchfileName = get_ParameterFromDict(dict, "batchfileName",
-                                              params.batchfileName)
-
-    params.xoptfoilInputFileName = get_ParameterFromDict(dict, "xoptfoilInputFileName",
-                                              params.xoptfoilInputFileName)
-
-    params.maxReFactor = get_ParameterFromDict(dict, "maxReynoldsFactor",
-                                              params.maxReFactor)
+    params.ReAlpha0 = get_ParameterFromDict(dict, "ReAlpha0",
+                                                   params.ReAlpha0)
 
     params.operatingMode = get_ParameterFromDict(dict, "operatingMode",
                                               params.operatingMode)
@@ -2880,28 +2832,10 @@ def get_Parameters(dict):
     params.maxLiftDistance = get_ParameterFromDict(dict, "maxLiftDistance",
                                                 params.maxLiftDistance)
 
-    params.maxGlideGain = get_ParameterFromDict(dict, "maxGlideGain",
-                                                params.maxGlideGain)
-
-    params.minCLGain  = get_ParameterFromDict(dict, "minCLGain",
-                                                params.minCLGain)
-
-    params.maxGlideShift = get_ParameterFromDict(dict, "maxGlideShift",
-                                                params.maxGlideShift)
-
-    params.maxSpeedGain = get_ParameterFromDict(dict, "maxSpeedGain",
-                                                params.maxSpeedGain)
-
-    params.maxLiftGain = get_ParameterFromDict(dict, "maxLiftGain",
-                                                params.maxLiftGain)
-
-
-    params.additionalOpPoints[0] = get_ParameterFromDict(dict, "additionalOpPoints",
-                                                   params.additionalOpPoints[0])
 
      # get optional boolean parameters
-    params.optimizeAlphaCl0 = get_booleanParameterListFromDict(dict,
-                             "optimizeAlphaCl0", params.optimizeAlphaCl0)
+    params.optimizeAlpha0 = get_booleanParameterListFromDict(dict,
+                             "optimizeAlpha0", params.optimizeAlpha0)
 
     params.scriptsAsExe = get_booleanParameterFromDict(dict,
                              "scriptsAsExe", params.scriptsAsExe)
@@ -2911,9 +2845,6 @@ def get_Parameters(dict):
 
     params.adaptInitialPerturb = get_booleanParameterFromDict(dict,
                              "adaptInitialPerturb", params.adaptInitialPerturb)
-
-    params.showTargetPolars = get_booleanParameterFromDict(dict,
-                             "showTargetPolars", params.showTargetPolars)
 
     params.smoothSeedfoil = get_booleanParameterFromDict(dict,
                              "smoothSeedfoil", params.smoothSeedfoil)
@@ -2940,13 +2871,13 @@ def get_Parameters(dict):
 
 def get_ListOfFiles(dirName):
     # create a list of files in the given directory
-    listOfFile = os.listdir(dirName)
+    listOfFile = listdir(dirName)
     allFiles = list()
 
     # Iterate over all the entries
     for entry in listOfFile:
         # Create full path
-        fullPath = os.path.join(dirName, entry)
+        fullPath = path.join(dirName, entry)
         allFiles.append(fullPath)
 
     return allFiles
@@ -2954,7 +2885,7 @@ def get_ListOfFiles(dirName):
 
 def get_WingDataFromXML(params):
 
-    xmlFileName = params.inputFolder + '/' + params.xmlFileName
+    xmlFileName = ressourcesPath + '/' + params.xmlFileName
     try:
         planeData = read_planeDataFile(xmlFileName)
     except:
@@ -2972,14 +2903,14 @@ def copyAndSmooth_Airfoil(srcName, srcPath, destName, smooth):
         print("Smoothing airfoil \'%s\', creating airfoil \'%s\'\n" %\
                        (srcName, destName))
         # smooth, rename and copy the airfoil
-        inputFilename = get_PresetInputFileName('Smooth', params)
+        inputFilename = get_PresetInputFileName(smoothInputFile, params)
 
         # compose system-string for smoothing the seed-airfoil
-        systemString = "xfoil_worker.exe -w smooth -i %s -a %s -o %s" % \
+        systemString = params.xfoilWorkerCall + " -w smooth -i %s -a %s -o %s" % \
                        (inputFilename, srcfoilNameAndPath, destName)
 
-        # execute xfoil-worker / create the smootehed root-airfoil
-        os.system(systemString)
+        # execute xfoil-worker / create the smoothed root-airfoil
+        system(systemString)
     else:
         print("Renaming airfoil \'%s\' to \'%s\'\n" % (srcName, destName))
         # only reanme and copy the airfoil
@@ -2995,7 +2926,7 @@ def copy_Matchpolarfoils(params):
     seedFoilName = params.seedFoilName
 
     # get the path where the airfoil can be found
-    srcPath = ".." + bs + params.inputFolder
+    srcPath = ".." + bs + ressourcesPath
 
     # copy and smooth the matchfoil
     copyAndSmooth_Airfoil(matchfoilName, srcPath, matchfoilName,
@@ -3016,7 +2947,7 @@ def generate_rootfoil(params):
     rootfoilName = get_FoilName(params, 0).strip('.dat')
 
     # get the path where the seed-airfoil can be found
-    srcPath = ".." + bs + params.inputFolder
+    srcPath = ".." + bs + ressourcesPath
 
     # copy and smooth the airfoil, also rename
     copyAndSmooth_Airfoil(seedFoilName, srcPath, rootfoilName,
@@ -3076,8 +3007,8 @@ def generate_InputFiles(params):
         newFile.adapt_ReNumbers(strakPolar)
 
         # insert oppoint for alpha @ CL = 0
-        if params.optimizeAlphaCl0[i]:
-            newFile.insert_alpha_CL0_oppoint(params, strakPolar,i)
+        if params.optimizeAlpha0[i]:
+            newFile.insert_alpha0_oppoint(params, strakPolar,i)
 
         if params.adaptInitialPerturb:
             # also adapt the initial perturb according to the change in
@@ -3101,12 +3032,11 @@ def generate_InputFiles(params):
         params.inputFiles.append(newFile)
 
 
-def generate_Polars(params, workingDir, rootfoilName):
+def generate_Polars(params, rootfoilName):
     # generate polars of seedfoil / root-airfoil:
     print("Generating polars for airfoil %s..." % rootfoilName)
 
     # compose polar-dir
-    #polarDir = workingDir + bs + rootfoilName + '_polars'
     polarDir = '.' + bs + rootfoilName + '_polars'
 
     # create polars, polar-file-Names and input-file-names from Re-Numbers
@@ -3133,12 +3063,12 @@ def generate_Polars(params, workingDir, rootfoilName):
         # compose string for system-call of XFOIL-worker for T1-polar generation
         airfoilName = rootfoilName + '.dat'
         inputFilename = get_PresetInputFileName(T1_polarInputFile, params)
-        systemString_T1 = "xfoil_worker.exe -i \"%s\" -o \"%s\" -w polar -a \"%s\" -r %d" %\
+        systemString_T1 = params.xfoilWorkerCall + " -i \"%s\" -o \"%s\" -w polar -a \"%s\" -r %d" %\
                               (inputFilename, rootfoilName, airfoilName, maxRe)
 
         # compose string for system-call of XFOIL-worker for T2-polar generation
         inputFilename = get_PresetInputFileName(T2_polarInputFile, params)
-        systemString_T2 = "xfoil_worker.exe -i \"%s\" -o \"%s\" -w polar -a \"%s\" -r %d" %\
+        systemString_T2 = params.xfoilWorkerCall + " -i \"%s\" -o \"%s\" -w polar -a \"%s\" -r %d" %\
                                  (inputFilename, rootfoilName, airfoilName, Re)
 
         # import polar type 1
@@ -3148,7 +3078,7 @@ def generate_Polars(params, workingDir, rootfoilName):
         except:
             # execute xfoil-worker / create T1 polar-file
             print("Generating polar %s" % polarFileName_T1)
-            os.system(systemString_T1)
+            system(systemString_T1)
             newPolar_T1.import_FromFile(polarFileNameAndPath_T1)
 
         params.T1_polars.append(newPolar_T1)
@@ -3160,7 +3090,7 @@ def generate_Polars(params, workingDir, rootfoilName):
         except:
             # execute xfoil-worker / create T2 polar-file
             print("Generating polar %s" % polarFileName_T2)
-            os.system(systemString_T2)
+            system(systemString_T2)
             newPolar_T2.import_FromFile(polarFileNameAndPath_T2)
 
         params.T2_polars.append(newPolar_T2)
@@ -3278,7 +3208,7 @@ def set_PolarDataFromInputFile(polarData, rootPolar, inputFile,
             polarData.Bot_Xtr.append(0.0)
 
 
-def generate_TargetPolars(params, workingDir):
+def generate_TargetPolars(params):
     # local variable
     targetPolars = params.target_polars
     inputFiles = params.inputFiles
@@ -3309,11 +3239,11 @@ def generate_TargetPolars(params, workingDir):
         params.target_polars.append(targetPolar)
 
         # compose polar-dir
-        polarDir = workingDir + bs + airfoilName + '_polars'
+        polarDir = params.buildDir + bs + airfoilName + '_polars'
 
         # check if output-folder exists. If not, create folder.
-        if not os.path.exists(polarDir):
-            os.makedirs(polarDir)
+        if not path.exists(polarDir):
+            makedirs(polarDir)
 
         # compose filename and path
         polarFileNameAndPath = polarDir + bs + ('target_polar_%s.txt' %\
@@ -3369,10 +3299,6 @@ if __name__ == "__main__":
         merge_Polars(polarFile_1, polarFile_2 , mergedPolarFile, mergeCL)
         exit(0)
 
-    # get real path of the script
-    pathname = os.path.dirname(sys.argv[0])
-    scriptPath = os.path.abspath(pathname)
-
     # try to open .json-file
     try:
         strakDataFile = open(strakDataFileName)
@@ -3382,7 +3308,7 @@ if __name__ == "__main__":
 
     # load dictionary from .json-file
     try:
-        strakdata = json.load(strakDataFile)
+        strakdata = load(strakDataFile)
         strakDataFile.close()
     except:
         ErrorMsg('failed to read data from file %s' % strakDataFileName)
@@ -3396,25 +3322,26 @@ if __name__ == "__main__":
     if (params.xmlFileName != None):
         params.wingData = get_WingDataFromXML(params)
 
-    # calculate further values like max Re-numbers etc.
+    # calculate further values like max Re-numbers etc., also setup
+    # calls of further tools like xoptfoil
     params.calculate_DependendValues()
 
     # get current working dir
-    workingDir = os.getcwd()
+    params.workingDir = getcwd()
 
     # check if output-folder exists. If not, create folder.
-    if not os.path.exists(params.outputFolder):
-        os.makedirs(params.outputFolder)
+    if not path.exists(buildPath):
+        makedirs(buildPath)
 
     # check if airfoil-folder exists. If not, create folder.
-    if not os.path.exists(params.outputFolder + '\\' + params.airfoilFolder):
-        os.makedirs(params.outputFolder + '\\' + params.airfoilFolder)
+    if not path.exists(buildPath + bs + airfoilPath):
+        makedirs(buildPath + bs + airfoilPath)
 
-    # change working-directory
-    os.chdir(workingDir + bs + params.outputFolder)
+    # change working-directory to output-directory
+    chdir(params.workingDir + bs + buildPath)
 
     # get current working dir again
-    workingDir = os.getcwd()
+    params.buildDir = getcwd()
 
     # get name of root-airfoil according to operating-mode
     if (params.operatingMode == 'matchpolarfoils'):
@@ -3424,8 +3351,8 @@ if __name__ == "__main__":
         # copy root-foil to airfoil-folder, as it can be used
         # as the root airfoil without optimization
         systemString = ("copy %s %s" + bs + "%s\n\n") % \
-        (rootfoilName+'.dat', params.airfoilFolder, rootfoilName+'.dat')
-        os.system(systemString)
+        (rootfoilName +'.dat', airfoilPath, rootfoilName + '.dat')
+        system(systemString)
 
     if (params.operatingMode == 'fromtargetpolar'):
         ErrorMsg("Not implemented yet")
@@ -3436,7 +3363,7 @@ if __name__ == "__main__":
         # (no) plotting option (?)
     else:
         # generate polars of root-airfoil, also analyze
-        generate_Polars(params, workingDir, rootfoilName)
+        generate_Polars(params, rootfoilName)
 
         # import polars of strak-airfoils, if they exist
         import_strakPolars(params)
@@ -3451,13 +3378,13 @@ if __name__ == "__main__":
         generate_InputFiles(params)
 
         # generate target polars and write to file
-        generate_TargetPolars(params, workingDir)
+        generate_TargetPolars(params)
 
     # generate Xoptfoil command-lines
     commandlines = generate_Commandlines(params)
 
     # change working-directory
-    os.chdir(".." + bs)
+    chdir(".." + bs)
 
     # generate batchfile
     print("Generating batchfiles...")
@@ -3474,6 +3401,6 @@ if __name__ == "__main__":
     graph = polarGraph()
 
     # show graph
-    graph.draw(scriptPath, params)
+    graph.draw(params)
 
     print("Ready.")
