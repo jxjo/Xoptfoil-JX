@@ -51,12 +51,14 @@ def my_input(message):
 ################################################################################
 #some global variables
 
+# folder containing the inputs-files
+inputFolder = 'ressources'
+
+# folder containing the output / result-files
+outputFolder ='ressources'
+
 # dictionary, containing all data of the planform
 PLanformDict =	{
-            # folder containing the inputs-files
-            "inputFolder": 'ressources',
-            # folder containing the output / result-files
-            "outputFolder": 'ressources',
             # name of XFLR5-template-xml-file
             "templateFileName": 'plane_template.xml',
             # name of the generated XFLR5-xml-file
@@ -67,6 +69,8 @@ PLanformDict =	{
             "planformName": 'main wing',
             # spanwidth in m
             "spanwidth": 2.54,
+            # overeliptic shaping of the wing
+            "overElipticOffset": 0.09,
              # length of the root-chord in m
             "rootchord": 0.223,
             # list of manual given values
@@ -74,9 +78,9 @@ PLanformDict =	{
             # number of airfoils that shall be calculated along the wing
             "numberOfSections": 7,
             # backsweep of the tip of the wing
-            "backsweep": 0.051,
+            "backsweep": 0.031,
             # depth of the aileron / flap in percent of the chord-length
-            "hingeDepthPercent": 25.0,
+            "hingeDepthPercent": 23.5,
             # dihedral of the of the wing in degree
             "dihedral": 2.5
             }
@@ -178,7 +182,7 @@ class wing:
     self.rootProfileName = ""
     self.rootchord = 0.0
     self.spanwidth = 0.0
-    self.overElipticOffset = 0.00
+    self.overElipticOffset = 0.11
     self.halfspanwidth = 0.0
     self.numberOfSections = 0
     self.numberOfGridChords = 0
@@ -200,8 +204,8 @@ class wing:
   def setData(self, dictData):
     self.rootchord = dictData["rootchord"]
     self.spanwidth = dictData["spanwidth"]
-    #self.overElipticOffset = dictData["overElipticOffset"]
-    self.halfspanwidth = (self.spanwidth/2) + self.overElipticOffset
+    self.overElipticOffset = dictData["overElipticOffset"]
+    self.halfspanwidth = (self.spanwidth/2)
     self.numberOfSections = dictData["numberOfSections"]
     self.numberOfGridChords = self.numberOfSections * 256
     self.backsweep = dictData["backsweep"]
@@ -237,7 +241,7 @@ class wing:
   # calculate grid-values of the wing (high-resolution wing planform)
   def calculateGrid(self):
     self.hingeInnerPoint = (1 - (self.hingeDepthPercent/100)) * self.rootchord
-    self.tipDepth = self.rootchord * np.sqrt(1 - ((self.spanwidth/2)*(self.spanwidth/2))/(self.halfspanwidth*self.halfspanwidth))
+    self.tipDepth = self.rootchord * self.overElipticOffset
     self.hingeOuterPoint= 0.5*self.rootchord + (self.tipDepth*(1-self.hingeDepthPercent/100)) + self.backsweep
 
 
@@ -247,8 +251,9 @@ class wing:
         grid = wingGrid()
 
         # calculate grid coordinates
-        grid.y = ((self.spanwidth/2) / (self.numberOfGridChords-1)) * (i-1)
-        grid.chord = self.rootchord*np.sqrt(1-(grid.y*grid.y/(self.halfspanwidth*self.halfspanwidth)))
+        grid.y = (self.halfspanwidth / (self.numberOfGridChords-1)) * (i-1)
+        grid.chord = self.rootchord*(1-self.overElipticOffset)*np.sqrt(1-(grid.y*grid.y/(self.halfspanwidth*self.halfspanwidth)))\
+                    + self.rootchord*self.overElipticOffset
         grid.hingeDepth = (self.hingeDepthPercent/100)*grid.chord
         grid.hingeLine = (self.hingeOuterPoint-self.hingeInnerPoint)/(self.halfspanwidth) * (grid.y) + self.hingeInnerPoint
         grid.trailingEdge = grid.hingeLine + grid.hingeDepth
@@ -481,7 +486,7 @@ if __name__ == "__main__":
   newWing = wing()
 
   #debug
-  #json.dump(PLanformDict, open("planformdata.txt",'w'))
+  json.dump(PLanformDict, open("planformdata.txt",'w'))
 
   # try to open .json-file
   try:
@@ -513,17 +518,17 @@ if __name__ == "__main__":
   newWing.calculateGrid()
   newWing.calculateSections()
 
-  inputFileName =  './' +planformData["inputFolder"] + '/'\
+  inputFileName =  './' + inputFolder + '/'\
                  + planformData["templateFileName"]
-  print inputFileName
+  print (inputFileName)
 
 
-  outputFileName = './' + planformData["outputFolder"] + '/'\
+  outputFileName = './' + outputFolder + '/'\
                  + planformData["outFileName"]
-  print outputFileName
+  print (outputFileName)
 
-  if not os.path.exists(planformData["outputFolder"]):
-      os.makedirs(planformData["outputFolder"])
+  if not os.path.exists(outputFolder):
+      os.makedirs(outputFolder)
 
  # insert the generated-data into the XML-File for XFLR5
   insert_PlanformDataIntoXFLR5_File(newWing, inputFileName, outputFileName, 0)
