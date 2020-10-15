@@ -319,11 +319,16 @@ class wing:
             hingeLine.append(element.hingeLine)
             trailingeEge.append(element.trailingEdge)
 
+        lastElementIndex = len(leadingEdge)-1
+        joint_y = (leadingEdge[lastElementIndex],trailingeEge[lastElementIndex])
+        joint_x = (xValues[lastElementIndex], xValues[lastElementIndex])
+
         # plot shape, mean-line and hinge-line
         plt.plot(xValues, leadingEdge, 'k-')
         plt.plot(xValues, meanLine, 'b-')
         plt.plot(xValues, hingeLine, 'r-')
         plt.plot(xValues, trailingeEge, 'k-')
+        plt.plot(joint_x, joint_y, 'k-')
 
         # insert text for mean-line
         plt.annotate('center line',
@@ -354,6 +359,13 @@ class wing:
 
 
 ################################################################################
+# find the wing in the XML-tree
+def get_wing(root, wingFinSwitch):
+    for wing in root.iter('wing'):
+        for XMLwingFinSwitch in wing.iter('isFin'):
+            if (XMLwingFinSwitch.text == wingFinSwitch):
+                return wing
+
 
 # insert the planform-data into XFLR5-xml-file
 def insert_PlanformDataIntoXFLR5_File(data, inFileName, outFileName):
@@ -363,18 +375,11 @@ def insert_PlanformDataIntoXFLR5_File(data, inFileName, outFileName):
 
     # get root of XML-tree
     root = tree.getroot()
-    bFound = 0
 
     # find wing-data
-    for wing in root.iter('wing'):
-        for XMLwingFinSwitch in wing.iter('isFin'):
-            if (XMLwingFinSwitch.text == data.wingFinSwitch):
-                # found the correct wing
-                print ("Wing was found\n")
-                bFound = 1
-                break
+    wing = get_wing(root, data.wingFinSwitch)
 
-    if (not bFound):
+    if (wing == None):
         print("Error, wing not found\n")
         return
 
@@ -418,6 +423,9 @@ def insert_PlanformDataIntoXFLR5_File(data, inFileName, outFileName):
 
         # add the new section to the tree
         wing.append(newSection)
+
+        print("Section %d: position: %.0f mm, chordlength %.0f mm, airfoilName %s was inserted" %
+          (section.number, section.y*1000, section.chord*1000, section.airfoilName))
 
     # write all data to the new file file
     tree.write(outFileName)
