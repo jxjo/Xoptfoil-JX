@@ -43,16 +43,15 @@ inputFolder = 'ressources'
 # folder containing the output / result-files
 outputFolder ='ressources'
 
+# name of the strakdata-file
+strakDataFileName = "strakdata.txt"
+
 # dictionary, containing all data of the planform
 PLanformDict =	{
             # name of XFLR5-template-xml-file
             "templateFileName": 'plane_template.xml',
             # name of the generated XFLR5-xml-file
             "outFileName": "rocketeerMainWing.xml",
-            # name of the root-airfoil
-            "rootAirfoilName": "AM",
-            # Re*sqrt(Cl) of root-airfoil
-            "rootReynolds": 137000,
             # name of the planform
             "planformName": 'main wing',
             # Wing or Fin
@@ -60,13 +59,9 @@ PLanformDict =	{
             # spanwidth in m
             "spanwidth": 2.54,
             # overeliptic shaping of the wing
-            "overElipticOffset": 0.09,
+            "overElipticOffset": 0.08,
              # length of the root-chord in m
             "rootchord": 0.223,
-            # list of manual given values
-            "listValues": [137000, 120000, 100000, 80000, 60000, 40000, 20000],
-            # number of airfoils that shall be calculated along the wing
-            "numberOfSections": 7,
             # backsweep of the tip of the wing
             "backsweep": 0.031,
             # depth of the aileron / flap in percent of the chord-length
@@ -74,7 +69,6 @@ PLanformDict =	{
             # dihedral of the of the wing in degree
             "dihedral": 2.5
             }
-
 
 ################################################################################
 #
@@ -163,31 +157,32 @@ class wing:
     self.sections = []
     self.grid = []
     self.valueList = []
+    self.area = 0.0
+    self.aspectRatio = 0.0
 
     # Fontsize for planform-plotting
-    self.fontsize = 10
+    self.fontsize = 7
 
 
   # set basic data of the wing
-  def setData(self, dictData):
+  def setData(self, dictData, strakData):
+    # evaluate strakdata
+    self.rootAirfoilName = strakData["seedFoilName"]
+    self.valueList = strakData["reynolds"]
+    self.numberOfSections = len(self.valueList)
+    self.rootReynolds = self.valueList[0]
+
+    # evaluate planformdata
     self.rootchord = dictData["rootchord"]
     self.spanwidth = dictData["spanwidth"]
     self.overElipticOffset = dictData["overElipticOffset"]
     self.halfspanwidth = (self.spanwidth/2)
-    self.numberOfSections = dictData["numberOfSections"]
     self.numberOfGridChords = self.numberOfSections * 256
     self.backsweep = dictData["backsweep"]
     self.hingeDepthPercent = dictData["hingeDepthPercent"]
     self.dihedral = dictData["dihedral"]
-    self.rootAirfoilName = dictData["rootAirfoilName"]
-    self.rootReynolds = dictData["rootReynolds"]
     self.planformName = dictData["planformName"]
     self.wingFinSwitch = dictData["isFin"]
-
-    try:
-        self.valueList = dictData["listValues"]
-    except:
-        pass
 
   # find grid-values for a given chord-length
   def findGrid(self, chord):
@@ -223,12 +218,14 @@ class wing:
 
 
     # calculate all Grid-chords
+    grid_delta_y = (self.halfspanwidth / (self.numberOfGridChords-1))
+
     for i in range(1, (self.numberOfGridChords + 1)):
         # create new grid
         grid = wingGrid()
 
         # calculate grid coordinates
-        grid.y = (self.halfspanwidth / (self.numberOfGridChords-1)) * (i-1)
+        grid.y = grid_delta_y * (i-1)
         grid.chord = self.rootchord*(1-self.overElipticOffset)*np.sqrt(1-(grid.y*grid.y/(self.halfspanwidth*self.halfspanwidth)))\
                     + self.rootchord*self.overElipticOffset
         grid.hingeDepth = (self.hingeDepthPercent/100)*grid.chord
@@ -240,6 +237,12 @@ class wing:
         # append section to section-list of wing
         self.grid.append(grid)
 
+        # calculate area of the wing
+        self.area = self.area + (grid_delta_y*10 * grid.chord*10)
+
+    # calculate aspect ratio of the wing
+    self.area = self.area * 2.0
+    self.aspectRatio = self.spanwidth*self.spanwidth / (self.area/100)
 
   # calculate all sections of the wing, oriented at the grid
   def calculateSections(self):
@@ -290,12 +293,12 @@ class wing:
 
         # plot sections
         factor = 1
-        offset = -60
+        offset = -40
 
         for element in self.sections:
             plt.plot([element.y, element.y] ,[element.leadingEdge, element.trailingEdge], 'b-')
             # insert text for section-name
-            text = ("%s\n(%d mm)" % (element.airfoilName, int(round(element.chord*1000))))
+            text = ("%s (%d mm)" % (element.airfoilName, int(round(element.chord*1000))))
             plt.annotate(text,
             xy=(element.y, element.leadingEdge), xycoords='data',
             xytext=(+(12*factor), offset), textcoords='offset points', fontsize=self.fontsize,
@@ -305,10 +308,10 @@ class wing:
             text = ("%d mm" % (int(round(element.y*1000))))
             plt.annotate(text,
             xy=(element.y, element.trailingEdge), xycoords='data',
-            xytext=(+(12*factor), -offset), textcoords='offset points', fontsize=self.fontsize,
+            xytext=(+(8*factor), -offset), textcoords='offset points', fontsize=self.fontsize,
             arrowprops=dict(arrowstyle="->", connectionstyle="arc, rad =0"))
-            factor = factor + 1
-            offset = offset + 5#12
+            factor = factor + 0.2
+            offset = offset + 3.5#12
 
         for element in self.grid:
             #build up list of x-values
@@ -345,8 +348,10 @@ class wing:
 
         # insert title
         spanwidth_mm = int(round(self.spanwidth*1000))
-        text = "%s (%d mm / %d mm)" % (self.planformName, spanwidth_mm/2, spanwidth_mm)
-        plt.title(text, fontsize = 20)
+        text = "\"%s\"\n wingspan: %d mm, area: %.2f dm², aspect ratio: %.2f\n"\
+         % (self.planformName, spanwidth_mm, self.area, self.aspectRatio)
+
+        plt.title(text, fontsize = 14)
 
         # show grid
         plt.grid(True)
@@ -444,7 +449,6 @@ def getInFileName(args):
     print("filename for planform input-data is: %s" % inFileName)
     return inFileName
 
-
 ################################################################################
 # function that gets arguments from the commandline
 def getArguments():
@@ -463,61 +467,78 @@ def getArguments():
 # Main program
 if __name__ == "__main__":
 
-  #get command-line-arguments or user-input
-  planformDataFileName = getArguments()
+    #get command-line-arguments or user-input
+    planformDataFileName = getArguments()
 
-  # create a new planform
-  newWing = wing()
+    # create a new planform
+    newWing = wing()
 
-  #debug
-  json.dump(PLanformDict, open("planformdata.txt",'w'))
+    #debug
+    json.dump(PLanformDict, open("planformdata.txt",'w'))
 
-  # try to open .json-file
-  try:
+    # try to open .json-file
+    try:
      planform = open(planformDataFileName)
-  except:
-    print('Error, failed to open file %s' % planformDataFileName)
-    exit(-1)
+    except:
+        print('Error, failed to open file %s' % planformDataFileName)
+        exit(-1)
 
-  # load dictionary from .json-file
-  try:
-    planformData = json.load( planform)
-    planform.close()
-  except:
-    print('Error, failed to read data from file %s' % planformDataFileName)
-    planform.close()
-    exit(-1)
+    # load dictionary from .json-file
+    try:
+        planformData = json.load( planform)
+        planform.close()
+    except:
+        print('Error, failed to read data from file %s' % planformDataFileName)
+        planform.close()
+        exit(-1)
 
 
-  try:
-    planformData = json.load(open("planformdata.txt"))
-  except:
-    print('failed to open file \"planformdata.txt\"')
-    planformData = PLanformDict
+    try:
+        planformData = json.load(open("planformdata.txt"))
+    except:
+        print('failed to open file \"planformdata.txt\"')
+        planformData = PLanformDict
 
-  # set data for the planform
-  newWing.setData(planformData)
 
-  # calculate the grid and sections
-  newWing.calculateGrid()
-  newWing.calculateSections()
+    # try to open .json-file
+    try:
+        strakDataFile = open('./' + inputFolder + '/' + strakDataFileName)
+    except:
+        print('failed to open file %s' % strakDataFileName)
+        exit(-1)
 
-  inputFileName =  './' + inputFolder + '/'\
+    # load dictionary from .json-file
+    try:
+        strakdata = json.load(strakDataFile)
+        strakDataFile.close()
+    except:
+        print('failed to read data from file %s' % strakDataFileName)
+        strakDataFile.close()
+        exit(-1)
+
+    # set data for the planform
+    newWing.setData(planformData, strakdata)
+
+    # calculate the grid and sections
+    newWing.calculateGrid()
+    newWing.calculateSections()
+
+    inputFileName =  './' + inputFolder + '/'\
                  + planformData["templateFileName"]
-  print (inputFileName)
+    print (inputFileName)
 
 
-  outputFileName = './' + outputFolder + '/'\
-                 + planformData["outFileName"]
-  print (outputFileName)
+    outputFileName = './' + outputFolder + '/'\
+                   + planformData["outFileName"]
+    print (outputFileName)
 
-  if not os.path.exists(outputFolder):
-      os.makedirs(outputFolder)
+    if not os.path.exists(outputFolder):
+        os.makedirs(outputFolder)
 
- # insert the generated-data into the XML-File for XFLR5
-  insert_PlanformDataIntoXFLR5_File(newWing, inputFileName, outputFileName)
+    # insert the generated-data into the XML-File for XFLR5
+    insert_PlanformDataIntoXFLR5_File(newWing, inputFileName, outputFileName)
 
-  # plot the result
-  newWing.plotPlanform()
+    # plot the result
+    newWing.plotPlanform()
 
-  print("Ready.")
+    print("Ready.")
