@@ -23,6 +23,7 @@
 
 
 import xml.etree.ElementTree as ET
+from copy import deepcopy
 import argparse
 from sys import version_info
 import os
@@ -34,22 +35,7 @@ from math import log10, floor
 import json
 
 ################################################################################
-# Input function that checks python version
-def my_input(message):
-
-  # Check python version
-
-  python_version = version_info[0]
-
-  # Issue correct input command
-
-  if (python_version == 2):
-    return raw_input(message)
-  else:
-    return input(message)
-
-################################################################################
-#some global variables
+# some global variables
 
 # folder containing the inputs-files
 inputFolder = 'ressources'
@@ -62,11 +48,15 @@ PLanformDict =	{
             # name of XFLR5-template-xml-file
             "templateFileName": 'plane_template.xml',
             # name of the generated XFLR5-xml-file
-            "outFileName": "rocketeer.xml",
+            "outFileName": "rocketeerMainWing.xml",
             # name of the root-airfoil
-            "rootAirfoilName": "JX-FXrcn",
+            "rootAirfoilName": "AM",
+            # Re*sqrt(Cl) of root-airfoil
+            "rootReynolds": 137000,
             # name of the planform
             "planformName": 'main wing',
+            # Wing or Fin
+            "isFin": 'false',
             # spanwidth in m
             "spanwidth": 2.54,
             # overeliptic shaping of the wing
@@ -85,21 +75,6 @@ PLanformDict =	{
             "dihedral": 2.5
             }
 
-################################################################################
-
-
-
-################################################################################
-
-mainWing_Tag = "<Name>%s</Name>" % "Main Wing"
-fin_Tag = "<Name>%s</Name>" % "Fin"
-
-StartOfSections_Tag = "            <Sections>"
-EndOfSections_Tag = "            </Sections>"
-
-inputFileName = "plane_template.xml"
-outputFileName = "plane.xml"
-
 
 ################################################################################
 #
@@ -111,6 +86,16 @@ def linearEquation(x1, x2, y1, y2, x):
     y = ((y2-y1)/(x2-x1)) * (x-x1) + y1
     return y
 
+# function that rounds Re and returns a rounded decimal number
+def round_Re(Re):
+    floatRe = Re/1000.0
+    decRe = round(floatRe, 0)
+    return int(decRe)
+
+
+# transform reynolds-number into a string e.g. Re = 123500 -> string = 124k
+def get_ReString(Re):
+    return ("%03dk" % round_Re(Re))
 
 ################################################################################
 #
@@ -134,24 +119,7 @@ class wingSection:
         self.dihedral= 3.00
 
         # name of the airfoil-file that shall be used for the section
-        self.profileName = ""
-
-
-    # write section-data to xml-file in the format of XFLR5
-    def writeToFile(self, file):
-        file.write("                <Section>\n");
-        file.write("                    <y_position>  %f</y_position>\n" % self.y)
-        file.write("                    <Chord>  %f</Chord>\n"  % self.chord)
-        file.write("                    <xOffset>  %f</xOffset>\n" % self.leadingEdge)
-        file.write("                    <Dihedral>  %f</Dihedral>\n" % self.dihedral)
-        file.write("                    <Twist>  0.000</Twist>\n")
-        file.write("                    <x_number_of_panels>13</x_number_of_panels>\n")
-        file.write("                    <x_panel_distribution>COSINE</x_panel_distribution>\n")
-        file.write("                    <y_number_of_panels>5</y_number_of_panels>\n")
-        file.write("                    <y_panel_distribution>UNIFORM</y_panel_distribution>\n")
-        file.write("                    <Left_Side_FoilName>%s</Left_Side_FoilName>\n" % self.profileName)
-        file.write("                    <Right_Side_FoilName>%s</Right_Side_FoilName>\n" % self.profileName)
-        file.write("                </Section>\n")
+        self.airfoilName = ""
 
 ################################################################################
 #
@@ -179,7 +147,7 @@ class wing:
 
   #class init
   def __init__(self):
-    self.rootProfileName = ""
+    self.rootAirfoilName = ""
     self.rootchord = 0.0
     self.spanwidth = 0.0
     self.overElipticOffset = 0.11
@@ -211,8 +179,11 @@ class wing:
     self.backsweep = dictData["backsweep"]
     self.hingeDepthPercent = dictData["hingeDepthPercent"]
     self.dihedral = dictData["dihedral"]
-    self.rootProfileName = dictData["rootAirfoilName"]
+    self.rootAirfoilName = dictData["rootAirfoilName"]
+    self.rootReynolds = dictData["rootReynolds"]
     self.planformName = dictData["planformName"]
+    self.wingFinSwitch = dictData["isFin"]
+
     try:
         self.valueList = dictData["listValues"]
     except:
@@ -235,7 +206,13 @@ class wing:
         section.leadingEdge = grid.leadingEdge
         section.meanLine = grid.meanLine
         section.dihedral = self.dihedral
-        section.profileName = self.rootProfileName + ("_%d" % section.number)
+        if (section.number == 1):
+            suffix = '-root'
+        else:
+            suffix = '-strak'
+        Re = (section.chord / self.rootchord) * self.rootReynolds
+        section.airfoilName = (self.rootAirfoilName + "%s-%s.dat") % \
+        (suffix ,get_ReString(Re))
 
 
   # calculate grid-values of the wing (high-resolution wing planform)
@@ -285,7 +262,7 @@ class wing:
         section.number = i
 
         # set name of the airfoil
-        section.profileName = self.rootProfileName + "_%s" % i
+        section.airfoilName = self.rootAirfoilName + "_%s" % i
 
         # find grid-values matching the chordlength of the section
         grid = self.findGrid(chord)
@@ -318,7 +295,7 @@ class wing:
         for element in self.sections:
             plt.plot([element.y, element.y] ,[element.leadingEdge, element.trailingEdge], 'b-')
             # insert text for section-name
-            text = ("%s\n(%d mm)" % (element.profileName, int(round(element.chord*1000))))
+            text = ("%s\n(%d mm)" % (element.airfoilName, int(round(element.chord*1000))))
             plt.annotate(text,
             xy=(element.y, element.leadingEdge), xycoords='data',
             xytext=(+(12*factor), offset), textcoords='offset points', fontsize=self.fontsize,
@@ -378,73 +355,72 @@ class wing:
 
 ################################################################################
 
-def SearchMainWingSection(line, outputFile, command):
-    if line.find(mainWing_Tag)>=0:
-        print("Main wing was found\n")
-        command = command+1
-
-    outputFile.write(line)
-    return command
-
-def SearchFinSection(line, outputFile, command):
-    if line.find(fin_Tag)>=0:
-        print("Fin was found\n")
-        command = command+1
-
-    outputFile.write(line)
-    return command
-
-def SearchSectionsStart(line, outputFile, command):
-    position = line.find(StartOfSections_Tag)
-    if position >=0:
-        print("Start of Sections was found\n")
-        command = command+1
-
-    outputFile.write(line)
-    return command
-
-def WriteSections(sections, outputFile, command):
-    for section in sections:
-       section.writeToFile(outputFile)
-
-    print("New Sections written to file\n")
-    command = command+1
-    return command
-
-def SearchSectionsEnd(line, outputFile, command):
-    if line.find(EndOfSections_Tag)>=0:
-        print("End of Sections was found\n")
-        outputFile.write(line)
-        command = command+1
-
-    return command
-
 # insert the planform-data into XFLR5-xml-file
-def insert_PlanformDataIntoXFLR5_File(data, inFileName, outFileName, wingFinSwitch):
-  command = 1
+def insert_PlanformDataIntoXFLR5_File(data, inFileName, outFileName):
 
-   # open inputfile and outputfile
-  inputFile = open(inFileName, 'r')
-  outputFile = open(outFileName, 'w+')
+    # basically parse the XML-file
+    tree = ET.parse(inFileName)
 
-  # parse lines of the inputfile
-  for line in inputFile:
-    if command == 1:
-         command = SearchMainWingSection(line, outputFile, command)
-    elif command == 2:
-        command = SearchSectionsStart(line, outputFile, command)
-    elif command == 3:
-        # apply the new wing sections
-        command = WriteSections(data.sections, outputFile, command)
-    elif command == 4:
-        command = SearchSectionsEnd(line, outputFile, command)
-    elif command == 5:
-        outputFile.write(line)
+    # get root of XML-tree
+    root = tree.getroot()
+    bFound = 0
 
-  # close files
-  inputFile.close()
-  outputFile.close()
+    # find wing-data
+    for wing in root.iter('wing'):
+        for XMLwingFinSwitch in wing.iter('isFin'):
+            if (XMLwingFinSwitch.text == data.wingFinSwitch):
+                # found the correct wing
+                print ("Wing was found\n")
+                bFound = 1
+                break
 
+    if (not bFound):
+        print("Error, wing not found\n")
+        return
+
+    # find sections-data-template
+    for sectionTemplate in wing.iter('Sections'):
+        # copy the template
+        newSection = deepcopy(sectionTemplate)
+
+        # remove the template
+        wing.remove(sectionTemplate)
+
+    # write the new section-data to the wing
+    for section in data.sections:
+        # copy the template
+        newSection = deepcopy(sectionTemplate)
+
+        # enter the new data
+        for yPosition in newSection.iter('y_position'):
+            # convert float to text
+            yPosition.text = str(section.y)
+
+        for chord in newSection.iter('Chord'):
+            # convert float to text
+            chord.text = str(section.chord)
+
+        for xOffset in newSection.iter('xOffset'):
+            # convert float to text
+            xOffset.text = str(section.leadingEdge)
+
+        for dihedral in newSection.iter('Dihedral'):
+            # convert float to text
+            dihedral.text = str(section.dihedral)
+
+        for foilName in newSection.iter('Left_Side_FoilName'):
+            # convert float to text
+            foilName.text = str(section.airfoilName)
+
+        for foilName in newSection.iter('Right_Side_FoilName'):
+            # convert float to text
+            foilName.text = str(section.airfoilName)
+
+        # add the new section to the tree
+        wing.append(newSection)
+
+    # write all data to the new file file
+    tree.write(outFileName)
 
 ################################################################################
 # function that gets the name of the strak-machine-data-file
@@ -531,7 +507,7 @@ if __name__ == "__main__":
       os.makedirs(outputFolder)
 
  # insert the generated-data into the XML-File for XFLR5
-  insert_PlanformDataIntoXFLR5_File(newWing, inputFileName, outputFileName, 0)
+  insert_PlanformDataIntoXFLR5_File(newWing, inputFileName, outputFileName)
 
   # plot the result
   newWing.plotPlanform()
