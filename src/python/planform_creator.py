@@ -45,9 +45,9 @@ fs_infotext = 7
 fs_legend = 7
 
 # colours, styles and linewidths
-cl_centerLine = 'b'
+cl_centerLine = 'darkcyan'
 ls_centerLine = 'dashdot'
-lw_centerLine  = 0.4
+lw_centerLine  = 0.8
 cl_hingeLine = 'r'
 ls_hingeLine = 'solid'
 lw_hingeLine = 0.6
@@ -85,7 +85,7 @@ PLanformDict =	{
             # overeliptic shaping of the wing
             "overElipticOffset": 0.08,
             # orientation of the wings leading edge
-            "leadingEdgeOrientation": 'down',
+            "leadingEdgeOrientation": 'up',
             # length of the root-chord in m
             "rootchord": 0.223,
             # sweep of the tip of the wing in degrees
