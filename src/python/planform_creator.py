@@ -37,6 +37,30 @@ import json
 ################################################################################
 # some global variables
 
+# fonts
+csfont = {'fontname':'DejaVu Sans'}
+
+# fontsizes
+fs_infotext = 7
+fs_legend = 7
+
+# colours, styles and linewidths
+cl_centerLine = 'b'
+ls_centerLine = 'dashdot'
+lw_centerLine  = 0.4
+cl_hingeLine = 'r'
+ls_hingeLine = 'solid'
+lw_hingeLine = 0.6
+cl_planform = 'aqua'
+ls_planform = 'solid'
+lw_planform = 0.6
+cl_sections = 'grey'
+ls_sections = 'solid'
+lw_sections = 0.4
+
+fs_tick = 7
+cl_infotext = 'aqua'
+
 # folder containing the inputs-files
 inputFolder = 'ressources'
 
@@ -60,7 +84,9 @@ PLanformDict =	{
             "wingspan": 2.54,
             # overeliptic shaping of the wing
             "overElipticOffset": 0.08,
-             # length of the root-chord in m
+            # orientation of the wings leading edge
+            "leadingEdgeOrientation": 'down',
+            # length of the root-chord in m
             "rootchord": 0.223,
             # sweep of the tip of the wing in degrees
             "rootTipSweep": 4.2,
@@ -139,61 +165,62 @@ class wingGrid:
 #
 ################################################################################
 class wing:
+    #class init
+    def __init__(self):
+        self.rootAirfoilName = ""
+        self.rootchord = 0.0
+        self.leadingEdgeOrientation = 'down'
+        self.wingspan = 0.0
+        self.overElipticOffset = 0.11
+        self.halfwingspan = 0.0
+        self.numberOfSections = 0
+        self.numberOfGridChords = 0
+        self.backsweep = 0.00
+        self.hingeDepthPercent = 0.0
+        self.hingeInnerPoint = 0
+        self.hingeOuterPoint = 0
+        self.tipDepth = 0
+        self.dihedral = 0.00
+        self.sections = []
+        self.grid = []
+        self.valueList = []
+        self.area = 0.0
+        self.aspectRatio = 0.0
 
-  #class init
-  def __init__(self):
-    self.rootAirfoilName = ""
-    self.rootchord = 0.0
-    self.wingspan = 0.0
-    self.overElipticOffset = 0.11
-    self.halfwingspan = 0.0
-    self.numberOfSections = 0
-    self.numberOfGridChords = 0
-    self.backsweep = 0.00
-    self.hingeDepthPercent = 0.0
-    self.hingeInnerPoint = 0
-    self.hingeOuterPoint = 0
-    self.tipDepth = 0
-    self.dihedral = 0.00
-    self.sections = []
-    self.grid = []
-    self.valueList = []
-    self.area = 0.0
-    self.aspectRatio = 0.0
-
-    # Fontsize for planform-plotting
-    self.fontsize = 7
-
-
-  # set basic data of the wing
-  def setData(self, dictData, strakData):
-    # evaluate strakdata
-    self.rootAirfoilName = strakData["seedFoilName"]
-    self.valueList = strakData["reynolds"]
-    self.numberOfSections = len(self.valueList)
-    self.rootReynolds = self.valueList[0]
-
-    # evaluate planformdata
-    self.rootchord = dictData["rootchord"]
-    self.wingspan = dictData["wingspan"]
-    self.overElipticOffset = dictData["overElipticOffset"]
-    self.halfwingspan = (self.wingspan/2)
-    self.numberOfGridChords = self.numberOfSections * 256
-    self.rootTipSweep = dictData["rootTipSweep"]
-    self.hingeDepthPercent = dictData["hingeDepthPercent"]
-    self.dihedral = dictData["dihedral"]
-    self.planformName = dictData["planformName"]
-    self.wingFinSwitch = dictData["isFin"]
-
-  # find grid-values for a given chord-length
-  def findGrid(self, chord):
-    for element in self.grid:
-        if (element.chord <= chord):
-          return element
+        # Fontsize for planform-plotting
+        self.fontsize = 7
 
 
-  # copy grid-values to section
-  def copyGridToSection(self, grid, section):
+    # set basic data of the wing
+    def setData(self, dictData, strakData):
+        # evaluate strakdata
+        self.rootAirfoilName = strakData["seedFoilName"]
+        self.valueList = strakData["reynolds"]
+        self.numberOfSections = len(self.valueList)
+        self.rootReynolds = self.valueList[0]
+
+        # evaluate planformdata
+        self.rootchord = dictData["rootchord"]
+        self.wingspan = dictData["wingspan"]
+        self.overElipticOffset = dictData["overElipticOffset"]
+        self.halfwingspan = (self.wingspan/2)
+        self.numberOfGridChords = self.numberOfSections * 256
+        self.rootTipSweep = dictData["rootTipSweep"]
+        self.leadingEdgeOrientation = dictData["leadingEdgeOrientation"]
+        self.hingeDepthPercent = dictData["hingeDepthPercent"]
+        self.dihedral = dictData["dihedral"]
+        self.planformName = dictData["planformName"]
+        self.wingFinSwitch = dictData["isFin"]
+
+    # find grid-values for a given chord-length
+    def findGrid(self, chord):
+        for element in self.grid:
+            if (element.chord <= chord):
+              return element
+
+
+    # copy grid-values to section
+    def copyGridToSection(self, grid, section):
         section.y = grid.y
         section.chord = grid.chord
         section.hingeDepth = grid.hingeDepth
@@ -207,124 +234,124 @@ class wing:
         section.Re = (section.chord / self.rootchord) * self.rootReynolds
 
 
-  # sets the airfoilname of a section
-  def setAirfoilName(self, section):
-    if (section.number == 1):
-        suffix = '-root'
-    else:
-        suffix = '-strak'
+    # sets the airfoilname of a section
+    def setAirfoilName(self, section):
+        if (section.number == 1):
+            suffix = '-root'
+        else:
+            suffix = '-strak'
 
-    section.airfoilName = (self.rootAirfoilName + "%s-%s.dat") % \
-        (suffix ,get_ReString(section.Re))
+        section.airfoilName = (self.rootAirfoilName + "%s-%s.dat") % \
+            (suffix ,get_ReString(section.Re))
 
 
-  # calculate grid-values of the wing (high-resolution wing planform)
-  def calculateGrid(self):
-    self.hingeInnerPoint = (1 - (self.hingeDepthPercent/100)) * self.rootchord
+    # calculate grid-values of the wing (high-resolution wing planform)
+    def calculateGrid(self):
+        self.hingeInnerPoint = (1 - (self.hingeDepthPercent/100)) * self.rootchord
 
-    # calculate tip-depth
-    self.tipDepth = self.rootchord * self.overElipticOffset
+        # calculate tip-depth
+        self.tipDepth = self.rootchord * self.overElipticOffset
 
-    # calculate tip-offset for sweep-angle
-    tipOffset = tan((self.rootTipSweep*pi)/180)*(self.wingspan/2)
+        # calculate tip-offset for sweep-angle
+        tipOffset = tan((self.rootTipSweep*pi)/180)*(self.wingspan/2)
 
-    # calculate hinge-offset
-    hingeOffset = tipOffset*(self.hingeDepthPercent/100)
+        # calculate hinge-offset
+        hingeOffset = tipOffset*(self.hingeDepthPercent/100)
 
-    # calculate hinge outer-point
-    self.hingeOuterPoint= 0.5*self.rootchord +\
-       (self.tipDepth*(1-self.hingeDepthPercent/100)) + hingeOffset
+        # calculate hinge outer-point
+        self.hingeOuterPoint= 0.5*self.rootchord +\
+           (self.tipDepth*(1-self.hingeDepthPercent/100)) + hingeOffset
 
-    # calculate all Grid-chords
-    grid_delta_y = (self.halfwingspan / (self.numberOfGridChords-1))
+        # calculate all Grid-chords
+        grid_delta_y = (self.halfwingspan / (self.numberOfGridChords-1))
 
-    for i in range(1, (self.numberOfGridChords + 1)):
-        # create new grid
-        grid = wingGrid()
+        for i in range(1, (self.numberOfGridChords + 1)):
+            # create new grid
+            grid = wingGrid()
 
-        # calculate grid coordinates
-        grid.y = grid_delta_y * (i-1)
-        grid.chord = self.rootchord*(1-self.overElipticOffset)*np.sqrt(1-(grid.y*grid.y/(self.halfwingspan*self.halfwingspan)))\
-                    + self.rootchord*self.overElipticOffset
-        grid.hingeDepth = (self.hingeDepthPercent/100)*grid.chord
-        grid.hingeLine = (self.hingeOuterPoint-self.hingeInnerPoint)/(self.halfwingspan) * (grid.y) + self.hingeInnerPoint
-        grid.trailingEdge = grid.hingeLine + grid.hingeDepth
-        grid.leadingEdge = grid.hingeLine -(grid.chord-grid.hingeDepth)
-        grid.meanLine = (grid.leadingEdge + grid.trailingEdge)/2
+            # calculate grid coordinates
+            grid.y = grid_delta_y * (i-1)
+            grid.chord = self.rootchord*(1-self.overElipticOffset)*np.sqrt(1-(grid.y*grid.y/(self.halfwingspan*self.halfwingspan)))\
+                        + self.rootchord*self.overElipticOffset
+            grid.hingeDepth = (self.hingeDepthPercent/100)*grid.chord
+            grid.hingeLine = (self.hingeOuterPoint-self.hingeInnerPoint)/(self.halfwingspan) * (grid.y) + self.hingeInnerPoint
+            grid.trailingEdge = grid.hingeLine + grid.hingeDepth
+            grid.leadingEdge = grid.hingeLine -(grid.chord-grid.hingeDepth)
+            grid.meanLine = (grid.leadingEdge + grid.trailingEdge)/2
 
-        # append section to section-list of wing
-        self.grid.append(grid)
+            # append section to section-list of wing
+            self.grid.append(grid)
 
-        # calculate area of the wing
-        self.area = self.area + (grid_delta_y*10 * grid.chord*10)
+            # calculate area of the wing
+            self.area = self.area + (grid_delta_y*10 * grid.chord*10)
 
-    # calculate aspect ratio of the wing
-    self.area = self.area * 2.0
-    self.aspectRatio = self.wingspan*self.wingspan / (self.area/100)
+        # calculate aspect ratio of the wing
+        self.area = self.area * 2.0
+        self.aspectRatio = self.wingspan*self.wingspan / (self.area/100)
 
-  # calculate all sections of the wing, oriented at the grid
-  def calculateSections(self):
 
-    # calculate decrement of chord from section to section
-    chord_decrement = (self.rootchord - self.tipDepth) / (self.numberOfSections)
+    # calculate all sections of the wing, oriented at the grid
+    def calculateSections(self):
+        # calculate decrement of chord from section to section
+        chord_decrement = (self.rootchord - self.tipDepth) / (self.numberOfSections)
 
-    # set chord-length of root-section
-    chord = self.rootchord
+        # set chord-length of root-section
+        chord = self.rootchord
 
-    # create all sections
-    for i in range(1, (self.numberOfSections + 1)):
-        # create new section
+        # create all sections
+        for i in range(1, (self.numberOfSections + 1)):
+            # create new section
+            section = wingSection()
+
+            # append section to section-list of wing
+            self.sections.append(section)
+
+            # set number of the section
+            section.number = i
+
+            # find grid-values matching the chordlength of the section
+            grid = self.findGrid(chord)
+
+            # copy grid-coordinates to section
+            self.copyGridToSection(grid, section)
+
+            # set the airfoil-Name
+            self.setAirfoilName(section)
+
+            # store last Re value for the tip
+            lastSectionRe = section.Re
+
+            # calculate chord for the next section
+            if (i < len(self.valueList)):
+                # calculate cordlangths from given valueList
+                chord = (self.rootchord * self.valueList[i]) / self.valueList[0]
+            else:
+                # calculate chord with fixed difference
+                chord = chord - chord_decrement
+
+        # create last section
         section = wingSection()
 
         # append section to section-list of wing
         self.sections.append(section)
 
         # set number of the section
-        section.number = i
+        section.number = i+1
 
-        # find grid-values matching the chordlength of the section
-        grid = self.findGrid(chord)
+        # get the tip grid-values
+        grid = self.grid[len(self.grid)-1]
 
         # copy grid-coordinates to section
         self.copyGridToSection(grid, section)
 
+        # set same Re as for the last section so the same airfoil-name will be given
+        section.Re = lastSectionRe
+
         # set the airfoil-Name
         self.setAirfoilName(section)
 
-        # store last Re value for the tip
-        lastSectionRe = section.Re
-
-        # calculate chord for the next section
-        if (i < len(self.valueList)):
-            # calculate cordlangths from given valueList
-            chord = (self.rootchord * self.valueList[i]) / self.valueList[0]
-        else:
-            # calculate chord with fixed difference
-            chord = chord - chord_decrement
-
-    # create last section
-    section = wingSection()
-
-    # append section to section-list of wing
-    self.sections.append(section)
-
-    # set number of the section
-    section.number = i+1
-
-    # get the tip grid-values
-    grid = self.grid[len(self.grid)-1]
-
-    # copy grid-coordinates to section
-    self.copyGridToSection(grid, section)
-
-    # set same Re as for the last section so the same airfoil-name will be given
-    section.Re = lastSectionRe
-
-    # set the airfoil-Name
-    self.setAirfoilName(section)
-
-  # plot the wing planform
-  def plotPlanform(self):
+    # plot the wing planform
+    def plotPlanform(self, ax):
         #create empty lists
         xValues = []
         leadingEdge = []
@@ -332,27 +359,57 @@ class wing:
         hingeLine = []
         meanLine = []
 
-        # plot sections
-        factor = 1
-        offset = -40
+        # setup empty list for new x-tick locations
+        new_tick_locations = []
 
-        for element in self.sections:
-            plt.plot([element.y, element.y] ,[element.leadingEdge, element.trailingEdge], 'b-')
-            # insert text for section-name
-            text = ("%s (%d mm)" % (element.airfoilName, int(round(element.chord*1000))))
-            plt.annotate(text,
-            xy=(element.y, element.leadingEdge), xycoords='data',
-            xytext=(+(12*factor), offset), textcoords='offset points', fontsize=self.fontsize,
-            arrowprops=dict(arrowstyle="->", connectionstyle="arc3, rad=.02"))
+        # set axes and labels
+        self.set_AxesAndLabels(ax, "Half-wing planform")
 
-            # insert text for section-length
-            text = ("%d mm" % (int(round(element.y*1000))))
-            plt.annotate(text,
-            xy=(element.y, element.trailingEdge), xycoords='data',
-            xytext=(+(8*factor), -offset), textcoords='offset points', fontsize=self.fontsize,
-            arrowprops=dict(arrowstyle="->", connectionstyle="arc, rad =0"))
-            factor = factor + 0.2
-            offset = offset + 3.5#12
+        # plot sections in reverse order
+        for element in reversed(self.sections):
+            ax.plot([element.y, element.y] ,[element.leadingEdge, element.trailingEdge],
+            color=cl_sections, linestyle = ls_sections, linewidth = lw_sections)
+
+            # determine x and y Positions of the labels
+            xPos = element.y
+            if (self.leadingEdgeOrientation == 'up'):
+                yPosChordLabel = element.trailingEdge
+                yPosOffsetSectionLabel = 12
+            else:
+                yPosChordLabel = element.leadingEdge
+                yPosOffsetSectionLabel = -12
+
+            yPosSectionLabel = element.leadingEdge
+
+            # plot label for chordlength of section
+            text = ("%d mm" % int(round(element.chord*1000)))
+            ax.annotate(text,
+            xy=(xPos, yPosChordLabel), xycoords='data',
+            xytext=(2, 10), textcoords='offset points', color = cl_sections,
+            fontsize=fs_infotext, rotation='vertical')
+
+            # plot label for airfoil-name / section-name
+            text = ("%s" % (element.airfoilName))
+            props = dict(arrowstyle="-", connectionstyle="arc3, rad=-0.23", color = cl_sections)
+            ax.annotate(text,
+            xy=(xPos, yPosSectionLabel), xycoords='data',
+            xytext=(10, yPosOffsetSectionLabel), textcoords='offset points', color = cl_sections,
+            fontsize=fs_infotext, arrowprops=props)
+
+            # append position of section to x-axis ticks
+            new_tick_locations.append(xPos)
+
+        # set new ticks for the x-axis according to the positions of the sections
+        ax.set_xticks(new_tick_locations)
+
+        # set new fontsize of the x-tick labels
+        for tick in ax.xaxis.get_major_ticks():
+            tick.label.set_fontsize(fs_tick)
+            tick.label.set_rotation('vertical')
+
+        # set new fontsize of the y-tick labels
+        for tick in ax.yaxis.get_major_ticks():
+            tick.label.set_fontsize(fs_tick)
 
         for element in self.grid:
             #build up list of x-values
@@ -363,46 +420,90 @@ class wing:
             hingeLine.append(element.hingeLine)
             trailingeEge.append(element.trailingEdge)
 
+        # setup root- and tip-joint
+        rootJoint_y = (leadingEdge[0],trailingeEge[0])
+        rootJoint_x = (xValues[0], xValues[0])
         lastElementIndex = len(leadingEdge)-1
-        joint_y = (leadingEdge[lastElementIndex],trailingeEge[lastElementIndex])
-        joint_x = (xValues[lastElementIndex], xValues[lastElementIndex])
+        tipJoint_y = (leadingEdge[lastElementIndex],trailingeEge[lastElementIndex])
+        tipJoint_x = (xValues[lastElementIndex], xValues[lastElementIndex])
 
-        # plot shape, mean-line and hinge-line
-        plt.plot(xValues, leadingEdge, 'k-')
-        plt.plot(xValues, meanLine, 'b-')
-        plt.plot(xValues, hingeLine, 'r-')
-        plt.plot(xValues, trailingeEge, 'k-')
-        plt.plot(joint_x, joint_y, 'k-')
+        # compose labels for legend
+        labelHingeLine = ("hinge line (%.1f %%)" % self.hingeDepthPercent)
 
-        # insert text for mean-line
-        plt.annotate('center line',
-        xy=(xValues[10], meanLine[10]), xycoords='data',
-        xytext=(40, -20), textcoords='offset points', fontsize=self.fontsize,
-        arrowprops=dict(arrowstyle="->", connectionstyle="arc3, rad=-.2"))
+        # plot mean-line and hinge-line
+        ax.plot(xValues, meanLine, color=cl_centerLine,
+         linestyle = ls_centerLine, linewidth = lw_centerLine,
+         label = "center line")
 
-        # insert text for hinge-line
-        text = ("hinge line (%.1f %%)" % self.hingeDepthPercent)
-        plt.annotate(text,
-        xy=(xValues[10], hingeLine[10]), xycoords='data',
-        xytext=(40, -20), textcoords='offset points', fontsize=self.fontsize,
-        arrowprops=dict(arrowstyle="->", connectionstyle="arc3, rad=-.2"))
+        # plot hinge-line
+        ax.plot(xValues, hingeLine, color=cl_hingeLine,
+         linestyle = ls_hingeLine, linewidth = lw_hingeLine,
+        label = labelHingeLine)
 
-        # insert title
+        # plot the planform last
+        ax.plot(xValues, leadingEdge, color=cl_planform, label = "planform")
+        ax.plot(xValues, trailingeEge, color=cl_planform)
+        ax.plot(rootJoint_x, rootJoint_y, color=cl_planform)
+        ax.plot(tipJoint_x, tipJoint_y, color=cl_planform)
+
+        # place legend inside subplot
+        ax.legend(loc='best', fontsize = fs_legend)
+
+        # show grid
+        ax.grid(True)
+
+        # both axes shall be equal
+        ax.axis('equal')
+
+        # revert y-axis on demand
+        if (self.leadingEdgeOrientation == 'up'):
+            ax.set_ylim(ax.get_ylim()[::-1])
+
+
+    def set_AxesAndLabels(self, ax, title):
+
+        # set title of the plot
+        text = (title)
+        #ax.set_title(text, fontsize = 30, color="darkgrey")
+
+        # customize grid
+        ax.grid(True, color='dimgrey',  linestyle='dotted', linewidth=0.4)
+
+
+    # draw the graph
+    def draw(self):
+
+        # set 'dark' style
+        plt.style.use('dark_background')
+
+        # setup subplots
+        fig, (upper,lower) = plt.subplots(2,1)
+
+        # compose diagram-title
         wingspan_mm = int(round(self.wingspan*1000))
         text = "\"%s\"\n wingspan: %d mm, area: %.2f dm², aspect ratio: %.2f, root-tip sweep: %.2f°\n"\
          % (self.planformName, wingspan_mm, self.area, self.aspectRatio, self.rootTipSweep)
 
-        plt.title(text, fontsize = 14)
+        fig.suptitle(text, fontsize = 12, color="darkgrey", **csfont)
 
-        # show grid
-        plt.grid(True)
+        # first figure, display detailed half-wing
+        self.plotPlanform(upper)
 
-        # both axes shall be equal
-        plt.axis('equal')
+        # second figure, display
+        self.plotPlanform(lower)
+
+        # maximize window
+        figManager = plt.get_current_fig_manager()
+        try:
+            figManager.window.Maximize(True)
+        except:
+            try:
+                figManager.window.state('zoomed')
+            except:
+                pass
 
         # show diagram
         plt.show()
-
 
 ################################################################################
 # find the wing in the XML-tree
@@ -580,6 +681,6 @@ if __name__ == "__main__":
     insert_PlanformDataIntoXFLR5_File(newWing, inputFileName, outputFileName)
 
     # plot the result
-    newWing.plotPlanform()
+    newWing.draw()
 
     print("Ready.")
