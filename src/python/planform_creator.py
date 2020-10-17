@@ -45,9 +45,9 @@ fs_infotext = 7
 fs_legend = 7
 
 # colours, styles and linewidths
-cl_centerLine = 'darkcyan'
-ls_centerLine = 'dashdot'
-lw_centerLine  = 0.8
+cl_quarterChordLine = 'darkcyan'
+ls_quarterChordLine = 'dashdot'
+lw_quarterChordLine  = 0.8
 cl_hingeLine = 'r'
 ls_hingeLine = 'solid'
 lw_hingeLine = 0.6
@@ -82,18 +82,24 @@ PLanformDict =	{
             "isFin": 'false',
             # wingspan in m
             "wingspan": 2.54,
-            # overeliptic shaping of the wing
-            "overElipticOffset": 0.08,
+            # shape of the planform, elliptical / trapezoidal
+            "planformShape": 'elliptical',
             # orientation of the wings leading edge
             "leadingEdgeOrientation": 'up',
             # length of the root-chord in m
             "rootchord": 0.223,
+            # depth of the tip in percent of the chord-length
+            "tipDepthPercent": 8.0,
             # sweep of the tip of the wing in degrees
             "rootTipSweep": 4.2,
             # depth of the aileron / flap in percent of the chord-length
             "hingeDepthPercent": 23.5,
             # dihedral of the of the wing in degree
-            "dihedral": 2.5
+            "dihedral": 2.5,
+            # whether to show the line at 25% of wing depth
+            "showQuarterChordLine" : 'true',
+            # whether to show the hinge-line
+            "showHingeLine" : 'true',
             }
 
 ################################################################################
@@ -136,7 +142,7 @@ class wingSection:
         self.trailingEdge = 0
         self.hingeDepth = 0
         self.hingeLine = 0
-        self.meanLine = 0
+        self.quarterChordLine = 0
         self.dihedral= 3.00
 
         # name of the airfoil-file that shall be used for the section
@@ -157,7 +163,7 @@ class wingGrid:
         self.trailingEdge = 0
         self.hingeDepth = 0
         self.hingeLine = 0
-        self.meanLine = 0
+        self.quarterChordLine = 0
 
 ################################################################################
 #
@@ -168,18 +174,20 @@ class wing:
     #class init
     def __init__(self):
         self.rootAirfoilName = ""
-        self.rootchord = 0.0
-        self.leadingEdgeOrientation = 'down'
-        self.wingspan = 0.0
-        self.overElipticOffset = 0.11
+        self.rootchord = 0.223
+        self.leadingEdgeOrientation = 'up'
+        self.wingspan = 2.54
+        self.planformShape = 'elliptical'
         self.halfwingspan = 0.0
         self.numberOfSections = 0
         self.numberOfGridChords = 0
-        self.backsweep = 0.00
-        self.hingeDepthPercent = 0.0
+        self.hingeDepthPercent = 23.0
+        self.tipDepthPercent = 8.0
+        self.tipDepth = 0
         self.hingeInnerPoint = 0
         self.hingeOuterPoint = 0
-        self.tipDepth = 0
+        self.showQuarterChordLine = 'true',
+        self.showHingeLine = 'true',
         self.dihedral = 0.00
         self.sections = []
         self.grid = []
@@ -187,12 +195,9 @@ class wing:
         self.area = 0.0
         self.aspectRatio = 0.0
 
-        # Fontsize for planform-plotting
-        self.fontsize = 7
-
 
     # set basic data of the wing
-    def setData(self, dictData, strakData):
+    def set_Data(self, dictData, strakData):
         # evaluate strakdata
         self.rootAirfoilName = strakData["seedFoilName"]
         self.valueList = strakData["reynolds"]
@@ -202,7 +207,8 @@ class wing:
         # evaluate planformdata
         self.rootchord = dictData["rootchord"]
         self.wingspan = dictData["wingspan"]
-        self.overElipticOffset = dictData["overElipticOffset"]
+        self.planformShape = dictData["planformShape"]
+        self.tipDepthPercent = dictData["tipDepthPercent"]
         self.halfwingspan = (self.wingspan/2)
         self.numberOfGridChords = self.numberOfSections * 256
         self.rootTipSweep = dictData["rootTipSweep"]
@@ -212,22 +218,27 @@ class wing:
         self.planformName = dictData["planformName"]
         self.wingFinSwitch = dictData["isFin"]
 
-    # find grid-values for a given chord-length
-    def findGrid(self, chord):
+        # evaluate additional data
+        self.showQuarterChordLine = dictData["showQuarterChordLine"]
+        self.showHingeLine = dictData["showHingeLine"]
+
+
+    # find planform-values for a given chord-length
+    def find_PlanformData(self, chord):
         for element in self.grid:
             if (element.chord <= chord):
               return element
 
 
-    # copy grid-values to section
-    def copyGridToSection(self, grid, section):
+    # copy planform-values to section
+    def copy_PlanformDataToSection(self, grid, section):
         section.y = grid.y
         section.chord = grid.chord
         section.hingeDepth = grid.hingeDepth
         section.hingeLine = grid.hingeLine
         section.trailingEdge = grid.trailingEdge
         section.leadingEdge = grid.leadingEdge
-        section.meanLine = grid.meanLine
+        section.quarterChordLine = grid.quarterChordLine
         section.dihedral = self.dihedral
 
         # set Re of the section (only for proper airfoil naming)
@@ -235,7 +246,7 @@ class wing:
 
 
     # sets the airfoilname of a section
-    def setAirfoilName(self, section):
+    def set_AirfoilName(self, section):
         if (section.number == 1):
             suffix = '-root'
         else:
@@ -245,39 +256,55 @@ class wing:
             (suffix ,get_ReString(section.Re))
 
 
-    # calculate grid-values of the wing (high-resolution wing planform)
-    def calculateGrid(self):
-        self.hingeInnerPoint = (1 - (self.hingeDepthPercent/100)) * self.rootchord
+    # calculate planform-shape of the half-wing (high-resolution wing planform)
+    def calculate_planform(self):
+        self.hingeInnerPoint = (1-(self.hingeDepthPercent/100))*self.rootchord
 
         # calculate tip-depth
-        self.tipDepth = self.rootchord * self.overElipticOffset
+        self.tipDepth = self.rootchord*(self.tipDepthPercent/100)
 
-        # calculate tip-offset for sweep-angle
-        tipOffset = tan((self.rootTipSweep*pi)/180)*(self.wingspan/2)
+        # calculate the depth of the hinge at the tip
+        tipHingeDepth = self.tipDepth *(self.hingeDepthPercent/100)
 
-        # calculate hinge-offset
-        hingeOffset = tipOffset*(self.hingeDepthPercent/100)
+        # calculate quarter-chord-lines
+        rootQuarterChord = self.rootchord/4
+        tipQuarterChord = self.tipDepth/4
+
+        # calculate the tip offset according to the sweep-angle
+        tipOffsetSweep = tan((self.rootTipSweep*pi)/180)*(self.halfwingspan)
+
+        # calculate hinge-offset at the tip (without the tip-offset)
+        tipHingeOffset = self.tipDepth - tipQuarterChord - tipHingeDepth
 
         # calculate hinge outer-point
-        self.hingeOuterPoint= 0.5*self.rootchord +\
-           (self.tipDepth*(1-self.hingeDepthPercent/100)) + hingeOffset
+        self.hingeOuterPoint= rootQuarterChord + tipOffsetSweep + tipHingeOffset
 
-        # calculate all Grid-chords
         grid_delta_y = (self.halfwingspan / (self.numberOfGridChords-1))
-
+        # calculate all Grid-chords
         for i in range(1, (self.numberOfGridChords + 1)):
             # create new grid
             grid = wingGrid()
 
             # calculate grid coordinates
             grid.y = grid_delta_y * (i-1)
-            grid.chord = self.rootchord*(1-self.overElipticOffset)*np.sqrt(1-(grid.y*grid.y/(self.halfwingspan*self.halfwingspan)))\
-                        + self.rootchord*self.overElipticOffset
+
+            # chord-length
+            if self.planformShape == 'elliptical':
+                # elliptical shaping of the wing with straight hing-line
+                #self.rootchord*(1-self.overElipticOffset)
+                grid.chord = (self.rootchord-self.tipDepth)\
+                 *np.sqrt(1-(grid.y*grid.y/(self.halfwingspan*self.halfwingspan)))\
+                 + self.tipDepth
+            else:
+                # trapezoidal shaping of the wing
+                grid.chord = self.rootchord*(self.halfwingspan-grid.y)/self.halfwingspan \
+                            + self.tipDepth* (grid.y/self.halfwingspan)
+
             grid.hingeDepth = (self.hingeDepthPercent/100)*grid.chord
             grid.hingeLine = (self.hingeOuterPoint-self.hingeInnerPoint)/(self.halfwingspan) * (grid.y) + self.hingeInnerPoint
             grid.trailingEdge = grid.hingeLine + grid.hingeDepth
             grid.leadingEdge = grid.hingeLine -(grid.chord-grid.hingeDepth)
-            grid.meanLine = (grid.leadingEdge + grid.trailingEdge)/2
+            grid.quarterChordLine = grid.leadingEdge + (grid.trailingEdge-grid.leadingEdge)/4
 
             # append section to section-list of wing
             self.grid.append(grid)
@@ -291,7 +318,7 @@ class wing:
 
 
     # calculate all sections of the wing, oriented at the grid
-    def calculateSections(self):
+    def calculate_sections(self):
         # calculate decrement of chord from section to section
         chord_decrement = (self.rootchord - self.tipDepth) / (self.numberOfSections)
 
@@ -300,6 +327,14 @@ class wing:
 
         # create all sections
         for i in range(1, (self.numberOfSections + 1)):
+            # find grid-values matching the chordlength of the section
+            grid = self.find_PlanformData(chord)
+
+            if (grid == None):
+                print("Error, chord-length %f not found in planform-data\n")
+                # end the loop
+                break
+
             # create new section
             section = wingSection()
 
@@ -310,13 +345,13 @@ class wing:
             section.number = i
 
             # find grid-values matching the chordlength of the section
-            grid = self.findGrid(chord)
+            grid = self.find_PlanformData(chord)
 
             # copy grid-coordinates to section
-            self.copyGridToSection(grid, section)
+            self.copy_PlanformDataToSection(grid, section)
 
             # set the airfoil-Name
-            self.setAirfoilName(section)
+            self.set_AirfoilName(section)
 
             # store last Re value for the tip
             lastSectionRe = section.Re
@@ -342,22 +377,22 @@ class wing:
         grid = self.grid[len(self.grid)-1]
 
         # copy grid-coordinates to section
-        self.copyGridToSection(grid, section)
+        self.copy_PlanformDataToSection(grid, section)
 
         # set same Re as for the last section so the same airfoil-name will be given
         section.Re = lastSectionRe
 
         # set the airfoil-Name
-        self.setAirfoilName(section)
+        self.set_AirfoilName(section)
 
-    # plot the wing planform
-    def plotPlanform(self, ax):
+    # plot planform of the half-wing
+    def plot_HalfWingPlanform(self, ax):
         #create empty lists
         xValues = []
         leadingEdge = []
         trailingeEge = []
         hingeLine = []
-        meanLine = []
+        quarterChordLine = []
 
         # setup empty list for new x-tick locations
         new_tick_locations = []
@@ -416,7 +451,7 @@ class wing:
             xValues.append(element.y)
             #build up lists of y-values
             leadingEdge.append(element.leadingEdge)
-            meanLine.append(element.meanLine)
+            quarterChordLine.append(element.quarterChordLine)
             hingeLine.append(element.hingeLine)
             trailingeEge.append(element.trailingEdge)
 
@@ -430,15 +465,17 @@ class wing:
         # compose labels for legend
         labelHingeLine = ("hinge line (%.1f %%)" % self.hingeDepthPercent)
 
-        # plot mean-line and hinge-line
-        ax.plot(xValues, meanLine, color=cl_centerLine,
-         linestyle = ls_centerLine, linewidth = lw_centerLine,
-         label = "center line")
+        # plot quarter-chord-line
+        if (self.showQuarterChordLine == 'true'):
+            ax.plot(xValues, quarterChordLine, color=cl_quarterChordLine,
+              linestyle = ls_quarterChordLine, linewidth = lw_quarterChordLine,
+              label = "quarter-chord line")
 
         # plot hinge-line
-        ax.plot(xValues, hingeLine, color=cl_hingeLine,
-         linestyle = ls_hingeLine, linewidth = lw_hingeLine,
-        label = labelHingeLine)
+        if (self.showHingeLine == 'true'):
+            ax.plot(xValues, hingeLine, color=cl_hingeLine,
+              linestyle = ls_hingeLine, linewidth = lw_hingeLine,
+              label = labelHingeLine)
 
         # plot the planform last
         ax.plot(xValues, leadingEdge, color=cl_planform, label = "planform")
@@ -487,10 +524,10 @@ class wing:
         fig.suptitle(text, fontsize = 12, color="darkgrey", **csfont)
 
         # first figure, display detailed half-wing
-        self.plotPlanform(upper)
+        self.plot_HalfWingPlanform(upper)
 
         # second figure, display
-        self.plotPlanform(lower)
+        self.plot_HalfWingPlanform(lower)
 
         # maximize window
         figManager = plt.get_current_fig_manager()
@@ -579,7 +616,7 @@ def insert_PlanformDataIntoXFLR5_File(data, inFileName, outFileName):
 
 ################################################################################
 # function that gets the name of the strak-machine-data-file
-def getInFileName(args):
+def get_InFileName(args):
 
     if args.input:
         inFileName = args.input
@@ -593,7 +630,7 @@ def getInFileName(args):
 
 ################################################################################
 # function that gets arguments from the commandline
-def getArguments():
+def get_Arguments():
 
     # initiate the parser
     parser = argparse.ArgumentParser('')
@@ -603,14 +640,14 @@ def getArguments():
 
     # read arguments from the command line
     args = parser.parse_args()
-    return (getInFileName(args))
+    return (get_InFileName(args))
 
 
 # Main program
 if __name__ == "__main__":
 
     #get command-line-arguments or user-input
-    planformDataFileName = getArguments()
+    planformDataFileName = get_Arguments()
 
     # create a new planform
     newWing = wing()
@@ -659,11 +696,11 @@ if __name__ == "__main__":
         exit(-1)
 
     # set data for the planform
-    newWing.setData(planformData, strakdata)
+    newWing.set_Data(planformData, strakdata)
 
     # calculate the grid and sections
-    newWing.calculateGrid()
-    newWing.calculateSections()
+    newWing.calculate_planform()
+    newWing.calculate_sections()
 
     inputFileName =  './' + inputFolder + '/'\
                  + planformData["templateFileName"]
