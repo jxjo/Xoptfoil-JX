@@ -91,7 +91,7 @@ PLanformDict =	{
             # depth of the tip in percent of the chord-length
             "tipDepthPercent": 8.0,
             # sweep of the tip of the wing in degrees
-            "rootTipSweep": 4.2,
+            "rootTipSweep": 3.2,
             # depth of the aileron / flap in percent of the chord-length
             "hingeDepthPercent": 23.5,
             # dihedral of the of the wing in degree
@@ -424,7 +424,7 @@ class wing:
             fontsize=fs_infotext, rotation='vertical')
 
             # plot label for airfoil-name / section-name
-            text = ("%s" % (element.airfoilName))
+            text = ("%s" % (element.airfoilName.strip('.dat')))
             props = dict(arrowstyle="-", connectionstyle="arc3, rad=-0.23", color = cl_sections)
             ax.annotate(text,
             xy=(xPos, yPosSectionLabel), xycoords='data',
@@ -478,10 +478,14 @@ class wing:
               label = labelHingeLine)
 
         # plot the planform last
-        ax.plot(xValues, leadingEdge, color=cl_planform, label = "planform")
-        ax.plot(xValues, trailingeEge, color=cl_planform)
-        ax.plot(rootJoint_x, rootJoint_y, color=cl_planform)
-        ax.plot(tipJoint_x, tipJoint_y, color=cl_planform)
+        ax.plot(xValues, leadingEdge, color=cl_planform,
+                linewidth = lw_planform, label = "planform")
+        ax.plot(xValues, trailingeEge, color=cl_planform,
+                linewidth = lw_planform)
+        ax.plot(rootJoint_x, rootJoint_y, color=cl_planform,
+                linewidth = lw_planform)
+        ax.plot(tipJoint_x, tipJoint_y, color=cl_planform,
+                linewidth = lw_planform)
 
         # place legend inside subplot
         ax.legend(loc='best', fontsize = fs_legend)
