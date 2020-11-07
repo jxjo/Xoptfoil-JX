@@ -22,26 +22,21 @@ module vardef
   implicit none
 
   type airfoil_type
-    character(80) :: name                               ! jx-mod Name of the airfoil
-    integer :: npoint
-    double precision, dimension(:), allocatable :: x, z ! Airfoil coordinates
-    double precision :: xle, zle                        ! Leading edge coords
-    integer :: leclose                                  ! Index closest to LE
-    integer :: addpoint_loc                             ! Whether to add point 
-                                                        !  for LE before or
-                                                        !  after leclose
-  end type airfoil_type
+    character(80) :: name                               ! name of the airfoil
+    integer :: npoint                                   ! number of points
+    double precision, dimension(:), allocatable :: x, z ! airfoil coordinates
+ 
+    double precision :: xle, zle                        ! leading edge coords
+    integer :: leclose                                  ! index closest to LE
+    integer :: addpoint_loc                             ! whether to add point for LE before or after leclose
+                                                        ! coordinates of top and bot side
+    double precision, dimension(:), allocatable :: xb, xt, zb, zt 
 
-! info about the transformation of seed
-  type foil_transform_type                              
-    double precision :: xoffset, zoffset                ! x,z shift in space
-    double precision :: scale                           ! scale factor
-    double precision :: angle                           ! rotation angle
-  end type foil_transform_type
+  end type airfoil_type
 
 ! jx-mod Geo targets - type
   type geo_target_type
-    character(10) :: type                               ! eg 'zBot' zTop'
+    character(30) :: type                               ! eg 'zBot' zTop'
     double precision :: x                               ! x-value of target
     double precision :: target_value                    ! target value to achieve
     double precision :: seed_value                      ! the value of the seed airfoil
@@ -65,7 +60,6 @@ module vardef
 
   integer :: noppoint
   integer, parameter :: max_op_points = 30
-  double precision, dimension(:), allocatable :: xseedt, xseedb, zseedt, zseedb
   character(7), dimension(max_op_points) :: op_mode
   character(8), dimension(max_op_points) :: flap_selection
   double precision, dimension(max_op_points) :: op_point,      &
@@ -82,15 +76,14 @@ module vardef
                                      !   setting will be optimized
   integer, dimension(max_op_points) :: flap_optimize_points
 
-  type (foil_transform_type) :: foil_transform
+  type(airfoil_type) :: seed_foil, seed_foil_not_smoothed
 
-  type(airfoil_type) :: curr_foil
   double precision :: min_thickness, max_thickness, min_te_angle,              &
                       growth_allowed, min_flap_degrees, max_flap_degrees,      &
                       min_camber, max_camber
   double precision :: max_te_curvature
 
-  logical :: check_curvature
+  logical :: check_curvature, auto_curvature
   double precision :: curv_threshold
   integer :: max_curv_reverse_top, max_curv_reverse_bot
   integer :: max_curv_highlow_top, max_curv_highlow_bot
@@ -100,8 +93,8 @@ module vardef
   character(16) :: shape_functions
 
 ! Match foil mode
+! jx-refactor: switch to airfoil_type for match coordinates
   double precision, dimension(:), allocatable :: xmatcht, xmatchb, zmatcht, zmatchb
-  double precision :: xoffmatch, zoffmatch, scale_match
   logical :: match_foils
   double precision :: match_foils_scale_factor 
   
@@ -129,8 +122,5 @@ module vardef
 ! jx-mod Smoothing - parameters for smoothing 
   double precision :: spike_threshold, highlow_threshold
   logical :: do_smoothing
-  double precision, dimension(:), allocatable :: zseedt_not_smoothed, zseedb_not_smoothed
   
-!$omp threadprivate(curr_foil)
-
 end module vardef

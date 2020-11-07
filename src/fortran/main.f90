@@ -27,7 +27,7 @@ program main
   use genetic_algorithm,   only : ga_options_type
   use simplex_search,      only : ds_options_type
   use airfoil_evaluation,  only : xfoil_geom_options, xfoil_options
-  use airfoil_operations,  only : get_seed_airfoil, split_airfoil
+  use airfoil_operations,  only : get_seed_airfoil, split_airfoil, split_foil
   use airfoil_operations,  only : repanel_and_normalize_airfoil
   use memory_util,         only : deallocate_airfoil, allocate_airfoil_data,   &
                                   deallocate_airfoil_data
@@ -44,8 +44,8 @@ program main
 #define PACKAGE_VERSION ""
 #endif
 
-  type(airfoil_type) :: buffer_foil, original_foil
-  character(80) :: search_type, global_search, local_search, seed_airfoil,     &
+  type(airfoil_type) :: original_foil, final_foil
+  character(80) :: search_type, global_search, local_search, seed_airfoil_type,  &
                    airfoil_file, matchfoil_file
   character(80) :: input_file, text
   type(naca_options_type) :: naca_options
@@ -79,28 +79,22 @@ program main
   npan_fixed = 200                      ! for optimizing npan is fixed ...
 
   call read_inputs(input_file, search_type, global_search, local_search,       &
-                   seed_airfoil, airfoil_file, nparams_top, nparams_bot,       &
+                   seed_airfoil_type, airfoil_file, nparams_top, nparams_bot,  &
                    restart, restart_write_freq, constrained_dvs, naca_options, &
                    pso_options, ga_options, ds_options, matchfoil_file,        &
                    xfoil_geom_options, xfoil_options)
 
-! Load seed airfoil into memory
 
-  call get_seed_airfoil(seed_airfoil, airfoil_file, naca_options, original_foil)
+! Load original airfoil into memory, repanel, normalize 
+!   to get seed airfoil ready for optimization 
 
-! Repanel to npan_fixed points and normalize to get LE at 0,0 and TE (1,0)
+  call get_seed_airfoil(seed_airfoil_type, airfoil_file, naca_options, original_foil)
 
-  call repanel_and_normalize_airfoil (original_foil, npan_fixed, buffer_foil)                            !   ... to have run_xfoil results equal airfoil external results
-  
-  xfoil_geom_options%npan = buffer_foil%npoint    ! will use this constant value now
+  call repanel_and_normalize_airfoil (original_foil, npan_fixed, seed_foil)                            !   ... to have run_xfoil results equal airfoil external results
+  xfoil_geom_options%npan = seed_foil%npoint    ! will use this constant value now
 
-! Split up seed airfoil into upper and lower surfaces - LE point will be added
+  call split_foil(seed_foil)                    ! extract upper and lower polyline
 
-  call split_airfoil(buffer_foil, xseedt, xseedb, zseedt, zseedb, symmetrical)
-
-! Deallocate the buffer airfoil (no longer needed)
-
-  call deallocate_airfoil(buffer_foil)
 
 ! Allocate optimal solution
 
@@ -160,17 +154,9 @@ program main
   text = 'dummy' 
 #endif
 
-! Smoothing ---- save original seed surface before smoothing
-!                ... to show original data later in visualizer 
-
-  allocate(zseedt_not_smoothed(size(zseedt)))
-  allocate(zseedb_not_smoothed(size(zseedb)))
-  zseedt_not_smoothed = zseedt
-  zseedb_not_smoothed = zseedb
-
   
 ! Make sure seed airfoil passes constraints, and get scaling factors for
-! operating points
+! operating points, smooth foil if requested
 
   call check_seed()
 
@@ -188,25 +174,20 @@ program main
 
 ! Write final design and summary
 
-  call write_final_design(optdesign, f0, fmin, shape_functions)
+  call write_final_design(optdesign, f0, fmin, final_foil)
 
 ! Generate polars for final airfoil if defind in input file - 
-!   - curr_foil was set in write_final_design 
 
-  call check_and_do_polar_generation (input_file, output_prefix, curr_foil)
+  call check_and_do_polar_generation (input_file, output_prefix, final_foil)
 
 ! Deallocate memory
+  call deallocate_airfoil(original_foil)
+  call deallocate_airfoil(seed_foil)
+  call deallocate_airfoil(final_foil)
+  call deallocate_airfoil(seed_foil_not_smoothed)
   call deallocate_airfoil_data()
-  deallocate(xseedt)
-  deallocate(xseedb)
-  deallocate(zseedt)
-  deallocate(zseedb)
   deallocate(optdesign)
   if (allocated(constrained_dvs)) deallocate(constrained_dvs)
 
-
-! jx-mod Smoothing ---- Deallocate save arrays
-  deallocate(zseedt_not_smoothed)
-  deallocate(zseedb_not_smoothed)
 
 end program main

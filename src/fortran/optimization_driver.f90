@@ -32,7 +32,8 @@ module optimization_driver
 subroutine matchfoils_preprocessing(matchfoil_file)
 
   use vardef,             only : airfoil_type, xmatcht, xmatchb, zmatcht,      &
-                                 zmatchb, xseedt, xseedb, symmetrical, npan_fixed
+                                 zmatchb, symmetrical, npan_fixed
+  use vardef,             only : seed_foil
   use memory_util,        only : deallocate_airfoil
   use airfoil_operations, only : get_seed_airfoil, get_split_points,           &
                                  split_airfoil, my_stop
@@ -76,15 +77,15 @@ subroutine matchfoils_preprocessing(matchfoil_file)
 
 ! Interpolate x-vals of foil to match to seed airfoil points to x-vals
 
-  pointst = size(xseedt,1)
-  pointsb = size(xseedb,1)
+  pointst = size(seed_foil%xt,1)
+  pointsb = size(seed_foil%xb,1)
   allocate(zttmp(pointst))
   allocate(zbtmp(pointsb))
   zttmp(pointst) = zmatcht(size(zmatcht,1))
   zbtmp(pointsb) = zmatchb(size(zmatchb,1))
-  call interp_vector(xmatcht, zmatcht, xseedt(1:pointst-1),                    &
+  call interp_vector(xmatcht, zmatcht, seed_foil%xt(1:pointst-1),                    &
                      zttmp(1:pointst-1))
-  call interp_vector(xmatchb, zmatchb, xseedb(1:pointsb-1),                    &
+  call interp_vector(xmatchb, zmatchb, seed_foil%xb(1:pointsb-1),                    &
                      zbtmp(1:pointsb-1))
 
 ! Re-set coordinates of foil to match from interpolated points
@@ -97,8 +98,8 @@ subroutine matchfoils_preprocessing(matchfoil_file)
   allocate(zmatcht(pointst))
   allocate(xmatchb(pointsb))
   allocate(zmatchb(pointsb))
-  xmatcht = xseedt
-  xmatchb = xseedb
+  xmatcht = seed_foil%xt
+  xmatchb = seed_foil%xb
   zmatcht = zttmp
   zmatchb = zbtmp
 
@@ -127,8 +128,7 @@ subroutine optimize(search_type, global_search, local_search, constrained_dvs, &
   use genetic_algorithm,  only : ga_options_type, geneticalgorithm
   use simplex_search,     only : ds_options_type, simplexsearch
   use airfoil_evaluation, only : objective_function,                           &
-                                 objective_function_nopenalty, write_function, &
-                                 write_function_restart_cleanup
+                                 objective_function_nopenalty, write_function
 
   character(*), intent(in) :: search_type, global_search, local_search
   type(pso_options_type), intent(in) :: pso_options
@@ -237,29 +237,6 @@ subroutine optimize(search_type, global_search, local_search, constrained_dvs, &
     restart_status = 'local_optimization'
   end if
 
-! Read restart status from file for restart case
-
-  if (restart) then
-
-!   Open status file
-
-    open(unit=iunit, file=restart_status_file, status='old', iostat=ioerr)
-
-!   Read or issue warning if file is not found
-
-    if (ioerr /= 0) then
-      write(*,*) 'Warning: could not find restart status file '//&
-                 trim(restart_status_file)//'.'
-      write(*,*) 'Restarting with '//trim(restart_status)//'.'
-    else
-      read(iunit,*) restart_status
-    end if
-
-!   Close status file
-
-    close(iunit)
-
-  end if
 
 ! Design coordinates/polars output handling
 
@@ -275,20 +252,10 @@ subroutine optimize(search_type, global_search, local_search, constrained_dvs, &
 ! Write seed airfoil coordinates and polars to file
 
   if (write_designs) then
-    if (.not. restart) then
 
-!     Analyze and write seed airfoil
-  
-      stat = write_function(x0, 0) 
+!   Analyze and write seed airfoil
+    stat = write_function(x0, 0) 
 
-    else
-
-!     Remove unused entries in design polars and coordinates from previous run
- 
-      stat = write_function_restart_cleanup(restart_status, global_search,     &
-                                            local_search)
-
-    end if
   end if
 
 ! Set temporary restart variable
@@ -332,22 +299,13 @@ subroutine optimize(search_type, global_search, local_search, constrained_dvs, &
 
     end if
 
-!   Write restart status to file
-
-    if (restart_write_freq /=0) then  
-      open(unit=iunit, file=restart_status_file, status='replace')
-      write(iunit,'(A)') trim(restart_status)
-      close(iunit)
-    end if 
-
     if (trim(global_search) == 'particle_swarm') then
 
 !     Particle swarm optimization
 
       call particleswarm(optdesign, fmin, stepsg, fevalsg, objective_function, &
                          x0, xmin, xmax, .true., f0_ref, constrained_dvs,      &
-                         pso_options, restart_temp, restart_write_freq,        &
-                         designcounter, stop_reason, write_function)
+                         pso_options, designcounter, stop_reason, write_function)
 
     else if (trim(global_search) == 'genetic_algorithm') then
 
@@ -375,12 +333,6 @@ subroutine optimize(search_type, global_search, local_search, constrained_dvs, &
   if (restart_status == 'local_optimization') then
 
     if (trim(local_search) == 'simplex') then
-
-!     Write optimization status to file
-
-      open(unit=iunit, file=restart_status_file, status='replace')
-      write(iunit,'(A)') trim(restart_status)
-      close(iunit)
 
 !     Simplex optimization
 
@@ -416,90 +368,33 @@ end subroutine optimize
 !=============================================================================80
 !
 ! Writes final airfoil design to a file
+!    Returns final airfoil 
 !
 !=============================================================================80
-subroutine write_final_design(optdesign, f0, fmin, shapetype)
+subroutine write_final_design(optdesign, f0, fmin, final_airfoil)
 
   use vardef
-  use memory_util,        only : allocate_airfoil, deallocate_airfoil
-  use airfoil_operations, only : airfoil_write, rebuild_airfoil
-  use parametrization,    only : top_shape_function, bot_shape_function,       &
-                                 create_airfoil, create_airfoil_camb_thick,    &
-                                 create_airfoil_camb_thick_plus
-  use airfoil_evaluation, only : xfoil_geom_options, xfoil_options
+  use airfoil_operations, only : airfoil_write
   use xfoil_driver,       only : run_xfoil
+  use airfoil_evaluation, only : create_airfoil_form_design, get_flap_degrees_from_design
+  use airfoil_evaluation, only : xfoil_geom_options, xfoil_options
 
   double precision, dimension(:), intent(in) :: optdesign
-  character(*), intent(in)                   :: shapetype
   double precision, intent(in)               :: f0, fmin
+  type(airfoil_type), intent(out)            :: final_airfoil
 
-  double precision, dimension(size(xseedt,1)) :: zt_new
-  double precision, dimension(size(xseedb,1)) :: zb_new
-  double precision, dimension(noppoint) :: alpha, lift, drag, moment, viscrms, &
-                                           xtrt, xtrb
+  double precision, dimension(noppoint) :: alpha, lift, drag, moment, xtrt, xtrb
+  logical,          dimension(noppoint) :: op_converged
   double precision, dimension(noppoint) :: actual_flap_degrees
-  double precision :: ffact
-  integer :: dvtbnd1, dvtbnd2, dvbbnd1, dvbbnd2, nmodest, nmodesb, nptt, nptb, i
-  integer :: flap_idx, dvcounter, iunit
-  type(airfoil_type) :: final_airfoil
+  integer :: i, iunit
   character(80) :: output_file, aero_file
   character(20) :: flapnote
 
- 
-  nmodest = size(top_shape_function,1)
-  nmodesb = size(bot_shape_function,1)
-  nptt = size(xseedt,1)
-  nptb = size(xseedb,1)
-
-! Set modes for top and bottom surfaces
-
-  if (trim(shape_functions) == 'naca') then
-    dvtbnd1 = 1
-    dvtbnd2 = nmodest
-    dvbbnd2 = nmodest + nmodesb
-    dvbbnd1 = dvtbnd2 + 1
-  else if ((trim(shape_functions) == 'camb-thick') .or. & 
-           (trim(shape_functions) == 'camb-thick-plus')) then
-    dvtbnd1 = 1
-    dvtbnd2 = nmodest
-    dvbbnd1 = 1
-    dvbbnd2 = dvtbnd2
-  else
-    dvtbnd1 = 1
-    dvtbnd2 = nmodest*3
-    dvbbnd2 = nmodest*3 + nmodesb*3
-    dvbbnd1 = dvtbnd2 + 1
-  end if
-
-! Overwrite lower DVs for symmetrical airfoils (they are not used)
-
-  if (symmetrical) then
-    dvbbnd1 = 1
-    dvbbnd2 = dvtbnd2
-  end if
-
-! Format coordinates in a single loop in derived type. Also remove translation
-! and scaling to ensure Cm_x=0.25 doesn't change.
-
-  if (trim(shape_functions) == 'camb-thick') then
-    ! Create new airfoil by changing camber and thickness of seed airfoil
-    call create_airfoil_camb_thick(xseedt, zseedt, xseedb, zseedb,             &
-                                   optdesign(dvtbnd1:dvtbnd2), zt_new, zb_new)
-  else if (trim(shape_functions) == 'camb-thick-plus') then
-    ! Create new airfoil by changing camber and thickness of seed airfoil, 
-    ! top and bottom seperately
-    call create_airfoil_camb_thick_plus(xseedt, zseedt, xseedb, zseedb,        &
-                                    optdesign(dvtbnd1:dvtbnd2), zt_new, zb_new)
-  else 
-    call create_airfoil(xseedt, zseedt, xseedb, zseedb,                        &
-                      optdesign(dvtbnd1:dvtbnd2), optdesign(dvbbnd1:dvbbnd2),  &
-                      zt_new, zb_new, shapetype, symmetrical)
-  end if
   
-! Rebuild foil out of top and bot 
+! Rebuild foil out final design and seed airfoil
 
-  call rebuild_airfoil (xseedt, xseedb, zt_new, zb_new, final_airfoil)
-
+  call create_airfoil_form_design (seed_foil, optdesign, final_airfoil)
+  
   final_airfoil%name   = output_prefix
 
 ! Use Xfoil to analyze final design
@@ -508,22 +403,15 @@ subroutine write_final_design(optdesign, f0, fmin, shapetype)
 
 !   Get actual flap angles based on design variables
 
-    ffact = initial_perturb/(max_flap_degrees - min_flap_degrees)
-    actual_flap_degrees(1:noppoint) = flap_degrees(1:noppoint)
-    dvcounter = dvbbnd2 + 1
-    do i = 1, nflap_optimize
-      flap_idx = flap_optimize_points(i)
-      actual_flap_degrees(flap_idx) = optdesign(dvcounter)/ffact
-      dvcounter = dvcounter + 1
-    end do
+    call get_flap_degrees_from_design (optdesign, actual_flap_degrees)
 
 !   Run xfoil for requested operating points
 
     call run_xfoil(final_airfoil, xfoil_geom_options, op_point(1:noppoint),    &
                    op_mode(1:noppoint), re(1:noppoint), ma(1:noppoint),        &
                    use_flap, x_flap, y_flap, y_flap_spec,                      &
-                   actual_flap_degrees(1:noppoint), xfoil_options, lift, drag, &
-                   moment, viscrms, alpha, xtrt, xtrb, ncrit_pt)
+                   actual_flap_degrees(1:noppoint), xfoil_options,             &
+                   op_converged, lift, drag, moment, alpha, xtrt, xtrb, ncrit_pt)
 
 !   Write summary to screen and file
 
@@ -584,20 +472,13 @@ subroutine write_final_design(optdesign, f0, fmin, shapetype)
 
 
   else
-    call write_matchfoil_summary (zt_new, zb_new)
+    call write_matchfoil_summary (final_airfoil%zt, final_airfoil%zb)
   end if
 
 ! Write airfoil to file
 
   output_file = trim(output_prefix)//'.dat'
   call airfoil_write(output_file, output_prefix, final_airfoil)
-
-! jx-mod save final_airfoil to curr_foil 
-
-  curr_foil = final_airfoil
-
-! Deallocate final airfoil
-  call deallocate_airfoil(final_airfoil)
 
 end subroutine write_final_design
 
@@ -607,10 +488,10 @@ end subroutine write_final_design
 !-----------------------------------------------------------------------------
 subroutine write_matchfoil_summary (zt_new, zb_new)
 
-  use vardef, only    : zmatcht, zmatchb, xseedt, xseedb
+  use vardef, only    : seed_foil, zmatcht, zmatchb
   
-  double precision, dimension(size(xseedt,1)), intent(in) :: zt_new
-  double precision, dimension(size(xseedb,1)), intent(in) :: zb_new
+  double precision, dimension(size(seed_foil%xt,1)), intent(in) :: zt_new
+  double precision, dimension(size(seed_foil%xb,1)), intent(in) :: zb_new
   double precision :: maxdeltat, maxdeltab, averaget, averageb, maxdt_rel, maxdb_rel
 
   maxdeltat = maxval(abs (zt_new - zmatcht))
@@ -619,8 +500,8 @@ subroutine write_matchfoil_summary (zt_new, zb_new)
   maxdt_rel = (maxdeltat / maxval(abs (zmatcht))) * 100.d0
   maxdb_rel = (maxdeltab / maxval(abs (zmatchb))) * 100.d0
  
-  averaget  = sum (zt_new - zmatcht) / size(xseedt,1)
-  averageb  = sum (zb_new - zmatchb) / size(xseedb,1)
+  averaget  = sum (zt_new - zmatcht) / size(seed_foil%xt,1)
+  averageb  = sum (zb_new - zmatchb) / size(seed_foil%xb,1)
 
   write(*,*)
   write(*,'(A)') " Match airfoil deviation summary"

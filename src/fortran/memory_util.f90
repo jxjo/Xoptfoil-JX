@@ -23,12 +23,11 @@ module memory_util
 
   contains
 
-!=============================================================================80
-!
-! Allocates memory for buffer airfoil
-!
-!=============================================================================80
-subroutine allocate_airfoil(foil)
+!----------------------------------------------------------------------------
+! Allocates memory for foil
+!    - but yet not top and bot poyline (not known at this moment)
+!----------------------------------------------------------------------------
+  subroutine allocate_airfoil(foil)
 
   use vardef, only : airfoil_type
 
@@ -42,19 +41,22 @@ subroutine allocate_airfoil(foil)
 
 end subroutine allocate_airfoil
 
-!=============================================================================80
-!
-! Deallocates memory for buffer airfoil
-!
-!=============================================================================80
+!----------------------------------------------------------------------------
+! Deallocates memory for foil
+!----------------------------------------------------------------------------
 subroutine deallocate_airfoil(foil)
 
   use vardef, only : airfoil_type
 
   type(airfoil_type), intent(inout) :: foil
 
-  deallocate(foil%x)
-  deallocate(foil%z)
+  if (allocated(foil%x)) deallocate(foil%x)
+  if (allocated(foil%z)) deallocate(foil%z)
+  if (allocated(foil%xb)) deallocate(foil%xb)
+  if (allocated(foil%xt)) deallocate(foil%xt)
+  if (allocated(foil%zb)) deallocate(foil%zb)
+  if (allocated(foil%zt)) deallocate(foil%zt)
+
 
 end subroutine deallocate_airfoil
 
@@ -67,27 +69,27 @@ subroutine allocate_airfoil_data()
 
   use xfoil_driver,       only : xfoil_init
   use vardef,             only : nparams_top, nparams_bot, shape_functions,    &
-                                 xseedt, xseedb, curr_foil
+                                 seed_foil
   use parametrization,    only : create_shape_functions
 
   double precision, dimension(:), allocatable :: modest, modesb
 
 ! Allocate shape function setup arrays
-if (trim(shape_functions) == 'naca') then
-  allocate(modest(nparams_top))
-  allocate(modesb(nparams_bot))
-  modest(:) = 0.d0
-  modesb(:) = 0.d0
-else if ((trim(shape_functions) == 'camb-thick') .or.                          &
-         (trim(shape_functions) == 'camb-thick-plus')) then
-  allocate(modest(nparams_top))
-  modest(:) = 0.d0
-else
-  allocate(modest(nparams_top*3))
-  allocate(modesb(nparams_bot*3))
-  modest(:) = 0.d0
-  modesb(:) = 0.d0
-end if
+  if (trim(shape_functions) == 'naca') then
+    allocate(modest(nparams_top))
+    allocate(modesb(nparams_bot))
+    modest(:) = 0.d0
+    modesb(:) = 0.d0
+  else if ((trim(shape_functions) == 'camb-thick') .or.                          &
+          (trim(shape_functions) == 'camb-thick-plus')) then
+    allocate(modest(nparams_top))
+    modest(:) = 0.d0
+  else
+    allocate(modest(nparams_top*3))
+    allocate(modesb(nparams_bot*3))
+    modest(:) = 0.d0
+    modesb(:) = 0.d0
+  end if
 
 ! Allocate private memory for airfoil optimization on each thread
 
@@ -96,14 +98,9 @@ end if
 ! For NACA, this will create the shape functions.  For Hicks-Henne,
 ! it will just allocate them.
 
-call create_shape_functions(xseedt, xseedb, modest, modesb,                  &
+  call create_shape_functions(seed_foil%xt, seed_foil%xb, modest, modesb,                  &
                               shape_functions, first_time=.true.)
 
-
-! Allocate memory for working airfoil on each thread
-
-  curr_foil%npoint = size(xseedt,1) + size(xseedb,1) - 1
-  call allocate_airfoil(curr_foil)
 
 ! Allocate memory for xfoil
 
@@ -114,7 +111,6 @@ call create_shape_functions(xseedt, xseedb, modest, modesb,                  &
 if ((trim(shape_functions) /= 'camb-thick') .and. & 
     (trim(shape_functions) /= 'camb-thick-plus')) then
 ! Deallocate shape function setup arrays
-
   deallocate(modest)
   deallocate(modesb)
 end if
@@ -129,13 +125,11 @@ end subroutine allocate_airfoil_data
 subroutine deallocate_airfoil_data()
 
   use parametrization,    only : deallocate_shape_functions
-  use vardef,             only : curr_foil
   use xfoil_driver,       only : xfoil_cleanup
 
 !$omp parallel default(shared)
 
   call deallocate_shape_functions()
-  call deallocate_airfoil(curr_foil)
   call xfoil_cleanup()
 
 !$omp end parallel
