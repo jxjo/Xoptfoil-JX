@@ -102,6 +102,8 @@ end subroutine init_random_seed
 subroutine initial_designs(dv, objval, fevals, objfunc, xmin, xmax, use_x0,    &
                            x0, feasible_init, feasible_limit, attempts)
 
+  use os_util, only: COLOR_GOOD, COLOR_NORMAL, COLOR_NOTE, COLOR_BAD, print_colored
+
   double precision, dimension(:,:), intent(inout) :: dv
   double precision, dimension(:), intent(inout) :: objval
   integer, intent(out) :: fevals
@@ -139,8 +141,10 @@ subroutine initial_designs(dv, objval, fevals, objfunc, xmin, xmax, use_x0,    &
 
 ! Initial population of designs set between xmin and xmax
 
-  write(*,*) 'Generating and evaluating initial designs ...'
   write(*,*)
+  write(text3,*) pop
+  text3 = adjustl(text3)
+  write(*,*) 'Generating and evaluating '//trim(text3)//' initial designs'
 
 !$omp end master
 !$omp barrier
@@ -170,9 +174,10 @@ subroutine initial_designs(dv, objval, fevals, objfunc, xmin, xmax, use_x0,    &
     write(text1,*) attempts
     text1 = adjustl(text1)
 !$omp master
-    write(*,*) 'Checking initial designs for feasibility ...'
-    write(*,*) '  (using a max of '//trim(text1)//' initialization attempts)'
+    write(*,*) 'Checking initial designs for feasibility using max '//trim(text1)//' init attempts...'
     write(*,*)
+    write(*,'(13x)', advance ='no') 
+
 !$omp end master
 
 
@@ -212,17 +217,20 @@ subroutine initial_designs(dv, objval, fevals, objfunc, xmin, xmax, use_x0,    &
 !     Write a message about the feasibility of initial designs
 
       if ((initcount > attempts) .and. (objval(i) >= feasible_limit)) then
-        write(*,*) ' Design '//trim(text2)//' is infeasible and was not'//     &
-                   ' fixed within '//trim(text1)//' reinitialization attempts.'
+        call print_colored (COLOR_NOTE,'.')         ! no valid design 
+!        write(*,*) ' Design '//trim(text2)//' is infeasible and was not'//     &
+!                   ' fixed within '//trim(text1)//' reinitialization attempts.'
       elseif ((initcount <= attempts) .and. (initcount > 0) .and.              &
               (objval(i) < feasible_limit)) then
-        write(text3,*) initcount
-        text3 = adjustl(text3)
-        write(*,*) ' Design '//trim(text2)//' was initially infeasible but'//  &
-                   ' was fixed after '//trim(text3)//                          &
-                   ' reinitialization attempts.'
+        call print_colored (COLOR_NORMAL, 'o')      ! made it after retries
+!        write(text3,*) initcount
+!        text3 = adjustl(text3)
+!        write(*,*) ' Design '//trim(text2)//' was initially infeasible but'//  &
+!                   ' was fixed after '//trim(text3)//                          &
+!                   ' reinitialization attempts.'
       else
-        write(*,*) ' Design '//trim(text2)//' is feasible.' 
+        call print_colored (COLOR_GOOD, 'o')        ! first shot
+!        write(*,*) ' Design '//trim(text2)//' is feasible.' 
       end if
 
     end do
@@ -230,6 +238,7 @@ subroutine initial_designs(dv, objval, fevals, objfunc, xmin, xmax, use_x0,    &
 !$omp end do
 
 !$omp master
+    write(*,*)
     write(*,*)
 !$omp end master
 
