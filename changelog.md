@@ -2,6 +2,24 @@
 
 All notable changes to this project are documented in this file.
 
+## [1.60 beta] - 2020-11-07
+
+Not final - current dev state
+
+####  Xoptfoil-JX
+
+A lot of code cleanings and refactorings
+- more stable xfoil driver 
+- auto-detection of curvature constraints especially for Hicks-Henne (default: auto_curvature = .true.)
+- auto-smoothing of surface when seed quuality is not good enough (default: do_smoothing = .true.)
+- new screen output during ps optimization to get more details about particles work
+
+#### Xfoil_worker
+
+- added new option "-w check" to check the surface (curvature) quality of an airfoil and tell about best optimization options 
+
+
+
 ## [1.52.1] - 2020-06-25
 
 This is just a bugfix and maintenance release
