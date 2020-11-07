@@ -18,8 +18,8 @@ module polar_operations
   implicit none
 
   type op_point_type
-    double precision :: value, lift, drag, moment, viscrms, alpha, &
-                        xtrt, xtrb
+    double precision :: value, lift, drag, moment, alpha, xtrt, xtrb
+    logical:: converged
   end type op_point_type
 
   type polar_type
@@ -64,7 +64,6 @@ subroutine check_and_do_polar_generation (input_file, output_prefix, foil)
   type (xfoil_options_type)      :: xfoil_options
   integer  :: npolars
 
-  write (*,*)
   call read_polar_inputs          (input_file, foil%name, npolars, polars, xfoil_options)
 
   if (npolars > 0)                                               &
@@ -104,6 +103,7 @@ subroutine generate_polar_files (output_prefix, foil, npolars, polars, &
   character (255) :: polars_subdirectory
 
 ! Create subdir for polar files if not exist
+! jx-todo wrong name for -0.5 names
   polars_subdirectory = trim(output_prefix)//'_polars'
   call make_directory (trim(polars_subdirectory))
 
@@ -112,18 +112,16 @@ subroutine generate_polar_files (output_prefix, foil, npolars, polars, &
   if (npolars > 1) then
     write (*,'(1x,A,I2,A)') 'A total of ',npolars,' polars will be generated '//  &
     'for airfoil '//trim(foil%name)
-  else
-    write (*,*)
   end if
 
   do i = 1, npolars
 
-    write (*,'(/,1x,A,I1,A, I7,A)') 'Calculating polar Type ',polars(i)%re%type,' Re=',  &
+    write (*,'(1x,A,I1,A, I7,A)') 'Calculating polar Type ',polars(i)%re%type,' Re=',  &
           int(polars(i)%re%number), ' for '// polars(i)%airfoil_name
     call init_polar (polars(i))
     call calculate_polar (foil, polars(i), xfoil_geom_options, xfoil_options)
 
-    write (*,'(1x,A, F7.0)')    'Writing to '//trim(polars_subdirectory)//'/'//trim(polars(i)%file_name)
+    write (*,'(1x,A, F7.0)')    'Writing polar to '//trim(polars_subdirectory)//'/'//trim(polars(i)%file_name)
 
     open(unit=13, file= trim(polars_subdirectory)//'/'//trim(polars(i)%file_name), status='replace')
     call write_polar_header (13, polars(i))
@@ -188,10 +186,10 @@ subroutine read_polar_inputs  (input_file, foil_name, npolars, polars, xfoil_opt
   xtripb          = 1.d0
   viscous_mode    = .true.
   silent_mode     = .true.
-  bl_maxit        = 100
+  bl_maxit        = 50
   vaccel          = 0.005d0
   fix_unconverged = .true.
-  reinitialize    = .true.
+  reinitialize    = .false.
 
 ! Open input file and read namelist from file
 
@@ -336,49 +334,6 @@ subroutine read_xfoil_paneling_inputs  (input_file, geom_options)
 
 end subroutine read_xfoil_paneling_inputs
 
-!=============================================================================
-! Read xoptfoil input file to xfoil_paneling_options
-!   (separated from read_inputs to be more modular)
-!=============================================================================
-
-subroutine read_smoothing_inputs  (input_file, spike_threshold, &
-                                    highlow_threshold, curv_threshold)
-
-  use airfoil_operations, only : my_stop
-  use input_output,       only : namelist_check
-
-  character(*), intent(in)      :: input_file
-  double precision , intent(out):: highlow_threshold, curv_threshold, spike_threshold
-
-  integer :: istat, iunit
-  logical                       :: do_smoothing
-
-  namelist /smoothing_options/ do_smoothing, spike_threshold 
-  namelist /constraints/ highlow_threshold, curv_threshold
-
-  ! Init default values 
-
-  do_smoothing      = .true.                !currently dummy
-  spike_threshold   = 0.8d0           
-  curv_threshold    = 0.01d0
-  highlow_threshold = 0.02d0
- 
-! Open input file and read namelist from file
-
-  iunit = 12
-  open(unit=iunit, file=input_file, status='old', iostat=istat)
-
-  if (istat == 0) then
-    read (iunit, iostat=istat, nml=constraints)
-    call namelist_check('constraints', istat, 'warn')
-    rewind(iunit)
-    read(iunit, iostat=istat, nml=smoothing_options)
-    close (iunit)
-  end if
-  
-  call namelist_check('smoothing_options', istat, 'warn')
-
-end subroutine read_smoothing_inputs
 
 !=============================================================================
 ! Read xoptfoil input file to get flap setting options
@@ -528,8 +483,8 @@ subroutine calculate_polar (foil, polar, xfoil_geom_options, xfoil_options)
   call run_xfoil(foil, xfoil_geom_options, polar%op_points%value,  op_modes,     &
     re, ma, use_flap, x_flap, y_flap,                                            &
     y_flap_spec, flap_degrees, xfoil_options,                                    &
-    polar%op_points%lift, polar%op_points%drag, polar%op_points%moment,          &
-    polar%op_points%viscrms, polar%op_points%alpha, polar%op_points%xtrt, polar%op_points%xtrb)
+    polar%op_points%converged, polar%op_points%lift, polar%op_points%drag,       &
+    polar%op_points%moment, polar%op_points%alpha, polar%op_points%xtrt, polar%op_points%xtrb)
 
 end subroutine calculate_polar
 
@@ -559,7 +514,7 @@ subroutine write_polar_data (out_unit, polar)
   do i = 1, polar%n_op_points
 
     op = polar%op_points(i)
-    if (op%viscrms < 1.0D-04) then
+    if (op%converged) then
       write (out_unit,  "(   F8.3,   F9.4,    F10.5,    F10.5,    F9.4,   F8.4,   F8.4)") &
                           op%alpha, op%lift, op%drag,    0d0,  op%moment,op%xtrt,op%xtrb
     else

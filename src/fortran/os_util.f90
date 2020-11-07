@@ -22,6 +22,11 @@ module os_util
   integer, parameter, public  :: COLOR_WARNING= 6
   integer, parameter, public  :: COLOR_NOTE   = 7
 
+  integer, parameter, public  :: Q_GOOD     = 0         ! must be ordered
+  integer, parameter, public  :: Q_OK       = 1
+  integer, parameter, public  :: Q_BAD      = 2
+  integer, parameter, public  :: Q_PROBLEM  = 4
+
   private
 
   public :: print_colored
@@ -29,6 +34,11 @@ module os_util
   public :: print_error
   public :: print_warning
   public :: print_note
+  public :: print_colored_i
+  public :: print_colored_r
+  public :: print_colored_s
+  public :: i_quality
+  public :: r_quality
   
   interface print_colored
 #ifdef UNIX
@@ -166,6 +176,8 @@ subroutine print_colored (color_typ, text)
   character(*),  intent (in) :: text
   character (20) :: color_string, normal_string
 
+!$omp critical
+
   select case (color_typ)
     case (COLOR_GOOD)
       color_string = FOREGROUND_LIGHT_GREEN
@@ -193,6 +205,8 @@ subroutine print_colored (color_typ, text)
 
   write(*,'(A)', advance = 'no') trim(color_string) // text // trim(normal_string)
 
+!$omp end critical
+
 end subroutine print_colored
 
 #else
@@ -207,11 +221,13 @@ subroutine print_colored_windows (color_typ, text)
   integer(BOOL) :: iresult
   type(T_CONSOLE_SCREEN_BUFFER_INFO) lpConsoleScreenBufferInfo
 
+!$omp critical
+
   select case (color_typ)
     case (COLOR_GOOD)
       color_attribute = iany([FOREGROUND_GREEN, FOREGROUND_INTENSITY])
     case (COLOR_BAD)
-      color_attribute = iany([FOREGROUND_RED, FOREGROUND_INTENSITY])
+      color_attribute = iany([FOREGROUND_RED])
     case (COLOR_HIGH)
       color_attribute = iany([FOREGROUND_RED, FOREGROUND_GREEN, FOREGROUND_BLUE, FOREGROUND_INTENSITY])
     case (COLOR_ERROR)
@@ -219,7 +235,9 @@ subroutine print_colored_windows (color_typ, text)
     case (COLOR_WARNING)
       color_attribute = iany([FOREGROUND_RED, FOREGROUND_GREEN])
     case (COLOR_NOTE)
-      color_attribute = iany([FOREGROUND_BLUE, FOREGROUND_GREEN])
+      color_attribute = iany([FOREGROUND_INTENSITY])
+!     grey is better then thi light blue
+!      color_attribute = iany([FOREGROUND_BLUE, FOREGROUND_GREEN])
     case default
       color_attribute = iany([FOREGROUND_RED, FOREGROUND_GREEN, FOREGROUND_BLUE])
   end select
@@ -232,7 +250,13 @@ subroutine print_colored_windows (color_typ, text)
   iresult = SetConsoleTextAttribute(hConsoleOutput,wAttributes)
   write(*,'(A)', advance = 'no') text
   
-  iresult = SetConsoleTextAttribute(hConsoleOutput,lpConsoleScreenBufferInfo%wAttributes)
+  wAttributes = int(iany([FOREGROUND_RED, FOREGROUND_GREEN, FOREGROUND_BLUE]),2)
+  ! Switch back to normal color instead of restoring old value 
+  !        (problems with multi threaded screen write)
+  ! iresult = SetConsoleTextAttribute(hConsoleOutput,lpConsoleScreenBufferInfo%wAttributes)
+  iresult = SetConsoleTextAttribute(hConsoleOutput,wAttributes)
+
+!$omp end critical
 
 end subroutine print_colored_windows
 
@@ -290,5 +314,148 @@ subroutine print_note (text)
   call print_colored (COLOR_NOTE, 'Note: ')
   write (*,'(A)') trim(text)
 end subroutine print_note
+
+!-------------------------------------------------------------------------
+! prints the integer ivalue colored depending
+!   on its quality (e.g. Q_OK)
+!-------------------------------------------------------------------------
+  
+subroutine print_colored_i (strlen, quality, ivalue)
+  
+  integer, intent(in) :: ivalue, quality, strlen
+
+  character (strlen)  :: str
+  integer             :: color 
+
+  select case (quality)
+    case (Q_GOOD)
+      color = COLOR_GOOD
+    case (Q_OK)
+      color = COLOR_NORMAL
+    case (Q_BAD)
+      color = COLOR_WARNING
+    case default 
+      color = COLOR_BAD
+  end select
+  str = repeat('*',strlen)
+
+  if (ivalue >= 10** strlen-1) then
+    str = repeat('*',strlen)
+  else
+    !jx-todo more flexibel with length (end of record)
+    write (str,'(I3)') ivalue
+  endif
+
+  str = adjustr(str)
+  call print_colored (color, str)
+  
+end subroutine print_colored_i
+
+!-------------------------------------------------------------------------
+! prints the real rvalue colored depending
+!   on its quality (e.g. Q_OK)
+!-------------------------------------------------------------------------
+  
+subroutine print_colored_r (strlen, format_string, quality, rvalue)
+  
+  double precision, intent(in) :: rvalue
+  integer, intent(in)          :: strlen, quality
+  character (*), intent(in)    :: format_string
+
+  character (strlen)  :: str
+  integer             :: color 
+
+  select case (quality)
+    case (Q_GOOD)
+      color = COLOR_GOOD
+    case (Q_OK)
+      color = COLOR_NORMAL
+    case (Q_BAD)
+      color = COLOR_WARNING
+    case default 
+      color = COLOR_BAD
+  end select
+
+  write (str,format_string) rvalue
+  str = adjustr(str)
+
+  call print_colored (color, str)
+
+end subroutine print_colored_r
+
+!-------------------------------------------------------------------------
+! evalutes the quality (constant Q_GOOD etc) of a integer value 
+!-------------------------------------------------------------------------
+
+function i_quality (value, lim_good, lim_ok, lim_bad)
+
+  integer, intent(in) :: value, lim_good, lim_ok, lim_bad
+  integer :: i_quality
+
+  if (value < lim_good) then
+    i_quality = Q_GOOD
+  elseif (value < lim_ok) then
+    i_quality = Q_OK
+  elseif (value < lim_bad) then
+    i_quality = Q_BAD
+  else
+    i_quality = Q_PROBLEM
+  end if
+
+end function i_quality
+  
+!-------------------------------------------------------------------------
+! evalutes the quality (constant Q_GOOD etc) of a real value 
+!-------------------------------------------------------------------------
+
+function r_quality (value, lim_good, lim_ok, lim_bad)
+
+  double precision, intent(in) :: value, lim_good, lim_ok, lim_bad
+  integer :: r_quality
+
+  if (value < lim_good) then
+    r_quality = Q_GOOD
+  elseif (value < lim_ok) then
+    r_quality = Q_OK
+  elseif (value < lim_bad) then
+    r_quality = Q_BAD
+  else
+    r_quality = Q_PROBLEM
+  end if
+
+end function r_quality
+
+!-------------------------------------------------------------------------
+! prints the string colored depending
+!   on its quality (e.g. Q_OK)
+!-------------------------------------------------------------------------
+  
+subroutine print_colored_s (strlen, quality)
+  
+  integer, intent(in)      :: quality, strlen
+
+  character (strlen)  :: str, comment
+  integer             :: color 
+
+  select case (quality)
+    case (Q_GOOD)
+      color = COLOR_GOOD
+      comment ='perfect'
+    case (Q_OK)
+      color = COLOR_NORMAL
+      comment ='ok'
+    case (Q_BAD)
+      color = COLOR_WARNING
+      comment ='bad'
+    case default 
+      color = COLOR_BAD
+      comment ='critical'
+  end select
+  write (str,'(A)') comment
+  str = adjustl(str)
+  call print_colored (color, str)
+  
+end subroutine print_colored_s
+
 
 end module os_util

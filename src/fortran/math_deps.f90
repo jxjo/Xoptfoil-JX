@@ -516,6 +516,47 @@ subroutine sort_vector(vec, idxs)
   end do
 
 end subroutine sort_vector
+!=============================================================================80
+!
+! Sorts a vector via bubble sort descending. Optionally records map of indices relative to
+! input vector.
+!
+!=============================================================================80
+subroutine sort_vector_descend (vec, idxs)
+
+  double precision, dimension(:), intent(inout) :: vec
+  integer, dimension(:), intent(inout), optional :: idxs
+
+  integer :: nelem, i, sortcounter
+  logical :: sorted
+
+! Set up indexing array
+
+  nelem = size(vec,1)
+  if (present(idxs)) then
+    do i = 1, nelem
+      idxs(i) = i
+    end do
+  end if
+
+! Bubble sorting algorithm
+
+  sorted = .false.
+  do while (.not. sorted)
+
+    sortcounter = 0
+    do i = 1, nelem-1
+      if (vec(i+1) > vec(i)) then
+        call swap_double(vec, i, i+1)
+        sortcounter = sortcounter + 1
+        if (present(idxs)) call swap_int(idxs, i, i+1)
+      end if
+    end do
+    if (sortcounter == 0) sorted = .true.
+
+  end do
+
+end subroutine sort_vector_descend
 
 !=============================================================================80
 !
@@ -707,6 +748,148 @@ subroutine find_curvature_reversals(npt, i_start, highlow_threshold, curve_thres
 
 end subroutine find_curvature_reversals
 
+!------------------------------------------------------------------------------
+! Evaluates the min possible threshold that no more than nreversals will be
+!    detected on the polyline 
+!------------------------------------------------------------------------------
+function min_threshold_for_reversals (x, y, min_threshold, max_threshold, nreversals_to_detect)
+
+  integer, intent(in)             :: nreversals_to_detect
+  double precision, intent(in)    :: min_threshold, max_threshold
+  double precision, dimension(:), intent(in) :: x, y
+  double precision       :: min_threshold_for_reversals, threshold, delta
+  integer                :: nreversals
+
+  if (min_threshold == 0d0) then
+    write (*,*) 'Error: min_threshold must be > 0 in min_threshold_for_reversals'
+    stop
+  end if 
+
+  threshold          = max_threshold
+  delta              = 0.1                          ! iteration start, will be decreased
+  nreversals         = nreversals_using_threshold (x,y, threshold)
+
+  do while ((threshold >= min_threshold) .and.  &
+            (nreversals <= nreversals_to_detect))
+
+    if (threshold <= delta) delta = delta / 10d0           !decrease delta when getting close to 0    
+    threshold = threshold - delta
+
+    nreversals         = nreversals_using_threshold (x,y, threshold)
+
+  end do 
+
+  if (nreversals > nreversals_to_detect) then
+    min_threshold_for_reversals = threshold + delta   ! to many - go delta back
+  else
+    min_threshold_for_reversals = threshold           ! exact match 
+  end if
+
+end function min_threshold_for_reversals
+
+
+!------------------------------------------------------------------------------
+! Evaluates the min possible threshold that no more than nhighlows will be
+!    detected on the polyline (in the range of min_threshold to max_threshold)
+!------------------------------------------------------------------------------
+function min_threshold_for_highlows (x, y, min_threshold, max_threshold, nhighlows_to_detect)
+
+  integer, intent(in)             :: nhighlows_to_detect
+  double precision, intent(in)    :: min_threshold, max_threshold
+  double precision, dimension(:), intent(in) :: x, y
+  double precision       :: min_threshold_for_highlows, threshold, delta
+  integer                :: nhighlows
+
+  if (min_threshold == 0d0) then
+    write (*,*) 'Error: min_threshold must be > 0 in min_threshold_for_reversals'
+    stop
+  end if 
+
+  threshold          = max_threshold
+  delta              = 0.1                          ! iteration start, will be decreased
+  nhighlows          = nhighlows_using_threshold (x,y, threshold)
+
+  ! this is brute force - decrease threshold step by step until we get nhighlows_to_detect
+
+  do while ((threshold >= min_threshold) .and.  &
+            (nhighlows <= nhighlows_to_detect))
+
+    if (threshold <= delta) delta = delta / 10d0           !decrease delta when getting close to 0    
+    threshold = threshold - delta
+    nhighlows = nhighlows_using_threshold (x,y, threshold)
+
+  end do 
+
+  if (nhighlows > nhighlows_to_detect) then
+    min_threshold_for_highlows = threshold + delta   ! to many - go delta back
+  else
+    min_threshold_for_highlows = threshold           ! exact match 
+  end if
+
+end function min_threshold_for_highlows
+
+
+!------------------------------------------------------------------------------
+! Gets the number of highlows if threshold 'highlow_threshold' is applied
+!    detected on the polyline 
+!------------------------------------------------------------------------------
+function nhighlows_using_threshold (x, y, highlow_threshold)
+
+  double precision, dimension(:), intent(in)  :: x, y
+  double precision, intent(in)                :: highlow_threshold
+  double precision :: curve_threshold
+  integer          :: nhighlows_using_threshold
+  integer          :: npt, i_start, nreversals
+  character (size(x)) :: result_info
+
+  npt     = size(x)
+  i_start = 5 
+  curve_threshold = 0.1d0             !dummy
+  result_info = repeat ('-', npt )    ! dummy 
+
+
+  call find_curvature_reversals(npt, i_start, highlow_threshold, curve_threshold, x, y, &
+                                nhighlows_using_threshold, nreversals, result_info)
+
+end function nhighlows_using_threshold
+
+
+!------------------------------------------------------------------------------
+! Gets the number of curve reversals if threshold 'curve_threshold' is applied
+!    detected on the polyline 
+!------------------------------------------------------------------------------
+function nreversals_using_threshold (x, y, curve_threshold)
+
+  double precision, dimension(:), intent(in)  :: x, y
+  double precision, intent(in)                :: curve_threshold
+  integer          :: nreversals_using_threshold, nreversals
+
+  double precision, dimension(:), allocatable :: deriv2
+  integer          :: i, npt, i_first
+  double precision :: curv1 
+
+  nreversals   = 0
+  i_first      = 5                  ! start behind LE
+  curv1        = 0d0
+
+  npt = size(x)
+  allocate(deriv2(npt))
+
+  deriv2 = derivation2(npt, x, y)   ! get 2nd derivation 
+
+  do i = i_first, npt-1
+    if (abs(deriv2(i)) >= curve_threshold) then
+      if (deriv2(i) * curv1 < 0.d0) then 
+        nreversals = nreversals + 1
+      end if
+      curv1 = deriv2(i)
+    end if
+  end do
+
+  nreversals_using_threshold = nreversals
+
+end function nreversals_using_threshold
+
 
 !------------------------------------------------------------------------------
 ! counts der curvature spikes of polyline (x,y)
@@ -884,10 +1067,5 @@ function interp_point(x, y, xnew)
   interp_point = interp1(x(pt1), x(pt1+1), xnew, y(pt1), y(pt1+1))
 
 end function interp_point
-
-!=============================================================================80
-! jx-mod Smoothing - End Additional functions 
-!=============================================================================80
-
 
 end module math_deps

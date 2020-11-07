@@ -19,6 +19,8 @@ module airfoil_operations
 
 ! Performs transformations and other operations on airfoils
 
+  use os_util
+
   implicit none
 
 ! Coefficients for 5th-order polynomial (curve fit for leading edge)
@@ -76,8 +78,6 @@ subroutine load_airfoil(filename, foil)
 
   use vardef,      only : airfoil_type
   use memory_util, only : allocate_airfoil
-  use os_util,     only : print_error, print_colored, COLOR_HIGH
-
 
   character(*), intent(in) :: filename
   type(airfoil_type), intent(out) :: foil
@@ -119,8 +119,6 @@ end subroutine load_airfoil
 !
 !=============================================================================80
 subroutine airfoil_points(filename, npoints, labeled)
-
-  use os_util, only: print_error
 
   character(*), intent(in) :: filename
   integer, intent(out) :: npoints
@@ -170,8 +168,6 @@ end subroutine airfoil_points
 !
 !=============================================================================80
 subroutine airfoil_read(filename, npoints, labeled, name, x, z)
-
-  use os_util, only: print_error
 
   character(*), intent(in) :: filename
   character(*), intent(out) :: name
@@ -240,7 +236,6 @@ subroutine cc_ordering(foil)
 
   use vardef,    only : airfoil_type
   use math_deps, only : norm_2
-  use os_util,   only : print_warning
 
   type(airfoil_type), intent(inout) :: foil
 
@@ -267,7 +262,7 @@ subroutine cc_ordering(foil)
 !    call my_stop("Panel with 0 length detected near trailing edge.")
 !
 !  tevec1 = tevec1/len1
-!  tevec2 = tevec2/len2
+!  tevec2 = tevec2/len2 
 
 !  if (tevec1(2) < tevec2(2)) then
   if (foil%z(npoints) > foil%z(1)) then
@@ -389,15 +384,13 @@ end subroutine le_find
 !    offset. SO this is iterated until the offset is small than epsilon
 !
 !-----------------------------------------------------------------------------
-subroutine repanel_and_normalize_airfoil (seed_foil, npoint_paneling, foil)
+subroutine repanel_and_normalize_airfoil (in_foil, npoint_paneling, foil)
 
-  use vardef,       only : airfoil_type, foil_transform
+  use vardef,       only : airfoil_type         ! jx-deprecated:  oil_transform
   use math_deps,    only : norm_2
-  use os_util,      only : print_warning
   use xfoil_driver, only : smooth_paneling
 
-
-  type(airfoil_type), intent(in)  :: seed_foil
+  type(airfoil_type), intent(in)  :: in_foil
   type(airfoil_type), intent(out) :: foil
   integer,            intent(in)  :: npoint_paneling
 
@@ -415,10 +408,12 @@ subroutine repanel_and_normalize_airfoil (seed_foil, npoint_paneling, foil)
   allocate (tmp_foil%z(npoint_paneling))  
   tmp_foil%npoint = npoint_paneling
 
+  foil%name = in_foil%name
+
   ! initial paneling to npoint_paneling
   write (*,*)
   write (*,'(1x,A,I3,A)') 'Repaneling and normalizing with ',npoint_paneling,' Points'
-  call smooth_paneling(seed_foil, npoint_paneling, foil)
+  call smooth_paneling(in_foil, npoint_paneling, foil)
   call le_find(foil%x, foil%z, foil%leclose, foil%xle, foil%zle, foil%addpoint_loc)
 
   le_fixed = .false. 
@@ -447,13 +442,9 @@ subroutine repanel_and_normalize_airfoil (seed_foil, npoint_paneling, foil)
 
   ! reached a virtual LE which is closer to 0,0 than epsilon, set it to 0,0
   if (le_fixed) then 
-    foil_transform%xoffset = 0.d0
-    foil_transform%zoffset = 0.d0
-    foil_transform%scale   = 1.d0
-    foil_transform%angle   = 0.d0 
     foil%xle = 0.d0
     foil%zle = 0.d0
-    ! is the LE panel of closest point much! shorter tanh the next panel? 
+    ! is the LE panel of closest point much! shorter than the next panel? 
     !       if yes, take this point to LE 0,0
     p(1)      = foil%x(foil%leclose)
     p(2)      = foil%z(foil%leclose)
@@ -473,8 +464,6 @@ subroutine repanel_and_normalize_airfoil (seed_foil, npoint_paneling, foil)
   else
     write (*,'(1x, A)')      'Set closest point to LE to become new leading edge at (0,0)'
   end if
-
-
 
 end subroutine repanel_and_normalize_airfoil
 
@@ -580,7 +569,7 @@ subroutine get_split_points(foil, pointst, pointsb, symmetrical)
 end subroutine get_split_points
 
 !-----------------------------------------------------------------------------
-!
+! jx-deprecated: remove this when extended foil-type is implemented
 ! Split an airfoil into top (xt,zt) and bottom surface (xb,zb) polyline
 !
 !-----------------------------------------------------------------------------
@@ -644,57 +633,106 @@ subroutine split_airfoil(foil, xt, xb, zt, zb, symmetrical)
 
 end subroutine split_airfoil
 
+!-----------------------------------------------------------------------------
+! Split an airfoil into top (xt,zt) and bottom surface (xb,zb) polyline
+!-----------------------------------------------------------------------------
+subroutine split_foil(foil)
+
+  use vardef, only : airfoil_type
+
+  type(airfoil_type), intent(inout) :: foil
+  logical :: symmetrical        !jx-deprecated
+  
+  integer i, boundst, boundsb, pointst, pointsb
+
+  ! In le_find the "virtual" leading edge was determined 
+  !    and checked if an additional le point has to be inserted to reflect the le
+  !    dpeending on foil%addpoint_loc a new point will be inserted to 
+  !    become the starting point (0,0) for top and bottom surface
+
+  !jx-deprecated
+  symmetrical = .false.
+
+  call get_split_points(foil, pointst, pointsb, symmetrical)
+
+  if (foil%addpoint_loc == 0) then
+    boundst = foil%leclose - 1
+    boundsb = foil%leclose + 1
+  elseif (foil%addpoint_loc == -1) then
+    boundst = foil%leclose - 1
+    boundsb = foil%leclose
+  else
+    boundst = foil%leclose
+    boundsb = foil%leclose + 1
+  end if
+
+! Copy points for the top surface
+
+  allocate(foil%xt(pointst))
+  allocate(foil%zt(pointst))
+  allocate(foil%xb(pointsb))
+  allocate(foil%zb(pointsb))
+
+  foil%xt(1) = foil%xle
+  foil%zt(1) = foil%zle
+  do i = 1, pointst - 1
+    foil%xt(i+1) = foil%x(boundst-i+1)
+    foil%zt(i+1) = foil%z(boundst-i+1)
+  end do
+
+! Copy points for the bottom surface
+
+  foil%xb(1) = foil%xle
+  foil%zb(1) = foil%zle
+  do i = 1, pointsb - 1
+    foil%xb(i+1) = foil%x(boundsb+i-1)
+    foil%zb(i+1) = foil%z(boundsb+i-1)
+  end do
+
+end subroutine split_foil
+
 !------------------------------------------------------------------------------
 !
 ! Rebuild airfoil out of top and bottom surfaces
-!     The foil will be optionally transformed by scale, offset and angle
 ! 
 !------------------------------------------------------------------------------
 
 subroutine rebuild_airfoil(xt, xb, zt, zb, foil)
 
-  use vardef, only : airfoil_type
-  use vardef, only : foil_transform
+  use vardef, only        : airfoil_type
+  use memory_util, only   : deallocate_airfoil
 
   type(airfoil_type), intent(inout) :: foil
   double precision, dimension(:), intent(in) :: xt, xb, zt, zb
   
   integer i, pointst, pointsb
-  double precision :: cosa, sina
-  double precision :: scale, xoffset, zoffset, angle
 
-  ! prepare datastructures
-
-  if (allocated(foil%x)) deallocate(foil%x)
-  if (allocated(foil%z)) deallocate(foil%z)
+  call deallocate_airfoil(foil)
 
   pointst = size(xt,1)
   pointsb = size(xb,1)
+
   foil%npoint = pointst + pointsb - 1
+
   allocate(foil%x(foil%npoint))
   allocate(foil%z(foil%npoint))
+  allocate(foil%xb(size(xb,1)))
+  allocate(foil%xt(size(xt,1)))
+  allocate(foil%zb(size(xb,1)))
+  allocate(foil%zt(size(xt,1)))
 
-  ! now do transformation
-
-  xoffset = foil_transform%xoffset
-  zoffset = foil_transform%zoffset
-  scale   = foil_transform%scale
-  angle   = foil_transform%angle
+  foil%xb = xb
+  foil%xt = xt
+  foil%zb = zb
+  foil%zt = zt
 
   do i = 1, pointst
-    foil%x(i) = xt(pointst-i+1)/scale - xoffset
-    foil%z(i) = zt(pointst-i+1)/scale - zoffset
+    foil%x(i) = xt(pointst-i+1)
+    foil%z(i) = zt(pointst-i+1)
   end do
   do i = 1, pointsb-1
-    foil%x(i+pointst) = xb(i+1)/scale - xoffset
-    foil%z(i+pointst) = zb(i+1)/scale - zoffset
-  end do
-
-  cosa  = cos (angle) 
-  sina  = sin (angle) 
-  do i = 1, foil%npoint
-    foil%x(i) = foil%x(i) * cosa - foil%z(i) * sina
-    foil%z(i) = foil%x(i) * sina + foil%z(i) * cosa
+    foil%x(i+pointst) = xb(i+1)
+    foil%z(i+pointst) = zb(i+1)
   end do
 
 
@@ -707,15 +745,16 @@ end subroutine rebuild_airfoil
 !=============================================================================80
 subroutine airfoil_write(filename, title, foil)
 
-  use vardef, only : airfoil_type
+  use vardef,     only : airfoil_type
 
   character(*), intent(in) :: filename, title
   type(airfoil_type), intent(in) :: foil
   integer :: iunit
 
   write(*,*)
-  write(*,*) 'Writing labeled airfoil file '//trim(filename)//' ...'
-  write(*,*)
+  write (*,'(1x, A)', advance = 'no') 'Writing airfoil to file: '
+  call print_colored (COLOR_HIGH,trim(filename))
+  write (*,*)
 
 ! Open file for writing and out ...
 
@@ -815,8 +854,6 @@ end function isnum
 !=============================================================================80
 subroutine my_stop(message, stoptype)
 
-  use os_util, only: print_error, print_warning
-
   character(*), intent(in) :: message
   character(4), intent(in), optional :: stoptype
 
@@ -839,38 +876,229 @@ end subroutine my_stop
 
 !------------------------------------------------------------------------------
 ! Assess polyline (x,y) on surface quality (curves of2nd and 3rd derivation)
-!    and print an info string like this '-----R---H--sss--'
+!    will return surface quality e.g. Q_GOOD
+!    and print an info string like this '-----R---H--sss--' (show_details)
 !------------------------------------------------------------------------------
 
-subroutine assess_surface (info, x, y)
+subroutine assess_surface (show_details, info, &
+                           curv_threshold, spike_threshold, highlow_threshold, &
+                           max_te_curvature, &
+                           x, y, overall_quality)
 
-  use math_deps, only : find_curvature_reversals, find_curvature_spikes
-  use vardef,    only:  curv_threshold, spike_threshold, highlow_threshold
+  use math_deps, only: find_curvature_reversals, find_curvature_spikes, curvature
 
+  logical, intent(in)      :: show_details
   character(*), intent(in) :: info
+  double precision, intent(in) :: curv_threshold, spike_threshold, highlow_threshold
+  double precision, intent(in) :: max_te_curvature
   double precision, dimension(:), intent(in) :: x, y
+  integer, intent(out)      :: overall_quality
 
-  integer :: nhighlows, nspikes, nreversals, i_check_start
+  integer             :: nhighlows, nspikes, nreversals, i_check_start, npt
+  double precision    :: cur_te_curvature
+  integer             :: quality_spikes, quality_highlows, quality_reversals
+  integer             :: quality_te
   character (size(x)) :: result_info
+  character (90)      :: result_out
+  character (22)      :: label
 
   nreversals = 0
   nhighlows  = 0
   nspikes    = 0
+  npt        = size(x)
 
-  result_info = repeat ('-', size(x) ) 
+  result_info = repeat ('-', npt ) 
 
-  ! have a look at 3rd derivation ... 
-  i_check_start  = 1              ! leave LE out from counting - too special there 
-  call find_curvature_spikes (size(x), i_check_start, spike_threshold, x, y, nspikes, result_info)
+! have a look at 3rd derivation ... 
+  i_check_start  = 5              ! leave LE out from counting - too special there 
+  call find_curvature_spikes   (npt, i_check_start, spike_threshold, x, y, nspikes, &
+                                result_info)
 
-  ! have a look at 2nd derivation ... skip first 5 points at LE (too special there) 
-  call find_curvature_reversals(size(x), 5, highlow_threshold, curv_threshold, x, y, &
-                                nhighlows, nreversals, result_info)
+! have a look at 2nd derivation ... skip first 5 points at LE (too special there) 
+  call find_curvature_reversals(npt, i_check_start, highlow_threshold, curv_threshold, &
+                                x, y, nhighlows, nreversals, result_info)
 
-  write (*,'(11x,A,1x,3(I2,A),A)') info//' ', nreversals, 'R ', &
-                                   nhighlows, 'HL ', nspikes, 's ', '  '// result_info
+  quality_spikes    = i_quality (nspikes, 2, 6, 40)
+  quality_highlows  = i_quality (nhighlows, 2, 6, 30)
+  quality_reversals = i_quality (nreversals, 2, 3, 10)
+  overall_quality   = ior(ior (quality_spikes, quality_highlows), quality_reversals)
 
+! check te curvature 
+
+  call get_max_te_curvature (size(x), x,y, cur_te_curvature )
+  quality_te      = r_quality (cur_te_curvature, max_te_curvature, 1d0, 10d0)
+  ! te quality counts only half as too often it is bad ... 
+  overall_quality = ior(overall_quality, (quality_te / 2))
+
+ 
+  ! all the output ...
+
+  if(show_details) then
+
+    write (*,*)
+    if (len(result_info) > len(result_out)) then
+      result_out = '... ' // result_info ((len(result_info) - len(result_out) + 1 + 4):)
+    else
+      result_out = result_info
+    end if 
+
+    Write (*,'(A21,A)') adjustl(info) // ' ', result_out
+
+    write (*,'(20x)', advance ='no')   
+    call print_colored (COLOR_NOTE, 'Spikes')
+    call print_colored_i (4, quality_spikes, nspikes)
+    call print_colored (COLOR_NOTE, '     HighLows')
+    call print_colored_i (4, quality_highlows, nhighlows)
+    call print_colored (COLOR_NOTE, '     Reversals')
+    call print_colored_i (4, quality_reversals, nreversals)
+    write (*,*)
+
+    write (*,'(20x)', advance = 'no')
+    label = 'max curvature at TE'
+    call print_colored (COLOR_NOTE, label//'=')
+    call print_colored_r (6,'(F6.2)', quality_te, cur_te_curvature) 
+    if (quality_te > Q_BAD) then
+      call print_colored (COLOR_NOTE, '   typically indicating a geometric spoiler at TE')
+    end if 
+    write(*,*)
+  end if
+                             
 end subroutine assess_surface
+
+
+!-------------------------------------------------------------------------
+! Get best estimate of nreversals and the corresponding threshold value
+!-------------------------------------------------------------------------
+
+subroutine get_best_reversal_threshold (npt, x,y, min_curv_thresh, max_reversals, best_threshold)
+
+  use math_deps,          only: min_threshold_for_reversals
+  use os_util
+
+  integer, intent(in)           :: npt 
+  double precision, dimension(npt), intent(in) :: x, y
+  double precision, intent(in)  :: min_curv_thresh
+  double precision, intent(out) :: best_threshold
+  integer, intent(out)          :: max_reversals
+
+  double precision       :: max_curv_thresh
+  double precision       :: min_for_0, min_for_1, min_for_2
+
+  best_threshold      = 0.10d0            ! default
+  max_reversals       = 0
+  max_curv_thresh     = 4.0d0
+  
+  ! evaluate the smallest threshold for 0,1,2 reversals...
+  
+  min_for_0 = min_threshold_for_reversals (x, y, min_curv_thresh, max_curv_thresh, 0)
+  min_for_1 = min_threshold_for_reversals (x, y, min_curv_thresh, max_curv_thresh, 1)
+  min_for_2 = min_threshold_for_reversals (x, y, min_curv_thresh, max_curv_thresh, 2)
+
+  ! ... and with some logic get the best estimate für nreversals and corresponding threshold
+
+  if (min_for_0 < max_curv_thresh) then
+    ! write (*,'(A,4F9.6)') 'min_curv_thresh ', min_curv_thresh, min_for_0, min_for_1, min_for_2
+    if (min_for_0 < (min_curv_thresh * 3d0)) then
+      max_reversals  = 0
+      best_threshold = min_for_0
+    elseif (min_for_1 < (min_curv_thresh * 2d0)) then
+      max_reversals  = 1
+      best_threshold = min_for_1
+    elseif (min_for_1 ==  min_for_2) then
+      max_reversals  = 2
+      best_threshold = min_for_1
+    elseif (min_for_1 >  min_curv_thresh) then
+      max_reversals  = 1
+      best_threshold = min_for_1
+    else
+      max_reversals  = 1
+      best_threshold = min_for_1
+    end if 
+  else
+    write (*,'(A,F6.3)') '!! Watch out - 1 reversal already with ', min_for_0
+    max_reversals       = 1
+  end if 
+
+end subroutine get_best_reversal_threshold
+
+!-------------------------------------------------------------------------
+! Get best estimate of max highlows and the corresponding threshold value
+!-------------------------------------------------------------------------
+
+subroutine get_best_highlow_threshold (npt, x,y, min_highlow_thresh, max_highlows, &
+                                       best_threshold)
+
+  use math_deps,          only: min_threshold_for_highlows
+  use os_util
+
+  integer, intent(in)           :: npt 
+  double precision, dimension(npt), intent(in) :: x, y
+  double precision, intent(in)  :: min_highlow_thresh
+  double precision, intent(out) :: best_threshold
+  integer, intent(out)          :: max_highlows
+
+  double precision       :: max_highlow_thresh
+  double precision       :: min_for_0, min_for_1, min_for_2
+
+  best_threshold     = 0.03d0            ! default
+  max_highlows       = 0
+  max_highlow_thresh = 1.0d0
+  
+  ! evaluate the smallest threshold for 0,1,2 reversals...
+  
+  min_for_0 = min_threshold_for_highlows (x, y, min_highlow_thresh, max_highlow_thresh, 0)
+  min_for_1 = min_threshold_for_highlows (x, y, min_highlow_thresh, max_highlow_thresh, 1)
+  min_for_2 = min_threshold_for_highlows (x, y, min_highlow_thresh, max_highlow_thresh, 2)
+
+  ! ... and with some logic get the best estimate für nreversals and corresponding threshold
+
+  if (min_for_0 < max_highlow_thresh) then
+    if (min_for_0 < (min_highlow_thresh * 2d0)) then
+      max_highlows   = 0
+      best_threshold = min_for_0
+    elseif (min_for_1 < (min_highlow_thresh * 2d0)) then
+      max_highlows   = 1
+      best_threshold = min_for_1
+    elseif (min_for_0 >  (min_for_1 * 4d0)) then   ! the first bump is a outlier - accept 1
+      max_highlows   = 1
+      best_threshold = min_for_1
+    elseif (min_for_1 >  (min_for_2 * 4d0)) then   ! the first two are outlier - accept 2
+      max_highlows   = 2
+      best_threshold = min_for_2
+    elseif (min_for_1 ==  min_for_2) then
+      max_highlows   = 2
+      best_threshold = min_for_1
+    elseif (min_for_1 >  min_highlow_thresh) then
+      max_highlows   = 1
+      best_threshold = min_for_1
+    else
+      max_highlows  = 1
+      best_threshold = min_for_1
+    end if 
+  else
+    write (*,'(A,F6.3)') '!! Watch out - 1 highlow already with ', min_for_0
+    max_highlows      = 1
+  end if 
+
+end subroutine get_best_highlow_threshold
+
+
+!-------------------------------------------------------------------------
+! get max. curvature at the end of polyline (= TE)
+!-------------------------------------------------------------------------
+
+subroutine get_max_te_curvature (npt, x,y, te_curvature)
+
+  use math_deps,          only: curvature
+
+  integer, intent(in)    :: npt 
+  double precision, dimension(npt), intent(in) :: x, y
+  double precision, intent(out)  :: te_curvature 
+
+  te_curvature = maxval (abs(curvature(11, x(npt-10:npt), y(npt-10:npt))))
+
+end subroutine get_max_te_curvature
+
 
 !------------------------------------------------------------------------------
 ! Counts the number of highlows of 2nd derivative (bumps) of polyline (x,y) 
@@ -966,16 +1194,13 @@ end subroutine get_curv_violations
 !    delta = y_smoothed - y_original
 !------------------------------------------------------------------------------
 
-subroutine smooth_it (show_details, x, y)
+subroutine smooth_it (show_details, spike_threshold, x, y)
 
   use math_deps, only : find_curvature_spikes
   use math_deps, only : smooth_it_Chaikin
-  use vardef,    only:  spike_threshold
-  use os_util, only: COLOR_BAD, COLOR_GOOD, COLOR_NORMAL, COLOR_HIGH
-  use os_util, only: print_colored
 
-
-  logical, intent(in) :: show_details
+  logical, intent(in) :: show_details  
+  double precision, intent(in) :: spike_threshold
   double precision, dimension(:), intent(in) :: x
   double precision, dimension(:), intent(inout) :: y
 
@@ -991,12 +1216,6 @@ subroutine smooth_it (show_details, x, y)
 
   sum_y_before = abs(sum(y))
 
-! print some info
-  if (show_details) then
-    call assess_surface ('   ', x, y)
-  else
-    call assess_surface ('Before', x, y)
-  end if 
 
 ! Transform the x-Axis with a arccos function so that the leading area will be stretched  
 ! resulting in lower curvature at LE - and the rear part a little compressed
@@ -1051,8 +1270,6 @@ subroutine smooth_it (show_details, x, y)
       n_no_improve = n_no_improve + 1  
     end if 
 
-    if (show_details) call assess_surface ('   ', x, y)
-
     i = i + 1
 
   end do
@@ -1092,8 +1309,6 @@ subroutine smooth_it (show_details, x, y)
       write (*,'(17x,A)') "Smoothing ended."          ! this shouldn't happen
     end if 
 
-  else
-    call assess_surface ('After ', x, y)
   end if
 
 end subroutine smooth_it

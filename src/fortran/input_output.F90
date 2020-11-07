@@ -76,7 +76,7 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
                       tournament_fraction, crossover_range_factor,             &
                       mutant_probability, chromosome_mutation_rate,            &
                       mutation_range_factor
-  integer :: nbot_actual, nmoment_constraint, nxtr_opt
+  integer :: nbot_actual, nxtr_opt
   integer :: i, iunit, ioerr, iostat1, counter, idx
   character(30) :: text
   character(3) :: family
@@ -88,7 +88,7 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
   double precision :: sum_weightings
   double precision, dimension(max_geo_targets) :: x_pos, target_geo
   double precision, dimension(max_geo_targets) :: weighting_geo
-  character(10), dimension(max_geo_targets) :: target_type
+  character(30), dimension(max_geo_targets) :: target_type
 
   ! jx-mod re_default - to ease Type1 and Type2 polar op points
   double precision :: re_default
@@ -109,7 +109,8 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
             re_default_as_resqrtcl, re_default,                                 &
             flap_degrees, weighting, optimization_type, ncrit_pt
   namelist /constraints/ min_thickness, max_thickness, moment_constraint_type, &
-                         min_moment, min_te_angle, check_curvature,            &
+                         min_moment, min_te_angle,                             &
+                         check_curvature, auto_curvature,                      &
                          max_curv_reverse_top, max_curv_reverse_bot,           &
                          max_curv_highlow_top, max_curv_highlow_bot,           &
                          curv_threshold, symmetrical, min_flap_degrees,        &
@@ -224,14 +225,15 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
   min_moment(:) = -1.d0
   min_te_angle = 2.d0
 
-  check_curvature = .false.
-  max_te_curvature = 10.d0                    ! more or less inactive by default
+  check_curvature      = .true.
+  auto_curvature       = .true.
+  max_te_curvature     = 10.d0                    ! more or less inactive by default
   max_curv_reverse_top = 0
   max_curv_reverse_bot = 0
   max_curv_highlow_top = 0
   max_curv_highlow_bot = 0
-  curv_threshold       = 0.10d0
-  highlow_threshold     = 0.05d0
+  curv_threshold       = 0.01d0
+  highlow_threshold    = 0.02d0
 
 
   symmetrical = .false.
@@ -306,7 +308,7 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
   !Set defaults for smoothing and read namelist 
 
   spike_threshold = 0.8d0
-  do_smoothing = .false.
+  do_smoothing    = .true.                ! now default - smoothing done only if needed
 
   rewind(iunit)
   read(iunit, iostat=iostat1, nml=smoothing_options)
@@ -352,18 +354,6 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
 ! jx-mod - end extension -----------------------------------------------------
 
 
-! Ask about removing pitching moment constraints for symmetrical optimization
-
-  if (symmetrical) then
-    nmoment_constraint = 0
-    do i = 1, noppoint
-      if (trim(moment_constraint_type(i)) /= 'none')                           &
-        nmoment_constraint = nmoment_constraint + 1
-    end do
-    
-    if (nmoment_constraint > 0) choice = ask_moment_constraints()
-    if (choice == 'y') moment_constraint_type(:) = 'none'
-  end if
 
 ! Sort thickness constraints in ascending x/c order
 
@@ -594,11 +584,11 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
   xtripb = 1.d0
   viscous_mode = .true.
   silent_mode = .true.
-  bl_maxit = 100
+  bl_maxit = 50             ! reduced to 50 as above the potential result is rarely usable..
   vaccel = 0.005d0          ! the original value of 0.01 leads to too many non convergences at 
                             !   higher lift --> reduced 
   fix_unconverged = .true.
-  reinitialize = .true.
+  reinitialize = .false.    ! as run_xfoil is improved, this will speed up the xfoil calcs
 
   if (npan_fixed > 0) then 
     npan   = npan_fixed     ! if npan_fixed is set - this is the one
@@ -771,16 +761,10 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
   write(*,'(A)') " &constraints"
   write(*,*) " min_thickness = ", min_thickness
   write(*,*) " max_thickness = ", max_thickness
-  do i = 1, noppoint
-    write(text,*) i
-    text = adjustl(text)
-    write(*,*) " moment_constraint_type("//trim(text)//") = "//                &
-               trim(moment_constraint_type(i))
-    write(*,*) " min_moment("//trim(text)//") = ", min_moment(i)
-  end do
   write(*,*) " min_te_angle = ", min_te_angle
   write(*,*) " max_te_curvature = ", max_te_curvature
   write(*,*) " check_curvature = ", check_curvature
+  write(*,*) " auto_curvature = ", auto_curvature
   write(*,*) " max_curv_reverse_top = ", max_curv_reverse_top
   write(*,*) " max_curv_reverse_bot = ", max_curv_reverse_bot
   write(*,*) " max_curv_highlow_top = ", max_curv_highlow_top
@@ -980,6 +964,12 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
       trim(shape_functions) /= 'camb-thick-plus')                              &
     call my_stop("min_bump_width must be > 0.")
 
+
+! No more restart
+  if (restart) &
+    call my_stop("The restart option is no more supported in Xoptfoil-JX. "//  &
+    "Please remove this option from input file.")
+
 ! Operating points
 
   if ((noppoint < 1) .and. .not. match_foils) call my_stop("noppoint must be > 0.")
@@ -1074,11 +1064,9 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
   if (min_thickness >= max_thickness)                                          &
     call my_stop("min_thickness must be < max_thickness.")
   do i = 1, noppoint
-    if (trim(moment_constraint_type(i)) /= 'use_seed' .and.                    &
-      trim(moment_constraint_type(i)) /= 'specify' .and.                       &
-      trim(moment_constraint_type(i)) /= 'none')                               &
-      call my_stop("moment_constraint_type must be 'use_seed', 'specify', "//  &
-                 "or 'none'.")
+    if (trim(moment_constraint_type(i)) /=  'none')                               &
+      call my_stop("Moment constraints are no more supported in Xoptfoil-JX. "//  &
+                    "Please use target_moment instead")
   end do
   if (min_te_angle < 0.d0) call my_stop("min_te_angle must be >= 0.")
   if (symmetrical)                                                             &
@@ -1119,12 +1107,13 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
       trim(geo_targets(i)%type) /= 'zTop') .and.                               &
       trim(geo_targets(i)%type) /= 'Camber') .and.                             &
       trim(geo_targets(i)%type) /= 'Thickness')                                &
-      call my_stop("target type must be 'zBot', 'zTop' or'Thickness'.")
+      call my_stop("target type must be 'zBot', 'zTop', 'Camber',"//           &
+                   " or 'Thickness'.")
     if ((geo_targets(i)%x <= 0.d0 .or.                                         &
         geo_targets(i)%x >= 1.d0) .and.                                        &
         trim(geo_targets(i)%type) /= 'Camber' .and.                            &
         trim(geo_targets(i)%type) /= 'Thickness')                              &
-      call my_stop("x position must be > 0 and < 1.")
+      call my_stop("x of geometry target position must be > 0 and < 1.")
  end do   
 
 
@@ -1235,6 +1224,62 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
   if (xpref2 > 1.d0) call my_stop("xpref2 must be <= 1.")
 
 end subroutine read_inputs
+
+!=============================================================================
+! Read xoptfoil input file to geometric constraints
+!   (separated from read_inputs to be more modular)
+!
+! ! default values have to be set by caller
+!=============================================================================
+
+subroutine read_geo_constraints_inputs  (input_file, &
+                                          check_curvature, auto_curvature,           &
+                                          max_te_curvature,                           &
+                                          max_curv_reverse_top, max_curv_reverse_bot, &
+                                          max_curv_highlow_top, max_curv_highlow_bot, &
+                                          curv_threshold,highlow_threshold)
+  
+  character(*), intent(in)           :: input_file
+  logical, intent(inout)             :: check_curvature, auto_curvature 
+  double precision , intent(inout)   :: max_te_curvature,          &
+                                        curv_threshold,highlow_threshold
+  integer, intent(inout)             :: max_curv_reverse_top, max_curv_reverse_bot, &
+                                        max_curv_highlow_top, max_curv_highlow_bot
+  integer :: istat, iunit
+
+  namelist /constraints/ check_curvature, auto_curvature, &
+                         highlow_threshold, curv_threshold, max_te_curvature, &
+                         max_curv_reverse_top, max_curv_reverse_bot,  &
+                         max_curv_highlow_top, max_curv_highlow_bot
+
+! Defaults
+
+  check_curvature      = .true.
+  auto_curvature       = .true.
+
+  highlow_threshold     = 0.03d0
+  curv_threshold        = 0.02d0
+  max_te_curvature      = 0.2d0
+  max_curv_reverse_top = 0
+  max_curv_reverse_bot = 0
+  max_curv_highlow_top = 0
+  max_curv_highlow_bot = 0
+  
+  ! Open input file and read namelist from file
+
+  iunit = 12
+  open(unit=iunit, file=input_file, status='old', iostat=istat)
+
+  if (istat == 0) then
+    read (iunit, iostat=istat, nml=constraints)
+    call namelist_check('constraints', istat, 'warn')
+    close (iunit)
+  end if
+
+
+end subroutine read_geo_constraints_inputs
+
+
 
 !=============================================================================80
 !
@@ -1382,45 +1427,6 @@ subroutine print_usage(exeprint)
 
 end subroutine print_usage
 
-!=============================================================================80
-!
-! Asks user to turn off pitching moment constraints
-!
-!=============================================================================80
-function ask_moment_constraints()
-
-  character :: ask_moment_constraints
-  logical :: valid_choice
-
-! Get user input
-
-  valid_choice = .false.
-  do while (.not. valid_choice)
-  
-    write(*,*)
-    write(*,'(A)') 'Warning: pitching moment constraints not recommended for '
-    write(*,'(A)', advance='no') 'symmetrical airfoil optimization. '//&
-                                 'Turn them off now? (y/n): '
-    read(*,'(A)') ask_moment_constraints
-
-    if ( (ask_moment_constraints == 'y') .or.                                  &
-         (ask_moment_constraints == 'Y') ) then
-      valid_choice = .true.
-      ask_moment_constraints = 'y'
-      write(*,*)
-      write(*,*) "Setting moment_constraint_type(:) = 'none'."
-    else if ( (ask_moment_constraints == 'n') .or.                             &
-         (ask_moment_constraints == 'N') ) then
-      valid_choice = .true.
-      ask_moment_constraints = 'n'
-    else
-      write(*,'(A)') 'Please enter y or n.'
-      valid_choice = .false.
-    end if
-
-  end do
-
-end function ask_moment_constraints
 
 !=============================================================================80
 !
