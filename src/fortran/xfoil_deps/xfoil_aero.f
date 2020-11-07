@@ -1385,8 +1385,10 @@ C===================================================================70
 C
 C     Converges viscous operating point
 C
+C     jx-mod: Returns number of iterations neeeded
+C
 C===================================================================70
-      SUBROUTINE VISCAL(NITER1)
+      SUBROUTINE VISCAL(NITER1, ITER)
 
       use xfoil_inc
 C
@@ -1394,6 +1396,8 @@ C---- convergence tolerance
       DATA EPS1 / 1.0E-4 /
 C
       NITER = NITER1
+C     jx-mod: will be number of iterations needed
+      ITER  = 0 
 
 C     DP mod: variable to notify of infinite loop condition (and halt)
       XFOIL_FAIL = .FALSE.
