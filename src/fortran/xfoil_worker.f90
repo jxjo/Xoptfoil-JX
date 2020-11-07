@@ -22,8 +22,8 @@ program xfoil_worker
 
   use vardef,             only : airfoil_type
   use memory_util,        only : deallocate_airfoil
-  use os_util,            only:  print_error
-  use airfoil_operations, only : load_airfoil, my_stop, airfoil_write
+  use os_util 
+  use airfoil_operations, only : load_airfoil, my_stop, airfoil_write,le_find
   use xfoil_driver,       only : xfoil_init, xfoil_cleanup 
   use xfoil_driver,       only : xfoil_set_airfoil, xfoil_reload_airfoil
   use polar_operations,   only : check_and_do_polar_generation
@@ -40,8 +40,6 @@ program xfoil_worker
   logical            :: visualizer
 
   write(*,'(A)') 
-  write(*,'(A)') 'Xfoil_Worker      Version '//trim(PACKAGE_VERSION)//  &
-                 '              (c) 2020 Jochen Guenzel'
 
 ! Set default names and read command line arguments
 
@@ -95,6 +93,12 @@ program xfoil_worker
 
       call set_flap (input_file, output_prefix, foil, visualizer)
 
+    case ('check')        ! Check the curvature quality of airfoil surface
+
+      if (trim(output_prefix) == '') & 
+        output_prefix = airfoil_filename (1:(index (airfoil_filename,'.') - 1))
+      call check_foil_curvature (input_file, output_prefix, foil, visualizer)
+
     case ('test')         ! Test for change max thickness location 
       
       call xfoil_set_airfoil (foil)
@@ -116,6 +120,80 @@ program xfoil_worker
 
 end program xfoil_worker
 
+
+!-------------------------------------------------------------------------
+! Checks curvature quality of foil 
+!-------------------------------------------------------------------------
+
+subroutine check_foil_curvature (input_file, output_prefix, foil, visualizer)
+
+  use vardef,             only: airfoil_type
+  use vardef,             only: curv_threshold, spike_threshold, highlow_threshold
+  use vardef,             only: max_curv_reverse_top, max_curv_reverse_bot
+  use vardef,             only: max_te_curvature, check_curvature, auto_curvature
+  use airfoil_operations, only: split_airfoil, le_find, assess_surface, smooth_it
+  use airfoil_operations, only: repanel_and_normalize_airfoil
+  use math_deps,          only: nreversals_using_threshold
+  use input_sanity,       only: check_and_smooth_surface, auto_curvature_constraints
+  use input_output,       only: read_geo_constraints_inputs
+  use xfoil_driver,       only: xfoil_defaults, xfoil_options_type, xfoil_geom_options_type
+  use polar_operations,   only: read_xfoil_paneling_inputs
+  use os_util
+
+  character(*), intent(in)     :: input_file
+  character(*), intent(in)     :: output_prefix
+  type (airfoil_type), intent (inout)  :: foil
+  logical, intent(in)          :: visualizer
+
+  type (airfoil_type)          :: seed_foil
+  type (xfoil_options_type)    :: xfoil_options
+!  type (xfoil_geom_options_type) :: geom_options
+
+  double precision, dimension(:), allocatable :: xt, xb, yt, yb
+
+  seed_foil = foil 
+
+  call le_find         (foil%x, foil%z, foil%leclose, foil%xle, foil%zle, foil%addpoint_loc)
+  call split_airfoil   (foil, xt, xb, yt, yb, .false.)
+
+  !jx-todo set these values into check values for assessment
+  call  read_geo_constraints_inputs  (input_file, &
+                                      check_curvature, auto_curvature,  &
+                                      max_te_curvature,    &
+                                      max_curv_reverse_top, max_curv_reverse_bot, &
+                                      max_curv_highlow_top, max_curv_highlow_bot, &
+                                      curv_threshold,highlow_threshold)
+  spike_threshold = 0.8d0
+
+
+!  ------------ analyze & smooth  -----
+
+  ! do checks on repanel foil - also needed for LE point handling (!)
+  call repanel_and_normalize_airfoil (seed_foil, foil%npoint, foil)
+  call check_and_smooth_surface (.true., .true., foil)
+
+
+!  ------------ set best values  -----
+
+  call auto_curvature_constraints (foil, &
+                                curv_threshold, highlow_threshold, max_te_curvature, &
+                                max_curv_highlow_top, max_curv_highlow_bot, &
+                                max_curv_reverse_top, max_curv_reverse_bot)
+
+  write(*,*)
+
+  if (visualizer) then 
+    ! Set default Xfoil parameters
+    xfoil_options%silent_mode = .true.
+    call xfoil_defaults(xfoil_options)
+
+    call write_design_coordinates (output_prefix, 0, seed_foil)
+    call write_design_coordinates (output_prefix, 1, foil)
+  end if 
+
+end subroutine check_foil_curvature
+
+
 !-------------------------------------------------------------------------
 ! Repanels and optionally smoothes foil based on settings in 'input file'
 !-------------------------------------------------------------------------
@@ -124,11 +202,16 @@ subroutine repanel_smooth (input_file, output_prefix, seed_foil, visualizer, do_
 
   use vardef,             only : airfoil_type
   use vardef,             only : spike_threshold, highlow_threshold, curv_threshold
+  use vardef,             only : check_curvature, auto_curvature
+  use vardef,             only : max_te_curvature
+  use vardef,             only : max_curv_reverse_top, max_curv_reverse_bot, &
+                                 max_curv_highlow_top, max_curv_highlow_bot
   use xfoil_driver,       only : xfoil_geom_options_type
   use airfoil_operations, only : airfoil_write, transform_airfoil, get_split_points
   use airfoil_operations, only : split_airfoil, assess_surface, smooth_it, rebuild_airfoil
   use airfoil_operations, only : repanel_and_normalize_airfoil
-  use polar_operations,   only : read_xfoil_paneling_inputs, read_smoothing_inputs
+  use polar_operations,   only : read_xfoil_paneling_inputs
+  use input_output,       only : read_geo_constraints_inputs
 
 
   character(*), intent(in)          :: input_file, output_prefix
@@ -139,34 +222,34 @@ subroutine repanel_smooth (input_file, output_prefix, seed_foil, visualizer, do_
   type (airfoil_type) :: foil_smoothed, foil
   type (xfoil_geom_options_type) :: geom_options
 
-! Read inputs file to get xfoil paneling options  
+! Read inputs file to get options needed 
 
-  write (*,*)
   call read_xfoil_paneling_inputs  (input_file, geom_options)
+  call read_geo_constraints_inputs (input_file, &
+                                      check_curvature, auto_curvature,  &
+                                      max_te_curvature,    &
+                                      max_curv_reverse_top, max_curv_reverse_bot, &
+                                      max_curv_highlow_top, max_curv_highlow_bot, &
+                                      curv_threshold,highlow_threshold)
+    spike_threshold       = 0.8d0
 
-! Repanel seed airfoil with xfoil PANGEN 
+! Prepare airfoil  - Repanel and split 
 
   call repanel_and_normalize_airfoil (seed_foil, geom_options%npan, foil)
-
-! Now split and rebuild to add a real  LE point at 0,0 
-
   call split_airfoil   (foil, xt, xb, zt, zb, .false.)
-  call rebuild_airfoil (xt, xb, zt, zb, foil)
+  call rebuild_airfoil (xt, xb, zt, zb, foil) 
 
-! Smooth it ?
+! Smooth it 
 
   if (do_smoothing) then 
 
-    write(*,*)
-    call read_smoothing_inputs (input_file, spike_threshold, highlow_threshold, curv_threshold)
-
     write (*,'(/,1x,A)') 'Smoothing Top surface ...'
     zt_smoothed = zt
-    call smooth_it (.true., xt, zt_smoothed) 
+    call smooth_it (.true., spike_threshold, xt, zt_smoothed) 
 
     write (*,'(/,1x,A)') 'Smoothing Bottom surface ...'
     zb_smoothed = zb
-    call smooth_it (.true., xb, zb_smoothed)
+    call smooth_it (.true., spike_threshold, xb, zb_smoothed)
 
   ! Rebuild foil and write to file
 
@@ -188,9 +271,10 @@ subroutine repanel_smooth (input_file, output_prefix, seed_foil, visualizer, do_
     call write_design_coordinates (output_prefix, 0, seed_foil)
     foil%name   = 'normalized'
     call write_design_coordinates (output_prefix, 1, foil)
-    if (do_smoothing) &
+    if (do_smoothing) then
       foil_smoothed%name   = 'smoothed'
       call write_design_coordinates (output_prefix, 2, foil_smoothed)
+    end if
   end if 
 
 end subroutine repanel_smooth
@@ -207,7 +291,7 @@ subroutine set_flap (input_file, output_prefix, seed_foil, visualizer)
   use xfoil_driver,       only : xfoil_apply_flap_deflection, xfoil_reload_airfoil
   use xfoil_driver,       only : xfoil_set_airfoil
   use airfoil_operations, only : airfoil_write, transform_airfoil, get_split_points
-  use airfoil_operations, only : split_airfoil, assess_surface, smooth_it, rebuild_airfoil
+  use airfoil_operations, only : split_airfoil, assess_surface, rebuild_airfoil
   use airfoil_operations, only : repanel_and_normalize_airfoil
   use polar_operations,   only : read_xfoil_paneling_inputs, read_flap_inputs
 
@@ -229,7 +313,6 @@ subroutine set_flap (input_file, output_prefix, seed_foil, visualizer)
 
 ! Read inputs file to get xfoil paneling options  
 
-  write (*,*)
   call read_xfoil_paneling_inputs  (input_file, geom_options)
   call read_flap_inputs            (input_file, x_flap, y_flap, y_flap_spec, ndegrees, flap_degrees)
 
@@ -252,13 +335,12 @@ subroutine set_flap (input_file, output_prefix, seed_foil, visualizer)
 
 ! Now set flap to all requested angles
 
-  write (*,*)
   do i = 1, ndegrees
 
     if (int(flap_degrees(i))*10  == int(flap_degrees(i)*10d0)) then  !degree having decimal?
-      write (text_degrees,'(I3)') int (flap_degrees(i))
+      write (text_degrees,'(SP,I3)') int (flap_degrees(i))
     else
-      write (text_degrees,'(F6.1)') flap_degrees(i)
+      write (text_degrees,'(SP,F6.1)') flap_degrees(i)
     end if
 
     write (*,'(1x,A,I2,A,F4.1,A)') 'Setting flaps at ', int (x_flap*1d2), '% ('//y_flap_spec//'=', &
@@ -271,7 +353,7 @@ subroutine set_flap (input_file, output_prefix, seed_foil, visualizer)
     if (ndegrees == 1) then 
       foil_flapped%name   = output_prefix
     else
-      foil_flapped%name   = trim(output_prefix) // '_' // trim(adjustl(text_degrees))
+      foil_flapped%name   = trim(output_prefix) // trim(adjustl(text_degrees))
     end if 
     call airfoil_write   (trim(foil_flapped%name)//'.dat', trim(foil_flapped%name), foil_flapped)
 
@@ -291,7 +373,7 @@ end subroutine set_flap
 !-------------------------------------------------------------------------
 
 
-subroutine write_design_coordinates (output_prefix, designcounter, curr_foil)
+subroutine write_design_coordinates (output_prefix, designcounter, foil)
 
   use vardef,             only : airfoil_type
   use airfoil_operations, only : airfoil_write_to_unit
@@ -299,7 +381,7 @@ subroutine write_design_coordinates (output_prefix, designcounter, curr_foil)
 
   character(*), intent(in)          :: output_prefix
   integer, intent(in)               :: designcounter
-  type (airfoil_type), intent (in)  :: curr_foil
+  type (airfoil_type), intent (in)  :: foil
 
   double precision :: maxt, xmaxt, maxc, xmaxc
   character(100) :: foilfile, text, title
@@ -308,7 +390,7 @@ subroutine write_design_coordinates (output_prefix, designcounter, curr_foil)
              
 ! Get geometry info
 
-  call xfoil_set_airfoil (curr_foil)
+  call xfoil_set_airfoil (foil)
   call xfoil_get_geometry_info(maxt, xmaxt, maxc, xmaxc)
 
   write(maxtchar,'(F8.5)') maxt
@@ -331,7 +413,7 @@ subroutine write_design_coordinates (output_prefix, designcounter, curr_foil)
 
 !   Header for coordinate file
 
-    write(*,*) "Writing "//trim(curr_foil%name)//" coordinates for seed airfoil to file "//               &
+    write(*,*) "Writing "//trim(foil%name)//" coordinates for seed airfoil to file "//               &
                trim(foilfile)//" ..."
     open(unit=foilunit, file=foilfile, status='replace')
     write(foilunit,'(A)') 'title="Airfoil coordinates"'
@@ -350,7 +432,7 @@ subroutine write_design_coordinates (output_prefix, designcounter, curr_foil)
     write(text,*) designcounter
     text = adjustl(text)
 
-    write(*,*) "Writing "//trim(curr_foil%name)//" coordinates for design number "//trim(text)//        &
+    write(*,*) "Writing "//trim(foil%name)//" coordinates for design number "//trim(text)//        &
                " to file "//trim(foilfile)//" ..."
     open(unit=foilunit, file=foilfile, status='old', position='append', err=900)
     title =  'zone t="Airfoil, maxt='//trim(maxtchar)//&
@@ -362,7 +444,7 @@ subroutine write_design_coordinates (output_prefix, designcounter, curr_foil)
 
 ! Write coordinates to file
 
-  call  airfoil_write_to_unit (foilunit, title, curr_foil, .True.)
+  call  airfoil_write_to_unit (foilunit, title, foil, .True.)
 
 ! Close output files
 
@@ -463,6 +545,8 @@ end subroutine read_worker_clo
 
 subroutine print_worker_usage()
 
+  write(*,'(A)') 'Xfoil_Worker      Version '//trim(PACKAGE_VERSION)//  &
+                 '              (c) 2020 Jochen Guenzel'
   write(*,'(A)')
   write(*,'(A)') "Usage: Xfoil_worker -w worker_action [Options]"
   write(*,'(A)')
@@ -470,6 +554,7 @@ subroutine print_worker_usage()
   write(*,'(A)') "  -w norm           Repanel, normalize 'airfoil_file'"
   write(*,'(A)') "  -w smooth         Repanel, normalize, smooth 'airfoil_file'"
   write(*,'(A)') "  -w flap           Set flap of 'airfoil_file'"
+  write(*,'(A)') "  -w check          Check the quality of surface curvature'"
   write(*,'(A)')
   write(*,'(A)') "Options:"
   write(*,'(A)') "  -i input_file     Specify an input file (default: 'inputs.txt')"
