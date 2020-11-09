@@ -8,11 +8,12 @@ Not final - current dev state
 
 ####  Xoptfoil-JX
 
-A lot of code cleanings and refactorings
+- a lot of code cleanings and refactorings
 - more stable xfoil driver 
-- auto-detection of curvature constraints especially for Hicks-Henne (default: auto_curvature = .true.)
-- auto-smoothing of surface when seed quuality is not good enough (default: do_smoothing = .true.)
+- auto-detection and setting of curvature constraints especially for Hicks-Henne (default: auto_curvature = .true.)
+- auto-smoothing of surface when seed quuality is not good enough (new default: do_smoothing = .true.)
 - new screen output during ps optimization to get more details about particles work
+- experimental: new target type "target_max_drag" which tries to optimize the drag at an operating point to be smaller than the target value. So drag may be smaller, but shouldn't be higher. This option helps to find a faster balance between all target values.
 
 #### Xfoil_worker
 
