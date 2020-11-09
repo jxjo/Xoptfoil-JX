@@ -277,8 +277,6 @@ subroutine particleswarm(xopt, fmin, step, fevals, objfunc, x0, xmin, xmax,    &
 
     do i = 1, pso_options%pop
 
-      call show_particle_header (i)
-
 !     Impose speed limit
       if (speed(i) > maxspeed) then
         vel(:,i) = maxspeed*vel(:,i)/speed(i)
@@ -304,7 +302,7 @@ subroutine particleswarm(xopt, fmin, step, fevals, objfunc, x0, xmin, xmax,    &
       objval(i) = objfunc(dv(:,i))
 
 !     Display some info about success of single particle 
-      call show_particle_info (fmin, minvals(i), objval(i))
+      call show_particle_info (fmin, objval(i))
 
 !     Update local best design if appropriate
       if (objval(i) < minvals(i)) then
@@ -529,27 +527,23 @@ subroutine pso_close_particlefile(particleunit)
 
 subroutine  show_optimization_header  (pso_pop, show_improvement)
 
-  use vardef, only              :  show_details
   logical, intent(in)           :: show_improvement
   integer, intent(in)           :: pso_pop
   character(:), allocatable     :: var_string
   character(200)                :: blanks = ' '
 
-  if (.not. show_details) then
-    write(*,*) "            '+' improved   '~' quite good   '-' bad   'x' xfoil no conv   '.' geometry failed"
-    write(*,*)
-    var_string = 'Particles...' // blanks (len('Particles...') : pso_pop)
-    write(*,'(1x,A9,3x,  A,          1x,A6,   5x,A9     )', advance ='no') &
-            'Iteration',var_string,'Radius','Objective'
-    
-    if (show_improvement) then
-      write(*,'(3x,A11)') 'Improvement'
-    else
-      write (*,*)
-    end if
+  write(*,*) "            '+' improved   '~' quite good   '-' bad   'x' xfoil no conv   '.' geometry failed"
+  write(*,*)
+  var_string = 'Particles...' // blanks (len('Particles...') : pso_pop)
+  write(*,'(1x,A9,3x,  A,          1x,A6,   5x,A9     )', advance ='no') &
+          'Iteration',var_string,'Radius','Objective'
+  
+  if (show_improvement) then
+    write(*,'(3x,A11)') 'Improvement'
+  else
+    write (*,*)
   end if
 
-  
 end subroutine show_optimization_header
 
 
@@ -559,19 +553,9 @@ end subroutine show_optimization_header
 
 subroutine  show_iteration_header (step)
 
-  use vardef,   only: show_details
+  integer, intent(in)          :: step
 
-  integer, intent(in)           :: step
-  character(3)                 :: s3
-
-  if (show_details) then
-    write (s3,'(I3)') step
-    write (*,'(/,1x,A,A,  A)') &
-             'Iteration #', adjustl(s3),'------------ Begin -------------'
-
-  else
-    write(*,'(4x,I5,A1,3x)', advance ='no') step, ':'
-  end if
+  write(*,'(4x,I5,A1,3x)', advance ='no') step, ':'
 
 end subroutine  show_iteration_header
 
@@ -588,95 +572,55 @@ subroutine  show_iteration_result (radius, fmin, f0, improved, show_improvement)
   logical, intent(in)           :: show_improvement, improved
   character(25)                 :: outstring
 
-  if (.not. show_details) then
+  write(*,'(ES9.1)', advance ='no') radius
 
-    write(*,'(ES9.1)', advance ='no') radius
+  write (outstring,'(3x,F9.6,A1)') fmin
+  if (improved) then 
+    call  print_colored (COLOR_NORMAL, trim(outstring))
+  else
+    call  print_colored (COLOR_NOTE,   trim(outstring))
+  end if
 
-    write (outstring,'(3x,F9.6,A1)') fmin
+  if (show_improvement) then
+    write (outstring,'(SP, 3x, F9.5,A1)') (f0 - fmin)/f0*100.d0, '%'
     if (improved) then 
-      call  print_colored (COLOR_NORMAL, trim(outstring))
-    else
-      call  print_colored (COLOR_NOTE,   trim(outstring))
+      call  print_colored (COLOR_GOOD, trim(outstring))
+    else 
+      call  print_colored (COLOR_NOTE, trim(outstring))
     end if
-
-    if (show_improvement) then
-      write (outstring,'(SP, 3x, F9.5,A1)') (f0 - fmin)/f0*100.d0, '%'
-      if (improved) then 
-        call  print_colored (COLOR_GOOD, trim(outstring))
-      else 
-        call  print_colored (COLOR_NOTE, trim(outstring))
-      end if
-    end if 
   end if 
+
+  if (improved) then 
+    if (show_details) then 
+      write (*,*)
+      write (*,*)
+    end if
+end if
 
 end subroutine  show_iteration_result
 
-!------------------------------------------------------------------------------
-! Shows header for a single particle
-!------------------------------------------------------------------------------
-
-subroutine  show_particle_header (i)
-
-  use vardef,   only: show_details
-
-  integer, intent(in)           :: i
-  character(3)                  :: s3
-
-  if (show_details) then
-    write (s3,'(I3)') i
-    write (*,'(/,3x,A)') 'Particle #' // trim(adjustl(s3)) // ' -----'
-    ! xfoil-driver will write in the same line
-  end if
-
-end subroutine  show_particle_header
 
 !------------------------------------------------------------------------------
 ! Shows user info about sucess of a single particle
 !------------------------------------------------------------------------------
 
-subroutine  show_particle_info (fmin, particle_min, objval)
+subroutine  show_particle_info (fmin, objval)
 
-  use vardef,   only: show_details
   use os_util,  only: COLOR_GOOD, COLOR_NORMAL, COLOR_NOTE, COLOR_ERROR, print_colored
   use airfoil_evaluation, only : OBJ_XFOIL_FAIL, OBJ_GEO_FAIL
 
-  double precision, intent(in)  :: fmin, objval, particle_min
-  character(25)                 :: outstring
+  double precision, intent(in)  :: fmin, objval
 
-  if (.not. show_details) then
-
-    if (objval < fmin) then 
-      call print_colored (COLOR_GOOD, '+')        ! improved (+x%)
-    else if (objval == OBJ_XFOIL_FAIL) then     
-      call print_colored (COLOR_ERROR, 'x')       ! no xfoil convergence
-    else if (objval < (fmin * 1.005d0)) then 
-      call print_colored (COLOR_NORMAL, '~')      ! not too bad (-0,5%)
-    else if (objval >= OBJ_GEO_FAIL) then  
-      call print_colored (COLOR_NOTE,'.')         ! no valid design 
-    else  
-      call print_colored (COLOR_NORMAL, '-')      ! bad (-10%)
-    end if 
-  else
-
-    if (objval >= OBJ_GEO_FAIL ) then
-      write (*,'(6x,A,E9.1, A)') 'Penalty: ',objval,'   Geometry failed'
-    else
-
-      write (*,'(6x,A)', advance = 'no') 'Obj:  '
-
-      write (outstring,'(2x,F15.6,A1)') particle_min
-      call  print_colored (COLOR_NOTE, trim(outstring))
-
-      write (outstring,'(2x,F9.6,A1)') objval
-      if (objval < fmin) then 
-        call  print_colored (COLOR_GOOD, trim(outstring))
-      else
-        call  print_colored (COLOR_NORMAL,   trim(outstring))
-      end if
-      write (*,*)
-
-    end if 
-  
+  if (objval < fmin) then 
+    call print_colored (COLOR_GOOD, '+')        ! improved (+x%)
+  else if (objval == OBJ_XFOIL_FAIL) then     
+    call print_colored (COLOR_ERROR, 'x')       ! no xfoil convergence
+  else if (objval < (fmin * 1.005d0)) then 
+    call print_colored (COLOR_NORMAL, '~')      ! not too bad (-0,5%)
+  else if (objval >= OBJ_GEO_FAIL) then  
+    call print_colored (COLOR_NOTE,'.')         ! no valid design 
+  else  
+    call print_colored (COLOR_NORMAL, '-')      ! bad (-10%)
   end if 
 
 end subroutine show_particle_info

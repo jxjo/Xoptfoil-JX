@@ -70,12 +70,7 @@ subroutine check_seed()
 
   seed_foil_not_smoothed = seed_foil
 
-  write (*,*) 
-  call print_note ('DEV-MODE - details and smoothing activated')
-  write (*,*) 
-
-!  call check_and_smooth_surface (show_details, do_smoothing, seed_foil)
-  call check_and_smooth_surface (.true., .true., seed_foil)
+  call check_and_smooth_surface (show_details, do_smoothing, seed_foil)
 
   xt = seed_foil%xt
   xb = seed_foil%xb
@@ -89,7 +84,7 @@ subroutine check_seed()
 ! Get best values fur surface constraints 
 
   if (auto_curvature) &
-    call auto_curvature_constraints (seed_foil, &
+    call auto_curvature_constraints (show_details, seed_foil, &
                                     curv_threshold, highlow_threshold, max_te_curvature, &
                                     max_curv_highlow_top, max_curv_highlow_bot, &
                                     max_curv_reverse_top, max_curv_reverse_bot)
@@ -347,12 +342,15 @@ subroutine check_seed()
 
 ! Analyze airfoil at requested operating conditions with Xfoil
 
+  xfoil_options%show_details = .false.      ! switch off because of repeated seed calls
+
   call run_xfoil(seed_foil, xfoil_geom_options, op_point(1:noppoint),          &
                  op_mode(1:noppoint), re(1:noppoint), ma(1:noppoint),          &
                  use_flap, x_flap, y_flap, y_flap_spec,                        &
                  flap_degrees(1:noppoint), xfoil_options,                      &
                  op_converged, lift, drag, moment, alpha, xtrt, xtrb, ncrit_pt)
 
+  xfoil_options%show_details = show_details
 
 ! get airfoil geometry info from xfoil    
 
@@ -617,16 +615,15 @@ subroutine check_and_smooth_surface (show_details, do_smoothing, foil)
 
 ! ... printing stuff 
 
-  write (*,*) 
 
   if (show_details) then
+    write (*,*) 
     call print_colored (COLOR_NOTE, ' Summary: ')
   else
     if (done_smoothing) then
-      call print_colored (COLOR_NORMAL, ' Smoothing airfoil smoothed due to bad surface quality')
+      call print_colored (COLOR_NORMAL, ' Smoothing airfoil due to bad surface quality')
       write (*,*)
     end if
-    write (*,*)
     call print_colored (COLOR_NOTE, ' Airfoil surface assessment: ')
   end if
 
@@ -650,15 +647,13 @@ subroutine check_and_smooth_surface (show_details, do_smoothing, foil)
   end if  
   write (*,*) 
 
-  write (*,*) 
-
 end subroutine
 
 !-------------------------------------------------------------------------
 ! Evaluates and sets the best values for surface thresholds and constraints
 !-------------------------------------------------------------------------
 
-subroutine auto_curvature_constraints (foil, &
+subroutine auto_curvature_constraints (show_details, foil, &
                     curv_threshold, highlow_threshold, max_te_curvature, &
                     max_curv_highlow_top, max_curv_highlow_bot, &
                     max_curv_reverse_top, max_curv_reverse_bot)
@@ -672,6 +667,7 @@ subroutine auto_curvature_constraints (foil, &
   
 
   type (airfoil_type), intent (inout)  :: foil
+  logical, intent (in)            :: show_details
   double precision, intent(inout) :: curv_threshold, highlow_threshold, max_te_curvature
   integer, intent(inout)          :: max_curv_reverse_top, max_curv_reverse_bot
   integer, intent(inout)          :: max_curv_highlow_top, max_curv_highlow_bot
@@ -729,58 +725,61 @@ subroutine auto_curvature_constraints (foil, &
 
 ! ... pleasure to print that all ...
 
-  !  ------------ reversals -----
+  if (show_details) then 
 
-  str = 'curv_threshold'
-  write (*,'(10x,A18,A1)', advance = 'no') str,'='
-  write (str,'(F6.3)') old_value
-  call print_colored (COLOR_NOTE,trim(str))
-  write (*,'(A3,F6.3,4x)', advance = 'no') ' ->', curv_threshold 
+    !  ------------ reversals -----
 
-  write (str,'(A)') 'to get'
-  call print_colored (COLOR_NOTE,trim(str))
-  write (*,'(A,I2)', advance = 'no') ' max_curv_reverse_top =', max_curv_reverse_top
-  write(*,*)
+    str = 'curv_threshold'
+    write (*,'(10x,A18,A1)', advance = 'no') str,'='
+    write (str,'(F6.3)') old_value
+    call print_colored (COLOR_NOTE,trim(str))
+    write (*,'(A3,F6.3,4x)', advance = 'no') ' ->', curv_threshold 
 
-  write (*,'(10x,38x)', advance = 'no')
-  write (str,'(A)') 'to get'
-  call print_colored (COLOR_NOTE, trim(str))
-  write (*,'(A,I2)', advance = 'no') ' max_curv_reverse_bot =', max_curv_reverse_bot
-  write(*,*)
- 
-  !  ------------ highlow curvature amplitude -----
+    write (str,'(A)') 'to get'
+    call print_colored (COLOR_NOTE,trim(str))
+    write (*,'(A,I2)', advance = 'no') ' max_curv_reverse_top =', max_curv_reverse_top
+    write(*,*)
 
-  str = 'highlow_threshold'
-  write (*,'(10x,A18,A1)', advance = 'no') str,'='
-  write (str,'(F6.3)') old_value
-  call print_colored (COLOR_NOTE,trim(str))
-  write (*,'(A3,F6.3,4x)', advance = 'no') ' ->', highlow_threshold 
+    write (*,'(10x,38x)', advance = 'no')
+    write (str,'(A)') 'to get'
+    call print_colored (COLOR_NOTE, trim(str))
+    write (*,'(A,I2)', advance = 'no') ' max_curv_reverse_bot =', max_curv_reverse_bot
+    write(*,*)
+  
+    !  ------------ highlow curvature amplitude -----
 
-  write (str,'(A)') 'to get'
-  call print_colored (COLOR_NOTE,trim(str))
-  write (*,'(A,I2)', advance = 'no') ' max_curv_highlow_top =', max_curv_highlow_top
-  write(*,*)
+    str = 'highlow_threshold'
+    write (*,'(10x,A18,A1)', advance = 'no') str,'='
+    write (str,'(F6.3)') old_value
+    call print_colored (COLOR_NOTE,trim(str))
+    write (*,'(A3,F6.3,4x)', advance = 'no') ' ->', highlow_threshold 
 
-  write (*,'(10x,38x)', advance = 'no')
-  write (str,'(A)') 'to get'
-  call print_colored (COLOR_NOTE, trim(str))
-  write (*,'(A,I2)', advance = 'no') ' max_curv_highlow_bot =', max_curv_highlow_bot
-  write(*,*)
+    write (str,'(A)') 'to get'
+    call print_colored (COLOR_NOTE,trim(str))
+    write (*,'(A,I2)', advance = 'no') ' max_curv_highlow_top =', max_curv_highlow_top
+    write(*,*)
 
-  !  ------------ te curvature -----
+    write (*,'(10x,38x)', advance = 'no')
+    write (str,'(A)') 'to get'
+    call print_colored (COLOR_NOTE, trim(str))
+    write (*,'(A,I2)', advance = 'no') ' max_curv_highlow_bot =', max_curv_highlow_bot
+    write(*,*)
 
-  str = 'max_te_curvature'
-  write (*,'(10x,A18,A1)', advance = 'no') str,'='
-  write (str,'(F6.3)') old_value
-  call print_colored (COLOR_NOTE,trim(str))
-  write (*,'(A3,F6.2,4x)', advance = 'no') ' ->', max_te_curvature 
-  if ( max_te_curvature > 100d0) then
-    call print_colored (COLOR_NOTE, 'due to much too high value of seed airfoil')
-    max_te_curvature = 1d6
+    !  ------------ te curvature -----
+
+    str = 'max_te_curvature'
+    write (*,'(10x,A18,A1)', advance = 'no') str,'='
+    write (str,'(F6.3)') old_value
+    call print_colored (COLOR_NOTE,trim(str))
+    write (*,'(A3,F6.2,4x)', advance = 'no') ' ->', max_te_curvature 
+    if ( max_te_curvature > 100d0) then
+      call print_colored (COLOR_NOTE, 'due to much too high value of seed airfoil')
+      max_te_curvature = 1d6
+    end if
+    write(*,*)
+
+    write(*,*)
   end if
-  write(*,*)
-
-  write(*,*)
 
 end subroutine auto_curvature_constraints
 

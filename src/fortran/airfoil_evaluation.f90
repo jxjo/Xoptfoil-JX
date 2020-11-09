@@ -21,6 +21,7 @@ module airfoil_evaluation
 
   use vardef
   use xfoil_driver, only : xfoil_options_type, xfoil_geom_options_type
+  use os_util
 
   implicit none
 
@@ -511,14 +512,17 @@ function aero_objective_function(foil, actual_flap_degrees)
 
 ! Analyze airfoil at requested operating conditions with Xfoil
 
-  call xfoil_set_airfoil (foil)        
+  call xfoil_set_airfoil (foil) 
+  
+  xfoil_options%show_details = .false.      ! switch off because of multi-threading
 
-  call run_xfoil(foil, xfoil_geom_options, op_point(1:noppoint),          &
+  call run_xfoil(foil, xfoil_geom_options, op_point(1:noppoint),               &
                  op_mode(1:noppoint), re(1:noppoint), ma(1:noppoint),          &
                  use_flap, x_flap, y_flap, y_flap_spec,                        &
                  actual_flap_degrees(1:noppoint), xfoil_options,               &
                  op_converged, lift, drag, moment, alpha, xtrt, xtrb, ncrit_pt)
 
+  xfoil_options%show_details = show_details  
 
 ! Early exit if an op_point didn't converge - further calculations wouldn't make sense
 
@@ -891,7 +895,6 @@ function write_airfoil_optimization_progress(designvars, designcounter)
   use airfoil_operations, only : airfoil_write_to_unit
   use xfoil_driver,       only : run_xfoil
   use xfoil_driver,       only : xfoil_get_geometry_info, xfoil_set_airfoil
-  use os_util,            only : print_error, print_colored, COLOR_HIGH
 
   double precision, dimension(:), intent(in) :: designvars
   integer, intent(in) :: designcounter
@@ -908,6 +911,18 @@ function write_airfoil_optimization_progress(designvars, designcounter)
   character(8) :: maxtchar, xmaxtchar, maxcchar, xmaxcchar
   integer :: foilunit, polarunit
 
+  write(text,*) designcounter
+  text = adjustl(text)
+
+  if (designcounter == 0) then
+    write (*,'(4x,A)') '-> Writing seed airfoil as design #'  //&
+           trim(text)//' to file '//trim(output_prefix)//'[...].dat'
+  else
+    write (*,'(2x,A)', advance ='no') '-> Writing design '
+    call  print_colored (COLOR_HIGH,'#'//trim(text))
+    write (*,*)
+  end if
+
 ! Design 0 is seed airfoil to output - take the original values 
 !     Smoothing - Restore the original, not smoothed seed airfoil to
 !                 ...design_coordinates.dat to show it in visualizer
@@ -921,6 +936,8 @@ function write_airfoil_optimization_progress(designvars, designcounter)
 
 ! Get actual flap angles based on design variables
   call get_flap_degrees_from_design (designvars, actual_flap_degrees)
+
+  if (show_details) write (*,*) 
 
 ! Analyze airfoil at requested operating conditions with Xfoil
   call run_xfoil(foil, xfoil_geom_options, op_point(1:noppoint),          &
@@ -957,9 +974,6 @@ function write_airfoil_optimization_progress(designvars, designcounter)
 
   if (designcounter == 0) then
 
-    write (*,'(2x,A)', advance ='no') '-> Writing seed airfoil as design #'  //&
-           trim(text)//' to file '//trim(output_prefix)//'[...].dat'
-
 !   Header for coordinate file
 
     open(unit=foilunit, file=foilfile, status='replace')
@@ -984,9 +998,6 @@ function write_airfoil_optimization_progress(designvars, designcounter)
 
   else
 
-    write (*,'(2x,A)', advance ='no') '-> Writing design '
-    call  print_colored (COLOR_HIGH,'#'//trim(text))
-
 !   Open coordinate file and write zone header
 
     open(unit=foilunit, file=foilfile, status='old', position='append', err=900)
@@ -1003,12 +1014,9 @@ function write_airfoil_optimization_progress(designvars, designcounter)
 
   end if
 
-  write (*,*) 
-
 ! Write coordinates to file
 
   call  airfoil_write_to_unit (foilunit, title, foil, .True.)
-
 
 ! Write polars to file
 
@@ -1029,6 +1037,9 @@ function write_airfoil_optimization_progress(designvars, designcounter)
   close(foilunit)
   close(polarunit)
 
+  if (show_details) &
+    call show_op_optimization_progress(designcounter, drag, lift, moment) 
+
 ! Set return value (needed for compiler)
 
   write_airfoil_optimization_progress = 0
@@ -1047,6 +1058,97 @@ function write_airfoil_optimization_progress(designvars, designcounter)
   return
 
 end function write_airfoil_optimization_progress
+
+!------------------------------------------------------------------------------
+!
+! Prints op results during optimization 
+!       ! work in progress !
+!------------------------------------------------------------------------------
+subroutine show_op_optimization_progress(designcounter, drag, lift, moment) 
+
+  integer, intent(in)             :: designcounter
+  double precision, dimension(noppoint), intent(in) :: lift, drag, moment
+
+  double precision :: delta_from_target
+  integer :: i, how_close, ntargets
+
+  delta_from_target = 0d0
+  ntargets = 0
+
+  ! currently only aero targets support - if no targets - retunr 
+
+  do i= 1, noppoint
+    if (trim(optimization_type(i) (1:6)) == 'target') then
+      ntargets = ntargets + 1
+    end if
+  end do
+  if(ntargets == 0 ) return
+
+  ! print headline 
+
+  write (*,*)
+  write (*,'(18x)', advance = 'no') 
+  do i= 1, noppoint
+    if (trim(optimization_type(i) (1:6)) == 'target') then
+      write (*,'(4x,"Op",I2)', advance = 'no') i
+    end if
+  end do
+  write (*,*)
+
+  ! print 2. headline 
+
+  write (*,'(4x, 3x,A10,1x)', advance = 'no') 'Difference'
+  do i= 1, noppoint
+    select case  (trim(optimization_type(i)))
+      case ('target-drag')
+        write (*,'(   A8)', advance = 'no') 'cd'
+      case ('target-max-drag')
+        write (*,'(    A8)', advance = 'no') 'cd'
+      case ('target-lift')
+        write (*,'(    A8)', advance = 'no') 'cl'
+      case ('target-moment')
+        write (*,'(    A8)', advance = 'no') 'cm'
+    end select
+  end do
+  write (*,*)
+  
+  ! now  print values
+  
+  write (*,'(4x,3x,A11)', advance = 'no') 'from target'
+  do i= 1, noppoint
+    select case  (trim(optimization_type(i)))
+      case ('target-drag')
+        delta_from_target = drag(i) - target_value(i)
+        how_close         = r_quality (abs(delta_from_target), 0.00005d0, 0.0002d0, 0.005d0)
+        if (delta_from_target >= 0) then
+          call print_colored_r (8,'(F6.5)', how_close, delta_from_target) 
+        else
+          call print_colored_r (8,'(F7.5)', how_close, delta_from_target) 
+        end if
+      case ('target-max-drag')
+        delta_from_target = drag(i) - target_value(i)
+        how_close         = r_quality (delta_from_target, 0.00005d0, 0.0002d0, 0.005d0)
+        if (delta_from_target >= 0) then
+          call print_colored_r (8,'(F6.5)', how_close, delta_from_target) 
+        else
+          call print_colored_r (8,'(F7.5)', how_close, delta_from_target) 
+        end if
+      case ('target-lift')
+        delta_from_target = (lift(i) - target_value(i)) 
+        how_close         = r_quality (abs(delta_from_target), 0.01d0, 0.05d0, 0.5d0)
+        call print_colored_r (8,'(F6.2)', how_close, delta_from_target) 
+      case ('target-moment')
+        delta_from_target = (moment(i) - target_value(i)) 
+        how_close         = r_quality (abs(delta_from_target), 0.005d0, 0.02d0, 0.05d0)
+        call print_colored_r (8,'(F6.2)', how_close, delta_from_target) 
+    end select
+  end do
+  write (*,*)
+
+  write (*,*)
+      
+end 
+
 
 !=============================================================================80
 !

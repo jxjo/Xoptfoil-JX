@@ -286,7 +286,7 @@ subroutine run_xfoil(foil, geom_options, operating_points, op_modes,           &
 !             - when the direction of alpha or cl changes along op points
 
   if (show_details) then 
-    write (*,'(6x,A)',advance = 'no') 'Xfoil  '
+    write (*,'(7x,A)',advance = 'no') 'Xfoil  '
     if (xfoil_options%repanel)      write (*,'(A)',advance = 'no') 'repanel '
     if (xfoil_options%reinitialize) write (*,'(A)',advance = 'no') 'init_BL '
   end if
@@ -294,7 +294,7 @@ subroutine run_xfoil(foil, geom_options, operating_points, op_modes,           &
   run_oppoints: do i = 1, noppoint
 
 !   print newline if output gets too long
-    if (show_details .and.( mod(i,25) == 0)) write (*,'(/,6x,A)',advance = 'no') '       '
+    if (show_details .and.( mod(i,25) == 0)) write (*,'(/,7x,A)',advance = 'no') '       '
 
 !   if flpas are activated, check if the angle has changed to reinit foil
 

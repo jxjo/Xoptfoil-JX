@@ -122,6 +122,39 @@ end program xfoil_worker
 
 
 !-------------------------------------------------------------------------
+! dev: test setting thickness of foil
+!-------------------------------------------------------------------------
+
+subroutine test_set_thickness (output_prefix, seed_foil)
+
+  use vardef,             only: airfoil_type
+  use os_util
+  use xfoil_driver,       only : xfoil_set_airfoil, xfoil_reload_airfoil
+
+
+  character(*), intent(in)     :: output_prefix
+  type (airfoil_type), intent (inout)  :: seed_foil
+
+  type (airfoil_type) :: foil
+  double precision, dimension(:), allocatable :: thickness_val
+  integer             :: i 
+
+  thickness_val = (/ 0.74d0, 0.75d0, 0.78d0, 0.80d0 /)
+  seed_foil = foil 
+
+  do i=1, size (thickness_val)
+
+    foil = seed_foil 
+    call xfoil_set_airfoil (foil)
+!    call THKCAM ( thickness_val(i), 1d0)
+    call xfoil_reload_airfoil(foil)
+    
+  end do
+
+end subroutine test_set_thickness
+
+
+!-------------------------------------------------------------------------
 ! Checks curvature quality of foil 
 !-------------------------------------------------------------------------
 
@@ -175,7 +208,7 @@ subroutine check_foil_curvature (input_file, output_prefix, foil, visualizer)
 
 !  ------------ set best values  -----
 
-  call auto_curvature_constraints (foil, &
+  call auto_curvature_constraints (.true., foil, &
                                 curv_threshold, highlow_threshold, max_te_curvature, &
                                 max_curv_highlow_top, max_curv_highlow_bot, &
                                 max_curv_reverse_top, max_curv_reverse_bot)

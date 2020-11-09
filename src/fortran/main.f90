@@ -135,20 +135,19 @@ program main
     write(*,*) "Optimizing for requested operating points."
   end if
 
-! Switch off multi threading when using show_details because the output to the console 
-!   would be corrupted ...
+! Handle multithreading - be careful with screen output in multi-threaded code parts
 !   macro OPENMP is set in CMakeLists.txt as _OPENMP is not set by default (..?) 
 #ifdef OPENMP                       
   if (omp_get_max_threads() > 1) then 
-    if (show_details ) then 
-      call print_warning ("Because of option 'show_details' CPU multi threading will be switched off")
-      write(*,*)
-      call omp_set_num_threads( 1 )
-    else
+!    if (show_details ) then 
+!      call print_warning ("Because of option 'show_details' CPU multi threading will be switched off")
+!      write(*,*)
+!      call omp_set_num_threads( 1 )
+!    else
       write (text,'(I2,A)') omp_get_max_threads(),' CPU threads will be used during optimization' 
       call print_note (text)
       write(*,*)
-    end if 
+!   end if 
   end if 
 #else
   text = 'dummy' 

@@ -37,6 +37,7 @@ module os_util
   public :: print_colored_i
   public :: print_colored_r
   public :: print_colored_s
+  public :: print_colored_rating
   public :: i_quality
   public :: r_quality
   
@@ -426,11 +427,36 @@ function r_quality (value, lim_good, lim_ok, lim_bad)
 end function r_quality
 
 !-------------------------------------------------------------------------
-! prints the string colored depending
-!   on its quality (e.g. Q_OK)
+! prints the string colored depending  on its quality (e.g. Q_OK)
 !-------------------------------------------------------------------------
   
-subroutine print_colored_s (strlen, quality)
+subroutine print_colored_s (quality, str)
+  
+  integer, intent(in)       :: quality
+  character (*), intent(in) :: str
+
+  integer  :: color 
+
+  select case (quality)
+    case (Q_GOOD)
+      color = COLOR_GOOD
+    case (Q_OK)
+      color = COLOR_NORMAL
+    case (Q_BAD)
+      color = COLOR_WARNING
+    case default 
+      color = COLOR_BAD
+  end select
+
+  call print_colored (color, str)
+  
+end subroutine print_colored_s
+
+!-------------------------------------------------------------------------
+! prints a colored rating based on quality (e.g. Q_OK) with a lenght of strlen
+!-------------------------------------------------------------------------
+  
+subroutine print_colored_rating (strlen, quality)
   
   integer, intent(in)      :: quality, strlen
 
@@ -455,7 +481,6 @@ subroutine print_colored_s (strlen, quality)
   str = adjustl(str)
   call print_colored (color, str)
   
-end subroutine print_colored_s
-
+end subroutine print_colored_rating
 
 end module os_util
