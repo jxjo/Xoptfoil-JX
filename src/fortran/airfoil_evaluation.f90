@@ -506,7 +506,7 @@ function aero_objective_function(foil, actual_flap_degrees)
 
   integer          :: i
   double precision :: pi
-  double precision :: cur_value, slope, increment
+  double precision :: cur_value, slope, increment, dist
 
   pi = acos(-1.d0)
 
@@ -576,14 +576,17 @@ function aero_objective_function(foil, actual_flap_degrees)
 
 ! Minimize difference between target cd value and current value 
     
-      increment = (target_value(i) + ABS (target_value(i)-drag(i))) * scale_factor(i)
+      dist = ABS (target_value(i)-drag(i))
+      if (dist < 0.000005d0) dist = 0d0  ! little threshold to achieve target
+    
+      increment = (target_value(i) + dist) * scale_factor(i)
       cur_value = drag(i) 
 
     elseif (trim(optimization_type(i)) == 'target-max-drag') then
 
 ! try to reach at least maximum drag defined in target value 
     
-      increment = (target_value(i) + max(target_value(i),drag(i)) - target_value(i)) * scale_factor(i)
+      increment = (max(target_value(i),drag(i))) * scale_factor(i)
       cur_value = drag(i) 
 
     elseif (trim(optimization_type(i)) == 'target-lift') then
@@ -1037,8 +1040,8 @@ function write_airfoil_optimization_progress(designvars, designcounter)
   close(foilunit)
   close(polarunit)
 
-  if (show_details) &
-    call show_op_optimization_progress(designcounter, drag, lift, moment) 
+  if (show_details .and. (designcounter > 0)) &
+    call show_op_optimization_progress(drag, lift, moment) 
 
 ! Set return value (needed for compiler)
 
@@ -1064,84 +1067,83 @@ end function write_airfoil_optimization_progress
 ! Prints op results during optimization 
 !       ! work in progress !
 !------------------------------------------------------------------------------
-subroutine show_op_optimization_progress(designcounter, drag, lift, moment) 
+subroutine show_op_optimization_progress(drag, lift, moment) 
 
-  integer, intent(in)             :: designcounter
+  type target_info_type
+    integer           :: i 
+    character (2)     :: variable
+    double precision  :: delta 
+    integer           :: how_close
+  end type 
+
   double precision, dimension(noppoint), intent(in) :: lift, drag, moment
 
-  double precision :: delta_from_target
-  integer :: i, how_close, ntargets
+  type (target_info_type), dimension (noppoint) :: target_info
+  integer :: i, j, nt
 
-  delta_from_target = 0d0
-  ntargets = 0
+  nt = 0
 
-  ! currently only aero targets support - if no targets - retunr 
+  ! currently only aero targets support - if no targets - return 
 
   do i= 1, noppoint
     if (trim(optimization_type(i) (1:6)) == 'target') then
-      ntargets = ntargets + 1
+      nt = nt + 1
+
+      target_info(nt)%i = i
+
+      select case  (trim(optimization_type(i)))
+        case ('target-drag')
+          target_info(nt)%variable  = 'cd'
+          target_info(nt)%delta     = drag(i) - target_value(i)
+          target_info(nt)%how_close = r_quality (abs(target_info(nt)%delta), 0.000005d0, 0.0002d0, 0.005d0)
+        case ('target-max-drag')
+          target_info(nt)%variable  = 'cd'
+          target_info(nt)%delta     = drag(i) - target_value(i)
+          target_info(nt)%how_close = r_quality (target_info(nt)%delta, 0.000005d0, 0.0002d0, 0.005d0)
+        case ('target-lift')
+          target_info(nt)%variable  = 'cl'
+          target_info(nt)%delta     = lift(i) - target_value(i)
+          target_info(nt)%how_close = r_quality (abs(target_info(nt)%delta), 0.01d0, 0.05d0, 0.5d0)
+        case ('target-moment')
+          target_info(nt)%variable = 'cm'
+          target_info(nt)%delta     = moment(i) - target_value(i)
+          target_info(nt)%how_close = r_quality (abs(target_info(nt)%delta), 0.005d0, 0.02d0, 0.05d0)
+        end select
+
     end if
   end do
-  if(ntargets == 0 ) return
+  if(nt == 0 ) return
 
   ! print headline 
 
   write (*,*)
   write (*,'(18x)', advance = 'no') 
-  do i= 1, noppoint
-    if (trim(optimization_type(i) (1:6)) == 'target') then
-      write (*,'(4x,"Op",I2)', advance = 'no') i
-    end if
+  do j= 1, nt
+    write (*,'(4x,"Op",I2)', advance = 'no') target_info(j)%i 
   end do
   write (*,*)
 
   ! print 2. headline 
 
   write (*,'(4x, 3x,A10,1x)', advance = 'no') 'Difference'
-  do i= 1, noppoint
-    select case  (trim(optimization_type(i)))
-      case ('target-drag')
-        write (*,'(   A8)', advance = 'no') 'cd'
-      case ('target-max-drag')
-        write (*,'(    A8)', advance = 'no') 'cd'
-      case ('target-lift')
-        write (*,'(    A8)', advance = 'no') 'cl'
-      case ('target-moment')
-        write (*,'(    A8)', advance = 'no') 'cm'
-    end select
+  do j= 1, nt
+    write (*,'(   A8)', advance = 'no') target_info(j)%variable
   end do
   write (*,*)
   
   ! now  print values
   
   write (*,'(4x,3x,A11)', advance = 'no') 'from target'
-  do i= 1, noppoint
-    select case  (trim(optimization_type(i)))
-      case ('target-drag')
-        delta_from_target = drag(i) - target_value(i)
-        how_close         = r_quality (abs(delta_from_target), 0.00005d0, 0.0002d0, 0.005d0)
-        if (delta_from_target >= 0) then
-          call print_colored_r (8,'(F6.5)', how_close, delta_from_target) 
-        else
-          call print_colored_r (8,'(F7.5)', how_close, delta_from_target) 
-        end if
-      case ('target-max-drag')
-        delta_from_target = drag(i) - target_value(i)
-        how_close         = r_quality (delta_from_target, 0.00005d0, 0.0002d0, 0.005d0)
-        if (delta_from_target >= 0) then
-          call print_colored_r (8,'(F6.5)', how_close, delta_from_target) 
-        else
-          call print_colored_r (8,'(F7.5)', how_close, delta_from_target) 
-        end if
-      case ('target-lift')
-        delta_from_target = (lift(i) - target_value(i)) 
-        how_close         = r_quality (abs(delta_from_target), 0.01d0, 0.05d0, 0.5d0)
-        call print_colored_r (8,'(F6.2)', how_close, delta_from_target) 
-      case ('target-moment')
-        delta_from_target = (moment(i) - target_value(i)) 
-        how_close         = r_quality (abs(delta_from_target), 0.005d0, 0.02d0, 0.05d0)
-        call print_colored_r (8,'(F6.2)', how_close, delta_from_target) 
-    end select
+  do j= 1, nt 
+    if (target_info(j)%how_close == Q_Good) then 
+      call print_colored_s (target_info(j)%how_close, '     hit') 
+    else
+      if (target_info(j)%delta >= 0) then
+        call print_colored_r (8,'(F6.5)', target_info(j)%how_close, target_info(j)%delta) 
+      else
+        call print_colored_r (8,'(F7.5)', target_info(j)%how_close, target_info(j)%delta) 
+      end if
+    end if
   end do
   write (*,*)
 

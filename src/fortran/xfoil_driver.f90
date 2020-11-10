@@ -273,7 +273,7 @@ subroutine run_xfoil(foil, geom_options, operating_points, op_modes,           &
   call xfoil_set_paneling(geom_options)
 
 
-! Run xfoil for requested operating points
+! Run xfoil for requested operating points -----------------------------------
 !
 ! Rules for initialization of xfoil boundary layer - xfoil_init_BL 
 !
@@ -447,7 +447,7 @@ subroutine run_xfoil(foil, geom_options, operating_points, op_modes,           &
     ! jx-mod Support Type 1 and 2 re numbers - cl may not be negative  
     if ((re(i)%type == 2) .and. (lift(i) <= 0d0) .and. op_converged(i)) then 
       write (*,*)
-      write(*,'(31x,A,I2,A, F6.2)') "Warning: Negative lift for Re-Type 2 at" // &
+      write(*,'(15x,A,I2,A, F6.2)') "Warning: Negative lift for Re-Type 2 at" // &
        " op",i," - cl:",lift(i)
     end if 
 

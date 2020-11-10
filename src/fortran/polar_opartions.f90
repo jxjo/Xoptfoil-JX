@@ -518,7 +518,7 @@ subroutine write_polar_data (out_unit, polar)
       write (out_unit,  "(   F8.3,   F9.4,    F10.5,    F10.5,    F9.4,   F8.4,   F8.4)") &
                           op%alpha, op%lift, op%drag,    0d0,  op%moment,op%xtrt,op%xtrb
     else
-      write(*,'(31x,A,I2,A, F6.2)') "Warning: No convergence - Skipped" // &
+      write(*,'(15x,A,I2,A, F6.2)') "Warning: No convergence - Skipped writing of" // &
       " op",i," - ",op%value
     end if
 
