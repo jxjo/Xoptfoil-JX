@@ -58,6 +58,7 @@ subroutine check_seed()
   character(15) :: opt_type
   logical :: addthick_violation
   double precision :: ref_value, seed_value, tar_value, match_delta, cur_te_curvature
+  double precision :: dist = 0d0
 
   penaltyval = 0.d0
   pi = acos(-1.d0)
@@ -306,7 +307,6 @@ subroutine check_seed()
            (trim(opt_type) /= 'max-xtr') .and.                                 &
             ! jx-mod - allow geo target and min-lift-slope, min-glide-slope
            (trim(opt_type) /= 'target-drag') .and.                             &
-           (trim(opt_type) /= 'target-max-drag') .and.                            &
            (trim(opt_type) /= 'min-lift-slope') .and.                          &
            (trim(opt_type) /= 'min-glide-slope') .and.                         &
            (trim(opt_type) /= 'max-lift-slope') ) then
@@ -477,14 +477,11 @@ subroutine check_seed()
 
     elseif (trim(optimization_type(i)) == 'target-drag') then
       if (target_value(i) < 0.d0) target_value(i) = drag(i) * abs(target_value(i))
- 
-      checkval   = target_value(i) + ABS (target_value(i)-drag(i))
-      seed_value = drag(i)
 
-    elseif (trim(optimization_type(i)) == 'target-max-drag') then
-      if (target_value(i) < 0.d0) target_value(i) = drag(i) * abs(target_value(i))
+      dist = ABS (target_value(i)-drag(i))
+      if (dist < 0.000004d0) dist = 0d0  ! little threshold to achieve target
 
-      checkval = max(target_value(i),drag(i))
+      checkval   = target_value(i) + dist
       seed_value = drag(i)
 
     elseif (trim(optimization_type(i)) == 'target-lift') then
@@ -675,7 +672,8 @@ subroutine auto_curvature_constraints (show_details, foil, &
   double precision, dimension(:), allocatable :: xt, xb, yt, yb
 
   double precision    :: threshold_top, threshold_bot, min_curv_thresh, min_highlow_thresh
-  double precision    :: max_te_curvature_top, max_te_curvature_bot, old_value
+  double precision    :: max_te_curvature_top, max_te_curvature_bot
+  double precision    :: old_max_te_curvature, old_highlow_threshold, old_curv_threshold
   character (80)      :: str
 
   write (*,'(1x, A)') 'Evaluating and auto setting of geometric thresholds and constraints '
@@ -692,7 +690,7 @@ subroutine auto_curvature_constraints (show_details, foil, &
   call get_best_reversal_threshold (size(xb), xb,yb, min_curv_thresh, max_curv_reverse_bot, &
                                     threshold_bot)
 
-  old_value = curv_threshold
+  old_curv_threshold = curv_threshold
   curv_threshold = max(threshold_top, threshold_bot)
   ! no retest - how many reversals will we get with the new threshold
   max_curv_reverse_top = nreversals_using_threshold (xt, yt, curv_threshold)
@@ -700,17 +698,18 @@ subroutine auto_curvature_constraints (show_details, foil, &
  
 !  ------------ te curvature -----
 
-  old_value = max_te_curvature
-  if (old_value > 1d10) old_value = 0.2d0
+  old_max_te_curvature = max_te_curvature
+  if (old_max_te_curvature > 1d10) old_max_te_curvature = 0.2d0
   
   call get_max_te_curvature (size(xt), xt,yt, max_te_curvature_top )
   call get_max_te_curvature (size(xb), xb,yb, max_te_curvature_bot )
-  max_te_curvature = max (max_te_curvature_top, max_te_curvature_bot)
+
+  max_te_curvature = max (max_te_curvature_top, max_te_curvature_bot) * 1.1d0 ! little more...
 
 !  ------------ highlow curvature amplitude -----
 
-  old_value          = highlow_threshold
-  min_highlow_thresh = highlow_threshold
+  old_highlow_threshold = highlow_threshold
+  min_highlow_thresh    = highlow_threshold
 
   call get_best_highlow_threshold (size(xt), xt,yt, min_highlow_thresh, &
                                    max_curv_highlow_top, threshold_top)
@@ -731,7 +730,7 @@ subroutine auto_curvature_constraints (show_details, foil, &
 
     str = 'curv_threshold'
     write (*,'(10x,A18,A1)', advance = 'no') str,'='
-    write (str,'(F6.3)') old_value
+    write (str,'(F6.3)') old_curv_threshold
     call print_colored (COLOR_NOTE,trim(str))
     write (*,'(A3,F6.3,4x)', advance = 'no') ' ->', curv_threshold 
 
@@ -750,7 +749,7 @@ subroutine auto_curvature_constraints (show_details, foil, &
 
     str = 'highlow_threshold'
     write (*,'(10x,A18,A1)', advance = 'no') str,'='
-    write (str,'(F6.3)') old_value
+    write (str,'(F6.3)') old_highlow_threshold
     call print_colored (COLOR_NOTE,trim(str))
     write (*,'(A3,F6.3,4x)', advance = 'no') ' ->', highlow_threshold 
 
@@ -769,7 +768,7 @@ subroutine auto_curvature_constraints (show_details, foil, &
 
     str = 'max_te_curvature'
     write (*,'(10x,A18,A1)', advance = 'no') str,'='
-    write (str,'(F6.3)') old_value
+    write (str,'(F6.3)') old_max_te_curvature
     call print_colored (COLOR_NOTE,trim(str))
     write (*,'(A3,F6.2,4x)', advance = 'no') ' ->', max_te_curvature 
     if ( max_te_curvature > 100d0) then

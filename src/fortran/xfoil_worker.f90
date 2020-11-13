@@ -70,14 +70,14 @@ program xfoil_worker
       if (trim(output_prefix) == '') & 
         output_prefix = airfoil_filename (1:(index (airfoil_filename,'.') - 1))
 
-        call check_and_do_polar_generation (input_file, output_prefix, foil)
+      call check_and_do_polar_generation (input_file, output_prefix, foil)
 
     case ('norm')         ! Repanel, Normalize into "<output_prefix>.dat"
 
       if (trim(output_prefix) == '') & 
         output_prefix = airfoil_filename (1:(index (airfoil_filename,'.') - 1))//'-norm'
 
-        call repanel_smooth (input_file, output_prefix, foil, visualizer, .false.)
+      call repanel_smooth (input_file, output_prefix, foil, visualizer, .false.)
 
     case ('smooth')       ! Repanel, Normalize and smooth into "<output_prefix>.dat"
 
@@ -101,10 +101,9 @@ program xfoil_worker
 
     case ('test')         ! Test for change max thickness location 
       
-      call xfoil_set_airfoil (foil)
-      call HIPNT (0.3d0, 0.25d0)
-      call xfoil_reload_airfoil(foil)
-      call airfoil_write (trim(output_prefix)//'.dat', output_prefix, foil)
+      if (trim(output_prefix) == '') & 
+        output_prefix = airfoil_filename (1:(index (airfoil_filename,'.') - 1))//'-t'
+      call test_set_thickness (output_prefix, foil)
 
     case default
 
@@ -129,7 +128,8 @@ subroutine test_set_thickness (output_prefix, seed_foil)
 
   use vardef,             only: airfoil_type
   use os_util
-  use xfoil_driver,       only : xfoil_set_airfoil, xfoil_reload_airfoil
+  use xfoil_driver,       only : xfoil_set_thickness_camber
+  use airfoil_operations, only : airfoil_write
 
 
   character(*), intent(in)     :: output_prefix
@@ -137,18 +137,36 @@ subroutine test_set_thickness (output_prefix, seed_foil)
 
   type (airfoil_type) :: foil
   double precision, dimension(:), allocatable :: thickness_val
+  character (80)      :: thick_str
   integer             :: i 
+  logical             :: visualizer
 
-  thickness_val = (/ 0.74d0, 0.75d0, 0.78d0, 0.80d0 /)
-  seed_foil = foil 
+  thickness_val = (/ 0.074d0, 0.075d0, 0.078d0, 0.080d0 /)
+  visualizer = .true.
+  
+  if (visualizer) then 
+    foil%name   = output_prefix
+    call write_design_coordinates (output_prefix, 0, seed_foil)
+  end if 
+
 
   do i=1, size (thickness_val)
 
-    foil = seed_foil 
-    call xfoil_set_airfoil (foil)
-!    call THKCAM ( thickness_val(i), 1d0)
-    call xfoil_reload_airfoil(foil)
-    
+    call xfoil_set_thickness_camber (seed_foil, thickness_val(i), 0d0, 0d0, 0d0, foil)
+
+    write (thick_str,'(F6.1)') thickness_val(i) * 100d0
+    write (*,'(1x,A)') 'Setting thickness to '//trim(adjustl(thick_str))//'%'
+
+    foil%name   = trim(output_prefix) // trim(adjustl(thick_str))
+
+    call airfoil_write   (trim(foil%name)//'.dat', trim(foil%name), foil)
+
+    ! Write airfoil to _design_coordinates using Xoptfoil format for visualizer
+  
+    if (visualizer) then 
+      call write_design_coordinates (output_prefix, i, foil)
+    end if 
+   
   end do
 
 end subroutine test_set_thickness
@@ -189,7 +207,19 @@ subroutine check_foil_curvature (input_file, output_prefix, foil, visualizer)
   call le_find         (foil%x, foil%z, foil%leclose, foil%xle, foil%zle, foil%addpoint_loc)
   call split_airfoil   (foil, xt, xb, yt, yb, .false.)
 
-  !jx-todo set these values into check values for assessment
+  ! Defaults
+
+  check_curvature      = .true.
+  auto_curvature       = .true.
+
+  highlow_threshold     = 0.03d0
+  curv_threshold        = 0.02d0
+  max_te_curvature      = 0.2d0
+  max_curv_reverse_top = 0
+  max_curv_reverse_bot = 0
+  max_curv_highlow_top = 0
+  max_curv_highlow_bot = 0
+
   call  read_geo_constraints_inputs  (input_file, &
                                       check_curvature, auto_curvature,  &
                                       max_te_curvature,    &
@@ -258,6 +288,20 @@ subroutine repanel_smooth (input_file, output_prefix, seed_foil, visualizer, do_
 ! Read inputs file to get options needed 
 
   call read_xfoil_paneling_inputs  (input_file, geom_options)
+
+  ! Defaults
+
+  check_curvature      = .true.
+  auto_curvature       = .true.
+
+  highlow_threshold     = 0.03d0
+  curv_threshold        = 0.02d0
+  max_te_curvature      = 0.2d0
+  max_curv_reverse_top = 0
+  max_curv_reverse_bot = 0
+  max_curv_highlow_top = 0
+  max_curv_highlow_bot = 0
+
   call read_geo_constraints_inputs (input_file, &
                                       check_curvature, auto_curvature,  &
                                       max_te_curvature,    &

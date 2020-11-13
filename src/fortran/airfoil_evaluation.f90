@@ -577,16 +577,9 @@ function aero_objective_function(foil, actual_flap_degrees)
 ! Minimize difference between target cd value and current value 
     
       dist = ABS (target_value(i)-drag(i))
-      if (dist < 0.000005d0) dist = 0d0  ! little threshold to achieve target
+      if (dist < 0.000004d0) dist = 0d0  ! little threshold to achieve target
     
       increment = (target_value(i) + dist) * scale_factor(i)
-      cur_value = drag(i) 
-
-    elseif (trim(optimization_type(i)) == 'target-max-drag') then
-
-! try to reach at least maximum drag defined in target value 
-    
-      increment = (max(target_value(i),drag(i))) * scale_factor(i)
       cur_value = drag(i) 
 
     elseif (trim(optimization_type(i)) == 'target-lift') then
@@ -1096,10 +1089,6 @@ subroutine show_op_optimization_progress(drag, lift, moment)
           target_info(nt)%variable  = 'cd'
           target_info(nt)%delta     = drag(i) - target_value(i)
           target_info(nt)%how_close = r_quality (abs(target_info(nt)%delta), 0.000005d0, 0.0002d0, 0.005d0)
-        case ('target-max-drag')
-          target_info(nt)%variable  = 'cd'
-          target_info(nt)%delta     = drag(i) - target_value(i)
-          target_info(nt)%how_close = r_quality (target_info(nt)%delta, 0.000005d0, 0.0002d0, 0.005d0)
         case ('target-lift')
           target_info(nt)%variable  = 'cl'
           target_info(nt)%delta     = lift(i) - target_value(i)
@@ -1125,7 +1114,7 @@ subroutine show_op_optimization_progress(drag, lift, moment)
 
   ! print 2. headline 
 
-  write (*,'(4x, 3x,A10,1x)', advance = 'no') 'Difference'
+  write (*,'(4x, 3x,A8,3x)', advance = 'no') 'Distance'
   do j= 1, nt
     write (*,'(   A8)', advance = 'no') target_info(j)%variable
   end do

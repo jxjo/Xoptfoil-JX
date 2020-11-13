@@ -66,7 +66,7 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
              reinitialize, restart, write_designs, reflexed,                   &
              pso_write_particlefile, repanel
   integer :: restart_write_freq, pso_pop, pso_maxit, simplex_maxit, bl_maxit,  &
-             npan, feasible_init_attempts
+             npan, feasible_init_attempts, pso_max_retries
   integer :: ga_pop, ga_maxit
   double precision :: maxt, xmaxt, maxc, xmaxc, design_cl, a, leidx
   double precision :: pso_tol, simplex_tol, ncrit, xtript, xtripb, vaccel
@@ -123,7 +123,7 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
                             feasible_init_attempts
   namelist /particle_swarm_options/ pso_pop, pso_tol, pso_maxit,               &
                                     pso_convergence_profile,                   &
-                                    pso_write_particlefile
+                                    pso_write_particlefile, pso_max_retries
   namelist /genetic_algorithm_options/ ga_pop, ga_tol, ga_maxit,               &
             parents_selection_method, parent_fraction,                         &
             roulette_selection_pressure, tournament_fraction,                  &
@@ -415,6 +415,7 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
   pso_pop = 40
   pso_tol = 1.D-04
   pso_maxit = 700
+  pso_max_retries = 0 
   pso_write_particlefile = .false.
 
   if ((trim(shape_functions) == 'camb-thick' ) .or. &
@@ -511,6 +512,7 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
       pso_options%feasible_limit = feasible_limit
       pso_options%feasible_init_attempts = feasible_init_attempts
       pso_options%write_designs = write_designs
+      pso_options%max_retries = pso_max_retries
       if (.not. match_foils) then
         pso_options%relative_fmin_report = .true.
       else
@@ -999,11 +1001,8 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
       trim(optimization_type(i)) /= 'max-glide' .and.                          &
       trim(optimization_type(i)) /= 'min-sink' .and.                           &
       trim(optimization_type(i)) /= 'max-lift' .and.                           &
-! jx-mod Aero targets - additional op-point type target-moment and target-drag
-!                       min-lift-slope, min-glide-slope, target-lift
       trim(optimization_type(i)) /= 'target-moment' .and.                      &
       trim(optimization_type(i)) /= 'target-drag' .and.                        &
-      trim(optimization_type(i)) /= 'target-max-drag' .and.                    &
       trim(optimization_type(i)) /= 'target-lift' .and.                        &
       trim(optimization_type(i)) /= 'max-xtr' .and.                            &
       trim(optimization_type(i)) /= 'min-lift-slope' .and.                     &
@@ -1011,8 +1010,8 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
       trim(optimization_type(i)) /= 'max-lift-slope')                          &
       call my_stop("optimization_type must be 'min-drag', 'max-glide', "//     &
                    "'min-sink', 'max-lift', 'max-xtr', 'target-moment', "//    &
-                   "'target-drag', 'min-lift-slope', , 'min-glide-slope',"//   &
-                   "'target-max-drag' or 'max-lift-slope'.")
+                   "'target-drag', 'min-lift-slope', , 'min-glide-slope'"//    &
+                   " or 'max-lift-slope'.")
     if ((trim(optimization_type(i)) == 'max-lift-slope') .and. (noppoint == 1))&
       call my_stop("at least two operating points are required for to "//      &
                    "maximize lift curve slope.")
@@ -1036,10 +1035,6 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
         (target_value(i)) == -1.d3) )                                         &
       call my_stop("No 'target-value' defined for "//  &
                      "for optimization_type 'target-drag'")
-    if (((trim(optimization_type(i)) == 'target-max-drag') .and.                 &
-        (target_value(i)) == -1.d3) )                                         &
-      call my_stop("No 'target-value' defined for "//  &
-                    "for optimization_type 'target-max-drag'")
     if (((trim(optimization_type(i)) == 'target-lift') .and.                  &
         (target_value(i)) == -1.d3) )                                         &
       call my_stop("No 'target-value' defined for "//  &
@@ -1048,6 +1043,18 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
 
 
 ! Constraints
+
+  if ((trim(shape_functions) == 'camb-thick') .or. &
+  (trim(shape_functions) == 'camb-thick-plus')) then
+    ! in case of camb_thick checking of curvature makes no sense
+    if (check_curvature) then 
+      call print_note ("Because of shape function 'camb-thick' ckecking of "// &
+                      "curvature will be switched off")
+      check_curvature = .false. 
+      auto_curvature  = .false. 
+    end if 
+  end if 
+
 
   if (check_curvature ) then 
     if (curv_threshold <= 0.d0)    call my_stop("curv_threshold must be > 0.")
@@ -1252,18 +1259,6 @@ subroutine read_geo_constraints_inputs  (input_file, &
                          max_curv_reverse_top, max_curv_reverse_bot,  &
                          max_curv_highlow_top, max_curv_highlow_bot
 
-! Defaults
-
-  check_curvature      = .true.
-  auto_curvature       = .true.
-
-  highlow_threshold     = 0.03d0
-  curv_threshold        = 0.02d0
-  max_te_curvature      = 0.2d0
-  max_curv_reverse_top = 0
-  max_curv_reverse_bot = 0
-  max_curv_highlow_top = 0
-  max_curv_highlow_bot = 0
   
   ! Open input file and read namelist from file
 

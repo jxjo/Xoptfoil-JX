@@ -1019,6 +1019,9 @@ subroutine get_best_reversal_threshold (npt, x,y, min_curv_thresh, max_reversals
     max_reversals       = 1
   end if 
 
+  ! allow a liitle more to "live"
+  best_threshold = best_threshold * 1.1d0
+
 end subroutine get_best_reversal_threshold
 
 !-------------------------------------------------------------------------
@@ -1079,6 +1082,10 @@ subroutine get_best_highlow_threshold (npt, x,y, min_highlow_thresh, max_highlow
     write (*,'(A,F6.3)') '!! Watch out - 1 highlow already with ', min_for_0
     max_highlows      = 1
   end if 
+
+  ! allow a liitle more to "live"
+  best_threshold = best_threshold * 1.1d0
+
 
 end subroutine get_best_highlow_threshold
 

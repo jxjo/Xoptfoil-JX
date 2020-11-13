@@ -873,6 +873,7 @@ end subroutine xfoil_scale_thickness_camber
 !   maxc  - new camber
 !   xmaxc - new max camber position
 !
+!   if one of the values = 0.0 then this value is not set
 ! 
 ! ** Note ** 
 !
@@ -905,12 +906,20 @@ subroutine xfoil_set_thickness_camber (infoil, maxt, xmaxt, maxc, xmaxc, outfoil
 ! Run xfoil to change thickness and camber 
   CFAC = 1.0
   TFAC = 1.0
-  IF(camb .NE.0.0 .AND. maxc.NE.999.0) CFAC = maxc / camb
-  IF(thick.NE.0.0 .AND. maxt.NE.999.0) TFAC = maxt / thick
+
+  if (maxc > 0.0d0) then
+    IF(camb .NE.0.0 .AND. maxc.NE.999.0) CFAC = maxc / camb
+  end if
+  if (maxt > 0.0d0) then
+    IF(thick.NE.0.0 .AND. maxt.NE.999.0) TFAC = maxt / thick
+  end if 
+
   call THKCAM ( TFAC, CFAC)
 
 ! Run xfoil to change highpoint of thickness and camber 
-  call HIPNT (xmaxc, xmaxt)
+
+  if((xmaxc > 0d0) .and. (xmaxt > 0d0)) &
+    call HIPNT (xmaxc, xmaxt)
 
 ! Recalc values ...
   call xfoil_get_geometry_info (thick, xthick, camb, xcamb) 
