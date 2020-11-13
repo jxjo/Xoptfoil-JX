@@ -13,8 +13,9 @@ Not final - current dev state
 - auto-detection and setting of curvature constraints especially for Hicks-Henne (default: auto_curvature = .true.)
 - auto-smoothing of surface when seed quuality is not good enough (new default: do_smoothing = .true.)
 - new screen output during ps optimization to get more details about particles work
-- experimental: new target type "target_max_drag" which tries to optimize the drag at an operating point to be smaller than the target value. So drag may be smaller, but shouldn't be higher. This option helps to find a faster balance between all target values.
+- removed experimental: new target type "target_max_drag" which tries to optimize the drag at an operating point to be smaller than the target value. So drag may be smaller, but shouldn't be higher. This option helps to find a faster balance between all target values.
 - multi-threading now supports 'show_details = .true.' for more information (entertainment) during the optimization process  
+- experimental: particle retry if geometry fails to improve optimization speed
 
 #### Xfoil_worker
 
