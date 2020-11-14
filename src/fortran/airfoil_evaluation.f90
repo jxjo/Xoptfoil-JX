@@ -68,9 +68,16 @@ function objective_function(designvars, evaluate_only_geometry)
 ! create the foil to evaluate out of seed foil + current design (shape functions)
   call create_airfoil_form_design (seed_foil, designvars, foil)
 
-! special treatment for match_foil mode
+! Objective function - special treatment for match_foil mode
+
   if (match_foils) then
-    objective_function = matchfoil_objective_function(foil)
+!   check the geometry for violations
+    geo_penalty = geo_penalty_function (foil, actual_flap_degrees)
+
+    objective_function = matchfoil_objective_function(foil) + geo_penalty
+
+! Objective function - the master 
+
   else
 
 !   if flaps activated, the flap angle at an op will be part of the design space
@@ -676,7 +683,7 @@ end function aero_objective_function
 function matchfoil_objective_function(foil)
 
   use math_deps,       only : norm_2
-  use vardef,          only : zmatcht, zmatchb
+  use vardef,          only : foil_to_match
 
   type(airfoil_type), intent(in)    :: foil
   double precision :: matchfoil_objective_function
@@ -688,8 +695,8 @@ function matchfoil_objective_function(foil)
 
 ! Evaluate the new airfoil, (not-> changed)  counting fixed LE and TE points
 
-  match_delta = norm_2(foil%zt(2:nptt-1) - zmatcht(2:nptt-1)) + &
-                norm_2(foil%zb(2:nptb-1) - zmatchb(2:nptb-1))
+  match_delta = norm_2(foil%zt(2:nptt-1) - foil_to_match%zt(2:nptt-1)) + &
+                norm_2(foil%zb(2:nptb-1) - foil_to_match%zb(2:nptb-1))
   if (match_delta < 1d-10)  match_delta = 1d-1 
 
   ! Scale result to initial value 1.
@@ -963,9 +970,6 @@ function write_airfoil_optimization_progress(designvars, designcounter)
   foilunit = 13
   polarunit = 14
 
-  write(text,*) designcounter
-  text = adjustl(text)
-
 ! Open files and write headers, if necessary
 
   if (designcounter == 0) then
@@ -1164,6 +1168,18 @@ function write_matchfoil_optimization_progress(designvars, designcounter)
   character(100) :: foilfile, text, title
   integer :: foilunit
 
+  write(text,*) designcounter
+  text = adjustl(text)
+
+  if (designcounter == 0) then
+    write (*,'(4x,A)') '-> Writing seed airfoil to file '//trim(output_prefix)//'[...].dat'
+  else
+    write (*,'(2x,A)', advance ='no') '-> Writing design '
+    call  print_colored (COLOR_HIGH,'#'//trim(text))
+    write (*,*)
+  end if
+
+
 ! Design 0 is seed airfoil to output - take the original values 
 !     Smoothing - Restore the original, not smoothed seed airfoil to
 !                 ...design_coordinates.dat to show it in visualizer
@@ -1195,9 +1211,6 @@ function write_matchfoil_optimization_progress(designvars, designcounter)
   if (designcounter == 0) then
 
 !   New File: Header for coordinate file & Seed foil 
-
-    write(*,*) "Writing coordinates for seed airfoil to file "//               &
-               trim(foilfile)//" ..."
     open(unit=foilunit, file=foilfile, status='replace')
     write(foilunit,'(A)') 'title="Airfoil coordinates"'
     write(foilunit,'(A)') 'variables="x" "z"'
@@ -1207,12 +1220,6 @@ function write_matchfoil_optimization_progress(designvars, designcounter)
   else
 
 !   Append to file: Header for design foil coordinates
-
-    write(text,*) designcounter
-    text = adjustl(text)
-
-    write(*,*) "  Writing coordinates for design number "//trim(text)//        &
-               " to file "//trim(foilfile)//" ..."
     open(unit=foilunit, file=foilfile, status='old', position='append', err=910)
     title =  'zone t="Airfoil, maxt='//trim(maxtchar)//&
              ', xmaxt='//trim(xmaxtchar)//', maxc='//&
@@ -1225,13 +1232,16 @@ function write_matchfoil_optimization_progress(designvars, designcounter)
   close(foilunit)
 
 
-  if (designcounter == 0) then
 ! Append the coordinates of the match foil when seed foil is written
-    write_matchfoil_optimization_progress = write_matchfoil_coordinates ()
-  else
-! Set return value (needed for compiler)
-    write_matchfoil_optimization_progress = 0
+  if (designcounter == 0) then
+    write (*,'(4x,A)') '-> Writing foil to match to file '//trim(output_prefix)//'[...].dat'
+
+    open(unit=foilunit, file=foilfile, status='old', position='append', err=910)
+    call  airfoil_write_to_unit (foilunit, 'zone t="Match airfoil"', foil_to_match, .True.)
+    close(foilunit)  
   end if 
+
+  write_matchfoil_optimization_progress = 0
 
   return
 
@@ -1242,63 +1252,6 @@ function write_matchfoil_optimization_progress(designvars, designcounter)
   return
 
 end function write_matchfoil_optimization_progress
-
-
-!=============================================================================80
-!
-! Writes airfoil coordinates of match_foil at the beginning of optimization 
-!
-!=============================================================================80
-function write_matchfoil_coordinates ()
-
-  use memory_util, only : allocate_airfoil
-  use airfoil_operations, only : airfoil_write_to_unit
-
-
-  character(100) :: foilfile
-  integer :: foilunit
-  integer :: write_matchfoil_coordinates
-  integer :: i, nptt, nptb
-  type(airfoil_type) :: tmpfoil
-
-
-  foilfile = trim(output_prefix)//'_design_coordinates.dat'
-  foilunit = 13
-
-  nptt = size(xmatcht,1)
-  nptb = size(xmatchb,1)
-
-  tmpfoil%npoint = nptt + nptb - 1
-  call allocate_airfoil(tmpfoil)
-
-  ! do *not* Format coordinates in a single loop in derived type
-  !     to have the real working foil in visualizer
-  do i = 1, nptt
-    tmpfoil%x(i) = xmatcht(nptt-i+1)
-    tmpfoil%z(i) = zmatcht(nptt-i+1)
-  end do
-  do i = 1, nptb-1
-    tmpfoil%x(i+nptt) = xmatchb(i+1)
-    tmpfoil%z(i+nptt) = zmatchb(i+1)
-  end do
-
-  write(*,*) "Writing coordinates for match airfoil to file "//trim(foilfile)//" ..."
-
-  open(unit=foilunit, file=foilfile, status='old', position='append', err=910)
-  call  airfoil_write_to_unit (foilunit, 'zone t="Match airfoil"', tmpfoil, .True.)
-  close(foilunit)
-
-  write_matchfoil_coordinates = 0
-
-  return
-
-! Warning if there was an error opening design_coordinates file
-
-910 write(*,*) "Warning: unable to open "//trim(foilfile)//". Skipping ..."
-  write_matchfoil_coordinates = 1
-  return
-
-end function write_matchfoil_coordinates
 
 
 end module airfoil_evaluation

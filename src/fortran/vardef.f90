@@ -93,8 +93,7 @@ module vardef
   character(16) :: shape_functions
 
 ! Match foil mode
-! jx-refactor: switch to airfoil_type for match coordinates
-  double precision, dimension(:), allocatable :: xmatcht, xmatchb, zmatcht, zmatchb
+  type(airfoil_type) :: foil_to_match
   logical :: match_foils
   double precision :: match_foils_scale_factor 
   

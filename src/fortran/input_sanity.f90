@@ -282,8 +282,8 @@ subroutine check_seed()
 ! If mode match_foils end here with checks as it becomes aero specific, calc scale
 
   if (match_foils) then
-    match_delta = norm_2(zt(2:nptt-1) - zmatcht(2:nptt-1)) + &
-                  norm_2(zb(2:nptb-1) - zmatchb(2:nptb-1))
+    match_delta = norm_2(zt(2:nptt-1) - foil_to_match%zt(2:nptt-1)) + &
+                  norm_2(zb(2:nptb-1) - foil_to_match%zb(2:nptb-1))
     ! Playground: Match foil equals seed foil. Take a dummy objective value to start
     if (match_delta < 1d-10) then 
       call ask_stop('Match foil and seed foil are equal. A dummy initial value '// &

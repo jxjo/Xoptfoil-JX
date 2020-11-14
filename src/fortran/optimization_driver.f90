@@ -31,11 +31,9 @@ module optimization_driver
 !=============================================================================80
 subroutine matchfoils_preprocessing(matchfoil_file)
 
-  use vardef,             only : airfoil_type, xmatcht, xmatchb, zmatcht,      &
-                                 zmatchb, symmetrical, npan_fixed
+  use vardef,             only : airfoil_type, foil_to_match, symmetrical, npan_fixed
   use vardef,             only : seed_foil
-  use memory_util,        only : deallocate_airfoil
-  use airfoil_operations, only : get_seed_airfoil, get_split_points,           &
+  use airfoil_operations, only : get_seed_airfoil,  rebuild_airfoil,           &
                                  split_airfoil, my_stop
   use airfoil_operations, only : repanel_and_normalize_airfoil
   use math_deps,          only : interp_vector
@@ -45,10 +43,10 @@ subroutine matchfoils_preprocessing(matchfoil_file)
   
   character(*), intent(in) :: matchfoil_file
 
-  type(airfoil_type) :: match_foil, original_foil
+  type(airfoil_type) :: original_foil
   type(naca_options_type) :: dummy_naca_options
   integer :: pointst, pointsb
-  double precision, dimension(:), allocatable :: zttmp, zbtmp
+  double precision, dimension(:), allocatable :: zttmp, zbtmp, xmatcht, xmatchb, zmatcht, zmatchb
 
   call print_note ('Using the optimizer to match the seed airfoil to the '//&
                    'airfoil about to be loaded.')
@@ -63,19 +61,13 @@ subroutine matchfoils_preprocessing(matchfoil_file)
 
   call get_seed_airfoil('from_file', matchfoil_file, dummy_naca_options, original_foil)
 
-! Repanel to npan_fixed points and normalize to get LE at 0,0 and TE (1,0)
+! Repanel to npan_fixed points and normalize to get LE at 0,0 and TE (1,0) and split
 
-  call repanel_and_normalize_airfoil (original_foil, npan_fixed, match_foil)
+  call repanel_and_normalize_airfoil (original_foil, npan_fixed, foil_to_match)
+  call split_airfoil(foil_to_match, xmatcht, xmatchb, zmatcht, zmatchb, .false.)
 
-! Split match_foil into upper and lower halves
-
-  call split_airfoil(match_foil, xmatcht, xmatchb, zmatcht, zmatchb, .false.)
-
-! Deallocate derived type version of airfoil being matched
-
-  call deallocate_airfoil(match_foil)
-
-! Interpolate x-vals of foil to match to seed airfoil points to x-vals
+! Interpolate x-vals of foil to match to seed airfoil points to x-vals 
+!    - so the z-values can later be compared
 
   pointst = size(seed_foil%xt,1)
   pointsb = size(seed_foil%xb,1)
@@ -90,25 +82,11 @@ subroutine matchfoils_preprocessing(matchfoil_file)
 
 ! Re-set coordinates of foil to match from interpolated points
     
-  deallocate(xmatcht)
-  deallocate(zmatcht)
-  deallocate(xmatchb)
-  deallocate(zmatchb)
-  allocate(xmatcht(pointst))
-  allocate(zmatcht(pointst))
-  allocate(xmatchb(pointsb))
-  allocate(zmatchb(pointsb))
-  xmatcht = seed_foil%xt
-  xmatchb = seed_foil%xb
-  zmatcht = zttmp
-  zmatchb = zbtmp
-
-! Deallocate temporary arrays
-
-  deallocate(zttmp)
-  deallocate(zbtmp)
+  call rebuild_airfoil(seed_foil%xt, seed_foil%xb, zttmp, zbtmp, foil_to_match)
 
 end subroutine matchfoils_preprocessing
+
+
 
 !=============================================================================80
 !
@@ -302,7 +280,6 @@ subroutine optimize(search_type, global_search, local_search, constrained_dvs, &
     if (trim(global_search) == 'particle_swarm') then
 
 !     Particle swarm optimization
-
       call particleswarm(optdesign, fmin, stepsg, fevalsg, objective_function, &
                          x0, xmin, xmax, .true., f0_ref, constrained_dvs,      &
                          pso_options, designcounter, stop_reason, write_function)
@@ -488,20 +465,20 @@ end subroutine write_final_design
 !-----------------------------------------------------------------------------
 subroutine write_matchfoil_summary (zt_new, zb_new)
 
-  use vardef, only    : seed_foil, zmatcht, zmatchb
+  use vardef, only    : seed_foil, foil_to_match
   
   double precision, dimension(size(seed_foil%xt,1)), intent(in) :: zt_new
   double precision, dimension(size(seed_foil%xb,1)), intent(in) :: zb_new
   double precision :: maxdeltat, maxdeltab, averaget, averageb, maxdt_rel, maxdb_rel
 
-  maxdeltat = maxval(abs (zt_new - zmatcht))
-  maxdeltab = maxval(abs (zb_new - zmatchb))
+  maxdeltat = maxval(abs (zt_new - foil_to_match%zt))
+  maxdeltab = maxval(abs (zb_new - foil_to_match%zb))
 
-  maxdt_rel = (maxdeltat / maxval(abs (zmatcht))) * 100.d0
-  maxdb_rel = (maxdeltab / maxval(abs (zmatchb))) * 100.d0
+  maxdt_rel = (maxdeltat / maxval(abs (foil_to_match%zt))) * 100.d0
+  maxdb_rel = (maxdeltab / maxval(abs (foil_to_match%zb))) * 100.d0
  
-  averaget  = sum (zt_new - zmatcht) / size(seed_foil%xt,1)
-  averageb  = sum (zb_new - zmatchb) / size(seed_foil%xb,1)
+  averaget  = sum (zt_new - foil_to_match%zt) / size(seed_foil%xt,1)
+  averageb  = sum (zb_new - foil_to_match%zb) / size(seed_foil%xb,1)
 
   write(*,*)
   write(*,'(A)') " Match airfoil deviation summary"
