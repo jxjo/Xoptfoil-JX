@@ -49,8 +49,15 @@ module particle_swarm
                                   ! solutions 
     logical :: write_particlefile ! Whether to write particle-values for each
                                   ! iteration to file
-    integer :: max_retries        ! max. number of retries a single particle tries to 
-                                  ! get a valied geometry
+    integer :: max_retries = 0    ! experimental: max. number of retries a single 
+                                  ! particle tries to get a valid geometry
+
+                                         ! experimental: for direct maipulation in inputs 
+    double precision :: c1 = 0d0         ! particle-best trust factor
+    double precision :: c2 = 0d0         ! swarm-best trust factor
+    double precision :: whigh = 0d0      ! starting inertial parameter
+    double precision :: wlow = 0d0       ! ending inertial parameter
+    double precision :: convrate = 0d0   ! inertial parameter reduction rate
 
   end type pso_options_type
 
@@ -114,7 +121,8 @@ subroutine particleswarm(xopt, fmin, step, fevals, objfunc, x0, xmin, xmax,    &
   character(25) :: relfminchar
   character(80), dimension(20) :: commands
   integer       :: i_retry
-
+  integer       :: total_geo_fail = 0 
+  
   nconstrained = size(constrained_dvs,1)
 
 ! PSO tuning variables
@@ -155,6 +163,12 @@ subroutine particleswarm(xopt, fmin, step, fevals, objfunc, x0, xmin, xmax,    &
     stop
   end if
 
+! experimental: to allow direct manipulation of parms in inputs 
+  if (pso_options%c1 > 0d0)       c1        = pso_options%c1
+  if (pso_options%c2 > 0d0)       c2        = pso_options%c2
+  if (pso_options%whigh > 0d0)    whigh     = pso_options%whigh
+  if (pso_options%wlow > 0d0)     wlow      = pso_options%wlow
+  if (pso_options%convrate > 0d0) convrate  = pso_options%convrate
 ! Speed limits
 
   maxspeed = abs(pso_options%maxspeed)
@@ -279,7 +293,7 @@ subroutine particleswarm(xopt, fmin, step, fevals, objfunc, x0, xmin, xmax,    &
 !$omp end master
 !$omp barrier
 
-!$omp do 
+!$omp do REDUCTION (+:total_geo_fail)
 ! $omp do ORDERED SCHEDULE(DYNAMIC)       
 
 !   Update each particle's position, evaluate objective function, etc.
@@ -320,17 +334,17 @@ subroutine particleswarm(xopt, fmin, step, fevals, objfunc, x0, xmin, xmax,    &
   !     Valid result --> proceed
         if (objval(i) < OBJ_GEO_FAIL) exit
 
-        i_retry = i_retry + 1
+        total_geo_fail = total_geo_fail + 1   ! see omp do
 
-        if (i_retry > pso_options%max_retries) exit
+        if (i_retry >= pso_options%max_retries) exit
+
+        i_retry = i_retry + 1
 
   !     Invalid result - particles violated geometry - try again with new velocity
    
         dv(:,i) = dv(:,i) - vel(:,i)
         call random_number(speed(i))
         vel(:,i) = speed(i) * vel(:,i) 
-!        vel(:,i) = vel(:,i) * 0.7d0
-!        speed(i) = norm_2(vel(:,i))
   
       end do 
 

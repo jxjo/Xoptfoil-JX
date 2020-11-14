@@ -66,7 +66,7 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
              reinitialize, restart, write_designs, reflexed,                   &
              pso_write_particlefile, repanel
   integer :: restart_write_freq, pso_pop, pso_maxit, simplex_maxit, bl_maxit,  &
-             npan, feasible_init_attempts, pso_max_retries
+             npan, feasible_init_attempts
   integer :: ga_pop, ga_maxit
   double precision :: maxt, xmaxt, maxc, xmaxc, design_cl, a, leidx
   double precision :: pso_tol, simplex_tol, ncrit, xtript, xtripb, vaccel
@@ -123,7 +123,8 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
                             feasible_init_attempts
   namelist /particle_swarm_options/ pso_pop, pso_tol, pso_maxit,               &
                                     pso_convergence_profile,                   &
-                                    pso_write_particlefile, pso_max_retries
+                                    pso_write_particlefile,                    &
+                                    pso_options       ! allow direct manipulation
   namelist /genetic_algorithm_options/ ga_pop, ga_tol, ga_maxit,               &
             parents_selection_method, parent_fraction,                         &
             roulette_selection_pressure, tournament_fraction,                  &
@@ -415,7 +416,6 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
   pso_pop = 40
   pso_tol = 1.D-04
   pso_maxit = 700
-  pso_max_retries = 0 
   pso_write_particlefile = .false.
 
   if ((trim(shape_functions) == 'camb-thick' ) .or. &
@@ -512,13 +512,12 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
       pso_options%feasible_limit = feasible_limit
       pso_options%feasible_init_attempts = feasible_init_attempts
       pso_options%write_designs = write_designs
-      pso_options%max_retries = pso_max_retries
       if (.not. match_foils) then
         pso_options%relative_fmin_report = .true.
       else
         pso_options%relative_fmin_report = .false.
       end if
-
+ 
     else if (trim(global_search) == 'genetic_algorithm') then
 
 !     Read genetic algorithm options and put them into derived type
