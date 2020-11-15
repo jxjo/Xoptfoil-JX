@@ -791,7 +791,7 @@ class inputFile:
         if params.ReAlpha0 > 0:
             reynolds = params.ReAlpha0
         else:
-            reynolds = maxRe_root
+            reynolds = 800000
 
         # insert op-Point, get index
         idx = self.insert_OpPoint('alpha0', 'spec-al', alpha, 'target-lift',
@@ -951,9 +951,9 @@ class strakData:
         self.useAlwaysRootfoil = False
         self.showTargetPolars = True
         self.adaptInitialPerturb = False
-        self.smoothSeedfoil = True
-        self.smoothStrakFoils = True
-        self.smoothMatchPolarFoil = True
+        self.smoothSeedfoil = False
+        self.smoothStrakFoils = False
+        self.smoothMatchPolarFoil = False
         self.plotStrakPolars = True
         self.ReNumbers = []
         self.additionalOpPoints = [[]]
@@ -2398,6 +2398,11 @@ def generate_Commandlines(params):
     # create an empty list of commandlines
     commandLines = []
 
+    # append time-measurement
+    timeFileName = buildPath + bs + "times.txt"
+    commandLines.append("del %s\n" % timeFileName)
+    commandLines.append("echo start-time %%TIME%% >> %s\n" % timeFileName)
+
     # do some initializations / set local variables
     if (params.operatingMode != 'matchpolarfoils'):
         rootfoilName = get_FoilName(params, 0)
@@ -2471,6 +2476,9 @@ def generate_Commandlines(params):
     commandline = "cd..\n"
     commandLines.append(commandline)
 
+    # append time-measurement
+    commandLines.append("echo end-time %%TIME%% >> %s\n" % timeFileName)
+
     # pause in the end
     commandline = "pause\n"
     commandLines.append(commandline)
@@ -2502,6 +2510,12 @@ def generate_Batchfile(batchFileName, commandlines):
 def get_strak_commandlines(params, commandlines, idx):
     strak_commandlines = []
     Re = str(params.ReNumbers[idx])
+    reString = get_ReString(params.ReNumbers[idx])
+    timeFileName = buildPath + bs + "times_%s.txt" % reString
+
+    # append time-measurement
+    strak_commandlines.append("del %s\n" % timeFileName)
+    strak_commandlines.append("echo start-time %%TIME%% >> %s\n" % timeFileName)
 
     # change current working dir to output folder
     strak_commandlines.append("cd %s\n\n" % buildPath)
@@ -2524,6 +2538,10 @@ def get_strak_commandlines(params, commandlines, idx):
 
     # change back directory
     strak_commandlines.append("cd..")
+
+    # append time-measurement
+    strak_commandlines.append("echo end-time %%TIME%% >> %s\n" % timeFileName)
+
     return strak_commandlines
 
 
@@ -2914,7 +2932,7 @@ def copyAndSmooth_Airfoil(srcName, srcPath, destName, smooth):
     else:
         print("Renaming airfoil \'%s\' to \'%s\'\n" % (srcName, destName))
         # only reanme and copy the airfoil
-        change_airfoilName (srcfoilNameAndPath, destName + '.dat')
+        change_airfoilname.change_airfoilName(srcfoilNameAndPath, destName + '.dat')
         DoneMsg()
 
 
