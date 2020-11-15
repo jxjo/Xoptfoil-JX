@@ -108,8 +108,8 @@ PLanformDict =	{
             "leadingEdgeOrientation": 'up',
             # length of the root-chord in m
             "rootchord": 0.223,
-            # depth of the tip in percent of the chord-length
-            "tipDepthPercent": 8.0,
+            # length of the tip-cord in m
+            "tipchord": 0.002,
             # sweep of the tip of the wing in degrees
             "rootTipSweep": 3.2,
             # depth of the aileron / flap in percent of the chord-length
@@ -234,10 +234,6 @@ class wing:
         # strakdata.txt
         self.numberOfSections = len(self.valueList)
 
-##        # add one section to handle the fuselage width, use root-airfoil
-##        # and rectangular shaping for this section
-##        self.numberOfSections = self.numberOfSections + 1
-
         # determine reynolds-nuiber for root-airfoil
         self.rootReynolds = self.valueList[0]
 
@@ -246,7 +242,8 @@ class wing:
         self.wingspan = dictData["wingspan"]
         self.fuselageWidth = dictData["fuselageWidth"]
         self.planformShape = dictData["planformShape"]
-        self.tipDepthPercent = dictData["tipDepthPercent"]
+        self.tipchord = dictData["tipchord"]
+        self.tipDepthPercent = (self.tipchord/self.rootchord)*100
         self.halfwingspan = (self.wingspan/2)-(self.fuselageWidth/2)
         #self.numberOfGridChords = #self.numberOfSections * 256 use fixed number of grid-chords
         self.rootTipSweep = dictData["rootTipSweep"]
@@ -454,8 +451,9 @@ class wing:
         quarterChordLine = []
         tipLine = []
 
-        # setup empty list for new x-tick locations
-        new_tick_locations = []
+        # setup empty lists for new tick locations
+        x_tick_locations = []
+        y_tick_locations = [self.rootchord]
 
         # set axes and labels
         self.set_AxesAndLabels(ax, "Half-wing planform")
@@ -498,10 +496,15 @@ class wing:
             bbox=dict(boxstyle="round", facecolor = 'gray', alpha=0.5), fontsize=fs_infotext, rotation='vertical', arrowprops=props)
 
             # append position of section to x-axis ticks
-            new_tick_locations.append(xPos)
+            x_tick_locations.append(xPos)
+
+            # append position of leading edge and trailing edge to y-axis-ticks
+            y_tick_locations.append(element.leadingEdge)
+            #y_tick_locations.append(element.trailingEdge)
 
         # set new ticks for the x-axis according to the positions of the sections
-        ax.set_xticks(new_tick_locations)
+        ax.set_xticks(x_tick_locations)
+        ax.set_yticks(y_tick_locations)
 
         # set new fontsize of the x-tick labels
         for tick in ax.xaxis.get_major_ticks():
@@ -590,13 +593,14 @@ class wing:
         # set axes and labels
         self.set_AxesAndLabels(ax, "Full-wing planform")
 
+
         # build up list of x-values,
         # first left half-wing
         for element in self.grid:
-            xValues.append(element.y)
+            xValues.append(element.y-(self.fuselageWidth/2))
 
         # offset for beginning of right half-wing
-        xOffset = self.halfwingspan + self.fuselageWidth
+        xOffset = self.halfwingspan + self.fuselageWidth/2
 
         # center-section / fuselage (x)
         lastElement = len(xValues)-1
@@ -646,6 +650,8 @@ class wing:
         ax.plot(leftWingRoot_x, wingRoot_y, color=cl_planform,
                 linewidth = lw_planform)
 
+        ax.arrow(self.wingspan/2, 0.0, 0.0, -1*(self.rootchord/3),head_width=self.fuselageWidth/4)
+
         ax.plot(rightWingRoot_x, wingRoot_y, color=cl_planform,
                 linewidth = lw_planform)
 
@@ -668,6 +674,22 @@ class wing:
         # fill the wing
         ax.fill_between(xValues, leadingEdge, hingeLine, color=cl_planform, alpha=0.4)
         ax.fill_between(xValues, hingeLine, trailingeEge, color=cl_hingeLine, alpha=0.4)
+
+        # setup list for new x-tick locations
+        new_tick_locations = [0.0, self.halfwingspan, (self.halfwingspan + self.fuselageWidth/2),
+                             (self.halfwingspan + self.fuselageWidth),self.wingspan]
+
+        # set new ticks for the x-axis according to the positions of the sections
+        ax.set_xticks(new_tick_locations)
+
+        # set new fontsize of the x-tick labels
+        for tick in ax.xaxis.get_major_ticks():
+            tick.label.set_fontsize(fs_tick)
+            tick.label.set_rotation('vertical')
+
+        # set new fontsize of the y-tick labels
+        for tick in ax.yaxis.get_major_ticks():
+            tick.label.set_fontsize(fs_tick)
 
 
     def set_AxesAndLabels(self, ax, title):
