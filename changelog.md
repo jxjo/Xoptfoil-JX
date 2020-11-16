@@ -19,6 +19,8 @@ Not final - current dev state
 
 #### Xfoil_worker
 
+- added new option "-w set" which allows to modify thickness, camber and their positions  
+
 - added new option "-w check" to check the surface (curvature) quality of an airfoil and tell about best optimization options 
 
 
