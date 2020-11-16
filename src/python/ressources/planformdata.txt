@@ -1,0 +1,17 @@
+{
+ "planformName": "main wing",
+ "templateFileName": "plane_template.xml", 
+ "outFileName": "MainWing.xml",
+ "isFin": "false",
+ "wingspan": 2.98,
+ "rootchord": 0.243,
+ "tipchord": 0.008,
+ "rootTipSweep": 4.2,
+ "fuselageWidth": 0.045,
+ "planformShape": "elliptical",
+ "leadingEdgeOrientation": "up",
+ "hingeDepthPercent": 23.5,
+ "dihedral": 2.5,
+ "showQuarterChordLine": "true",
+ "showTipLine": "true",
+ "showHingeLine": "true"}
