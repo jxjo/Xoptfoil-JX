@@ -918,8 +918,13 @@ subroutine xfoil_set_thickness_camber (infoil, maxt, xmaxt, maxc, xmaxc, outfoil
 
 ! Run xfoil to change highpoint of thickness and camber 
 
-  if((xmaxc > 0d0) .and. (xmaxt > 0d0)) &
+  if((xmaxc > 0d0) .and. (xmaxt > 0d0)) then
     call HIPNT (xmaxc, xmaxt)
+  elseif((xmaxc > 0d0) .and. (xmaxt == 0d0)) then
+    call HIPNT (xmaxc, xthick)
+  elseif((xmaxc == 0d0) .and. (xmaxt > 0d0)) then
+    call HIPNT (xcamb, xmaxt)
+  end if 
 
 ! Recalc values ...
   call xfoil_get_geometry_info (thick, xthick, camb, xcamb) 

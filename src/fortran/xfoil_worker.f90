@@ -24,8 +24,8 @@ program xfoil_worker
   use memory_util,        only : deallocate_airfoil
   use os_util 
   use airfoil_operations, only : load_airfoil, my_stop, airfoil_write,le_find
-  use xfoil_driver,       only : xfoil_init, xfoil_cleanup 
-  use xfoil_driver,       only : xfoil_set_airfoil, xfoil_reload_airfoil
+  use xfoil_driver,       only : xfoil_init, xfoil_cleanup, xfoil_options_type
+  use xfoil_driver,       only : xfoil_set_airfoil, xfoil_reload_airfoil, xfoil_defaults
   use polar_operations,   only : check_and_do_polar_generation
 
   implicit none
@@ -35,8 +35,10 @@ program xfoil_worker
 #endif
 
   type(airfoil_type) :: foil
+  type (xfoil_options_type) :: xfoil_options
+
   character(255)     :: input_file, output_prefix, airfoil_filename
-  character(20)      :: action
+  character(20)      :: action, value_argument
   logical            :: visualizer
 
   write(*,'(A)') 
@@ -48,7 +50,8 @@ program xfoil_worker
   action            = ''
   airfoil_filename  = ''
   visualizer        = .false.
-  call read_worker_clo(input_file, output_prefix, airfoil_filename, action, visualizer)
+  call read_worker_clo(input_file, output_prefix, airfoil_filename, action, & 
+                       value_argument, visualizer)
 
   if (trim(action) == "") &
     call my_stop("Must specify an action for the worker with -w option.")
@@ -60,6 +63,10 @@ program xfoil_worker
 
 ! Allocate xfoil variables
   call xfoil_init()
+  xfoil_options%silent_mode = .true.
+  call xfoil_defaults(xfoil_options)
+
+
 
 ! Do actions according command line option
 
@@ -68,42 +75,42 @@ program xfoil_worker
     case ('polar')        ! Generate polars in subdirectory ".\<output_prefix>_polars\*.*
 
       if (trim(output_prefix) == '') & 
-        output_prefix = airfoil_filename (1:(index (airfoil_filename,'.') - 1))
+        output_prefix = airfoil_filename (1:(index (airfoil_filename,'.', back = .true.) - 1))
 
       call check_and_do_polar_generation (input_file, output_prefix, foil)
 
     case ('norm')         ! Repanel, Normalize into "<output_prefix>.dat"
 
       if (trim(output_prefix) == '') & 
-        output_prefix = airfoil_filename (1:(index (airfoil_filename,'.') - 1))//'-norm'
+        output_prefix = airfoil_filename (1:(index (airfoil_filename,'.', back = .true.) - 1))//'-norm'
 
       call repanel_smooth (input_file, output_prefix, foil, visualizer, .false.)
 
     case ('smooth')       ! Repanel, Normalize and smooth into "<output_prefix>.dat"
 
       if (trim(output_prefix) == '') & 
-        output_prefix = airfoil_filename (1:(index (airfoil_filename,'.') - 1))//'-smoothed'
+        output_prefix = airfoil_filename (1:(index (airfoil_filename,'.', back = .true.) - 1))//'-smoothed'
 
       call repanel_smooth (input_file, output_prefix, foil, visualizer, .true.)
   
     case ('flap')         ! Repaneland set flap into "<output_prefix>.dat"
 
       if (trim(output_prefix) == '') & 
-        output_prefix = airfoil_filename (1:(index (airfoil_filename,'.') - 1))//'-flap'
+        output_prefix = airfoil_filename (1:(index (airfoil_filename,'.',back = .true.) - 1))//'-flap'
 
       call set_flap (input_file, output_prefix, foil, visualizer)
 
     case ('check')        ! Check the curvature quality of airfoil surface
 
       if (trim(output_prefix) == '') & 
-        output_prefix = airfoil_filename (1:(index (airfoil_filename,'.') - 1))
+        output_prefix = airfoil_filename (1:(index (airfoil_filename,'.', back = .true.) - 1))
       call check_foil_curvature (input_file, output_prefix, foil, visualizer)
 
-    case ('test')         ! Test for change max thickness location 
+    case ('set')         ! set geometry value like thickness etc...
       
       if (trim(output_prefix) == '') & 
-        output_prefix = airfoil_filename (1:(index (airfoil_filename,'.') - 1))//'-t'
-      call test_set_thickness (output_prefix, foil)
+        output_prefix = airfoil_filename (1:(index (airfoil_filename,'.', back = .true.) - 1))
+      call set_geometry_value (output_prefix, foil, value_argument, visualizer)
 
     case default
 
@@ -124,52 +131,63 @@ end program xfoil_worker
 ! dev: test setting thickness of foil
 !-------------------------------------------------------------------------
 
-subroutine test_set_thickness (output_prefix, seed_foil)
+subroutine set_geometry_value (output_prefix, seed_foil, value_argument, visualizer)
 
   use vardef,             only: airfoil_type
   use os_util
   use xfoil_driver,       only : xfoil_set_thickness_camber
-  use airfoil_operations, only : airfoil_write
+  use airfoil_operations, only : airfoil_write, my_stop
 
-
-  character(*), intent(in)     :: output_prefix
+  character(*), intent(in)     :: output_prefix, value_argument
   type (airfoil_type), intent (inout)  :: seed_foil
+  logical, intent(in)          :: visualizer
 
   type (airfoil_type) :: foil
-  double precision, dimension(:), allocatable :: thickness_val
-  character (80)      :: thick_str
-  integer             :: i 
-  logical             :: visualizer
+  character (20)     :: value_str, label
+  character (2)      :: value_type
 
-  thickness_val = (/ 0.074d0, 0.075d0, 0.078d0, 0.080d0 /)
-  visualizer = .true.
-  
+  value_type = value_argument (1:(index (value_argument,'=') - 1))
+  value_str  = value_argument ((index (value_argument,'=') + 1):)
+
+  read (value_str ,*) value_number  
+
+  write (*,*) 
+
+  select case (trim(value_type))
+
+    case ('t') 
+      write (*,'(1x,A)') 'Setting thickness to '//trim(adjustl(value_str))//'%'
+      call xfoil_set_thickness_camber (seed_foil, (value_number / 100d0), 0d0, 0d0, 0d0, foil)
+
+    case ('xt') 
+      write (*,'(1x,A)') 'Setting max. thickness position to '//trim(adjustl(value_str))//'%'
+      call xfoil_set_thickness_camber (seed_foil, 0d0, (value_number / 100d0), 0d0, 0d0, foil)
+
+    case ('c') 
+      write (*,'(1x,A)') 'Setting camber to '//trim(adjustl(value_str))//'%'
+      call xfoil_set_thickness_camber (seed_foil, 0d0, 0d0, (value_number / 100d0), 0d0, foil)
+
+    case ('xc') 
+      write (*,'(1x,A)') 'Setting max. camber position to '//trim(adjustl(value_str))//'%'
+      call xfoil_set_thickness_camber (seed_foil, 0d0, 0d0, 0d0, (value_number / 100d0), foil)
+
+    case default
+      call my_stop ('Unknown type for setting geometry')
+
+  end select
+
+  label     = '-' // (trim(value_type)) // trim(adjustl(value_str))
+  foil%name = trim(output_prefix) // trim(label)
+
+  call airfoil_write   (trim(foil%name)//'.dat', trim(foil%name), foil)
+
+  ! Write airfoil to _design_coordinates using Xoptfoil format for visualizer
   if (visualizer) then 
-    foil%name   = output_prefix
-    call write_design_coordinates (output_prefix, 0, seed_foil)
+    call write_design_coordinates (trim(output_prefix)//label, 0, seed_foil)
+    call write_design_coordinates (trim(output_prefix)//label, 1, foil)
   end if 
 
-
-  do i=1, size (thickness_val)
-
-    call xfoil_set_thickness_camber (seed_foil, thickness_val(i), 0d0, 0d0, 0d0, foil)
-
-    write (thick_str,'(F6.1)') thickness_val(i) * 100d0
-    write (*,'(1x,A)') 'Setting thickness to '//trim(adjustl(thick_str))//'%'
-
-    foil%name   = trim(output_prefix) // trim(adjustl(thick_str))
-
-    call airfoil_write   (trim(foil%name)//'.dat', trim(foil%name), foil)
-
-    ! Write airfoil to _design_coordinates using Xoptfoil format for visualizer
-  
-    if (visualizer) then 
-      call write_design_coordinates (output_prefix, i, foil)
-    end if 
-   
-  end do
-
-end subroutine test_set_thickness
+end subroutine set_geometry_value
 
 
 !-------------------------------------------------------------------------
@@ -197,8 +215,6 @@ subroutine check_foil_curvature (input_file, output_prefix, foil, visualizer)
   logical, intent(in)          :: visualizer
 
   type (airfoil_type)          :: seed_foil
-  type (xfoil_options_type)    :: xfoil_options
-!  type (xfoil_geom_options_type) :: geom_options
 
   double precision, dimension(:), allocatable :: xt, xb, yt, yb
 
@@ -246,10 +262,6 @@ subroutine check_foil_curvature (input_file, output_prefix, foil, visualizer)
   write(*,*)
 
   if (visualizer) then 
-    ! Set default Xfoil parameters
-    xfoil_options%silent_mode = .true.
-    call xfoil_defaults(xfoil_options)
-
     call write_design_coordinates (output_prefix, 0, seed_foil)
     call write_design_coordinates (output_prefix, 1, foil)
   end if 
@@ -542,11 +554,12 @@ end subroutine write_design_coordinates
 ! Reads command line arguments for input file name and output file prefix
 !-------------------------------------------------------------------------
 
-subroutine read_worker_clo(input_file, output_prefix, airfoil_name, action, visualizer)
+subroutine read_worker_clo(input_file, output_prefix, airfoil_name, action, value_argument, &
+                           visualizer)
 
   use airfoil_operations, only : my_stop
 
-  character(*), intent(inout) :: input_file, output_prefix, action, airfoil_name
+  character(*), intent(inout) :: input_file, output_prefix, action, airfoil_name, value_argument
   logical,      intent(inout) :: visualizer
 
   character(80) :: arg
@@ -598,6 +611,10 @@ subroutine read_worker_clo(input_file, output_prefix, airfoil_name, action, visu
       else
         call getarg(i+1, action)
         i = i+2
+        if (trim(action) == 'set') then
+          call getarg(i, value_argument)
+          i = i+1
+        end if 
       end if
     else if (trim(arg) == "-v") then
       visualizer = .true.
