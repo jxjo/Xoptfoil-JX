@@ -2427,6 +2427,12 @@ def generate_Commandlines(params):
     # skip the root airfoil (as it was already copied)
     for i in range (firstIdx, numFoils):
 
+        # append time-measurement start for strak-airfoil-optimization
+        reString = get_ReString(ReList[i])
+        strakTimeFileName = "times_%s.txt" % reString
+        commandLines.append("del %s\n" % strakTimeFileName)
+        commandLines.append("echo start-time %%TIME%% >> %s\n" % strakTimeFileName)
+
         if (params.useAlwaysRootfoil == False):
             # store previous airfoil-name
             previousFoilname = strakFoilName
@@ -2442,6 +2448,9 @@ def generate_Commandlines(params):
                         (iFile, ReList[i], previousFoilname,
                           strakFoilName.strip('.dat'))
         commandLines.append(commandline)
+
+        # time-measurement end
+        commandLines.append("echo end-time %%TIME%% >> %s\n" % strakTimeFileName)
 
         # check wheather the strak-airfoils shall be smoothed after their
         # creation
@@ -2509,13 +2518,7 @@ def generate_Batchfile(batchFileName, commandlines):
 # function that gets commandlines to generate one strak-airfoil
 def get_strak_commandlines(params, commandlines, idx):
     strak_commandlines = []
-    Re = str(params.ReNumbers[idx])
-    reString = get_ReString(params.ReNumbers[idx])
-    timeFileName = buildPath + bs + "times_%s.txt" % reString
-
-    # append time-measurement
-    strak_commandlines.append("del %s\n" % timeFileName)
-    strak_commandlines.append("echo start-time %%TIME%% >> %s\n" % timeFileName)
+    ReString = get_ReString(params.ReNumbers[idx])
 
     # change current working dir to output folder
     strak_commandlines.append("cd %s\n\n" % buildPath)
@@ -2523,8 +2526,8 @@ def get_strak_commandlines(params, commandlines, idx):
 
     for line_idx in range(len(commandlines)):
         # determine start-line
-        if ((commandlines[line_idx].find(Re)>=0) and
-            (commandlines[line_idx].find( 'xoptfoil')>=0)):
+        if ((commandlines[line_idx].find(ReString)>=0) and
+            (commandlines[line_idx].find( 'del')>=0)):
             start = True
 
         if (start and (commandlines[line_idx].find('copy')>=0)):
@@ -2537,11 +2540,7 @@ def get_strak_commandlines(params, commandlines, idx):
             strak_commandlines.append(commandlines[line_idx])
 
     # change back directory
-    strak_commandlines.append("cd..")
-
-    # append time-measurement
-    strak_commandlines.append("echo end-time %%TIME%% >> %s\n" % timeFileName)
-
+    strak_commandlines.append("cd..\n")
     return strak_commandlines
 
 
