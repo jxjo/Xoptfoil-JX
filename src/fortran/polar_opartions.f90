@@ -66,10 +66,11 @@ subroutine check_and_do_polar_generation (input_file, output_prefix, foil)
 
   call read_polar_inputs          (input_file, foil%name, npolars, polars, xfoil_options)
 
-  if (npolars > 0)                                               &
+  if (npolars > 0) then
     call read_xfoil_paneling_inputs (input_file, xfoil_geom_options)
     call generate_polar_files (output_prefix, foil, npolars, polars, &
                                xfoil_geom_options, xfoil_options)
+  end if
 
 end subroutine check_and_do_polar_generation
 
@@ -199,18 +200,19 @@ subroutine read_polar_inputs  (input_file, foil_name, npolars, polars, xfoil_opt
   if (istat == 0) then
 
     read (iunit, iostat=istat, nml=polar_generation)
-    if (.not. generate_polars) return 
-    call namelist_check('polar_generation', istat, 'warn')
+    if (generate_polars) then 
+      call namelist_check('polar_generation', istat, 'warn')
 
-    rewind(iunit)
-    read (iunit, iostat=istat, nml=xfoil_run_options)
-    call namelist_check('xfoil_run_options', istat, 'warn')
-
+      rewind(iunit)
+      read (iunit, iostat=istat, nml=xfoil_run_options)
+      call namelist_check('xfoil_run_options', istat, 'warn')
+    end if
     close (iunit)
   else
     call my_stop('Could not find input file '//trim(input_file)//'.')
   end if
   
+  if (.not. generate_polars) return 
 
 ! if there are no re numbers in input file take from command line
   if (polar_reynolds(1) == 0d0) then
