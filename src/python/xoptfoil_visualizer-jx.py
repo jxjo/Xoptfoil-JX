@@ -442,7 +442,7 @@ def plot_airfoil_coordinates(seedfoil, matchfoil, designfoils, plotnum, firsttim
   plot_foil       = not plotoptions["show_seed_airfoil_only"]
 
   show_info       = plotoptions["show_airfoil_info"]
-  show_transition = False                 # show transition points
+  show_transition = True                 # show transition points
 
   sc = plotoptions["color_for_seed"]
   nc = plotoptions["color_for_new_designs"]
@@ -815,22 +815,22 @@ def plot_polars(seedfoil, designfoils, plotnum, firsttime=True, animation=False,
     x_label = 'Angle of attack'
 
   if plot_seed_polar :
-    axarr[0].plot(seedfoil.alpha, seedfoil.cl,    linestyle='-', color=sc, marker='o')
-    axarr[1].plot(seedfoil.cd,    seedfoil.cl,    linestyle='-', color=sc, marker='o')
-    axarr[3].plot(seedfoil.alpha, seedfoil.cm,    linestyle='-', color=sc, marker='o')
-    axarr[4].plot(seedfoil.xtrt,  seedfoil.alpha, linestyle='-', color=sc, marker='o')
-    axarr[4].plot(seedfoil.xtrb,  seedfoil.alpha, linestyle='--',color=sc, marker='o')
-    axarr[2].plot(seed_x_values,  seedfoil.glide, linestyle='-', color=sc, marker='o')
-    axarr[5].plot(seed_x_values,  seedfoil.climb, linestyle='-', color=sc, marker='o')
+    plot_single_polar (axarr[0], seedfoil.alpha, seedfoil.alpha, seedfoil.cl, '-', sc, 'o')
+    plot_single_polar (axarr[1], seedfoil.alpha, seedfoil.cd, seedfoil.cl, '-', sc, 'o')
+    plot_single_polar (axarr[3], seedfoil.alpha, seedfoil.alpha, seedfoil.cm, '-', sc, 'o')
+    plot_single_polar (axarr[4], seedfoil.alpha, seedfoil.xtrt, seedfoil.alpha, '-', sc, 'o')
+    plot_single_polar (axarr[4], seedfoil.alpha, seedfoil.xtrb, seedfoil.alpha, '--', sc, 'o')
+    plot_single_polar (axarr[2], seedfoil.alpha, seed_x_values, seedfoil.glide, '-', sc, 'o')
+    plot_single_polar (axarr[5], seedfoil.alpha, seed_x_values, seedfoil.climb, '-', sc, 'o')
 
   if plot_polar:
-    axarr[0].plot(foil.alpha,     foil.cl,        linestyle='-', color=nc, marker='s')
-    axarr[1].plot(foil.cd,        foil.cl,        linestyle='-', color=nc, marker='s')
-    axarr[3].plot(foil.alpha,     foil.cm,        linestyle='-', color=nc, marker='s')
-    axarr[4].plot(foil.xtrt,      foil.alpha,     linestyle='-', color=nc, marker='s')
-    axarr[4].plot(foil.xtrb,      foil.alpha,     linestyle='--',color=nc, marker='s')
-    axarr[2].plot(foil_x_values,  foil.glide,     linestyle='-', color=nc, marker='s')
-    axarr[5].plot(foil_x_values,  foil.climb,     linestyle='-', color=nc, marker='s')
+    plot_single_polar (axarr[0], foil.alpha, foil.alpha, foil.cl, '-', nc, 's')
+    plot_single_polar (axarr[1], foil.alpha, foil.cd, foil.cl, '-', nc, 's')
+    plot_single_polar (axarr[3], foil.alpha, foil.alpha, foil.cm, '-', nc, 's')
+    plot_single_polar (axarr[4], foil.alpha, foil.xtrt, foil.alpha, '-', nc, 's')
+    plot_single_polar (axarr[4], foil.alpha, foil.xtrb, foil.alpha, '--', nc, 's')
+    plot_single_polar (axarr[2], foil.alpha, foil_x_values, foil.glide, '-', nc, 's')
+    plot_single_polar (axarr[5], foil.alpha, foil_x_values, foil.climb, '-', nc, 's')
 
     annotate_changes (axarr[0], prev_foil.alpha,prev_foil.cl,    foil.alpha,    foil.cl,    "y")
     annotate_changes (axarr[1], prev_foil.cd,   prev_foil.cl,    foil.cd,       foil.cl,    "x")
@@ -929,6 +929,33 @@ def plot_polars(seedfoil, designfoils, plotnum, firsttime=True, animation=False,
 
   return
 
+#---------------------------------------------------------------------------------------
+# Plots a single polar
+#
+#    tries to draw separate curves if the op_points do not belong to single "polar"
+#    so there will be no zick-zack on the screen 
+#
+#---------------------------------------------------------------------------------------
+def plot_single_polar (axes, alpha, x, y, my_linestyle, my_color, my_marker):
+
+  istart = 0
+  prev_alpha = -100
+
+  for i in range(len(alpha)):
+
+    if (alpha[i] < prev_alpha) :              # draw new curve? 
+      iend = i 
+      axes.plot(x[istart:iend], y[istart:iend], linestyle=my_linestyle, color=my_color, 
+                marker=my_marker, linewidth=0.8)
+      istart = i 
+    
+    prev_alpha = alpha[i]
+
+  iend   = len(alpha) 
+  axes.plot(x[istart:iend], y[istart:iend], linestyle=my_linestyle, color=my_color, 
+            marker=my_marker, linewidth=0.8)
+
+
 
 #---------------------------------------------------------------------------------------
 # Annotate marker depending value increased or decreased
@@ -1002,11 +1029,11 @@ def plot_optimization_history(steps, fmins, relfmins, rads, firsttime=True,
 
   # Plot optimization history
 
-  axarr[0].plot(steps, fmins, color='blue')
+  axarr[0].plot(steps, fmins, color='blue', linewidth=0.8)
   for t1 in axarr[0].get_yticklabels(): t1.set_color('blue')
-  mirrorax0.plot(steps, relfmins, color='red')
+  mirrorax0.plot(steps, relfmins, color='red', linewidth=0.8)
   for t2 in mirrorax0.get_yticklabels(): t2.set_color('red')
-  axarr[1].plot(steps, rads)
+  axarr[1].plot(steps, rads, linewidth=0.8)
 
   axarr[0].set_xlabel('Iteration')
   axarr[0].set_ylabel('Objective function', color='blue')
