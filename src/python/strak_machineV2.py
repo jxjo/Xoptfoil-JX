@@ -376,26 +376,41 @@ class inputFile:
                 return operatingConditions['op_mode'][idx]
             idx = idx + 1
 
-
-    def set_InitialPerturb(self, Re, ReDiff, ReFactor):
-        ReDiffList =  [(150000/5), 150000]
-        perturbList = [(0.01/5), 0.01]
-        pso_tolList = [(0.0015/5), 0.0015]
-        #ReFactorList =  [0.67, 0.95] #TODO
-        #perturbList = [(0.01/5), 0.0005]
-        #pso_tolList = [(0.0015/5), 0.0015]
-
-        # calculate corresponding perturb
-        perturb = np.interp(ReDiff, ReDiffList, perturbList)
+    def get_InitialPerturb(self):
         optimization_options = self.values["optimization_options"]
-        optimization_options['initial_perturb'] = perturb
+        return optimization_options['initial_perturb']
 
-        # also adapt pso_tol!!!
-        pso_tol = round(np.interp(ReDiff, ReDiffList, pso_tolList),6)
+    def set_InitialPerturb(self, newValue):
+        optimization_options = self.values["optimization_options"]
+        optimization_options['initial_perturb'] = newValue
+
+    def set_maxIterations(self, newValue):
         particle_swarm_options = self.values["particle_swarm_options"]
-        particle_swarm_options['pso_tol'] = pso_tol
-        print("Re-Diff is %d, setting initial_perturb to %.4f and pso_tol to %.5f" %\
-         (ReDiff, perturb, pso_tol))
+        particle_swarm_options['pso_maxit'] = newValue
+
+    def get_maxIterations(self):
+        particle_swarm_options = self.values["particle_swarm_options"]
+        return particle_swarm_options['pso_maxit']
+
+##    def set_InitialPerturb(self, Re, ReDiff, ReFactor):
+##        ReDiffList =  [(150000/5), 150000]
+##        perturbList = [(0.01/5), 0.01]
+##        pso_tolList = [(0.0015/5), 0.0015]
+##        #ReFactorList =  [0.67, 0.95] #TODO
+##        #perturbList = [(0.01/5), 0.0005]
+##        #pso_tolList = [(0.0015/5), 0.0015]
+##
+##        # calculate corresponding perturb
+##        perturb = np.interp(ReDiff, ReDiffList, perturbList)
+##        optimization_options = self.values["optimization_options"]
+##        optimization_options['initial_perturb'] = perturb
+##
+##        # also adapt pso_tol!!!
+##        pso_tol = round(np.interp(ReDiff, ReDiffList, pso_tolList),6)
+##        particle_swarm_options = self.values["particle_swarm_options"]
+##        particle_swarm_options['pso_tol'] = pso_tol
+##        print("Re-Diff is %d, setting initial_perturb to %.4f and pso_tol to %.5f" %\
+##         (ReDiff, perturb, pso_tol))
 
 
     def set_NewTargetValues(self, start, end, rootPolar, x1, x2, y1, y2):
@@ -942,7 +957,8 @@ class strakData:
         self.CL_min = -0.1
         self.CL_switchpoint_Type2_Type1_polar = 0.05
         self.maxReFactor = 2.0
-        self.maxLiftDistance = 0.05
+        self.maxLiftDistance = 0.2
+        self.optimizationPasses = 3
         self.scriptsAsExe = False
         self.generateBatch = True
         self.xmlFileName = None
@@ -951,7 +967,7 @@ class strakData:
         self.useAlwaysRootfoil = False
         self.showTargetPolars = True
         self.adaptInitialPerturb = False
-        self.smoothSeedfoil = False
+        self.smoothSeedfoil = True
         self.smoothStrakFoils = False
         self.smoothMatchPolarFoil = False
         self.plotStrakPolars = True
@@ -970,6 +986,7 @@ class strakData:
         self.target_polars = []
         self.strak_polars = []
         self.inputFiles = []
+        self.maxIterations = [0], # single-pass-optimization
         self.optimizeAlpha0 = [True, True, True, True, True, True, True, True, True, True, True, True]
         self.minCLGain = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
         self.maxGlideShift = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
@@ -2439,14 +2456,37 @@ def generate_Commandlines(params):
 
         # get name of the airfoil
         strakFoilName = get_FoilName(params, i)
+        seedfoilName = previousFoilname
 
-        # set input-file name for Xoptfoil
-        iFile = params.inputFileNames[i]
+        # multi-pass-optimization:
+        # generate commandlines for intermediate airfoils
+        for n in range(0, params.optimizationPasses-1):
+            iFileIndex = i*(params.optimizationPasses) + n
+            # set input-file name for Xoptfoil
+            iFile = params.inputFileNames[iFileIndex]
 
-        # generate Xoptfoil-commandline
+            # generate name of the intermediate airfoil
+            intermediateFoilName = strakFoilName.strip('.dat')
+            intermediateFoilName = intermediateFoilName + ("_%d.dat" % (n+1))
+
+            # generate commandline for intermediate strak-airfoil
+            commandline = params.xoptfoilCall + " -i %s -r %d -a %s -o %s\n" %\
+            (iFile, ReList[i], seedfoilName,
+              intermediateFoilName.strip('.dat'))
+            commandLines.append(commandline)
+            # the output- airfoil is the new seedfoil
+            seedfoilName = intermediateFoilName
+
+        # generate commandline for final strak-airfoil
+        if (params.optimizationPasses > 1):
+            iFileIndex = i*(params.optimizationPasses) + (n+1)
+        else:
+            iFileIndex = i
+
+        iFile = params.inputFileNames[iFileIndex]
         commandline = params.xoptfoilCall + " -i %s -r %d -a %s -o %s\n" %\
-                        (iFile, ReList[i], previousFoilname,
-                          strakFoilName.strip('.dat'))
+                    (iFile, ReList[i], seedfoilName,
+                      strakFoilName.strip('.dat'))
         commandLines.append(commandline)
 
         # time-measurement end
@@ -2820,6 +2860,11 @@ def get_Parameters(dict):
     params.maxLiftGain = get_MandatoryParameterFromDict(dict, "maxLiftGain")
 
     # get optional parameters
+    # multi-pass-optimization
+    params.maxIterations = get_ParameterFromDict(dict, "maxIterations",
+                                                   params.maxIterations)
+    params.optimizationPasses = len(params.maxIterations)
+
     params.additionalOpPoints[0] = get_ParameterFromDict(dict, "additionalOpPoints",
                                                    params.additionalOpPoints[0])
 
@@ -3027,25 +3072,47 @@ def generate_InputFiles(params):
         if params.optimizeAlpha0[i]:
             newFile.insert_alpha0_oppoint(params, strakPolar,i)
 
-        if params.adaptInitialPerturb:
-            # also adapt the initial perturb according to the change in
-            # Re-number
-            if (params.useAlwaysRootfoil):
-                # difference calculated to Re-number of root-airfoil
-                ReDiff = params.ReNumbers[0] - params.ReNumbers[i]
-                # factor caclulated to Re-number of root-airfoil
-                ReFactor = params.ReNumbers[i] / params.ReNumbers[0]
-            else:
-                # difference calculated to Re-number of previous-airfoil
-                ReDiff = params.ReNumbers[i-1] - params.ReNumbers[i]
-                ReFactor = params.ReNumbers[i] / params.ReNumbers[i-1]
+## TODO: vorerst auskommentiert, um Komplexität zu reduzieren
+##        if params.adaptInitialPerturb:
+##            # also adapt the initial perturb according to the change in
+##            # Re-number
+##            if (params.useAlwaysRootfoil):
+##                # difference calculated to Re-number of root-airfoil
+##                ReDiff = params.ReNumbers[0] - params.ReNumbers[i]
+##                # factor caclulated to Re-number of root-airfoil
+##                ReFactor = params.ReNumbers[i] / params.ReNumbers[0]
+##            else:
+##                # difference calculated to Re-number of previous-airfoil
+##                ReDiff = params.ReNumbers[i-1] - params.ReNumbers[i]
+##                ReFactor = params.ReNumbers[i] / params.ReNumbers[i-1]
+##
+##            newFile.set_InitialPerturb(params.ReNumbers[i], ReDiff, ReFactor)
 
-            newFile.set_InitialPerturb(params.ReNumbers[i], ReDiff, ReFactor)
+        # get default-value of initialPerturb from template
+        initialPerturb = newFile.get_InitialPerturb()
+        maxIterationsDefault = newFile.get_maxIterations()
 
-        # physically create the file
-        newFile.write_ToFile(params.inputFileNames[i])
+        # multi-pass-optimization:
+        # generate input-files for intermediate strak-airfoils
+        for n in range(0, params.optimizationPasses):
+            iFileIndex = i*(params.optimizationPasses) + n
+            # set input-file name
+            iFile = params.inputFileNames[iFileIndex]
 
-        # append to params
+            # set max number of iterations
+            maxIterations = params.maxIterations[n]
+            if (maxIterations == 0):
+                maxIterations = maxIterationsDefault
+
+            newFile.set_maxIterations(maxIterations)
+            # set initialPerturb
+            newFile.set_InitialPerturb(initialPerturb)
+            # physically create the file
+            newFile.write_ToFile(iFile)
+            # reduce initial perturb for the next pass
+            initialPerturb = initialPerturb/2
+
+        # append only input-file of final strak-airfoil to params
         params.inputFiles.append(newFile)
 
 
@@ -3075,6 +3142,14 @@ def generate_Polars(params, rootfoilName):
         # generate inputfilename from Re-number
         inputFilename = params.xoptfoilInputFileName.strip('.txt')
         inputFilename = inputFilename + ("_%s.txt" % get_ReString(Re))
+
+        # multi-pass-optimization: generate input-filenames for intermediate-airfoils
+        for n in range(1, (params.optimizationPasses)):
+            name = inputFilename.strip(".txt")
+            name = name + ("_%d.txt" % n)
+            params.inputFileNames.append(name)
+
+        # append name of inputfile for final airfoil
         params.inputFileNames.append(inputFilename)
 
         # compose string for system-call of XFOIL-worker for T1-polar generation
