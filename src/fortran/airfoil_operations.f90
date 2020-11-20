@@ -1083,10 +1083,6 @@ subroutine get_best_highlow_threshold (npt, x,y, min_highlow_thresh, max_highlow
     max_highlows      = 1
   end if 
 
-  ! allow a liitle more to "live"
-  best_threshold = best_threshold * 1.1d0
-
-
 end subroutine get_best_highlow_threshold
 
 

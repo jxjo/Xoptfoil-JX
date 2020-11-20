@@ -704,7 +704,7 @@ subroutine auto_curvature_constraints (show_details, foil, &
   call get_max_te_curvature (size(xt), xt,yt, max_te_curvature_top )
   call get_max_te_curvature (size(xb), xb,yb, max_te_curvature_bot )
 
-  max_te_curvature = max (max_te_curvature_top, max_te_curvature_bot) * 1.1d0 ! little more...
+  max_te_curvature = max (max_te_curvature_top, max_te_curvature_bot) * 1.05d0 ! little more...
 
 !  ------------ highlow curvature amplitude -----
 
@@ -716,7 +716,7 @@ subroutine auto_curvature_constraints (show_details, foil, &
   call get_best_highlow_threshold (size(xb), xb,yb, min_highlow_thresh, &
                                    max_curv_highlow_bot, threshold_bot)
 
-  highlow_threshold = max(threshold_top, threshold_bot) 
+  highlow_threshold = max(threshold_top, threshold_bot) * 1.05d0 ! little more...
 
   max_curv_highlow_top = nhighlows_using_threshold (xt, yt, highlow_threshold)
   max_curv_highlow_bot = nhighlows_using_threshold (xb, yb, highlow_threshold)

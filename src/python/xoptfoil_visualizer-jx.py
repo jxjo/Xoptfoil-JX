@@ -1029,15 +1029,16 @@ def plot_optimization_history(steps, fmins, relfmins, rads, firsttime=True,
 
   # Plot optimization history
 
-  axarr[0].plot(steps, fmins, color='blue', linewidth=0.8)
-  for t1 in axarr[0].get_yticklabels(): t1.set_color('blue')
+  axarr[0].plot(steps, fmins, color='grey', linewidth=0.8)
+#  for t1 in axarr[0].get_yticklabels(): t1.set_color('grey')
   mirrorax0.plot(steps, relfmins, color='red', linewidth=0.8)
   for t2 in mirrorax0.get_yticklabels(): t2.set_color('red')
-  axarr[1].plot(steps, rads, linewidth=0.8)
+  axarr[1].plot(steps, rads, color='grey', linewidth=0.8)
 
   axarr[0].set_xlabel('Iteration')
-  axarr[0].set_ylabel('Objective function', color='blue')
+  axarr[0].set_ylabel('Objective function')
   mirrorax0.set_ylabel('% Improvement over seed', color='red')
+  axarr[0].grid(axis='x')
   axarr[1].set_xlabel('Iteration')
   axarr[1].set_ylabel('Design radius')
   axarr[1].set_yscale("log")
@@ -1087,7 +1088,7 @@ def print_improvement (axes, steps, improvements):
       axes.annotate(('{:.5f}'.format(improvements[i_best])+'%'),
                     xy = (steps[i_best], improvements[i_best]),
                     xytext = (x_text,y_text), textcoords="offset points", ha = "center",
-                    fontsize='small', color='red')
+                    fontsize='small', color='grey')
 
 ################################################################################
 # Input function that checks python version

@@ -8,9 +8,7 @@
 ! airfoil_file     = '... dat'                              ! get airfoil file  from command line 
   shape_functions  = 'camb-thick'
   initial_perturb  = 0.01
-  write_designs    = .true.
   show_details     = .true.
-  echo_input_parms = .false.
 /  
 
 &operating_conditions
@@ -46,8 +44,3 @@
   pso_maxit        = 40
 /
 
-&xfoil_run_options
-  vaccel          = 0.005
-  reinitialize    = .false.                                 ! speed up a little (set true if too many no convergence) 
-
-/
