@@ -285,7 +285,7 @@ end subroutine make_directory_unix
     integer         :: istat
     character (255) :: mkdir_command
 
-    mkdir_command = 'if not exist '//trim(subdirectory)//' mkdir '//trim(subdirectory)
+    mkdir_command = 'if not exist "'//trim(subdirectory)//'" mkdir "'//trim(subdirectory)//'"'
     istat = system (trim(mkdir_command))
   end subroutine make_directory_windows
 

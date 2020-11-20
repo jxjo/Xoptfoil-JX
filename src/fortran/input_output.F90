@@ -313,7 +313,6 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
 
   rewind(iunit)
   read(iunit, iostat=iostat1, nml=smoothing_options)
-  call namelist_check('smoothing_options', iostat1, 'warn')
 
 ! jx-mod Geo targets - start read and weight options---------------------
 
@@ -682,7 +681,6 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
   matchfoil_file = 'none'
   rewind(iunit)
   read(iunit, iostat=iostat1, nml=matchfoil_options)
-  call namelist_check('matchfoil_options', iostat1, 'warn')
 
 ! Close the input file
 
@@ -1047,8 +1045,8 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
   (trim(shape_functions) == 'camb-thick-plus')) then
     ! in case of camb_thick checking of curvature makes no sense
     if (check_curvature) then 
-      call print_note ("Because of shape function 'camb-thick' ckecking of "// &
-                      "curvature will be switched off")
+      call print_note ("Because of shape function 'camb-thick' curvature ckecking "// &
+                       "will be switched off during optimization")
       check_curvature = .false. 
       auto_curvature  = .false. 
     end if 

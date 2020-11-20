@@ -10,8 +10,6 @@
   airfoil_file   = 'JX-Seed.dat'
   shape_functions = 'camb-thick'
   initial_perturb = 0.01
-  restart_write_freq = 0
-  echo_input_parms = .false.
 /  
 
 &matchfoil_options

@@ -66,10 +66,11 @@ subroutine check_and_do_polar_generation (input_file, output_prefix, foil)
 
   call read_polar_inputs          (input_file, foil%name, npolars, polars, xfoil_options)
 
-  if (npolars > 0)                                               &
+  if (npolars > 0) then
     call read_xfoil_paneling_inputs (input_file, xfoil_geom_options)
     call generate_polar_files (output_prefix, foil, npolars, polars, &
                                xfoil_geom_options, xfoil_options)
+  end if
 
 end subroutine check_and_do_polar_generation
 
@@ -117,10 +118,13 @@ subroutine generate_polar_files (output_prefix, foil, npolars, polars, &
   do i = 1, npolars
 
     write (*,'(1x,A,I1,A, I7,A)') 'Calculating polar Type ',polars(i)%re%type,' Re=',  &
-          int(polars(i)%re%number), ' for '// polars(i)%airfoil_name
+          int(polars(i)%re%number), ' for '// trim(polars(i)%airfoil_name)
+    write (*,*) 
     call init_polar (polars(i))
+
     call calculate_polar (foil, polars(i), xfoil_geom_options, xfoil_options)
 
+    write (*,*) 
     write (*,'(1x,A, F7.0)')    'Writing polar to '//trim(polars_subdirectory)//'/'//trim(polars(i)%file_name)
 
     open(unit=13, file= trim(polars_subdirectory)//'/'//trim(polars(i)%file_name), status='replace')
@@ -199,18 +203,19 @@ subroutine read_polar_inputs  (input_file, foil_name, npolars, polars, xfoil_opt
   if (istat == 0) then
 
     read (iunit, iostat=istat, nml=polar_generation)
-    if (.not. generate_polars) return 
-    call namelist_check('polar_generation', istat, 'warn')
+    if (generate_polars) then 
+      call namelist_check('polar_generation', istat, 'warn')
 
-    rewind(iunit)
-    read (iunit, iostat=istat, nml=xfoil_run_options)
-    call namelist_check('xfoil_run_options', istat, 'warn')
-
+      rewind(iunit)
+      read (iunit, iostat=istat, nml=xfoil_run_options)
+      call namelist_check('xfoil_run_options', istat, 'warn')
+    end if
     close (iunit)
   else
     call my_stop('Could not find input file '//trim(input_file)//'.')
   end if
   
+  if (.not. generate_polars) return 
 
 ! if there are no re numbers in input file take from command line
   if (polar_reynolds(1) == 0d0) then
@@ -315,8 +320,6 @@ subroutine read_xfoil_paneling_inputs  (input_file, geom_options)
     close (iunit)
   end if
   
-  call namelist_check('xfoil_paneling_options', istat, 'warn')
-
 ! Put xfoil options into derived types
 
   if (npan_fixed > 0 .and. (npan /= npan_fixed)) then 
