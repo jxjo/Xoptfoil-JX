@@ -59,6 +59,7 @@ CL_decimals = 4 # lift
 CD_decimals = 6 # drag
 CL_CD_decimals = 2 # lift/drag
 AL_decimals = 4 # alpha
+PER_decimals = 6
 
 # fontsizes
 fs_infotext = 9
@@ -392,25 +393,19 @@ class inputFile:
         particle_swarm_options = self.values["particle_swarm_options"]
         return particle_swarm_options['pso_maxit']
 
-##    def set_InitialPerturb(self, Re, ReDiff, ReFactor):
-##        ReDiffList =  [(150000/5), 150000]
-##        perturbList = [(0.01/5), 0.01]
-##        pso_tolList = [(0.0015/5), 0.0015]
-##        #ReFactorList =  [0.67, 0.95] #TODO
-##        #perturbList = [(0.01/5), 0.0005]
-##        #pso_tolList = [(0.0015/5), 0.0015]
-##
-##        # calculate corresponding perturb
-##        perturb = np.interp(ReDiff, ReDiffList, perturbList)
-##        optimization_options = self.values["optimization_options"]
-##        optimization_options['initial_perturb'] = perturb
-##
-##        # also adapt pso_tol!!!
-##        pso_tol = round(np.interp(ReDiff, ReDiffList, pso_tolList),6)
-##        particle_swarm_options = self.values["particle_swarm_options"]
-##        particle_swarm_options['pso_tol'] = pso_tol
-##        print("Re-Diff is %d, setting initial_perturb to %.4f and pso_tol to %.5f" %\
-##         (ReDiff, perturb, pso_tol))
+    def calculate_InitialPerturb(self, Re, ReDiff, ReFactor):
+        # TODO: not sure what is the best algorithm:
+        # use Difference in Re or use Re-factor?
+        ReDiffList =  [(70000/4), 70000]
+        perturbList = [(0.0025/2), 0.0025]
+
+        #ReFactorList =  [0.67, 0.95] #TODO
+        #perturbList = [(0.01/5), 0.0005]
+
+        # calculate corresponding perturb according to Re-Diff
+        perturb = interpolate(ReDiffList[0],ReDiffList[1],
+                              perturbList[0],perturbList[1],ReDiff)
+        return round(perturb, PER_decimals)
 
 
     def set_NewTargetValues(self, start, end, rootPolar, x1, x2, y1, y2):
@@ -966,7 +961,7 @@ class strakData:
         self.useWingPlanform = True
         self.useAlwaysRootfoil = False
         self.showTargetPolars = True
-        self.adaptInitialPerturb = False
+        self.adaptInitialPerturb = True #TODO check default value, better false?
         self.smoothSeedfoil = True
         self.smoothStrakFoils = False
         self.smoothMatchPolarFoil = False
@@ -986,7 +981,7 @@ class strakData:
         self.target_polars = []
         self.strak_polars = []
         self.inputFiles = []
-        self.maxIterations = [0], # single-pass-optimization
+        self.maxIterations = 0, # single-pass-optimization
         self.optimizeAlpha0 = [True, True, True, True, True, True, True, True, True, True, True, True]
         self.minCLGain = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
         self.maxGlideShift = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
@@ -3072,24 +3067,28 @@ def generate_InputFiles(params):
         if params.optimizeAlpha0[i]:
             newFile.insert_alpha0_oppoint(params, strakPolar,i)
 
-## TODO: vorerst auskommentiert, um Komplexität zu reduzieren
-##        if params.adaptInitialPerturb:
-##            # also adapt the initial perturb according to the change in
-##            # Re-number
-##            if (params.useAlwaysRootfoil):
-##                # difference calculated to Re-number of root-airfoil
-##                ReDiff = params.ReNumbers[0] - params.ReNumbers[i]
-##                # factor caclulated to Re-number of root-airfoil
-##                ReFactor = params.ReNumbers[i] / params.ReNumbers[0]
-##            else:
-##                # difference calculated to Re-number of previous-airfoil
-##                ReDiff = params.ReNumbers[i-1] - params.ReNumbers[i]
-##                ReFactor = params.ReNumbers[i] / params.ReNumbers[i-1]
-##
-##            newFile.set_InitialPerturb(params.ReNumbers[i], ReDiff, ReFactor)
-
         # get default-value of initialPerturb from template
         initialPerturb = newFile.get_InitialPerturb()
+
+        if (params.adaptInitialPerturb and (i>0)):
+            # calculate the initial perturb according to the change in
+            # Re-number
+            if (params.useAlwaysRootfoil):
+                # difference calculated to Re-number of root-airfoil
+                ReDiff = params.ReNumbers[0] - params.ReNumbers[i]
+                # factor calculated to Re-number of root-airfoil
+                ReFactor = params.ReNumbers[i] / params.ReNumbers[0]
+            else:
+                # difference calculated to Re-number of previous-airfoil
+                ReDiff = params.ReNumbers[i-1] - params.ReNumbers[i]
+                ReFactor = params.ReNumbers[i] / params.ReNumbers[i-1]
+
+            # calculate initial perturb now.
+            initialPerturb = newFile.calculate_InitialPerturb(params.ReNumbers[i],
+                              ReDiff, ReFactor)
+
+
+        # get Default-value for max iterations
         maxIterationsDefault = newFile.get_maxIterations()
 
         # multi-pass-optimization:
