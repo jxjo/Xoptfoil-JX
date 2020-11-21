@@ -12,12 +12,6 @@
 import argparse
 import change_airfoilname
 
-# paths and separators
-bs = "\\"
-ressourcesPath = 'ressources'
-buildPath = 'build'
-
-
 
 ################################################################################
 # function that gets arguments from the commandline
