@@ -45,6 +45,7 @@ strakMachineName = "strak_machineV2"
 xfoilWorkerName = "xfoil_worker"
 xoptfoilName = "xoptfoil-jx"
 xoptfoilVisualizerName = "xoptfoil_visualizer-jx"
+airfoilComparisonName = "best_airfoil"
 logoName = 'strakmachine.jpg'
 strakMachineInputFileName = 'strakdata.txt'
 T1_polarInputFile = 'iPolars_T1.txt'
@@ -937,6 +938,7 @@ class strakData:
         self.xfoilWorkerCall = "xfoil_worker.exe"
         self.xoptfoilCall = "xoptfoil-jx.exe"
         self.xoptfoilVisualizerCall = "xoptfoil_visualizer-jx.exe"
+        self.airfoilComparisonCall = "best_airfoil.py"
         self.xoptfoilInputFileName = 'istrak.txt'
         self.weightingMode = 'sinus'
         self.batchfileName = 'make_strak.bat'
@@ -981,7 +983,8 @@ class strakData:
         self.target_polars = []
         self.strak_polars = []
         self.inputFiles = []
-        self.maxIterations = 0, # single-pass-optimization
+        self.maxIterations = 0, # multi-pass optimization: single-pass-optimization / one stage
+        self.numberOfCompetitors = [1, 1, 1, 1, 1, 1, 1, 1], # multi-pass optimization: only one competitor per stage
         self.optimizeAlpha0 = [True, True, True, True, True, True, True, True, True, True, True, True]
         self.minCLGain = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
         self.maxGlideShift = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
@@ -1027,9 +1030,11 @@ class strakData:
         if (params.scriptsAsExe):
             self.strakMachineCall = exeCallString + strakMachineName + '.exe'
             self.xoptfoilVisualizerCall = exeCallString + xoptfoilVisualizerName + '.exe'
+            self.airfoilComparisonCall = exeCallString + airfoilComparisonName + '.exe'
         else:
             self.strakMachineCall = pythonCallString + strakMachineName + '.py'
             self.xoptfoilVisualizerCall = pythonCallString + xoptfoilVisualizerName + '.py'
+            self.airfoilComparisonCall = pythonCallString + airfoilComparisonName + '.py'
 
         # calculate List of Re-numers, if wingdata available
         if (self.wingData != None):
@@ -2464,13 +2469,27 @@ def generate_Commandlines(params):
             intermediateFoilName = strakFoilName.strip('.dat')
             intermediateFoilName = intermediateFoilName + ("_%d.dat" % (n+1))
 
-            # generate commandline for intermediate strak-airfoil
-            commandline = params.xoptfoilCall + " -i %s -r %d -a %s -o %s\n" %\
-            (iFile, ReList[i], seedfoilName,
-              intermediateFoilName.strip('.dat'))
+            # check, if there is more than one competitor for this intermediate stage
+            num = params.numberOfCompetitors[n]
+
+            for c in range(num):
+                # append competitor-number to name of intermediate airfoil
+                competitorName = intermediateFoilName.strip('.dat') + ("_%d" % (c+1))
+
+                # generate commandline for competitor-intermediate strak-airfoil
+                commandline = params.xoptfoilCall + " -i %s -r %d -a %s -o %s\n" %\
+                (iFile, ReList[i], seedfoilName, competitorName)
+                commandLines.append(commandline)
+
+            # generate commandline for selecting the best airfoil among all
+            # competitors
+            commandline = params.airfoilComparisonCall + " -a %s -n %d\n" %\
+                (intermediateFoilName.strip('.dat'), num)
             commandLines.append(commandline)
-            # the output- airfoil is the new seedfoil
+
+            # the output-airfoil is the new seedfoil
             seedfoilName = intermediateFoilName
+
 
         # generate commandline for final strak-airfoil
         if (params.optimizationPasses > 1):
@@ -2860,6 +2879,9 @@ def get_Parameters(dict):
                                                    params.maxIterations)
     params.optimizationPasses = len(params.maxIterations)
 
+    params.numberOfCompetitors = get_ParameterFromDict(dict, "numberOfCompetitors",
+                                                   params.numberOfCompetitors)
+
     params.additionalOpPoints[0] = get_ParameterFromDict(dict, "additionalOpPoints",
                                                    params.additionalOpPoints[0])
 
@@ -2970,7 +2992,7 @@ def copyAndSmooth_Airfoil(srcName, srcPath, destName, smooth):
         system(systemString)
     else:
         print("Renaming airfoil \'%s\' to \'%s\'\n" % (srcName, destName))
-        # only reanme and copy the airfoil
+        # only rename and copy the airfoil
         change_airfoilname.change_airfoilName(srcfoilNameAndPath, destName + '.dat')
         DoneMsg()
 
