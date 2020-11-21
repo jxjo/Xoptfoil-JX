@@ -11,30 +11,12 @@
 
 import argparse
 import change_airfoilname
-from colorama import init
-from termcolor import colored
 
 # paths and separators
 bs = "\\"
 ressourcesPath = 'ressources'
 buildPath = 'build'
 
-################################################################################
-#
-# helper functions to put colored messages
-#
-################################################################################
-def ErrorMsg(message):
-    print(colored(' Error: ', 'red') + message)
-
-def WarningMsg(message):
-    print(colored(' Warning: ', 'yellow') + message)
-
-def NoteMsg(message):
-    print(colored(' Note: ', 'cyan') + message)
-
-def DoneMsg():
-    print("Done.\n")
 
 
 ################################################################################
@@ -48,7 +30,7 @@ def getArguments():
 
     # read arguments from the command line
     args = parser.parse_args()
-    return (args.airfoil, args.number)
+    return (args.airfoil, int(args.number))
 
 
 def readPerformanceSummary(filename):
@@ -58,7 +40,7 @@ def readPerformanceSummary(filename):
         file_content = file.readlines()
         file.close()
     except:
-        ErrorMsg("File %s could not be opened %s" % filename)
+        print("Error, File %s could not be opened !" % filename)
         exit(-1)
 
     return file_content
@@ -72,30 +54,42 @@ def main():
     bestCompetitor = airfoilName
 
     if (airfoilName == None) or (numCompetitors == None):
-        ErrorMsg("airfoilName or numCompetitors not specified")
+        print("Error, airfoilName or numCompetitors not specified!")
         exit(-1)
 
-    for i in range(1, numCompetitors):
-        fileName = airfoilName + ("_%d" %i)
-        summary = readPerformanceSummary(fileName)
+    for i in range(numCompetitors):
+        # example: SD-strak-150k_1_1_performance_summary.dat
+        summaryFileName = airfoilName + ("_%d_performance_summary.dat" % (i+1))
 
+        # example: SD-strak-150k_1_1
+        competitorFileName = airfoilName + ("_%d" % (i+1))
+
+        # read performace-summary of competitor-airfoil into ram
+        summary = readPerformanceSummary(summaryFileName)
+
+        # determine maximum improvement and thus best of the competitor-airfoils
         for line in summary:
+            # find the line containg the overall improvement
             if (line.find("improvement over seed") >=0):
                 splitlines = line.split(":")
-                improvement = int(splitlines[1])
+                improvementString = splitlines[1].strip(" ")
+                splitlines  = improvementString.split("%")
+                improvement = float(splitlines[0])
 
+                # competitor has best overall result, set as new best competitor
                 if (improvement > max_improvement):
                     max_improvement = improvement
-                    bestCompetitor = fileName
+                    bestCompetitor = competitorFileName
 
     # print result
     print("Best competitor is: \'%s\'" % bestCompetitor)
     print("Renaming airfoil \'%s\' to \'%s\'\n" % (bestCompetitor, airfoilName))
 
+    # compose complete filenames
     bestCompetitor = bestCompetitor + '.dat'
     airfoilName = airfoilName  + '.dat'
 
-    # rename and copy the airfoil
+    # rename and copy the competitor-airfoil to stage-result airfoil
     change_airfoilname.change_airfoilName(bestCompetitor, airfoilName)
 
 
