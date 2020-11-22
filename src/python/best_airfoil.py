@@ -40,6 +40,21 @@ def readPerformanceSummary(filename):
     return file_content
 
 
+def writeSummaryToFile(airfoilName, summary):
+    # example: SD-strak-150k_1_performance_summary.dat
+    summaryFilename = airfoilName + ("_performance_summary.dat")
+    try:
+        print("writing summary file..")
+        file = open(summaryFilename, 'w')
+        for line in summary:
+            file.writelines(line)
+        file.close()
+        print("o.k.")
+    except:
+        print("Error, File %s could not be written !" % filename)
+        exit(-1)
+
+
 def main():
     # get command-line-arguments
     (airfoilName, numCompetitors) = getArguments()
@@ -74,10 +89,15 @@ def main():
                 if (improvement > max_improvement):
                     max_improvement = improvement
                     bestCompetitor = competitorFileName
+                    bestCompetitorSummary = summary
 
     # print result
     print("Best competitor is: \'%s\'" % bestCompetitor)
+    print("Improvement over seed is: \'%f\'" % max_improvement)
     print("Renaming airfoil \'%s\' to \'%s\'\n" % (bestCompetitor, airfoilName))
+
+    # write the summary-file of the best competitor
+    writeSummaryToFile(airfoilName, bestCompetitorSummary)
 
     # compose complete filenames
     bestCompetitor = bestCompetitor + '.dat'
@@ -85,6 +105,7 @@ def main():
 
     # rename and copy the competitor-airfoil to stage-result airfoil
     change_airfoilname.change_airfoilName(bestCompetitor, airfoilName)
+
 
 
 if __name__ == '__main__':
