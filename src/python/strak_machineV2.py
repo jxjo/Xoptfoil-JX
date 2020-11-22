@@ -2375,10 +2375,10 @@ def generate_polarCreationCommandLines(commandlines, params, strakFoilName, maxR
 
     polarDir = strakFoilName.strip('.dat') + '_polars'
 
-    polarFileName_T1 = "T1_Re0.%03d_M0.00_N9.0.txt" % round_Re(maxRe)
+    polarFileName_T1 = "T1_Re%d.%03d_M0.00_N9.0.txt" % (round_Re(maxRe)/1000, round_Re(maxRe)%1000)
     polarFileNameAndPath_T1 = polarDir + bs + polarFileName_T1
 
-    polarFileName_T2 = "T2_Re0.%03d_M0.00_N9.0.txt" % round_Re(Re)
+    polarFileName_T2 = "T2_Re%d.%03d_M0.00_N9.0.txt" % (round_Re(Re)/1000, round_Re(Re)%1000)
     polarFileNameAndPath_T2 = polarDir + bs + polarFileName_T2
 
     mergedPolarFileName =  polarDir + bs +\
@@ -3151,12 +3151,12 @@ def generate_Polars(params, rootfoilName):
         maxRe = params.maxReNumbers[ReIdx]
 
         # create polar-file-Name T1-polar from maxRe-Number
-        polarFileName_T1 = "T1_Re0.%03d_M0.00_N9.0.txt" % round_Re(maxRe)
+        polarFileName_T1 = "T1_Re%d.%03d_M0.00_N9.0.txt" % (round_Re(maxRe)/1000, round_Re(maxRe)%1000)
         polarFileNameAndPath_T1 = polarDir + bs + polarFileName_T1
         params.polarFileNames_T1.append(polarFileNameAndPath_T1)
 
         # create polar-file-Name T2-polar from Re-Number
-        polarFileName_T2 = "T2_Re0.%03d_M0.00_N9.0.txt" % round_Re(Re)
+        polarFileName_T2 = "T2_Re%d.%03d_M0.00_N9.0.txt" % (round_Re(Re)/1000, round_Re(Re)%1000)
         polarFileNameAndPath_T2 = polarDir + bs + polarFileName_T2
         params.polarFileNames_T2.append(polarFileNameAndPath_T2)
 
