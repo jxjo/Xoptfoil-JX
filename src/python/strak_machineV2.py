@@ -146,7 +146,7 @@ def get_PresetInputFileName(xoptfoilTemplate, params):
             " searching xoptfoil-template-files")
 
     ErrorMsg("could not find xoptfoil-template-file %s" % xoptfoilTemplate)
-    exit(-1)
+    sys.exit(-1)
 
 
 
@@ -162,7 +162,6 @@ class inputFile:
         self.idx_maxSpeed = 0
         self.idx_maxGlide = 0
         self.idx_preClmax = 0
-        self.idx_alpha_preClmax = 0
         self.idx_additionalOpPoints = []
 
         # get name and path of xoptfoil-inputfile
@@ -534,19 +533,16 @@ class inputFile:
         maxWeigth = params.maxWeight
         minWeight = params.minWeight
 
-        # set weight of alpha_pre_CLmax to zero
-        self.change_Weighting(self.idx_alpha_preClmax, 0.0)
-
         # evaluate the weighting-mode
         if (params.weightingMode == 'constant'):
             # set every op-point to constant minWeight (but not alpha_preClmax)
-            for idx in range((self.idx_alpha_preClmax)):
+            for idx in range(self.idx_preClmax+1):
                 self.change_Weighting(idx, minWeight)
 
         elif (params.weightingMode == 'linear_progression'):
             # increment weighting from minWeight to maxWeight
             # do not change alpha_preClmax
-            num_intervals = self.idx_alpha_preClmax
+            num_intervals = self.idx_preClmax+1
             diff = (maxWeigth - minWeight) / num_intervals
 
             for idx in range(num_intervals):
@@ -779,9 +775,6 @@ class inputFile:
             if (idx <= self.idx_preClmax):
                 self.idx_preClmax = self.idx_preClmax + 1
 
-            if (idx <= self.idx_alpha_preClmax):
-                self.idx_alpha_preClmax = self.idx_alpha_preClmax + 1
-
             # append idx to list of additional op-points
             self.idx_additionalOpPoints.append(idx)
             num = num + 1
@@ -954,7 +947,7 @@ class strakData:
         self.CL_min = -0.1
         self.CL_switchpoint_Type2_Type1_polar = 0.05
         self.maxReFactor = 2.0
-        self.maxLiftDistance = 0.2
+        self.maxLiftDistance = 0.05
         self.optimizationPasses = 3
         self.scriptsAsExe = False
         self.generateBatch = True
@@ -2803,7 +2796,7 @@ def get_MandatoryParameterFromDict(dict, key):
         value = dict[key]
     except:
         ErrorMsg('parameter \'%s\' not specified, this key is mandatory!'% key)
-        exit(-1)
+        sys.exit(-1)
     return value
 
 
@@ -2969,7 +2962,7 @@ def get_WingDataFromXML(params):
         planeData = read_planeDataFile(xmlFileName)
     except:
         ErrorMsg("file \"%s\" could not be opened.") % xmlFileName
-        exit(-1)
+        sys.exit(-1)
 
     # return data
     return planeData[0]
@@ -3377,14 +3370,14 @@ def merge_Polars(polarFile_1, polarFile_2 , mergedPolarFile, mergeCL):
         polar_1.import_FromFile(polarFile_1)
     except:
         ErrorMsg("polarfile \'%s\' could not be imported" % polarFile_1)
-        exit(-1)
+        sys.exit(-1)
 
     try:
         polar_2 = polarData()
         polar_2.import_FromFile(polarFile_2)
     except:
         ErrorMsg("polarfile \'%s\' could not be imported" % polarFile_2)
-        exit(-1)
+        sys.exit(-1)
 
     # merge polars and write to file.
     # lower part (CL_min..mergeCL) comes from polar_1.
@@ -3395,7 +3388,7 @@ def merge_Polars(polarFile_1, polarFile_2 , mergedPolarFile, mergeCL):
         mergedPolar.write_ToFile(mergedPolarFile)
     except:
         ErrorMsg("polarfile \'%s\' could not be generated" % mergedPolarFile)
-        exit(-1)
+        sys.exit(-1)
 
 ################################################################################
 # Main program
@@ -3417,7 +3410,7 @@ if __name__ == "__main__":
         strakDataFile = open(strakDataFileName)
     except:
         ErrorMsg('failed to open file %s' % strakDataFileName)
-        exit(-1)
+        sys.exit(-1)
 
     # load dictionary from .json-file
     try:
@@ -3426,7 +3419,7 @@ if __name__ == "__main__":
     except:
         ErrorMsg('failed to read data from file %s' % strakDataFileName)
         strakDataFile.close()
-        exit(-1)
+        sys.exit(-1)
 
     # get strak-machine-parameters from dictionary
     params = get_Parameters(strakdata)
@@ -3469,7 +3462,7 @@ if __name__ == "__main__":
 
     if (params.operatingMode == 'fromtargetpolar'):
         ErrorMsg("Not implemented yet")
-        exit(-1)
+        sys.exit(-1)
         # TODO implement
         # read target-polars from file
         # generate input-Files directly from target-polars
