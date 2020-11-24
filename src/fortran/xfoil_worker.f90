@@ -96,7 +96,7 @@ program xfoil_worker
     case ('flap')         ! Repaneland set flap into "<output_prefix>.dat"
 
       if (trim(output_prefix) == '') & 
-        output_prefix = airfoil_filename (1:(index (airfoil_filename,'.',back = .true.) - 1))//'-flap'
+        output_prefix = airfoil_filename (1:(index (airfoil_filename,'.',back = .true.) - 1))//'-f'
 
       call set_flap (input_file, output_prefix, foil, visualizer)
 
@@ -149,7 +149,10 @@ subroutine set_geometry_value (output_prefix, seed_foil, value_argument, visuali
   value_type = value_argument (1:(index (value_argument,'=') - 1))
   value_str  = value_argument ((index (value_argument,'=') + 1):)
 
-  read (value_str ,*) value_number  
+  read (value_str ,*, iostat = ierr) value_number  
+
+  if(ierr /= 0) & 
+    call my_stop ("Wrong argument format '"//trim(value_argument)//"' in set command") 
 
   write (*,*) 
 
@@ -439,11 +442,7 @@ subroutine set_flap (input_file, output_prefix, seed_foil, visualizer)
     call xfoil_apply_flap_deflection(x_flap, y_flap, y_flap_spec, flap_degrees(i))
     call xfoil_reload_airfoil(foil_flapped)
 
-    if (ndegrees == 1) then 
-      foil_flapped%name   = output_prefix
-    else
-      foil_flapped%name   = trim(output_prefix) // trim(adjustl(text_degrees))
-    end if 
+    foil_flapped%name   = trim(output_prefix) // trim(adjustl(text_degrees))
     call airfoil_write   (trim(foil_flapped%name)//'.dat', trim(foil_flapped%name), foil_flapped)
 
     ! Write airfoil to _design_coordinates using Xoptfoil format for visualizer
