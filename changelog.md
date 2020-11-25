@@ -23,6 +23,7 @@ Not final - current dev state
 
 - added new option "-w check" to check the surface (curvature) quality of an airfoil and tell about best optimization options 
 
+- added new option "-w blend" to blend an airfoil with another one
 
 
 ## [1.52.1] - 2020-06-25
