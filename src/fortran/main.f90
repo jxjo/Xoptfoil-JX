@@ -139,15 +139,15 @@ program main
 !   macro OPENMP is set in CMakeLists.txt as _OPENMP is not set by default (..?) 
 #ifdef OPENMP                       
   if (omp_get_max_threads() > 1) then 
-!    if (show_details ) then 
-!      call print_warning ("Because of option 'show_details' CPU multi threading will be switched off")
-!      write(*,*)
-!      call omp_set_num_threads( 1 )
-!    else
+    if (.false. ) then                        ! for testing purposes
+      call print_warning ("Because of option 'show_details' CPU multi threading will be switched off")
+      write(*,*)
+      call omp_set_num_threads( 1 )
+    else
       write (text,'(I2,A)') omp_get_max_threads(),' CPU threads will be used during optimization' 
       call print_note (text)
       write(*,*)
-!   end if 
+   end if 
   end if 
 #else
   text = 'dummy' 
