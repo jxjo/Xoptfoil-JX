@@ -63,4 +63,4 @@ Windows developers will have to install the [MinGW toolchain](https://sourceforg
 
 Feel free to contact us - and of course we are happy for any contributions and suggestions!
 
-Jochen Guenzel, June 2020
+Jochen Guenzel, November 2020
