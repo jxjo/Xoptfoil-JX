@@ -8,5 +8,5 @@
 /
 
 &xfoil_run_options
-  ncrit = 9
+  ncrit = 7
 /
