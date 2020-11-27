@@ -1,3 +1,6 @@
+rem neccessary python-package to create .exe-Files: pyinstaller --> pip install pyinstaller
+rem neccessary zip-tool: 7-zip -> download from the internet, add to PATH-variable
+
 rem use pyinstaller to create exe-files
 pyinstaller --onefile ..\src\python\planform_creator.py
 pyinstaller --onefile ..\src\python\strak_machineV2.py
@@ -33,6 +36,15 @@ xcopy .\Strakmachine_pure\XFLR5\*.* Strakmachine_instant\XFLR5\ /Y /E /H /C /I
 
 rem copy build-results from strakmachine-pure
 xcopy .\Strakmachine_pure\build\*.* Strakmachine_instant\build\ /Y /E /H /C /I
+
+rem create program calls
+del .\Strakmachine_instant\start_strakmachine.bat
+echo .\bin\strak_machineV2.exe >>.\Strakmachine_instant\start_strakmachine.bat
+echo pause >>.\Strakmachine_instant\start_strakmachine.bat
+
+del .\Strakmachine_instant\start_visualizer.bat
+echo .\bin\start_visu.exe >>.\Strakmachine_instant\start_visualizer.bat 
+echo pause >>.\Strakmachine_instant\start_visualizer.bat 
 
 rem create zip-archive
 rem 7z a .\Strakmachine_instant\ strakmachine_instant_1_1.zip
