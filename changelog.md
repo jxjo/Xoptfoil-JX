@@ -2,50 +2,49 @@
 
 All notable changes to this project are documented in this file.
 
-## [1.60 beta] - 2020-11-07
+## [1.60] - 2020-11-27
 
-Not final - current dev state
+This is a consolitation release with a bunch of smaller but nice enhancements and some refactorings inside the programm
 
-####  Xoptfoil-JX
+### Xoptfoil-JX
 
-- a lot of code cleanings and refactorings
-- more stable xfoil driver 
-- auto-detection and setting of curvature constraints especially for Hicks-Henne (default: auto_curvature = .true.)
-- auto-smoothing of surface when seed quuality is not good enough (new default: do_smoothing = .true.)
-- new screen output during ps optimization to get more details about particles work
-- removed experimental: new target type "target_max_drag" which tries to optimize the drag at an operating point to be smaller than the target value. So drag may be smaller, but shouldn't be higher. This option helps to find a faster balance between all target values.
-- multi-threading now supports 'show_details = .true.' for more information (entertainment) during the optimization process  
-- experimental: particle retry if geometry fails to improve optimization speed
+- More robust xfoil driver which reduces the situations, xfoil doesn't get convergence at an operating point. Switching on `show_details` the xfoil driver will give some information about iterations and retries.
+- Auto-detection of curvature constraints especially when using  'Hicks-Henne' shape functions. The various curvature parameters will be automatically set to achieve best possible quality for the optimized airfoil based on the quality of the seed airfoil. The new parameter `auto_curvature` is active by default.
+- Smoothing of the seed airfoil surface is now done automatically if the auto-detection of curvature signals too many 'spikes' on the surface. Again `show_details` will give some more information. The new default value is now `do_smoothing = .true.`
+- New screen output during particle swarm optimization to get more details about the success of each particle. This greatly improves an understanding of the overall optimization process based on particle swarm. Use `show_details` to get more information about single operating points especially when using `target_drag`
+- Multi-threading is now always active also if `show_details = .true.`  
+- Experimental: Retry of a single particle shape design if this design fails due to geometry constraints to improve optimization speed
+- A lot of minor things...
 
-#### Xfoil_worker
+### Xfoil_worker
 
-- added new option "-w set" which allows to modify thickness, camber and their positions  
+- Added new option `-w set` which allows to modify the geometry parameters like thickness, camber and their positions of maximum  
 
-- added new option "-w check" to check the surface (curvature) quality of an airfoil and tell about best optimization options 
+- Added new option "-w check" to check the surface (curvature) quality of an airfoil and tell about best optimization options for the curvature. This is the same information as `auto_curvature = .true.` when using the optimizer.
 
-
+- Added new option `-w blend` to blend an airfoil with another airfoil by xx%. 
 
 ## [1.52.1] - 2020-06-25
 
 This is just a bugfix and maintenance release
 
-####  Xoptfoil-JX
+### Xoptfoil-JX
 
 - Fix: When smoothing an exception occured when the number of spikes became 0
 - Fix: Typo 'highlow_treshold'.  
 **breakin change:** All occurences of `highlow_treshold` in input files have to be changed in `highlow_threshold`
 
-#### Xoptfoil_visualizer-JX
+### Xoptfoil_visualizer-JX
 
 - In polar view little markers will show the value changes during optimization
 
-#### Xfoil_worker
+### Xfoil_worker
 
 - added new option "-w flap" to set flap at an airfoil and generate a new airfoil with flap set
 
 ## [1.52] - 2020-06-10
 
-#### Xoptfoil-JX
+### Xoptfoil-JX
 
 - Normalization of the airfoil - the optimized airfoil will be repaneled, moved, scaled and rotated to have the leading edge at 0,0 and the trailing edge at 1,0
   - depending on the repaneling result a new airfoil will have 200 or 201 points (if an additional leading edge point was added)
@@ -66,7 +65,7 @@ This is just a bugfix and maintenance release
 - Fixes
   - Different methods were used to calculate thickness and camber. This is now consistent taking the more precise method
 
-#### Xoptfoil_visualizer-JX
+### Xoptfoil_visualizer-JX
 
 - Fixes
   - new plot objects were added at each refresh. This slowed down the visualizer more and more during long optimizations
@@ -76,7 +75,7 @@ Thanks to Tobias for testing and advices, Alexander for his hint regarding smoot
 
 ## [1.51.0] - 2020-05-24
 
-#### Xoptfoil-JX
+### Xoptfoil-JX
 
 - Revision of match_foils mode. Added ready to run examples to demonstrate the theoretical precision of Hicks-Henne or Camb-Thick based optimizations.
 - New geometric constraint 'max_te_curvature' to handle curvature problems at TE when using Hicks-Henne shape functions
@@ -86,7 +85,7 @@ Thanks to Tobias for testing and advices, Alexander for his hint regarding smoot
 - Fixed: When creating 'initial designs' the xfoil calculation isn't called anymore. This speeds up 'initial designs' heavily.
 - Code cleanings and minor bugs
 
-#### Xoptfoil_visualizer-JX
+### Xoptfoil_visualizer-JX
 
 - created short documentation (Xoptfoil_visualizer-JX Reference.pdf)
 - show points of transition laminar-turbulent in geometric view

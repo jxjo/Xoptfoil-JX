@@ -34,10 +34,10 @@ program xfoil_worker
 #define PACKAGE_VERSION ""
 #endif
 
-  type(airfoil_type) :: foil
+  type(airfoil_type) :: foil, blend_foil
   type (xfoil_options_type) :: xfoil_options
 
-  character(255)     :: input_file, output_prefix, airfoil_filename
+  character(255)     :: input_file, output_prefix, airfoil_filename, second_airfoil_filename
   character(20)      :: action, value_argument
   logical            :: visualizer
 
@@ -51,7 +51,7 @@ program xfoil_worker
   airfoil_filename  = ''
   visualizer        = .false.
   call read_worker_clo(input_file, output_prefix, airfoil_filename, action, & 
-                       value_argument, visualizer)
+                       second_airfoil_filename, value_argument, visualizer)
 
   if (trim(action) == "") &
     call my_stop("Must specify an action for the worker with -w option.")
@@ -111,6 +111,14 @@ program xfoil_worker
       if (trim(output_prefix) == '') & 
         output_prefix = airfoil_filename (1:(index (airfoil_filename,'.', back = .true.) - 1))
       call set_geometry_value (output_prefix, foil, value_argument, visualizer)
+
+    case ('blend')         ! blend two airfoils...
+      
+      if (trim(output_prefix) == '') & 
+        output_prefix = airfoil_filename (1:(index (airfoil_filename,'.', back = .true.) - 1))//'-blend'
+
+      call load_airfoil(second_airfoil_filename, blend_foil)
+      call blend_foils (input_file, output_prefix, foil, blend_foil, value_argument, visualizer)
 
     case default
 
@@ -373,6 +381,95 @@ end subroutine repanel_smooth
 
 
 !-------------------------------------------------------------------------
+! Blend to seed_foil a blend_foil by (value) % 
+!-------------------------------------------------------------------------
+
+subroutine blend_foils (input_file, output_prefix, seed_foil_in, blend_foil_in, value_argument, visualizer)
+
+  use vardef,             only : airfoil_type
+  use math_deps,          only : interp_vector
+  use xfoil_driver,       only : xfoil_geom_options_type
+  use xfoil_driver,       only : xfoil_apply_flap_deflection, xfoil_reload_airfoil
+  use xfoil_driver,       only : xfoil_set_airfoil
+  use airfoil_operations, only : airfoil_write, transform_airfoil, get_split_points
+  use airfoil_operations, only : split_airfoil, rebuild_airfoil, my_stop
+  use airfoil_operations, only : repanel_and_normalize_airfoil
+  use polar_operations,   only : read_xfoil_paneling_inputs
+
+  character(*), intent(in)          :: input_file, output_prefix, value_argument
+  type (airfoil_type), intent (inout)  :: seed_foil_in, blend_foil_in
+  logical, intent(in)               :: visualizer
+
+  double precision, dimension(:), allocatable :: xt, xb, zt, zb, bxt, bxb, bzt, bzb
+  double precision, dimension(:), allocatable :: zttmp, zbtmp, zt_blended, zb_blended
+  type (airfoil_type) :: blended_foil, seed_foil, blend_foil
+  type (xfoil_geom_options_type) :: geom_options
+  integer       :: pointst, pointsb
+  double precision :: blend_factor
+
+  read (value_argument ,*, iostat = ierr) blend_factor  
+
+  if(ierr /= 0) & 
+    call my_stop ("Wrong blend value format '"//trim(value_argument)//"' in blend command") 
+
+! Argument could be in % or as a fraction 
+  
+  if (blend_factor > 1) blend_factor = blend_factor / 100d0
+  if (blend_factor <0 .or. blend_factor > 1) & 
+    call my_stop ("Blend value must be between 0 and 1.0 ( or 0 and 100)") 
+
+
+! Read inputs file to get xfoil paneling options  
+
+  call read_xfoil_paneling_inputs  (input_file, geom_options)
+
+! Prepare - Repanel both airfoils 
+
+  call repanel_and_normalize_airfoil (seed_foil_in,  geom_options%npan, seed_foil)
+  call repanel_and_normalize_airfoil (blend_foil_in, geom_options%npan, blend_foil)
+
+! Now split  in upper & lower side 
+
+  call split_airfoil   (seed_foil,  xt, xb, zt, zb, .false.)
+  call split_airfoil   (blend_foil, bxt, bxb, bzt, bzb, .false.)
+
+! Interpolate x-vals of blend_foil to match to seed airfoil points to x-vals 
+!    - so the z-values can later be blended
+
+  pointst = size(xt,1)
+  pointsb = size(xb,1)
+  allocate(zttmp(pointst))
+  allocate(zbtmp(pointsb))
+  call interp_vector(bxt, bzt, xt, zttmp)
+  call interp_vector(bxb, bzb, xb, zbtmp)
+
+! now blend the z-values of the two poylines to become the new one
+
+  write (*,'(/1x,A, I3,A)') 'Blending '//trim(seed_foil_in%name)//' and '//&
+           trim(blend_foil_in%name)//' with', int(blend_factor * 100),'%'
+ 
+  zt_blended = (1d0 - blend_factor) * zt + blend_factor * zttmp
+  zb_blended = (1d0 - blend_factor) * zb + blend_factor * zbtmp
+
+! and build new foil 
+
+  call rebuild_airfoil (xt, xb, zt_blended, zb_blended, blended_foil)
+
+! Write airfoil to _design_coordinates using Xoptfoil format for visualizer
+
+  blended_foil%name = trim(output_prefix)//trim(adjustl(value_argument))
+  call airfoil_write   (trim(blended_foil%name)//'.dat', trim(blended_foil%name), blended_foil)
+
+
+  if (visualizer) then 
+    call write_design_coordinates (blended_foil%name, 0, seed_foil)
+    call write_design_coordinates (blended_foil%name, 1, blend_foil)
+    call write_design_coordinates (blended_foil%name, 2, blended_foil)
+  end if 
+
+end subroutine blend_foils
+
+!-------------------------------------------------------------------------
 ! Repanels and set flaps of foil based on settings in 'input file'
 !-------------------------------------------------------------------------
 
@@ -553,12 +650,14 @@ end subroutine write_design_coordinates
 ! Reads command line arguments for input file name and output file prefix
 !-------------------------------------------------------------------------
 
-subroutine read_worker_clo(input_file, output_prefix, airfoil_name, action, value_argument, &
-                           visualizer)
+subroutine read_worker_clo(input_file, output_prefix, airfoil_name, action, &
+                           second_airfoil_filename, value_argument, visualizer)
 
   use airfoil_operations, only : my_stop
+  use os_util
 
   character(*), intent(inout) :: input_file, output_prefix, action, airfoil_name, value_argument
+  character(*), intent(inout) :: second_airfoil_filename
   logical,      intent(inout) :: visualizer
 
   character(80) :: arg
@@ -604,6 +703,13 @@ subroutine read_worker_clo(input_file, output_prefix, airfoil_name, action, valu
         call getarg(i+1, airfoil_name)
         i = i+2
       end if
+    else if (trim(arg) == "-a2") then
+      if (i == nargs) then
+        call my_stop("Must specify filename of second airfoil for -a2 option.")
+      else
+        call getarg(i+1, second_airfoil_filename)
+        i = i+2
+      end if
     else if (trim(arg) == "-w") then
       if (i == nargs) then
         call my_stop("Must specify an action for the worker e.g. polar")
@@ -611,6 +717,9 @@ subroutine read_worker_clo(input_file, output_prefix, airfoil_name, action, valu
         call getarg(i+1, action)
         i = i+2
         if (trim(action) == 'set') then
+          call getarg(i, value_argument)
+          i = i+1
+        elseif (trim(action) == 'blend') then
           call getarg(i, value_argument)
           i = i+1
         end if 
@@ -622,7 +731,8 @@ subroutine read_worker_clo(input_file, output_prefix, airfoil_name, action, valu
       call print_worker_usage
       stop
     else
-      write(*,'(A)') "Unrecognized option "//trim(arg)//"."
+      call print_error ("Unrecognized option: "//trim(arg))
+      write (*,*)
       call print_worker_usage
       stop 1
     end if
@@ -648,12 +758,16 @@ subroutine print_worker_usage()
   write(*,'(A)') "  -w smooth         Repanel, normalize, smooth 'airfoil_file'"
   write(*,'(A)') "  -w flap           Set flap of 'airfoil_file'"
   write(*,'(A)') "  -w check          Check the quality of surface curvature'"
+  write(*,'(A)') "  -w set [arg]      Set max thickness or max camber or their locations"
+  write(*,'(A)') "                      where [arg]:  't=zz' or 'c=zz' or 'xt=zz' or 'xc='zz' in percent"
+  write(*,'(A)') "  -w blend xx       Blend 'airfoil_file' with 'second_airfoil_file' by xx%"
   write(*,'(A)')
   write(*,'(A)') "Options:"
   write(*,'(A)') "  -i input_file     Specify an input file (default: 'inputs.txt')"
   write(*,'(A)') "  -o output_prefix  Specify an output prefix (default: 'foil')"
   write(*,'(A)') "  -r xxxxxx         Specify a default reynolds number (re_default)"
   write(*,'(A)') "  -a airfoil_file   Specify filename of seed airfoil"
+  write(*,'(A)') "  -a2 airfoil_file  Specify filename of a second airfoil (for blending)"
   write(*,'(A)') "  -v                Generate file 'design_coordinates' for visualizer"
   write(*,'(A)') "  -h, --help        Display usage information and exit"
   write(*,'(A)')

@@ -326,12 +326,18 @@ subroutine run_xfoil(foil, geom_options, operating_points, op_modes,           &
       if (xfoil_options%reinitialize) then 
         call xfoil_init_BL (.false.)
       else
-        ! Init BL if the direction of alpha or cl changes along op points
-        op_delta = operating_points(i) - operating_points(i-1)
-        if ((prev_op_delta * op_delta) < 0d0) then 
+        if (op_modes(i) /= op_modes(i-1)) then  ! init if op_mode changed
           call xfoil_init_BL (show_details)
-        end if 
-        prev_op_delta = op_delta
+          prev_op_delta = 0d0
+        else                                    ! Init BL if the direction of alpha or cl changes 
+          op_delta = operating_points(i) - operating_points(i-1)
+          if ((prev_op_delta * op_delta) < 0d0) then 
+            call xfoil_init_BL (show_details)
+            prev_op_delta = 0d0
+          else
+            prev_op_delta = op_delta
+          end if 
+        end if
       end if
     end if
 
@@ -371,13 +377,16 @@ subroutine run_xfoil(foil, geom_options, operating_points, op_modes,           &
 
       if (show_details) write (*,'(A)',advance = 'no') '['
 
-!     Try to initialize BL at new point (in the direction away from stall)
+!     + Try to initialize BL at intermediate new point (in the direction away from stall)
+      if (trim(op_modes(i)) == 'spec-al') then
+        newpoint = operating_points(i) - 0.25d0
+      else
+        newpoint = operating_points(i) - 0.02d0
+        if (newpoint == 0.d0) newpoint = 0.01d0       !because of Type 2 polar calc
+      end if
 
-      newpoint = operating_points(i) - 0.2d0*abs(operating_points(i))*sign(    &
-                                                 1.d0, operating_points(i))
-      if (newpoint == 0.d0) newpoint = 0.1d0
-
-      ! always init BL to get this new point to start from for fix,,
+      ! init BL for this new point to start for fix with little increased Re
+      REINF1 =  REINF1 * 1.001d0
       call xfoil_init_BL (show_details .and. (.not. xfoil_options%reinitialize))
       call run_xfoil_op_point (op_modes(i), newpoint, xfoil_options%viscous_mode, &
                                xfoil_options%maxit, show_details , & 
@@ -401,7 +410,7 @@ subroutine run_xfoil(foil, geom_options, operating_points, op_modes,           &
             .or. (is_out_lier (drag_statistics(i), drag(i)))  &
             .or. (lift_changed (op_modes(i), operating_points(i), lift(i)))) then 
 
-        ! increase a little RE to converge and try again
+        ! increase a little RE again to converge and try again
           REINF1 =  REINF1 * 1.002d0
         ! Re-init the second try
           call xfoil_init_BL (show_details .and. (.not. xfoil_options%reinitialize))

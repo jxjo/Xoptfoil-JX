@@ -342,7 +342,7 @@ subroutine check_seed()
 
 ! Analyze airfoil at requested operating conditions with Xfoil
 
-  xfoil_options%show_details = .false.      ! switch off because of repeated seed calls
+!  xfoil_options%show_details = .false.      ! switch off because of repeated seed calls
 
   call run_xfoil(seed_foil, xfoil_geom_options, op_point(1:noppoint),          &
                  op_mode(1:noppoint), re(1:noppoint), ma(1:noppoint),          &

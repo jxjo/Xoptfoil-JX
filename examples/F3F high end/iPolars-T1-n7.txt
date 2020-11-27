@@ -2,11 +2,11 @@
 
 &polar_generation
   generate_polars = .true.
-  type_of_polar   = 2
+  type_of_polar   = 1
   op_mode         = 'spec-al'
-  op_point_range  = -1.5, 11.0, 0.25
+  op_point_range  = -4, 11.5, 0.25
 /
 
 &xfoil_run_options
-  ncrit = 9
+  ncrit = 7
 /

@@ -1,0 +1,144 @@
+! Creates F3F airfoil JX-GX-15
+!    optimized for Re*sqrt(cl) = 150.000 and Re = 600.000
+!
+! GX : better performance cl = 0,1-06 compared to JX-FXevo-15
+!         (needs flap for low cl)  
+!      calculated with ncrit = 7 to reflect more turbulent conditions on the slope
+
+
+&optimization_options
+  search_type      = 'global'
+  global_search    = 'particle_swarm'
+  seed_airfoil     = 'from_file'
+  airfoil_file     = 'JX-Seed-Rearload-Thin.dat'     
+
+  shape_functions  = 'hicks-henne'
+  min_bump_width   = 0.1  
+  initial_perturb  = 0.003
+  nfunctions_top   = 5
+  nfunctions_bot   = 5
+
+  show_details     = .true.                         
+/  
+
+&operating_conditions
+  re_default       = 150000
+  re_default_as_resqrtcl = .true.
+  
+
+  noppoint         = 13
+
+! ---------------------  Type 1 ---------------------
+
+  op_mode(1) = 'spec-cl'
+  op_point(1) = -0.08
+  optimization_type(1) = 'target-drag'
+  target_value(1) = 0.00735
+  reynolds(1) = 600000
+  weighting(1) = 0.6
+
+  op_mode(2) = 'spec-cl'
+  op_point(2) = 0.03
+  optimization_type(2) = 'target-drag'
+  target_value(2) = 0.00576
+  reynolds(2) =  600000
+  weighting(2) = 1.4
+
+  op_mode(3) = 'spec-cl'
+  op_point(3) = 0.1
+  optimization_type(3) = 'target-drag'
+  target_value(3) = 0.00513
+  reynolds(3) =  600000
+  weighting(3) = 1.0
+
+  op_mode(4) = 'spec-cl'
+  op_point(4) = 0.2
+  optimization_type(4) = 'target-drag'
+  target_value(4) = 0.00471
+  weighting(4) = 1.0
+  reynolds(4) = 600000
+  ncrit_pt(4) = 9 				! ncrit = 9 is more challenging
+
+  op_mode(5) = 'spec-cl'
+  op_point(5) = 0.30
+  optimization_type(5) = 'target-drag'
+  target_value(5) = 0.00526
+  weighting(5) = 1.2
+  reynolds(5) = 600000
+
+  op_point(6) = 0.8
+  op_mode(6) = 'spec-cl'
+  optimization_type(6) = 'target-drag'
+  target_value(6) = 0.01048
+  weighting(6) = 0.6
+  reynolds(6) = 600000
+
+  op_point(7) = 1.0
+  op_mode(7) = 'spec-cl'
+  optimization_type(7) = 'target-drag'
+  target_value(7) = 0.01465
+  weighting(7) = 0.6
+  reynolds(7) = 600000
+
+! ---------------------  Type 2 ---------------------
+
+  op_mode(8) = 'spec-cl'
+  op_point(8) = 0.20
+  optimization_type(8) = 'target-drag'
+  target_value(8) = 0.00615
+  weighting(8) = 5.5
+  ncrit_pt(8) = 9 				! = 9, as polar with ncrit= 9 collapses at this point
+
+  op_mode(9) = 'spec-cl'
+  op_point(9) = 0.4
+  optimization_type(9) = 'target-drag'
+  target_value(9) = 0.00760
+  weighting(9) = 1.4
+ 
+  op_mode(10) = 'spec-cl'
+  op_point(10) = 0.60
+  optimization_type(10) = 'target-drag'
+  target_value(10) = 0.01015
+  weighting(10) = 1.2
+
+  op_mode(11) = 'spec-cl'
+  op_point(11) = 0.70
+  optimization_type(11) = 'target-drag'
+  target_value(11) = 0.01205
+  weighting(11) = 1.0
+
+  op_mode(12) = 'spec-cl'
+  op_point(12) = 0.8
+  optimization_type(12) = 'target-drag'
+  target_value(12) = 0.01477
+  weighting(12) = 0.8
+
+  op_mode(13) = 'spec-cl'
+  op_point(13) = 0.90
+  optimization_type(13) = 'target-drag'
+  target_value(13) = 0.0196
+  weighting(13) = 0.5
+/
+
+&geometry_targets
+  ngeo_targets    = 1
+  target_type(1)  = 'Thickness'
+  target_geo(1)   = 0.076
+  weighting_geo(1)= 2.0
+/  
+
+&initialization
+  feasible_init = .false.
+/
+
+&particle_swarm_options
+  pso_pop        = 40
+  pso_maxit      = 600
+  pso_tol        = 1D-06
+  pso_convergence_profile = 'exhaustive'
+/
+
+&xfoil_run_options
+  ncrit = 7					! default value for op points
+/
+

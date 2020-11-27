@@ -1,13 +1,12 @@
 ! Helper inputs for polar generation
 
 &polar_generation
-  generate_polars = .true. 									
+  generate_polars = .true.
   type_of_polar   = 1
   op_mode         = 'spec-al'
-  op_point_range  = -3, 13, 0.25
+  op_point_range  = -4, 11.5, 0.25
 /
 
 &xfoil_run_options
-  reinitialize = .false.
+  ncrit = 9
 /
-
