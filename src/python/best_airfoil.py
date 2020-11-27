@@ -10,6 +10,7 @@
 #-------------------------------------------------------------------------------
 
 import argparse
+import sys
 import change_airfoilname
 
 
@@ -35,7 +36,7 @@ def readPerformanceSummary(filename):
         file.close()
     except:
         print("Error, File %s could not be opened !" % filename)
-        exit(-1)
+        sys.exit(-1)
 
     return file_content
 
@@ -52,7 +53,7 @@ def writeSummaryToFile(airfoilName, summary):
         print("o.k.")
     except:
         print("Error, File %s could not be written !" % filename)
-        exit(-1)
+        sys.exit(-1)
 
 
 def main():
@@ -64,7 +65,7 @@ def main():
 
     if (airfoilName == None) or (numCompetitors == None):
         print("Error, airfoilName or numCompetitors not specified!")
-        exit(-1)
+        sys.exit(-1)
 
     for i in range(numCompetitors):
         # example: SD-strak-150k_1_1_performance_summary.dat

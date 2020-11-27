@@ -10,17 +10,16 @@
 #-------------------------------------------------------------------------------
 
 import os
+import sys
 from json import load
 
 # paths and separators
 bs = "\\"
 buildPath = 'build'
-ressourcesPath = 'ressources'
 scriptPath = 'scripts'
 exePath = 'bin'
 
 # fixed filenames
-
 # name of python-interpreter
 pythonInterpreterName = "python"
 
@@ -29,13 +28,6 @@ xoptfoilVisualizerName = "xoptfoil_visualizer-jx"
 
 # filename of progress-file
 progressFileName = "progress.txt"
-
-# filename of strakdata-file
-strakDataFileName = ressourcesPath + bs + "strakdata.txt"
-
-
-scriptsAsExe = False # TODO aus strakdata.txt einlesen!
-
 
 # gets the name of the airfoil that is currently processed by the strak-machine
 def getCurrentAirfoilName(filename):
@@ -48,7 +40,7 @@ def getCurrentAirfoilName(filename):
         file.close()
     except:
         print("Error, File %s could not be opened !" % filename)
-        exit(-1)
+        sys.exit(-1)
 
     for line in file_content:
         # look for name of current airfoil
@@ -59,45 +51,17 @@ def getCurrentAirfoilName(filename):
     return airfoilname
 
 
-################################################################################
-# function that gets a single boolean parameter from dictionary and returns a
-#  default value in case of error
-def get_booleanParameterFromDict(dict, key, default):
-    value = default
-    try:
-        string = dict[key]
-        if (string == 'true'):
-            value = True
-        else:
-            value = False
-    except:
-        print('parameter \'%s\' not specified, using' \
-        ' default-value \'%s\'' % (key, str(value)))
-    return value
-
-
 def main():
+    # get program-call from arguments
+    call = sys.argv[0]
 
-    # try to open .json-file containg strakdata
-    try:
-        strakDataFile = open(strakDataFileName)
-    except:
-        ErrorMsg('failed to open file %s' % strakDataFileName)
-        sys.exit(-1)
-
-    # load dictionary from .json-file
-    try:
-        strakdata = load(strakDataFile)
-        strakDataFile.close()
-    except:
-        ErrorMsg('failed to read data from file %s' % strakDataFileName)
-        strakDataFile.close()
-        sys.exit(-1)
-
-    # determine if the visualizer shall be started as a python-script
-    # or exe-file
-    scriptsAsExe = get_booleanParameterFromDict(strakdata,
-                             "scriptsAsExe", False)
+    # was it an .exe-call ?
+    if call.find('.exe') >= 0:
+        # yes, perform all following calls as exe-calls
+        scriptsAsExe = True
+    else:
+        # yes, perform all following calls as python-calls
+        scriptsAsExe = False
 
     # get current airfoilname from progressfile for starting the visualizer
     airfoilname = getCurrentAirfoilName(buildPath + bs + progressFileName)
@@ -116,8 +80,6 @@ def main():
 
     # compose system-call-string
     systemString = ("%s -o 3 -c %s") % (xoptfoilVisualizerCall, airfoilname)
-    #print (systemString) #Debug
-    #print ("Ready\n") #Debug
 
     # now execute system-call
     os.system(systemString)

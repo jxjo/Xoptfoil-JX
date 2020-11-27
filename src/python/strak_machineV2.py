@@ -20,6 +20,7 @@
 # imports
 import xml.etree.ElementTree as ET
 import argparse
+import sys
 from json import load
 from os import listdir, path, system, makedirs, chdir, getcwd
 from matplotlib import pyplot as plt
@@ -51,6 +52,9 @@ strakMachineInputFileName = 'strakdata.txt'
 T1_polarInputFile = 'iPolars_T1.txt'
 T2_polarInputFile = 'iPolars_T2.txt'
 smoothInputFile = 'iSmooth.txt'
+# filename of progress-file
+progressFileName = "progress.txt"
+
 
 # fonts
 csfont = {'fontname':'Segoe Print'}
@@ -958,7 +962,7 @@ class strakData:
         self.showTargetPolars = True
         self.adaptInitialPerturb = True #TODO check default value, better false?
         self.smoothSeedfoil = True
-        self.smoothStrakFoils = False
+        self.smoothStrakFoils = True
         self.smoothMatchPolarFoil = False
         self.plotStrakPolars = True
         self.ReNumbers = []
@@ -2399,6 +2403,28 @@ def generate_polarCreationCommandLines(commandlines, params, strakFoilName, maxR
     commandlines.append(commandline)
 
 
+def delete_progressFile(commandLines, filename):
+    commandLines.append("del %s\n" % filename)
+
+
+def insert_TimestampAndProgress(commandLines, fileName, progress):
+    commandLines.append("echo timestamp: %%TIME%% >> %s\n" % fileName)
+    commandLines.append("echo progress: %.1f >> %s\n" % (progress,fileName))
+
+
+def insert_airfoilName(commandLines, filename, params, i, n, c, airfoilname):
+    # TODO
+    commandLines.append("echo current airfoil: %s >> %s\n" % (airfoilname, filename))
+
+
+def calculate_progress(params, i, n, c):
+    # TODO
+    progress = 10.3
+    print ("progress is: TODO\n")
+    return progress
+
+
+
 ################################################################################
 # function that generates commandlines to run Xoptfoil, create and merge polars
 # etc.
@@ -2407,11 +2433,6 @@ def generate_Commandlines(params):
 
     # create an empty list of commandlines
     commandLines = []
-
-    # append time-measurement
-    timeFileName = buildPath + bs + "times.txt"
-    commandLines.append("del %s\n" % timeFileName)
-    commandLines.append("echo start-time %%TIME%% >> %s\n" % timeFileName)
 
     # do some initializations / set local variables
     if (params.operatingMode != 'matchpolarfoils'):
@@ -2429,6 +2450,13 @@ def generate_Commandlines(params):
     commandline = "cd %s\n\n" % buildPath
     commandLines.append(commandline)
 
+    # delete progress-file
+    delete_progressFile(commandLines, progressFileName)
+
+    # set timestamp and progress
+    progress = 0.0
+    insert_TimestampAndProgress(commandLines, progressFileName, progress)
+
     # store rootfoilname
     strakFoilName = rootfoilName
     previousFoilname = rootfoilName
@@ -2436,12 +2464,6 @@ def generate_Commandlines(params):
     # add command-lines for each strak-airfoil
     # skip the root airfoil (as it was already copied)
     for i in range (firstIdx, numFoils):
-
-        # append time-measurement start for strak-airfoil-optimization
-        reString = get_ReString(ReList[i])
-        strakTimeFileName = "times_%s.txt" % reString
-        commandLines.append("del %s\n" % strakTimeFileName)
-        commandLines.append("echo start-time %%TIME%% >> %s\n" % strakTimeFileName)
 
         if (params.useAlwaysRootfoil == False):
             # store previous airfoil-name
@@ -2455,6 +2477,7 @@ def generate_Commandlines(params):
         # generate commandlines for intermediate airfoils
         for n in range(0, params.optimizationPasses-1):
             iFileIndex = i*(params.optimizationPasses) + n
+
             # set input-file name for Xoptfoil
             iFile = params.inputFileNames[iFileIndex]
 
@@ -2469,10 +2492,28 @@ def generate_Commandlines(params):
                 # append competitor-number to name of intermediate airfoil
                 competitorName = intermediateFoilName.strip('.dat') + ("_%d" % (c+1))
 
+                # insert name of airfoil to be processes into progress-file
+                insert_airfoilName(commandLines, progressFileName, params, i, n, c, competitorName)
+
                 # generate commandline for competitor-intermediate strak-airfoil
                 commandline = params.xoptfoilCall + " -i %s -r %d -a %s -o %s\n" %\
                 (iFile, ReList[i], seedfoilName, competitorName)
                 commandLines.append(commandline)
+
+                # check wheather the strak-airfoils shall be smoothed after their
+                # creation
+                if (params.smoothStrakFoils):
+                    # smooth the airfoil
+                    smoothFileName = get_PresetInputFileName(smoothInputFile, params)
+
+                    # compose commandline for smoothing the airfoil
+                    commandline = params.xfoilWorkerCall + " -w smooth -i %s -a %s -o %s\n" % \
+                       (smoothFileName, competitorName + '.dat', competitorName)
+                    commandLines.append(commandline)
+
+                # set timestamp and progress
+                progress = calculate_progress(params, i, n, c)
+                insert_TimestampAndProgress(commandLines, progressFileName, progress)
 
             # generate commandline for selecting the best airfoil among all
             # competitors
@@ -2490,14 +2531,14 @@ def generate_Commandlines(params):
         else:
             iFileIndex = i
 
+        # insert name of airfoil to be processes into progress-file
+        insert_airfoilName(commandLines, progressFileName, params, i, n, c, strakFoilName.strip('.dat'))
+
         iFile = params.inputFileNames[iFileIndex]
         commandline = params.xoptfoilCall + " -i %s -r %d -a %s -o %s\n" %\
                     (iFile, ReList[i], seedfoilName,
                       strakFoilName.strip('.dat'))
         commandLines.append(commandline)
-
-        # time-measurement end
-        commandLines.append("echo end-time %%TIME%% >> %s\n" % strakTimeFileName)
 
         # check wheather the strak-airfoils shall be smoothed after their
         # creation
@@ -2509,6 +2550,9 @@ def generate_Commandlines(params):
             commandline = params.xfoilWorkerCall + " -w smooth -i %s -a %s -o %s\n" % \
                        (inputFilename, strakFoilName, strakFoilName.strip('.dat'))
             commandLines.append(commandline)
+
+        # set timestamp and progress
+        insert_TimestampAndProgress(commandLines, progressFileName, 99.0)
 
         # create T1 / T2 / merged polars for the specified Re-numbers of the
         # generated strak-airfoil
@@ -2532,8 +2576,8 @@ def generate_Commandlines(params):
     commandline = "cd..\n"
     commandLines.append(commandline)
 
-    # append time-measurement
-    commandLines.append("echo end-time %%TIME%% >> %s\n" % timeFileName)
+    # set final timestamp and progress
+    insert_TimestampAndProgress(commandLines, progressFileName, 100.0)
 
     # pause in the end
     commandline = "pause\n"
@@ -2846,6 +2890,17 @@ def get_Parameters(dict):
 
     print("getting parameters..\n")
 
+    # get program-call from arguments
+    call = sys.argv[0]
+
+    # was it an .exe-call ?
+    if call.find('.exe') >= 0:
+        # yes, perform all following calls as exe-calls
+        params.scriptsAsExe = True
+    else:
+        # yes, perform all following calls as python-calls
+        params.scriptsAsExe = False
+
     # get mandatory parameters first
 
     params.seedFoilName = get_MandatoryParameterFromDict(dict, 'seedFoilName')
@@ -2909,8 +2964,8 @@ def get_Parameters(dict):
     params.optimizeAlpha0 = get_booleanParameterListFromDict(dict,
                              "optimizeAlpha0", params.optimizeAlpha0)
 
-    params.scriptsAsExe = get_booleanParameterFromDict(dict,
-                             "scriptsAsExe", params.scriptsAsExe)
+##    params.scriptsAsExe = get_booleanParameterFromDict(dict,
+##                             "scriptsAsExe", params.scriptsAsExe)
 
     params.useAlwaysRootfoil = get_booleanParameterFromDict(dict,
                              "useAlwaysRootfoil", params.useAlwaysRootfoil)
@@ -3497,8 +3552,8 @@ if __name__ == "__main__":
     if (params.generateBatch == True):
         print ('generating batchfile \'%s\'' % params.batchfileName)
         generate_Batchfile(params.batchfileName, commandlines)
-        print ('generating visu-batchfiles')
-        generate_VisuBatchfiles(params)
+##        print ('generating visu-batchfiles')
+##        generate_VisuBatchfiles(params)
         print ('generating batchfiles for each single airfoil of the strak')
         generate_StrakBatchfiles(params, commandlines)
     DoneMsg()
