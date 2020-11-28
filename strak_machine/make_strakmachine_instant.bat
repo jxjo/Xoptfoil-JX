@@ -20,7 +20,7 @@ md .\Strakmachine_instant\ressources
 
 rem copy all exe-files to strakmachine instant
 copy .\dist\*.exe .\Strakmachine_instant\bin\
-copy ..\windows\bin .\Strakmachine_instant\bin\
+copy ..\windows\bin\*.exe .\Strakmachine_instant\bin\
 
 rem copy short instruction
 copy ..\doc\Strak_Machine_Short_instruction.pdf .\Strakmachine_instant\
