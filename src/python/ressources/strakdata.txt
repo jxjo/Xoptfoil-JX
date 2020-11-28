@@ -1,8 +1,7 @@
 {
-      "xoptfoilTemplate": "iOpt_MC",
+      "xoptfoilTemplate": "iOpt_HH",
       "maxIterations":    [40,60,160],
       "numberOfCompetitors":[4, 2, 1],
-      "maxLiftDistance": 0.05,
       "weightingMode": "constant",
       "seedFoilName": "SD",
       "minCLGain":        [0.0,        0.1,    0.23],
@@ -10,6 +9,5 @@
       "maxGlideGain":     [0.0,      -0.22,   -0.08],
       "maxLiftGain":      [0.0,       0.24,    0.09],
       "maxGlideShift":    [0.0,      0.015,   0.015],
-      "reynolds":         [220000,  150000,   80000], 
-      "maxReynoldsFactor": 10.0
+      "reynolds":         [220000,  150000,   80000]
 }

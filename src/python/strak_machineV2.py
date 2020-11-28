@@ -950,7 +950,7 @@ class strakData:
         self.maxWeight = 1.5
         self.CL_min = -0.1
         self.CL_switchpoint_Type2_Type1_polar = 0.05
-        self.maxReFactor = 2.0
+        self.maxReFactor = 10.0
         self.maxLiftDistance = 0.05
         self.optimizationPasses = 3
         self.scriptsAsExe = False
@@ -960,7 +960,7 @@ class strakData:
         self.useWingPlanform = True
         self.useAlwaysRootfoil = False
         self.showTargetPolars = True
-        self.adaptInitialPerturb = True #TODO check default value, better false?
+        self.adaptInitialPerturb = True
         self.smoothSeedfoil = True
         self.smoothStrakFoils = True
         self.smoothMatchPolarFoil = False
@@ -2451,7 +2451,7 @@ def insert_SubTaskEnd(commandLines, filename):
 def calculate_progress(params, i, n, c):
     # TODO
     progress = 10.3
-    print ("progress is: TODO\n")
+    #print ("progress is: TODO\n")#Debug
     return progress
 
 
@@ -2710,36 +2710,6 @@ def generate_StrakBatchfiles(params, commandlines):
 
 
 ################################################################################
-# function that generates a batchfile to start the visualizer for one
-# strak airfoil
-def generate_VisuBatchfiles(params):
-   # determine start-index
-    if (params.operatingMode == 'matchpolarfoils'):
-        startidx = 0
-    else:
-        startidx = 1
-
-    for i in range(startidx, len(params.ReNumbers)):
-        visuFileName = "visu_%s.bat" % (get_ReString(params.ReNumbers[i]))
-        airfoilName = get_FoilName(params, i)
-        airfoilName = airfoilName.strip('.dat')
-
-        try:
-            # create a new file
-            outputfile = open(visuFileName, "w+")
-        except:
-            ErrorMsg('file %s could not be opened' % visuFileName)
-            return
-
-        # write commandlines
-        outputfile.write("cd build\n")
-        outputfile.write(params.xoptfoilVisualizerCall + " -o 3 -c %s\n" % airfoilName)
-
-        # close the outputfile
-        outputfile.close()
-
-
-################################################################################
 # function that gets the name of the strak-machine-data-file
 def get_InFileName(args):
 
@@ -2956,8 +2926,6 @@ def get_Parameters(dict):
 
     params.ReNumbers = get_MandatoryParameterFromDict(dict, 'reynolds')
 
-    params.maxReFactor = get_MandatoryParameterFromDict(dict, "maxReynoldsFactor")
-
     params.maxGlideGain = get_MandatoryParameterFromDict(dict, "maxGlideGain")
 
     params.minCLGain  = get_MandatoryParameterFromDict(dict, "minCLGain")
@@ -2969,6 +2937,9 @@ def get_Parameters(dict):
     params.maxLiftGain = get_MandatoryParameterFromDict(dict, "maxLiftGain")
 
     # get optional parameters
+    params.maxReFactor = get_ParameterFromDict(dict, "maxReynoldsFactor",
+                                                        params.maxReFactor)
+
     # multi-pass-optimization
     params.maxIterations = get_ParameterFromDict(dict, "maxIterations",
                                                    params.maxIterations)
@@ -3606,8 +3577,7 @@ if __name__ == "__main__":
     if (params.generateBatch == True):
         print ('generating batchfile \'%s\'' % params.batchfileName)
         generate_Batchfile(params.batchfileName, commandlines)
-##        print ('generating visu-batchfiles')
-##        generate_VisuBatchfiles(params)
+
         print ('generating batchfiles for each single airfoil of the strak')
         generate_StrakBatchfiles(params, commandlines)
     DoneMsg()
