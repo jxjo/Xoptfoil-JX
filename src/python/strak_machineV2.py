@@ -2372,10 +2372,10 @@ def generate_polarCreationCommandLines(commandlines, params, strakFoilName, maxR
 
     polarDir = strakFoilName.strip('.dat') + '_polars'
 
-    polarFileName_T1 = "T1_Re%d.%03d_M0.00_N9.0.txt" % (round_Re(maxRe)/1000, round_Re(maxRe)%1000)
+    polarFileName_T1 = compose_Polarfilename_T1(maxRe)
     polarFileNameAndPath_T1 = polarDir + bs + polarFileName_T1
 
-    polarFileName_T2 = "T2_Re%d.%03d_M0.00_N9.0.txt" % (round_Re(Re)/1000, round_Re(Re)%1000)
+    polarFileName_T2 = compose_Polarfilename_T2(Re)
     polarFileNameAndPath_T2 = polarDir + bs + polarFileName_T2
 
     mergedPolarFileName =  polarDir + bs +\
@@ -2417,6 +2417,37 @@ def insert_airfoilName(commandLines, filename, params, i, n, c, airfoilname):
     commandLines.append("echo current airfoil: %s >> %s\n" % (airfoilname, filename))
 
 
+def insert_MainTaskStart(commandLines, filename, rootfoilName, ReList):
+    line = "echo main-task start: create whole set of strak-airfoils "
+    splitlines = rootfoilName.split("root")
+    rootfoilName = splitlines[0]
+    numStrakfoils = len(ReList)
+
+    for i in range(1, numStrakfoils):
+        reString = get_ReString(ReList[i])
+        strakfoilname = rootfoilName + "strak-" + reString
+        line = line +"%s" % strakfoilname
+
+        if (i < (numStrakfoils-1)):
+            # not the last airfoil, append comma
+            line = line +", "
+
+    line = line + ">> %s\n\n" % (filename)
+    commandLines.append(line)
+
+
+def insert_MainTaskEnd(commandLines, filename):
+    commandLines.append("echo main-task end >> %s\n" % (filename))
+
+
+def insert_SubTaskStart(commandLines, filename, strakfoilname):
+    commandLines.append("echo sub-task start: create strak-airfoil %s >> %s\n" % (strakfoilname, filename))
+
+
+def insert_SubTaskEnd(commandLines, filename):
+    commandLines.append("echo sub-task end >> %s\n\n" % (filename))
+
+
 def calculate_progress(params, i, n, c):
     # TODO
     progress = 10.3
@@ -2424,6 +2455,12 @@ def calculate_progress(params, i, n, c):
     return progress
 
 
+def progressfile_preamble(commandLines, progressFileName):
+    # delete progress-file
+    delete_progressFile(commandLines, progressFileName)
+
+    # set timestamp and progress
+    insert_TimestampAndProgress(commandLines, progressFileName, 0.0)
 
 ################################################################################
 # function that generates commandlines to run Xoptfoil, create and merge polars
@@ -2450,12 +2487,11 @@ def generate_Commandlines(params):
     commandline = "cd %s\n\n" % buildPath
     commandLines.append(commandline)
 
-    # delete progress-file
-    delete_progressFile(commandLines, progressFileName)
+    # do some initialisations for progress-file
+    progressfile_preamble(commandLines, progressFileName)
 
-    # set timestamp and progress
-    progress = 0.0
-    insert_TimestampAndProgress(commandLines, progressFileName, progress)
+    # insert specification of main task
+    insert_MainTaskStart(commandLines, progressFileName, rootfoilName, ReList)
 
     # store rootfoilname
     strakFoilName = rootfoilName
@@ -2472,6 +2508,9 @@ def generate_Commandlines(params):
         # get name of the airfoil
         strakFoilName = get_FoilName(params, i)
         seedfoilName = previousFoilname
+
+        # insert specification of sub-task
+        insert_SubTaskStart(commandLines, progressFileName, strakFoilName)
 
         # multi-pass-optimization:
         # generate commandlines for intermediate airfoils
@@ -2572,12 +2611,18 @@ def generate_Commandlines(params):
             (strakFoilName , airfoilPath, strakFoilName)
         commandLines.append(commandline)
 
+        # insert end of sub-task
+        insert_SubTaskEnd(commandLines, progressFileName)
+
     # change current working dir back
     commandline = "cd..\n"
     commandLines.append(commandline)
 
     # set final timestamp and progress
     insert_TimestampAndProgress(commandLines, progressFileName, 100.0)
+
+    # set end of main-task
+    insert_MainTaskEnd(commandLines, progressFileName)
 
     # pause in the end
     commandline = "pause\n"
@@ -2613,15 +2658,17 @@ def get_strak_commandlines(params, commandlines, idx):
 
     # change current working dir to output folder
     strak_commandlines.append("cd %s\n\n" % buildPath)
+    progressfile_preamble(strak_commandlines, progressFileName)
+
     start = False
 
     for line_idx in range(len(commandlines)):
         # determine start-line
         if ((commandlines[line_idx].find(ReString)>=0) and
-            (commandlines[line_idx].find( 'del')>=0)):
+            (commandlines[line_idx].find( 'sub-task start')>=0)):
             start = True
 
-        if (start and (commandlines[line_idx].find('copy')>=0)):
+        if (start and (commandlines[line_idx].find('sub-task end')>=0)):
             # everything found, append last line
             strak_commandlines.append(commandlines[line_idx])
             break
@@ -2964,9 +3011,6 @@ def get_Parameters(dict):
     params.optimizeAlpha0 = get_booleanParameterListFromDict(dict,
                              "optimizeAlpha0", params.optimizeAlpha0)
 
-##    params.scriptsAsExe = get_booleanParameterFromDict(dict,
-##                             "scriptsAsExe", params.scriptsAsExe)
-
     params.useAlwaysRootfoil = get_booleanParameterFromDict(dict,
                              "useAlwaysRootfoil", params.useAlwaysRootfoil)
 
@@ -3185,6 +3229,16 @@ def generate_InputFiles(params):
         params.inputFiles.append(newFile)
 
 
+def compose_Polarfilename_T1(Re):
+    return ("T1_Re%d.%03d_M0.00_N9.0.txt"\
+        % (round_Re(Re)/1000, round_Re(Re)%1000))
+
+
+def compose_Polarfilename_T2(ReSqrt_Cl):
+    return ("T2_Re%d.%03d_M0.00_N9.0.txt"\
+ % (round_Re(ReSqrt_Cl)/1000, round_Re(ReSqrt_Cl)%1000))
+
+
 def generate_Polars(params, rootfoilName):
     # generate polars of seedfoil / root-airfoil:
     print("Generating polars for airfoil %s..." % rootfoilName)
@@ -3199,12 +3253,12 @@ def generate_Polars(params, rootfoilName):
         maxRe = params.maxReNumbers[ReIdx]
 
         # create polar-file-Name T1-polar from maxRe-Number
-        polarFileName_T1 = "T1_Re%d.%03d_M0.00_N9.0.txt" % (round_Re(maxRe)/1000, round_Re(maxRe)%1000)
+        polarFileName_T1 = compose_Polarfilename_T1(maxRe)
         polarFileNameAndPath_T1 = polarDir + bs + polarFileName_T1
         params.polarFileNames_T1.append(polarFileNameAndPath_T1)
 
         # create polar-file-Name T2-polar from Re-Number
-        polarFileName_T2 = "T2_Re%d.%03d_M0.00_N9.0.txt" % (round_Re(Re)/1000, round_Re(Re)%1000)
+        polarFileName_T2 = compose_Polarfilename_T2(Re)
         polarFileNameAndPath_T2 = polarDir + bs + polarFileName_T2
         params.polarFileNames_T2.append(polarFileNameAndPath_T2)
 

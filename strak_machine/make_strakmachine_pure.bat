@@ -21,7 +21,7 @@ copy ..\src\python\best_airfoil.py .\Strakmachine_pure\scripts\
 copy ..\src\python\change_airfoilname.py .\Strakmachine_pure\scripts\
 
 rem copy xoptfoil and xfoil-worker to bin-folder
-copy ..\windows\bin .\Strakmachine_pure\bin\
+copy ..\windows\bin\*.exe .\Strakmachine_pure\bin\
 
 rem copy short instruction
 copy ..\doc\Strak_Machine_Short_instruction.pdf .\Strakmachine_pure\
