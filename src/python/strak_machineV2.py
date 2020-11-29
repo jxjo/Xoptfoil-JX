@@ -945,7 +945,7 @@ class strakData:
         self.matchPolarFoilName = ""
         self.ReSqrtCl = 150000
         self.ReAlpha0 = 0
-        self.numOpPoints = 16
+        self.numOpPoints = 13
         self.minWeight = 0.7
         self.maxWeight = 1.5
         self.CL_min = -0.1
