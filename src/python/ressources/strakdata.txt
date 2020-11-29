@@ -5,9 +5,9 @@
       "weightingMode": "constant",
       "seedFoilName": "SD",
       "minCLGain":        [0.0,        0.1,    0.23],
-      "maxSpeedGain":     [0.0,       0.40,    0.50],
-      "maxGlideGain":     [0.0,      -0.22,   -0.08],
-      "maxLiftGain":      [0.0,       0.24,    0.09],
+      "maxSpeedGain":     [0.0,       0.40,    0.40],
+      "maxGlideGain":     [0.0,      -0.22,   -0.05],
+      "maxLiftGain":      [0.0,       0.26,    0.13],
       "maxGlideShift":    [0.0,      0.015,   0.015],
       "reynolds":         [220000,  150000,   80000]
 }
