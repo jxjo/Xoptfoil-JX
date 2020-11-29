@@ -8,7 +8,7 @@
  "leadingEdgeOrientation": "up",
  "rootchord": 0.310,
  "tipchord": 0.032,
- "rootTipSweep": 3.2,
+ "rootTipSweep": 4.0,
  "hingeDepthPercent": 23.5,
  "dihedral": 2.5,
  "showQuarterChordLine": "true",
