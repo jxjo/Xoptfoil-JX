@@ -41,5 +41,8 @@ del .\Strakmachine_pure\create_wingplanform.bat
 echo python .\scripts\planform_creator.py >>.\Strakmachine_pure\create_wingplanform.bat
 echo pause >>.\Strakmachine_pure\\create_wingplanform.bat
 
+del .\Strakmachine_pure\show_status.bat
+echo pythonw  .\scripts\show_status.py >>.\Strakmachine_pure\show_status.bat
+
 rem create zip-archive
 rem 7z a .\Strakmachine_pure\ Strakmachine_pure_1_1.zip

@@ -12,6 +12,7 @@
 import os
 import sys
 from json import load
+import subprocess
 
 # importing tkinter module
 import tkinter as tk
@@ -42,8 +43,12 @@ progressFileName = "progress.txt"
 # update-rate in s
 update_rate = 0.2
 
-# debug
-#main_progress = 0.0
+# colour of the backgound
+bg_colour = 'gray3'
+
+# variable to store the number of lines of the update-cycles
+old_length = 0
+new_length = 0
 
 class show_status():
     def __init__(self):
@@ -80,6 +85,9 @@ class show_status():
         # Write following format for center screen
         self.root.geometry("+{}+{}".format(x_Left, y_Top))
 
+        # set background-colour
+        self.root.configure(bg=bg_colour)
+
         # display logo of the strak machine
         imagename = (".." + bs + ressourcesPath + bs + logoName)
 
@@ -89,7 +97,7 @@ class show_status():
 
         # The Label widget is a standard Tkinter widget used to display a text
         # or image on the screen.
-        panel = tk.Label(self.root, image = img)
+        panel = tk.Label(self.root, image = img, bg=bg_colour)
 
         # The Pack geometry manager packs widgets in rows or columns.
         panel.pack(side = "top", fill = "both", expand = "yes")
@@ -129,18 +137,23 @@ class show_status():
 
         # change the text of the progressbar,
         # the trailing spaces are here to properly center the text
-        self.s_main.configure("MainProgressbar", text="0 %      ")
-        self.s_sub.configure("SubProgressbar", text="0 %      ")
+        self.s_main.configure("MainProgressbar", text="0 %      ", background = 'green2')
+        self.s_sub.configure("SubProgressbar", text="0 %      ", background = 'green2')
 
-        # textbox to display content of progress-file
-        self.progressLog = tk.Text(self.root, height=10, width=100)
+        # create a scrollbar
+        scrollbar = tk.Scrollbar(self.root)
+        scrollbar.pack( side = 'right', fill='y' )
+
+        # create textbox to display content of progress-file
+        self.progressLog = tk.Listbox(self.root, height=10, width=100, yscrollcommand = scrollbar.set)
         self.progressLog.pack(pady = 10)
+        scrollbar.config( command = self.progressLog.yview )
 
         # This button will start the visualizer
         Button(self.root, text = 'Start Visualizer', command = self.start_visualizer).pack(pady = 10)
 
         # This button will Quit the application
-        Button(self.root, text = 'Quit', command = self.quit).pack(pady = 10)
+        #Button(self.root, text = 'Quit', command = self.quit).pack(pady = 10)
 
         # update with actual values
         self.update_progressbars()
@@ -173,14 +186,12 @@ class show_status():
             # look for main-task-progress
             if line.find("main-task progress") >= 0:
                 splitlines = line.split(": ")
-                #main_progress = float(splitlines[1])
+                main_progress = float(splitlines[1])
 
             # look for sub-task-progress
             if line.find("sub-task progress") >= 0:
                 splitlines = line.split(": ")
                 sub_progress = float(splitlines[1])
-
-        #main_progress = round (main_progress + 0.2,1) Debug
 
         return (main_progress, sub_progress, airfoilname, file_content)
 
@@ -200,31 +211,60 @@ class show_status():
 
         for line in file_content:
             # look for name of current airfoil
-            if (line.find("strak-airfoil") >= 0) or line.find("preliminary-airfoil"):
+            if (line.find("finalizing strak-airfoil") >= 0) or\
+               (line.find("creating preliminary-airfoil") >=0):
                 splitlines = line.split(": ")
                 airfoilname = splitlines[1]
 
         return airfoilname
 
 
+    # function to filter out some kind of output
+    def filterLines(self, line):
+        filteredLine = line
+
+        # several filters
+        if (line.find("progress") >=0):
+            filteredLine = None
+
+        if (line.find("task") >=0):
+            filteredLine = None
+
+        if (line.find("timestamp") >=0):
+            filteredLine = None
+
+        return filteredLine
+
+
     # Function responsible for the update of the progress bar values
     def update_progressbars(self):
+        global old_length
+        global new_length
 
         # read actual values from progress-file
         (main_progress, sub_progress, current_airfoil, content) = self.read_progressFile()
 
+        # store lengths
+        old_length = new_length
+        new_length = len(content)
+
         # update progress-bars
         self.main_progressBar['value'] = main_progress
         self.sub_progressBar['value'] = sub_progress
-        self.s_main.configure("MainProgressbar", text="{0} %      ".format(main_progress))
-        self.s_sub.configure("SubProgressbar", text="{0} %      ".format(sub_progress))
+        self.s_main.configure("MainProgressbar", text="all airfoils: {0} %      ".format(main_progress))
+        self.s_sub.configure("SubProgressbar", text="current airfoil: {0} %      ".format(sub_progress))
 
-        #self.progressLog.delete()
-
-        #for line in content:
-         #   self.progressLog.insert(tk.END, line)
+        # update progress-log-widget (only the new lines)
+        for idx in range (old_length, new_length):
+            line = self.filterLines(content[idx])
+            if line != None:
+                self.progressLog.insert(tk.END, content[idx])
+                # always show the last line, if there is a new one
+                self.progressLog.see(tk.END)
 
         self.root.update()
+
+        # setup next cylce
         self.root.after(200, self.update_progressbars)
 
 
@@ -234,18 +274,19 @@ class show_status():
 
         # setup tool-calls
         exeCallString =  " .." + bs + exePath + bs
-        pythonCallString = pythonInterpreterName + ' ..' + bs + scriptPath + bs
+        pythonCallString =  pythonInterpreterName + ' ..' + bs + scriptPath + bs
 
         if (self.scriptsAsExe):
-            xoptfoilVisualizerCall = exeCallString + xoptfoilVisualizerName + '.exe'
+            xoptfoilVisualizerCall =  exeCallString + xoptfoilVisualizerName + '.exe'
         else:
-            xoptfoilVisualizerCall = pythonCallString + xoptfoilVisualizerName + '.py'
+            xoptfoilVisualizerCall =  pythonCallString + xoptfoilVisualizerName + '.py'
 
-        # compose system-call-string
-        systemString = ("%s -o 3 -c %s") % (xoptfoilVisualizerCall, airfoilname)
+        # compose subprocess-string
+        cmd = (" %s -o 3 -c %s\n") % (xoptfoilVisualizerCall, airfoilname)
 
-        # now execute system-call
-        os.system(systemString)
+        # now open subprocess
+        p = subprocess.Popen(cmd, shell=True)
+        #os.system(systemString)
 
 
     def quit(self):

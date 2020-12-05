@@ -29,7 +29,3 @@
   pso_maxit       = 140
 /
 
-&xfoil_run_options
-  reinitialize    = .true.
-/
-

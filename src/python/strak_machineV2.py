@@ -2422,12 +2422,14 @@ def insert_SubTaskProgress(commandLines, fileName, progress):
     commandLines.append("echo sub-task progress: %.1f >> %s\n" % (progress,fileName))
 
 
-def insert_airfoilName(commandLines, filename, params, i, n, c, airfoilname):
-    commandLines.append("echo finalizing strak-airfoil: %s >> %s\n" % (airfoilname, filename))
+def insert_preliminaryAirfoilName(commandLines, filename, airfoilname):
+    commandLines.append("echo %%TIME%%   creating preliminary-airfoil: %s >> %s\n" % (airfoilname, filename))
 
+def insert_airfoilName(commandLines, filename, airfoilname):
+    commandLines.append("echo %%TIME%%   finalizing strak-airfoil: %s >> %s\n" % (airfoilname, filename))
 
-def insert_preliminaryAirfoilName(commandLines, filename, params, i, n, c, airfoilname):
-    commandLines.append("echo creating preliminary-airfoil: %s >> %s\n" % (airfoilname, filename))
+def insert_finishedAirfoil(commandLines, filename, airfoilname):
+     commandLines.append("echo %%TIME%%   finished strak-airfoil: %s >> %s\n" % (airfoilname, filename))
 
 
 def insert_MainTaskStart(commandLines, filename, rootfoilName, ReList):
@@ -2453,8 +2455,8 @@ def insert_MainTaskEnd(commandLines, filename):
     commandLines.append("echo main-task end >> %s\n" % (filename))
 
 
-def insert_SubTaskStart(commandLines, filename, strakfoilname):
-    commandLines.append("echo sub-task start: create strak-airfoil %s >> %s\n" % (strakfoilname, filename))
+def insert_SubTaskStart(commandLines, filename, airfoilname):
+    commandLines.append("echo sub-task start: create strak-airfoil %s >> %s\n" % (airfoilname, filename))
 
 
 def insert_SubTaskEnd(commandLines, filename):
@@ -2466,14 +2468,39 @@ def insert_StatusCall(commandLines, params):
 
 
 def calculate_MainTaskProgress(params, i):
-    numFoils = get_NumberOfAirfoils(params)
+    # get number of airfoils without root-airfoil
+    numFoils = get_NumberOfAirfoils(params)-1
     progress = (i*100.0)/numFoils
     return progress
 
+
 def calculate_SubTaskProgress(params, n, c):
-    # TODO
-    progress = 10.3
-    #print ("progress is: TODO\n")#Debug
+    overall_iterations = 0
+    iterations_elapsed = 0
+
+    # multi-pass-optimization ?
+    if (params.optimizationPasses > 1):
+        # loop over all optimization-passes
+        for idx in range(0, params.optimizationPasses):
+            num_competitors = params.numberOfCompetitors[idx]
+            iterations_per_competitor = params.maxIterations[idx]
+            iterations_per_pass = num_competitors * iterations_per_competitor
+            overall_iterations = overall_iterations + iterations_per_pass
+
+        for idx in range(0, n+1):
+            num_competitors = params.numberOfCompetitors[idx]
+            iterations_per_competitor = params.maxIterations[idx]
+            if (n > idx):
+                iterations_per_pass = num_competitors * iterations_per_competitor
+            else:
+                iterations_per_pass = (c+1) * iterations_per_competitor
+            iterations_elapsed = iterations_elapsed + iterations_per_pass
+
+        progress = (iterations_elapsed * 100.0) / overall_iterations
+    else:
+        # singlepass-optimization
+        progress = 100.0
+
     return progress
 
 
@@ -2560,7 +2587,7 @@ def generate_Commandlines(params):
                 competitorName = intermediateFoilName.strip('.dat') + ("_%d" % (c+1))
 
                 # insert name of airfoil to be processes into progress-file
-                insert_preliminaryAirfoilName(commandLines, progressFileName, params, i, n, c, competitorName)
+                insert_preliminaryAirfoilName(commandLines, progressFileName, competitorName)
 
                 # generate commandline for competitor-intermediate strak-airfoil
                 commandline = params.xoptfoilCall + " -i %s -r %d -a %s -o %s\n" %\
@@ -2599,7 +2626,7 @@ def generate_Commandlines(params):
             iFileIndex = i
 
         # insert name of airfoil to be processes into progress-file
-        insert_airfoilName(commandLines, progressFileName, params, i, n, c, strakFoilName.strip('.dat'))
+        insert_airfoilName(commandLines, progressFileName, strakFoilName.strip('.dat'))
 
         iFile = params.inputFileNames[iFileIndex]
         commandline = params.xoptfoilCall + " -i %s -r %d -a %s -o %s\n" %\
@@ -2639,22 +2666,22 @@ def generate_Commandlines(params):
             (strakFoilName , airfoilPath, strakFoilName)
         commandLines.append(commandline)
 
+        # insert message that strak-airfoil was finished
+        insert_finishedAirfoil(commandLines, progressFileName, strakFoilName)
+
         # insert end of sub-task
         insert_SubTaskEnd(commandLines, progressFileName)
 
         # set timestamp and progress
-        progress = calculate_MainTaskProgress(params, i+1)
+        progress = calculate_MainTaskProgress(params, i)
         insert_MainTaskProgress(commandLines, progressFileName, progress)
+
+    # set end of main-task
+    insert_MainTaskEnd(commandLines, progressFileName)
 
     # change current working dir back
     commandline = "cd..\n"
     commandLines.append(commandline)
-
-    # set final timestamp and progress
-    #insert_MainTaskProgress(commandLines, progressFileName, 100.0) TODO
-
-    # set end of main-task
-    insert_MainTaskEnd(commandLines, progressFileName)
 
     # pause in the end
     commandline = "pause\n"

@@ -67,6 +67,10 @@ def main():
         print("Error, airfoilName or numCompetitors not specified!")
         sys.exit(-1)
 
+    # open progressfile to append text-messages
+    progressfile = open("progress.txt", 'a')
+    progressfile.write('\nchoosing best preliminary airfoil for next stage\n')
+
     for i in range(numCompetitors):
         # example: SD-strak-150k_1_1_performance_summary.dat
         summaryFileName = airfoilName + ("_%d_performance_summary.dat" % (i+1))
@@ -92,10 +96,17 @@ def main():
                     bestCompetitor = competitorFileName
                     bestCompetitorSummary = summary
 
+    bestAirfoilString = "Best airfoil is: \'%s\'\n" % bestCompetitor
+    improvementString = "Improvement over seed is: %f\n\n" % max_improvement
+
     # print result
-    print("Best competitor is: \'%s\'" % bestCompetitor)
-    print("Improvement over seed is: \'%f\'" % max_improvement)
+    print(bestAirfoilString)
+    print(improvementString)
     print("Renaming airfoil \'%s\' to \'%s\'\n" % (bestCompetitor, airfoilName))
+
+    # write result to progressfile
+    progressfile.write(bestAirfoilString)
+    progressfile.write(improvementString)
 
     # write the summary-file of the best competitor
     writeSummaryToFile(airfoilName, bestCompetitorSummary)

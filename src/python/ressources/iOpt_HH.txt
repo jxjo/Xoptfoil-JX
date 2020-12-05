@@ -34,7 +34,3 @@
   pso_convergence_profile = 'exhaustive'
   pso_options%max_retries = 50
 /
-
-&xfoil_run_options
-  reinitialize    = .true.
-/
