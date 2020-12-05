@@ -69,7 +69,7 @@ def main():
 
     # open progressfile to append text-messages
     progressfile = open("progress.txt", 'a')
-    progressfile.write('\nchoosing best preliminary airfoil for next stage\n')
+    progressfile.write('\nchoosing best preliminary airfoil for next stage..\n')
 
     for i in range(numCompetitors):
         # example: SD-strak-150k_1_1_performance_summary.dat
@@ -96,17 +96,14 @@ def main():
                     bestCompetitor = competitorFileName
                     bestCompetitorSummary = summary
 
-    bestAirfoilString = "Best airfoil is: \'%s\'\n" % bestCompetitor
-    improvementString = "Improvement over seed is: %f\n\n" % max_improvement
+    bestAirfoilString = "Best airfoil is: \'%s\', Improvement over seed is: %f%%\n\n" % (bestCompetitor, max_improvement)
 
     # print result
     print(bestAirfoilString)
-    print(improvementString)
     print("Renaming airfoil \'%s\' to \'%s\'\n" % (bestCompetitor, airfoilName))
 
     # write result to progressfile
     progressfile.write(bestAirfoilString)
-    progressfile.write(improvementString)
 
     # write the summary-file of the best competitor
     writeSummaryToFile(airfoilName, bestCompetitorSummary)

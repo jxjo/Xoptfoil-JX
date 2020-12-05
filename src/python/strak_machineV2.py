@@ -2414,11 +2414,10 @@ def delete_progressFile(commandLines, filename):
 
 
 def insert_MainTaskProgress(commandLines, fileName, progress):
-    commandLines.append("echo timestamp: %%TIME%% >> %s\n" % fileName)
     commandLines.append("echo main-task progress: %.1f >> %s\n" % (progress,fileName))
 
+
 def insert_SubTaskProgress(commandLines, fileName, progress):
-    commandLines.append("echo timestamp: %%TIME%% >> %s\n" % fileName)
     commandLines.append("echo sub-task progress: %.1f >> %s\n" % (progress,fileName))
 
 
@@ -2428,9 +2427,14 @@ def insert_preliminaryAirfoilName(commandLines, filename, airfoilname):
 def insert_airfoilName(commandLines, filename, airfoilname):
     commandLines.append("echo %%TIME%%   finalizing strak-airfoil: %s >> %s\n" % (airfoilname, filename))
 
-def insert_finishedAirfoil(commandLines, filename, airfoilname):
-     commandLines.append("echo %%TIME%%   finished strak-airfoil: %s >> %s\n" % (airfoilname, filename))
+def insert_finishedAirfoil(commandLines, filename ):
+     commandLines.append("echo %%TIME%%   finished strak-airfoil >> %s\n" % filename)
 
+def insert_calculate_polars(commandLines, filename, airfoilname):
+     commandLines.append("echo %%TIME%%   calculating polars for strak-airfoil: %s >> %s\n" % (airfoilname, filename))
+
+def insert_calculate_polars_finished(commandLines, filename):
+     commandLines.append("echo %%TIME%%   finished calculating polars >> %s\n" % filename)
 
 def insert_MainTaskStart(commandLines, filename, rootfoilName, ReList):
     line = "echo main-task start: create whole set of strak-airfoils "
@@ -2648,6 +2652,12 @@ def generate_Commandlines(params):
         # set timestamp and progress
         insert_SubTaskProgress(commandLines, progressFileName, 100.0)
 
+        # insert message that strak-airfoil was finished
+        insert_finishedAirfoil(commandLines, progressFileName)
+
+        # insert message for polar-calculation
+        insert_calculate_polars(commandLines, progressFileName, strakFoilName)
+
         # create T1 / T2 / merged polars for the specified Re-numbers of the
         # generated strak-airfoil
         generate_polarCreationCommandLines(commandLines, params, strakFoilName,
@@ -2661,13 +2671,13 @@ def generate_Commandlines(params):
             generate_polarCreationCommandLines(commandLines, params, strakFoilName,
                                                maxReList[i+1], ReList[i+1])
 
+        # insert message for polar-calculation
+        insert_calculate_polars_finished(commandLines, progressFileName)
+
         # copy strak-airfoil to airfoil-folder
         commandline = ("copy %s %s" + bs +"%s\n\n") % \
             (strakFoilName , airfoilPath, strakFoilName)
         commandLines.append(commandline)
-
-        # insert message that strak-airfoil was finished
-        insert_finishedAirfoil(commandLines, progressFileName, strakFoilName)
 
         # insert end of sub-task
         insert_SubTaskEnd(commandLines, progressFileName)
