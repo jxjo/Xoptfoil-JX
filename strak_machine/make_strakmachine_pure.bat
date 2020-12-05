@@ -16,9 +16,9 @@ rem use copy to create exe-files
 copy ..\src\python\planform_creator.py .\Strakmachine_pure\scripts\
 copy ..\src\python\strak_machineV2.py .\Strakmachine_pure\scripts\
 copy ..\src\python\xoptfoil_visualizer-jx.py .\Strakmachine_pure\scripts\
-copy ..\src\python\start_visu.py .\Strakmachine_pure\scripts\
 copy ..\src\python\best_airfoil.py .\Strakmachine_pure\scripts\
 copy ..\src\python\change_airfoilname.py .\Strakmachine_pure\scripts\
+copy ..\src\python\show_status.py .\Strakmachine_pure\scripts\
 
 rem copy xoptfoil and xfoil-worker to bin-folder
 copy ..\windows\bin\*.exe .\Strakmachine_pure\bin\
@@ -37,15 +37,9 @@ del .\Strakmachine_pure\start_strakmachine.bat
 echo python .\scripts\strak_machineV2.py >>.\Strakmachine_pure\start_strakmachine.bat
 echo pause >>.\Strakmachine_pure\start_strakmachine.bat
 
-del .\Strakmachine_pure\start_visualizer.bat
-echo python .\scripts\start_visu.py >>.\Strakmachine_pure\start_visualizer.bat 
-echo pause >>.\Strakmachine_pure\start_visualizer.bat 
-
 del .\Strakmachine_pure\create_wingplanform.bat
 echo python .\scripts\planform_creator.py >>.\Strakmachine_pure\create_wingplanform.bat
 echo pause >>.\Strakmachine_pure\\create_wingplanform.bat
 
 rem create zip-archive
 rem 7z a .\Strakmachine_pure\ Strakmachine_pure_1_1.zip
-
-pause
