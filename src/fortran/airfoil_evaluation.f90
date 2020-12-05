@@ -913,6 +913,7 @@ function write_airfoil_optimization_progress(designvars, designcounter)
   character(100) :: foilfile, polarfile, text, title
   character(8) :: maxtchar, xmaxtchar, maxcchar, xmaxcchar
   integer :: foilunit, polarunit
+  logical :: xfoil_reinitialize
 
   write(text,*) designcounter
   text = adjustl(text)
@@ -929,8 +930,13 @@ function write_airfoil_optimization_progress(designvars, designcounter)
 ! Design 0 is seed airfoil to output - take the original values 
 !     Smoothing - Restore the original, not smoothed seed airfoil to
 !                 ...design_coordinates.dat to show it in visualizer
+  xfoil_reinitialize = xfoil_options%reinitialize
+
   if (designcounter == 0) then
     foil = seed_foil_not_smoothed
+
+  ! ensure convergence for seed airfoil - see also check_seed
+    xfoil_options%reinitialize = .true. 
 
 ! Design > 0 - Build current foil out seed foil and current design 
   else 
@@ -948,6 +954,9 @@ function write_airfoil_optimization_progress(designvars, designcounter)
                  use_flap, x_flap, y_flap, y_flap_spec,                        &
                  actual_flap_degrees(1:noppoint), xfoil_options,               &
                  op_converged, lift, drag, moment, alpha, xtrt, xtrb, ncrit_pt)
+
+
+xfoil_options%reinitialize = xfoil_reinitialize 
              
 ! Get geometry info 
   call xfoil_set_airfoil (foil)   ! last set could have been a flaped version     

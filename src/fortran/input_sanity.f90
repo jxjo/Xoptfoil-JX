@@ -56,7 +56,7 @@ subroutine check_seed()
   integer :: i, nptt, nptb, nptint
   character(100) :: text, text2
   character(15) :: opt_type
-  logical :: addthick_violation
+  logical :: addthick_violation, xfoil_reinitialize
   double precision :: ref_value, seed_value, tar_value, match_delta, cur_te_curvature
   double precision :: dist = 0d0
 
@@ -331,7 +331,8 @@ subroutine check_seed()
 
   end do
 
-  ! jx-mod Check for a good value of xfoil vaccel to ensure convergence at higher cl
+! Check for a good value of xfoil vaccel to ensure convergence at higher cl
+
   if (xfoil_options%vaccel > 0.01d0) then
     write(text,'(F8.4)') xfoil_options%vaccel
     text = adjustl(text)
@@ -339,10 +340,13 @@ subroutine check_seed()
                      " should be less then 0.01 to avoid convergence problems.")
   end if
 
+! Re-Init boundary layer at each op point to ensure convergence (slower)
+
+  xfoil_reinitialize = xfoil_options%reinitialize
+  xfoil_options%reinitialize = .true. 
+
 
 ! Analyze airfoil at requested operating conditions with Xfoil
-
-!  xfoil_options%show_details = .false.      ! switch off because of repeated seed calls
 
   call run_xfoil(seed_foil, xfoil_geom_options, op_point(1:noppoint),          &
                  op_mode(1:noppoint), re(1:noppoint), ma(1:noppoint),          &
@@ -351,6 +355,7 @@ subroutine check_seed()
                  op_converged, lift, drag, moment, alpha, xtrt, xtrb, ncrit_pt)
 
   xfoil_options%show_details = show_details
+  xfoil_options%reinitialize = xfoil_reinitialize 
 
 ! get airfoil geometry info from xfoil    
 
