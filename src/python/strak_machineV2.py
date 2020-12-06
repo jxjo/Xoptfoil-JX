@@ -402,15 +402,21 @@ class inputFile:
         # TODO: not sure what is the best algorithm:
         # use Difference in Re or use Re-factor?
         ReDiffList =  [(70000/4), 70000]
-        perturbList = [(0.0025/2), 0.0025]
+        perturbList_ReDiff = [(0.0025/2), 0.0025]
 
-        #ReFactorList =  [0.67, 0.95] #TODO
-        #perturbList = [(0.01/5), 0.0005]
+        ReFactorList = [(150/220),(80/150)]
+        perturbList_ReFactor = [(0.0025*1.5), (0.0025*2.5)]
 
         # calculate corresponding perturb according to Re-Diff
-        perturb = interpolate(ReDiffList[0],ReDiffList[1],
-                              perturbList[0],perturbList[1],ReDiff)
-        return round(perturb, PER_decimals)
+        perturb_fromDiff = interpolate(ReDiffList[0],ReDiffList[1],
+                           perturbList_ReDiff[0],perturbList_ReDiff[1],ReDiff)
+
+        # calculate corresponding perturb according to Re-Factor
+        perturb_fromFactor = interpolate(ReFactorList[0],ReFactorList[1],
+                             perturbList_ReFactor[0],perturbList_ReFactor[1],ReFactor)
+
+        # return perturb, based on Re-Factor
+        return round(perturb_fromFactor, PER_decimals)
 
 
     def set_NewTargetValues(self, start, end, rootPolar, x1, x2, y1, y2):
@@ -535,20 +541,21 @@ class inputFile:
         opPoints = operatingConditions["op_point"]
 
         # determine min and max weight
-        maxWeigth = params.maxWeight
+        maxWeight = params.maxWeight
         minWeight = params.minWeight
 
         # evaluate the weighting-mode
         if (params.weightingMode == 'constant'):
             # set every op-point to constant minWeight (but not alpha_preClmax)
-            for idx in range(self.idx_preClmax+1):
+            for idx in range(self.idx_preClmax):#(self.idx_preClmax+1) #Test
                 self.change_Weighting(idx, minWeight)
+            self.change_Weighting(self.idx_preClmax, 2*maxWeight)#Test
 
         elif (params.weightingMode == 'linear_progression'):
             # increment weighting from minWeight to maxWeight
             # do not change alpha_preClmax
             num_intervals = self.idx_preClmax+1
-            diff = (maxWeigth - minWeight) / num_intervals
+            diff = (maxWeight - minWeight) / num_intervals
 
             for idx in range(num_intervals):
                 weight = round(minWeight + (idx*diff), 2)
@@ -573,7 +580,7 @@ class inputFile:
 
                 # calculate sinus-function. The result is a "delta-" value
                 # that will be added to minWeight
-                diff = (maxWeigth - minWeight) * sin(y)
+                diff = (maxWeight - minWeight) * sin(y)
 
                 # calculate new weight
                 weight = round((minWeight + diff), 2)
@@ -589,7 +596,7 @@ class inputFile:
                 y2 = 0.0
                 y = interpolate(x1, x2, y1, y2, opPoints[idx])
 
-                diff = (maxWeigth - minWeight) * sin(y)
+                diff = (maxWeight - minWeight) * sin(y)
                 weight = round((minWeight + diff), 2)
                 self.change_Weighting(idx, weight)
 
