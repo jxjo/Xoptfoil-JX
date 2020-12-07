@@ -405,7 +405,7 @@ class inputFile:
         perturbList_ReDiff = [(0.0025/2), 0.0025]
 
         ReFactorList = [(150/220),(80/150)]
-        perturbList_ReFactor = [(0.0025*1.5), (0.0025*2.5)]
+        perturbList_ReFactor = [(0.0025), (0.0025*2)]
 
         # calculate corresponding perturb according to Re-Diff
         perturb_fromDiff = interpolate(ReDiffList[0],ReDiffList[1],
@@ -547,9 +547,8 @@ class inputFile:
         # evaluate the weighting-mode
         if (params.weightingMode == 'constant'):
             # set every op-point to constant minWeight (but not alpha_preClmax)
-            for idx in range(self.idx_preClmax):#(self.idx_preClmax+1) #Test
+            for idx in range(self.idx_preClmax+1):
                 self.change_Weighting(idx, minWeight)
-            self.change_Weighting(self.idx_preClmax, 2*maxWeight)#Test
 
         elif (params.weightingMode == 'linear_progression'):
             # increment weighting from minWeight to maxWeight
@@ -800,8 +799,8 @@ class inputFile:
         # get alpha0 - target
         alpha = round(params.targets["alpha0"][i], AL_decimals)
 
-        # set weighting to 2 times maxWeight
-        weighting = 2*params.maxWeight
+        # set weighting to maxWeight
+        weighting = params.maxWeight #2*params.maxWeight #Test
 
         # set reynolds
         if params.ReAlpha0 > 0:
@@ -814,6 +813,30 @@ class inputFile:
                                      0.0, weighting, reynolds)
 
             #print (idx)#Debug
+
+    # This function will append an additonal oppoint, that will prevent
+    # that the point of maxLift drops too much at lower reynolds-numbers
+    def add_maxLift_protection_oppoint(self, params, strakPolar, i):
+        # get Re of strak-airfoil
+        Re = params.ReNumbers[i]
+
+        # calculate reynolds-number that shall be watched
+        reynolds = int(round((Re*2/3), 0))
+
+        # set weighting of oppoint to half between min and maxWeight
+        weighting = (params.minWeight + params.maxWeight) / 2
+
+        # get data of last oppoint (that is always the point of maximum lift)
+        (lastOppointName, idx) = self.get_LastOpPoint()
+        CL =  self.get_OpPoint(lastOppointName)
+
+        # calculate target-value of maximum Lift-oppoint at lower
+        # reynolds-number (only roughly estimated)
+        targetValue = self.get_TargetValue(lastOppointName) * 1.2
+
+        # append oppoint now
+        self.add_Oppoint('maxLiftGuard', 'spec-cl', CL, 'target-drag',
+                                     targetValue, weighting, reynolds)
 
 
     # All op-points between start and end shall be distributed equally.
@@ -1336,7 +1359,7 @@ class polarGraph:
 
         # determine some text-offsets
         CL0TextOffset_x = polars[0].find_CD_From_CL(0.0) * 1.1
-        CL0TextOffset_y = 0
+        CL0TextOffset_y = -0.2
         maxSpeedTextOffset_x = polars[0].CD_maxSpeed * 1.1
         maxSpeedTextOffset_y = rootPolar.CL_maxSpeed
         maxGlideTextOffset_x = polars[0].find_CD_From_CL(rootPolar.CL_maxGlide) * 1.1
@@ -1527,7 +1550,7 @@ class polarGraph:
             # additonal text for root polar only
             if (polar == rootPolar):
                 ax.annotate('CL=0 (root) @ alpha = %.2f' % x,
-                  xy=(x,y), xytext=(20,-5), textcoords='offset points',
+                  xy=(x,y), xytext=(20,-15), textcoords='offset points',
                   fontsize = fs_infotext, color=cl_infotext)
 
             # plot max Speed
@@ -3230,6 +3253,9 @@ def generate_InputFiles(params):
         # insert oppoint for alpha @ CL = 0
         if params.optimizeAlpha0[i]:
             newFile.insert_alpha0_oppoint(params, strakPolar,i)
+
+        # insert oppoint for maxLift-protection at lower Re-numbers
+        newFile.add_maxLift_protection_oppoint(params, strakPolar,i)
 
         # get default-value of initialPerturb from template
         initialPerturb = newFile.get_InitialPerturb()
