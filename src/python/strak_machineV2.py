@@ -3255,7 +3255,7 @@ def generate_InputFiles(params):
             newFile.insert_alpha0_oppoint(params, strakPolar,i)
 
         # insert oppoint for maxLift-protection at lower Re-numbers
-        newFile.add_maxLift_protection_oppoint(params, strakPolar,i)
+        #newFile.add_maxLift_protection_oppoint(params, strakPolar,i)
 
         # get default-value of initialPerturb from template
         initialPerturb = newFile.get_InitialPerturb()
