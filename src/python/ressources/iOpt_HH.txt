@@ -28,6 +28,10 @@
   feasible_init_attempts = 1000
 /
 
+&xfoil_paneling_options
+  repanel = .true.
+/
+
 &particle_swarm_options
   pso_pop        = 40
   pso_maxit      = 300
