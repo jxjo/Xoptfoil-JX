@@ -390,6 +390,10 @@ class inputFile:
         optimization_options = self.values["optimization_options"]
         optimization_options['initial_perturb'] = newValue
 
+    def set_shape_functions (self, shape_functions):
+        optimization_options = self.values["optimization_options"]
+        optimization_options['shape_functions'] = shape_functions
+
     def set_maxIterations(self, newValue):
         particle_swarm_options = self.values["particle_swarm_options"]
         particle_swarm_options['pso_maxit'] = newValue
@@ -405,7 +409,7 @@ class inputFile:
         perturbList_ReDiff = [(0.0025/2), 0.0025]
 
         ReFactorList = [(150/220),(80/150)]
-        perturbList_ReFactor = [(0.0025), (0.0025*2)]
+        perturbList_ReFactor = [(0.0025), (0.0025*1.5)]
 
         # calculate corresponding perturb according to Re-Diff
         perturb_fromDiff = interpolate(ReDiffList[0],ReDiffList[1],
@@ -962,6 +966,7 @@ class strakData:
     def __init__(self):
         self.buildDir = ''
         self.workingDir = ''
+        self.quality = 'medium'
         self.strakMachineCall = "strak_machineV2.py"
         self.xfoilWorkerCall = "xfoil_worker.exe"
         self.xoptfoilCall = "xoptfoil-jx.exe"
@@ -969,9 +974,9 @@ class strakData:
         self.xoptfoilVisualizerCall = "xoptfoil_visualizer-jx.exe"
         self.airfoilComparisonCall = "best_airfoil.py"
         self.xoptfoilInputFileName = 'istrak.txt'
-        self.weightingMode = 'sinus'
+        self.weightingMode = 'constant'
         self.batchfileName = 'make_strak.bat'
-        self.xoptfoilTemplate = "Generic"
+        self.xoptfoilTemplate = "iOpt"
         self.operatingMode = 'default'
         self.seedFoilName = ""
         self.matchPolarFoilName = ""
@@ -994,7 +999,7 @@ class strakData:
         self.showTargetPolars = True
         self.adaptInitialPerturb = True
         self.smoothSeedfoil = True
-        self.smoothStrakFoils = True
+        self.smoothStrakFoils = False
         self.smoothMatchPolarFoil = False
         self.plotStrakPolars = True
         self.ReNumbers = []
@@ -1012,8 +1017,9 @@ class strakData:
         self.target_polars = []
         self.strak_polars = []
         self.inputFiles = []
-        self.maxIterations = 0, # multi-pass optimization: single-pass-optimization / one stage
-        self.numberOfCompetitors = [1, 1, 1, 1, 1, 1, 1, 1], # multi-pass optimization: only one competitor per stage
+        self.maxIterations = [30,40,160], # multi-pass optimization
+        self.numberOfCompetitors = [1, 3, 1], # multi-pass optimization
+        self.shape_functions = ['camb-thick-plus','hicks-henne','hicks-henne'],
         self.optimizeAlpha0 = [True, True, True, True, True, True, True, True, True, True, True, True]
         self.minCLGain = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
         self.maxGlideShift = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
@@ -2906,7 +2912,15 @@ def get_Arguments():
 # function that gets a single parameter from dictionary and returns a
 # default value in case of error
 def get_ParameterFromDict(dict, key, default):
-    value = default
+    res = type(default) is tuple
+    # set default-value first
+    if (res):
+        value = None
+        for element in default:
+            value = element
+    else:
+        value = default
+
     try:
         value = dict[key]
     except:
@@ -2964,7 +2978,7 @@ def get_MandatoryParameterFromDict(dict, key):
 
 
 ################################################################################
-# function that checks validity of the weighting-mode
+# function that checks validity of the 'weighting-mode'-input
 def check_WeightingMode(params):
     if ((params.weightingMode != 'linear_progression') &
         (params.weightingMode != 'constant') &
@@ -2973,6 +2987,30 @@ def check_WeightingMode(params):
         WarningMsg('weightingMode = \'%s\' is not valid, setting weightingMode'\
         ' to \'constant\'' % params.weightingMode)
         params.weightingMode = 'constant'
+
+
+################################################################################
+# function that checks validity of the 'quality'-input
+def check_quality(params):
+    if ((params.quality != 'medium') &
+        (params.quality != 'high')):
+
+        WarningMsg('quality = \'%s\' is not valid, setting quality'\
+        ' to \'medium\'' % params.quality)
+        params.quality = 'medium'
+
+    if params.quality == 'medium':
+        # single-pass optimization, camb-thick-plus
+        params.maxIterations = [40]
+        params.numberOfCompetitors = [1]
+        params.shape_functions = ['camb-thick-plus'],
+    else:
+        # multi-pass optimization, camb-thick-plus and hicks-henne
+        params.maxIterations = [30,40,160]
+        params.numberOfCompetitors = [1, 3, 1]
+        params.shape_functions = ['camb-thick-plus','hicks-henne','hicks-henne']
+
+    params.optimizationPasses = len(params.maxIterations)
 
 
 ################################################################################
@@ -3021,10 +3059,9 @@ def get_Parameters(dict):
         params.scriptsAsExe = False
 
     # get mandatory parameters first
+    params.quality = get_MandatoryParameterFromDict(dict, 'quality')
 
     params.seedFoilName = get_MandatoryParameterFromDict(dict, 'seedFoilName')
-
-    params.xoptfoilTemplate = get_MandatoryParameterFromDict(dict, 'xoptfoilTemplate')
 
     params.ReNumbers = get_MandatoryParameterFromDict(dict, 'reynolds')
 
@@ -3042,13 +3079,8 @@ def get_Parameters(dict):
     params.maxReFactor = get_ParameterFromDict(dict, "maxReynoldsFactor",
                                                         params.maxReFactor)
 
-    # multi-pass-optimization
-    params.maxIterations = get_ParameterFromDict(dict, "maxIterations",
-                                                   params.maxIterations)
-    params.optimizationPasses = len(params.maxIterations)
-
-    params.numberOfCompetitors = get_ParameterFromDict(dict, "numberOfCompetitors",
-                                                   params.numberOfCompetitors)
+    params.xoptfoilTemplate = get_ParameterFromDict(dict, 'xoptfoilTemplate',
+                                 params.xoptfoilTemplate)
 
     params.additionalOpPoints[0] = get_ParameterFromDict(dict, "additionalOpPoints",
                                                    params.additionalOpPoints[0])
@@ -3108,6 +3140,7 @@ def get_Parameters(dict):
     check_operatingMode(params, dict)
     check_WeightingMode(params)
     check_NumOpPoints(params)
+    check_quality(params)
 
     DoneMsg()
     return params
@@ -3296,10 +3329,12 @@ def generate_InputFiles(params):
             newFile.set_maxIterations(maxIterations)
             # set initialPerturb
             newFile.set_InitialPerturb(initialPerturb)
+            # set shape_functions
+            newFile.set_shape_functions (params.shape_functions [n])
             # physically create the file
             newFile.write_ToFile(iFile)
             # reduce initial perturb for the next pass
-            initialPerturb = initialPerturb/2
+            initialPerturb = initialPerturb/4
 
         # append only input-file of final strak-airfoil to params
         params.inputFiles.append(newFile)
