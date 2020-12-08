@@ -2,11 +2,11 @@
   search_type      = 'global'
   global_search    = 'particle_swarm'
   seed_airfoil     = 'from_file'
-  shape_functions  = 'camb-thick-plus'
-  initial_perturb  = 0.01
-  write_designs    = .true.
-  show_details     = .false.
-  echo_input_parms = .false.
+  shape_functions  = 'hicks-henne'
+  min_bump_width   = 0.1  
+  initial_perturb  = 0.0025
+  nfunctions_top   = 5
+  nfunctions_bot   = 5
 /  
 
 &operating_conditions
@@ -22,14 +22,19 @@
   weighting         = 1.0, 1.0,
 /
 
+&initialization
+  feasible_init = .true.
+  feasible_limit = 100000
+  feasible_init_attempts = 1000
+/
+
 &xfoil_paneling_options
   repanel = .true.
 /
 
 &particle_swarm_options
-  pso_pop         = 40
-  pso_tol         = 0.0005  
-  pso_convergence_profile = 'quick_camb_thick'
-  pso_maxit       = 140
+  pso_pop        = 40
+  pso_maxit      = 300
+  pso_convergence_profile = 'exhaustive'
+  pso_options%max_retries = 50
 /
-
