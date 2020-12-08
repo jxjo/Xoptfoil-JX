@@ -1,11 +1,8 @@
 {
-      "xoptfoilTemplate": "iOpt_HH",
-      "maxIterations":    [40,60,160],
-      "numberOfCompetitors":[4, 2, 1],
-      "weightingMode": "constant",
+      "quality": "high",
       "seedFoilName": "SD",
       "minCLGain":        [0.0,        0.1,    0.23],
-      "maxSpeedGain":     [0.0,       0.40,    0.40],
+      "maxSpeedGain":     [0.0,       0.40,    0.35],
       "maxGlideGain":     [0.0,      -0.22,   -0.05],
       "maxLiftGain":      [0.0,       0.26,    0.13],
       "maxGlideShift":    [0.0,      0.015,   0.015],
