@@ -1160,11 +1160,10 @@ class strakData:
 
             #---------------------- maxSpeed-targets --------------------------
             target_CL_maxSpeed = rootPolar.CL_maxSpeed
-            polar_CD_maxSpeed = polar.find_CD_From_CL(target_CL_maxSpeed)
 
             # now calculate CD-target-value
             target_CD_maxSpeed = self.calculate_CD_TargetValue(
-            rootPolar.CD_maxSpeed, polar_CD_maxSpeed, maxSpeedGain)
+            rootPolar.CD_maxSpeed, polar.CD_maxSpeed, maxSpeedGain)
 
             # append the targets
             self.targets["CL_maxSpeed"].append(target_CL_maxSpeed)
@@ -2005,12 +2004,7 @@ class polarData:
         # get root-polar for reference
         rootPolar = params.merged_polars[0]
 
-        # is this polar the root-polar?
-        if (self == rootPolar):
-            self.determine_MaxSpeed()
-        else:
-            self.determine_MaxSpeedOfStrakPolar(rootPolar.CL_maxSpeed)
-
+        self.determine_MaxSpeed()
         self.determine_CLmin(params)
         self.determine_MaxGlide()
         self.determine_MaxLift(params)
@@ -3006,7 +3000,7 @@ def check_quality(params):
         params.shape_functions = ['camb-thick-plus'],
     else:
         # multi-pass optimization, camb-thick-plus and hicks-henne
-        params.maxIterations = [30,40,160]
+        params.maxIterations = [40,60,160]
         params.numberOfCompetitors = [1, 3, 1]
         params.shape_functions = ['camb-thick-plus','hicks-henne','hicks-henne']
 
