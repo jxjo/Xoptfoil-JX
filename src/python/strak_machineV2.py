@@ -982,13 +982,13 @@ class strakData:
         self.matchPolarFoilName = ""
         self.ReSqrtCl = 150000
         self.ReAlpha0 = 0
-        self.numOpPoints = 13
+        self.numOpPoints = 15
         self.minWeight = 0.7
         self.maxWeight = 1.5
         self.CL_min = -0.1
         self.CL_switchpoint_Type2_Type1_polar = 0.05
         self.maxReFactor = 10.0
-        self.maxLiftDistance = 0.05
+        self.maxLiftDistance = 0.09
         self.optimizationPasses = 3
         self.scriptsAsExe = False
         self.generateBatch = True
@@ -2995,7 +2995,7 @@ def check_quality(params):
 
     if params.quality == 'medium':
         # single-pass optimization, camb-thick-plus
-        params.maxIterations = [40]
+        params.maxIterations = [50]
         params.numberOfCompetitors = [1]
         params.shape_functions = ['camb-thick-plus'],
     else:
@@ -3303,7 +3303,6 @@ def generate_InputFiles(params):
             # calculate initial perturb now.
             initialPerturb = newFile.calculate_InitialPerturb(params.ReNumbers[i],
                               ReDiff, ReFactor)
-
 
         # get Default-value for max iterations
         maxIterationsDefault = newFile.get_maxIterations()
