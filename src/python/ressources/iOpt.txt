@@ -37,4 +37,5 @@
   pso_maxit      = 300
   pso_convergence_profile = 'exhaustive'
   pso_options%max_retries = 50
+  pso_tol = 0.00001
 /
