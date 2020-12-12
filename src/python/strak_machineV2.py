@@ -132,6 +132,15 @@ def interpolate(x1, x2, y1, y2, x):
     return y
 
 
+def interpolate_2(x1, x2, y1, y2, y):
+    try:
+        x = (y - y1)/((y2-y1)/(x2-x1)) + x1
+    except:
+        ErrorMsg("Division by zero!")
+        x = 0.0
+    return x
+
+
 # get the name and absolute path of an template xoptfoil-input-file, that
 # resides in the 'presets'-folder.
 def get_PresetInputFileName(xoptfoilTemplate, params):
@@ -179,7 +188,12 @@ class inputFile:
         #print (operatingConditions)#Debug
 
         # clean-up file
-        self.remove_DeactivatedOpPoints() #TODO remove
+        #self.remove_DeactivatedOpPoints() #TODO remove
+
+
+    def __del__(self):
+        class_name = self.__class__.__name__
+        #print (class_name, "destroyed")#Debug
 
 
     # prints all op-points for debugging-purposes
@@ -504,7 +518,6 @@ class inputFile:
         y2 = factor_maxSpeed
         x1 = params.CL_min
         x2 = CL_maxSpeed_strak
-        print(y1, y2, x1, x2)
 
         self.set_NewTargetValues(start, end, shifted_rootPolar, x1, x2, y1, y2)
 
@@ -986,6 +999,9 @@ class strakData:
         self.minWeight = 0.7
         self.maxWeight = 1.5
         self.CL_min = -0.1
+        self.intersectionPoint_CL = 0.0
+        self.intersectionPoint_CL_CD = -1.0
+        self.intersection_Hysteresis= 0.001
         self.CL_switchpoint_Type2_Type1_polar = 0.05
         self.maxReFactor = 10.0
         self.maxLiftDistance = 0.09
@@ -1464,8 +1480,11 @@ class polarGraph:
                     label = 'target-polar'
 
             if (polar == rootPolar) or (params.showTargetPolars == True):
-                x = targetPolar.CD
-                y = targetPolar.CL
+                # remove last elements, as they are dummies
+                x = deepcopy(targetPolar.CD)
+                x.pop()
+                y = deepcopy(targetPolar.CL)
+                y.pop()
 
             ax.plot(x, y, style, linestyle = ls_targetPolar,
                             linewidth = linewidth, label = label)
@@ -1606,8 +1625,11 @@ class polarGraph:
                 style = opt_point_style_root
                 linewidth = 0.0
 
-                x = targetPolar.alpha
-                y = targetPolar.CL
+                # remove last dummy-values
+                x = deepcopy(targetPolar.alpha)
+                x.pop()
+                y = deepcopy(targetPolar.CL)
+                y.pop()
 
                 # plot
                 ax.plot(x, y, style, linestyle = ls_targetPolar,
@@ -1659,6 +1681,7 @@ class polarGraph:
             # plot upper (T2)-part of polar
             x = polar.CL[switchIdx:len(polar.CD)]
             y = polar.CL_CD[switchIdx:len(polar.CL)]
+
             # plot CL, CD
             ax.plot(x, y, (cl_T2_polar+'-'), label=T2_label)
             ax.legend(loc='upper left', fontsize = fs_legend)
@@ -1733,8 +1756,10 @@ class polarGraph:
                     label = 'target-polar'
 
             if (polar == rootPolar) or (params.showTargetPolars == True):
-                x = targetPolar.CL
-                y = targetPolar.CL_CD
+                x = deepcopy(targetPolar.CL)
+                x.pop()
+                y = deepcopy(targetPolar.CL_CD)
+                y.pop()
 
                 # plot
                 ax.plot(x, y, style, linestyle = ls_targetPolar,
@@ -3070,6 +3095,9 @@ def get_Parameters(dict):
     params.maxLiftGain = get_MandatoryParameterFromDict(dict, "maxLiftGain")
 
     # get optional parameters
+    params.intersectionPoint_CL_CD = get_ParameterFromDict(dict, "intersectionPoint_CL_CD",
+                                                        params.intersectionPoint_CL_CD)
+
     params.maxReFactor = get_ParameterFromDict(dict, "maxReynoldsFactor",
                                                         params.maxReFactor)
 
@@ -3227,54 +3255,126 @@ def generate_rootfoil(params):
     return rootfoilName
 
 
+def calculate_intersectionPoint(params, inputfile):
+    # get operating-conditions
+    operatingConditions = inputfile.get_OperatingConditions()
+    #inputfile.print_OpPoints()#Debug
+
+    CL_list = operatingConditions["op_point"]
+    CD_list = operatingConditions["target_value"]
+    num = len(CL_list)
+    x1 = CL_list[num-2]
+    x2 = CL_list[num-1]
+    y1 = x1/CD_list[num-2]
+    y2 = x2/CD_list[num-1]
+
+    # extrapolate CL_CD up to CL_CD_intersection-coordinate
+    result = interpolate_2(x1, x2, y1, y2, params.intersectionPoint_CL_CD)
+    result = round(result, CL_decimals)
+    return result
+
+
+def create_new_inputFile(params, i):
+     # get strak-polar
+    strakPolar = params.merged_polars[i]
+
+    # get shifted root-polar (with shifted max-glide point).
+    # all target-values will be derived from the shifted root-polar.
+    shifted_rootPolar = deepcopy(params.shifted_rootPolars[i])
+
+    # create new inputfile from template
+    newFile = inputFile(params)
+
+    # generate a fresh list of equally distributed op-Points
+    num_opPoints = params.numOpPoints + len(params.additionalOpPoints)
+
+    # get the target-values
+    targets = params.targets
+    CL_pre_maxLift = targets["CL_pre_maxLift"][i]
+
+    # generate op-points in the range CL_min..CL_max
+    newFile.generate_OpPoints(params.numOpPoints, params.CL_min,
+                           CL_pre_maxLift)
+
+    # distribute main opPoints, also set the target-values
+    newFile.distribute_MainOpPoints(targets, i)
+
+    # insert additional opPoints (if there are any):
+    if len(params.additionalOpPoints[0])>0:
+        newFile.insert_AdditionalOpPoints(params.additionalOpPoints[i])
+
+    # now distribute the opPoints between the main opPoints and additional
+    # oppoints equally
+    newFile.distribute_IntermediateOpPoints()
+
+    # set the target-values of all intermediate-op-points now
+    newFile.set_IntermediateOpPointTargetValues(targets, shifted_rootPolar,
+                                                strakPolar, i)
+    # not needed anymore
+    del shifted_rootPolar
+
+    return newFile
+
+
+def createAdjustedInputFile(params, i):
+    adjust = True
+    while (adjust):
+        # create initial, unadjusted  inputFile
+        newFile = create_new_inputFile(params, i)
+
+        targets = params.targets
+
+        # automatic adjustment of max-Lift target-value
+        # for all strak-polars, adjust CD-target-value, so the intersection-point will
+        # be hit, leaving a small error
+        intersection_CL = calculate_intersectionPoint(params, newFile)
+
+        if (intersection_CL > (params.intersectionPoint_CL + params.intersection_Hysteresis)):
+            # increase target-value
+            targets["CD_pre_maxLift"][i] = round(targets["CD_pre_maxLift"][i] + 0.00005, CD_decimals)
+            # destroy the instance of newFile and shifted polar
+            del newFile
+        elif (intersection_CL < (params.intersectionPoint_CL - params.intersection_Hysteresis)):
+            # decrease target-value
+            targets["CD_pre_maxLift"][i] = round(targets["CD_pre_maxLift"][i] - 0.00005, CD_decimals)
+            # destroy the instance of newFile and shifted polar
+            del newFile
+
+        else:
+            # everything o.k., clear adjustment-Flag
+            adjust = False
+
+    return newFile
+
+
 def generate_InputFiles(params):
     print("Generating inputfiles...")
 
-    num_polars = len(params.ReNumbers)
+    # calculate number of files to be created
+    num_files = len(params.ReNumbers)
+
+    # create inputFile of root-airfoil, this is for reference-purposes only
+    newFile = create_new_inputFile(params, 0)
+
+    # append input-file to params
+    params.inputFiles.append(newFile)
+
+    # calculate the common intersectionPoint, so maxLiftGain can be adjusted
+    # automatically
+    params.intersectionPoint_CL = calculate_intersectionPoint(params, newFile)
+
 
     # generate files for all Re-numbers
-    for i in range(num_polars):
-        # get strak-polar
-        strakPolar = params.merged_polars[i]
+    for i in range(1, num_files):
 
-        # get shifted root-polar (with shifted max-glide point).
-        # all target-values will be derived from the shifted root-polar.
-        shifted_rootPolar = params.shifted_rootPolars[i]
-
-        # create new inputfile from template
-        newFile = inputFile(params)
-
-        # generate a fresh list of equally distributed op-Points
-        num_opPoints = params.numOpPoints + len(params.additionalOpPoints)
-
-        # get the target-values
-        targets = params.targets
-        CL_pre_maxLift = targets["CL_pre_maxLift"][i]
-
-        # generate op-points in the range CL_min..CL_max
-        newFile.generate_OpPoints(params.numOpPoints, params.CL_min,
-                               CL_pre_maxLift)
-
-        # distribute main opPoints, also set the target-values
-        newFile.distribute_MainOpPoints(targets, i)
-
-        # insert additional opPoints (if there are any):
-        if len(params.additionalOpPoints[0])>0:
-            newFile.insert_AdditionalOpPoints(params.additionalOpPoints[i])
-
-        # now distribute the opPoints between the main opPoints and additional
-        # oppoints equally
-        newFile.distribute_IntermediateOpPoints()
-        #newFile.print_OpPoints()#debug
-
-        # set the target-values of all intermediate-op-points now
-        newFile.set_IntermediateOpPointTargetValues(targets, shifted_rootPolar,
-                                                    strakPolar, i)
+        # generate file that has an adjusted maxLift-Target
+        newFile = createAdjustedInputFile(params, i)
 
         # set the importance / weightings of the op-points
         newFile.set_Weightings(params)
 
-        # adapt reynolds()-values
+        # adapt reynolds()-values, get strak-polar
+        strakPolar = params.merged_polars[i]
         newFile.adapt_ReNumbers(strakPolar)
 
         # insert oppoint for alpha @ CL = 0
@@ -3525,6 +3625,17 @@ def set_PolarDataFromInputFile(polarData, rootPolar, inputFile,
             polarData.Cm.append(0.0)
             polarData.Top_Xtr.append(0.0)
             polarData.Bot_Xtr.append(0.0)
+
+    # Bugfix: The last line of the target-polar-file will not be shown in XFLR5,
+    # add a dummy-line here
+    polarData.alpha.append(0.0)
+    polarData.CL.append(0.0)
+    polarData.CD.append(0.0)
+    polarData.CL_CD.append(0.0)
+    polarData.CDp.append(0.0)
+    polarData.Cm.append(0.0)
+    polarData.Top_Xtr.append(0.0)
+    polarData.Bot_Xtr.append(0.0)
 
 
 def generate_TargetPolars(params):
