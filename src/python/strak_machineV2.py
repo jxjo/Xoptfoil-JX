@@ -2830,6 +2830,9 @@ def get_strak_commandlines(params, commandlines, idx):
     strak_commandlines.append("cd %s\n\n" % buildPath)
     progressfile_preamble(strak_commandlines, progressFileName)
 
+    # set progress of main-task to 0 percent
+    insert_MainTaskProgress(strak_commandlines, progressFileName, 0.0)
+
     # call status monitoring
     insert_StatusCall(strak_commandlines, params)
 
@@ -2849,6 +2852,9 @@ def get_strak_commandlines(params, commandlines, idx):
         if (start):
             # append line
             strak_commandlines.append(commandlines[line_idx])
+
+    # set progress of main-task to 100 percent
+    insert_MainTaskProgress(strak_commandlines, progressFileName, 100.0)
 
     # change back directory
     strak_commandlines.append("cd..\n")

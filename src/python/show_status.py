@@ -13,6 +13,7 @@ import os
 import sys
 from json import load
 import subprocess
+import winsound
 
 # importing tkinter module
 import tkinter as tk
@@ -29,6 +30,7 @@ scriptPath = 'scripts'
 ressourcesPath = 'ressources'
 exePath = 'bin'
 logoName = 'strakmachine.jpg'
+finishSound = 'fanfare.wav'
 
 # fixed filenames
 # name of python-interpreter
@@ -49,6 +51,9 @@ bg_colour = 'gray3'
 # variable to store the number of lines of the update-cycles
 old_length = 0
 new_length = 0
+
+# variable that signals that strak-machine has finished work
+finished = False
 
 class show_status():
     def __init__(self):
@@ -240,6 +245,7 @@ class show_status():
     def update_progressbars(self):
         global old_length
         global new_length
+        global finished
 
         # read actual values from progress-file
         (main_progress, sub_progress, current_airfoil, content) = self.read_progressFile()
@@ -264,6 +270,16 @@ class show_status():
 
         self.root.update()
 
+        # check if strak-machine has finished
+        if (finished == False):
+            if (main_progress == 100.0):
+                print(os.getcwd())
+                soundFileName = '..' + bs + ressourcesPath + bs + finishSound
+                winsound.PlaySound(soundFileName , winsound.SND_FILENAME|winsound.SND_NOWAIT)
+                finished = True
+
+
+
         # setup next cylce
         self.root.after(200, self.update_progressbars)
 
@@ -286,7 +302,6 @@ class show_status():
 
         # now open subprocess
         p = subprocess.Popen(cmd, shell=True)
-        #os.system(systemString)
 
 
     def quit(self):
