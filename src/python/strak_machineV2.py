@@ -3140,13 +3140,12 @@ def get_Parameters(dict):
 
     params.minCLGain  = get_MandatoryParameterFromDict(dict, "minCLGain")
 
-    params.maxGlideShift = get_MandatoryParameterFromDict(dict, "maxGlideShift")
-
     params.maxSpeedGain = get_MandatoryParameterFromDict(dict, "maxSpeedGain")
 
-    params.maxLiftGain = get_MandatoryParameterFromDict(dict, "maxLiftGain")
-
     # get optional parameters
+    params.maxGlideShift = get_ParameterFromDict(dict, "maxGlideShift",
+                                                        params.maxGlideShift)
+
     params.linearFactor_1 = get_ParameterFromDict(dict, "linearFactor_1",
                                                         params.linearFactor_1)
 
