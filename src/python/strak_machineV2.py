@@ -462,9 +462,43 @@ class inputFile:
             # set new target-value
             self.change_TargetValue(opPointNames[idx], CD_new)
 
+    def linearizeTargetValues(self, start, end, factor):
+        # get operating-conditions from dictionary
+        operatingConditions = self.values["operating_conditions"]
 
-    def set_IntermediateOpPointTargetValues(self, targets, shifted_rootPolar,
-                                           strakPolar, i):
+        # get op-points / names
+        opPoints = operatingConditions["op_point"]
+        targetValues = operatingConditions["target_value"]
+        opPointNames = operatingConditions["name"]
+
+        x1 = targetValues[start]
+        x2 = targetValues[end]
+        y1 = opPoints[start]
+        y2 = opPoints[end]
+
+        for idx in range(start+1, end):
+            #print ("changing opPoint: %s" % opPointNames[idx]) #Debug
+
+            # get opPoint
+            opPoint = opPoints[idx]
+
+            # calculate target-value by linear-interpolation between start and
+            # end
+            linearTargetValue = interpolate_2(x1, x2, y1, y2, opPoint)
+
+            # get actual target-value of target-polar
+            targetValue = targetValues[idx]
+
+            # calculate new target-value
+            new_targetValue = (factor * linearTargetValue)\
+                              + (1-factor) * targetValue
+
+            # set new target-value
+            self.change_TargetValue(opPointNames[idx], new_targetValue)
+
+
+    def set_IntermediateOpPointTargetValues(self, params, targets,
+                                            shifted_rootPolar, strakPolar, i):
 
         # shift the CD-values of the root-polar according to change in CD at the
         # maxGlide-point
@@ -534,6 +568,10 @@ class inputFile:
 
         self.set_NewTargetValues(start, end, shifted_rootPolar, x1, x2, y1, y2)
 
+        # now linearize the values by a certain factor
+        linearFactor = params.linearFactor_1[i]
+        self.linearizeTargetValues(self.idx_maxSpeed, self.idx_maxGlide, linearFactor)
+
         # determine start and end-index for all op-points between
         # maxGlide and pre_maxLift
         start = self.idx_maxGlide + 1
@@ -549,6 +587,10 @@ class inputFile:
 
         self.set_NewTargetValues(start, end, shifted_rootPolar, x1, x2, y1, y2)
 
+        # now linearize the values by a certain factor
+        linearFactor = params.linearFactor_2[i]
+        self.linearizeTargetValues(self.idx_maxGlide, self.idx_preClmax, linearFactor)
+
 
     # Set weighting of all op-points according to the parameters
     # 'weightingMode', 'minWeight' and 'maxWeight'
@@ -563,9 +605,11 @@ class inputFile:
 
         # evaluate the weighting-mode
         if (params.weightingMode == 'constant'):
-            # set every op-point to constant minWeight (but not alpha_preClmax)
-            for idx in range(self.idx_preClmax+1):
+            # set every op-point to constant minWeight (but not max-Lift-opPoint)
+            for idx in range(self.idx_preClmax):
                 self.change_Weighting(idx, minWeight)
+            # set weighting of max-Lift op-point to maxWeight
+            self.change_Weighting(self.idx_preClmax, maxWeight)
 
         elif (params.weightingMode == 'linear_progression'):
             # increment weighting from minWeight to maxWeight
@@ -1042,6 +1086,8 @@ class strakData:
         self.maxGlideGain = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
         self.maxSpeedGain = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
         self.maxLiftGain = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+        self.linearFactor_1 = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+        self.linearFactor_2 = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
         self.targets ={
                         "CL_min": [],
                         "CD_min": [],
@@ -3095,6 +3141,12 @@ def get_Parameters(dict):
     params.maxLiftGain = get_MandatoryParameterFromDict(dict, "maxLiftGain")
 
     # get optional parameters
+    params.linearFactor_1 = get_ParameterFromDict(dict, "linearFactor_1",
+                                                        params.linearFactor_1)
+
+    params.linearFactor_2 = get_ParameterFromDict(dict, "linearFactor_2",
+                                                        params.linearFactor_2)
+
     params.intersectionPoint_CL_CD = get_ParameterFromDict(dict, "intersectionPoint_CL_CD",
                                                         params.intersectionPoint_CL_CD)
 
@@ -3308,7 +3360,7 @@ def create_new_inputFile(params, i):
     newFile.distribute_IntermediateOpPoints()
 
     # set the target-values of all intermediate-op-points now
-    newFile.set_IntermediateOpPointTargetValues(targets, shifted_rootPolar,
+    newFile.set_IntermediateOpPointTargetValues(params, targets, shifted_rootPolar,
                                                 strakPolar, i)
     # not needed anymore
     del shifted_rootPolar
