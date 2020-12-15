@@ -1,11 +1,14 @@
 {
       "quality": "high",
       "seedFoilName": "SD",
-      "intersectionPoint_CL_CD": 12.0,
-      "linearFactor_1":   [0.0,        0.1,    0.38],
-      "linearFactor_2":   [0.0,        0.0,    0.0 ],
+      "maxReynoldsFactor": 15.0,
+      "intersectionPoint_CL_CD": 21.0,
+      "additionalOpPoints": [0.04],
+      "linearFactor_1":   [0.0,        0.1,    0.9],
+      "linearFactor_2":   [0.0,       0.1,    0.2 ],
       "minCLGain":        [0.0,        0.1,    0.23],
-      "maxSpeedGain":     [0.0,       0.10,   -0.35],
-      "maxGlideGain":     [0.0,      -0.22,   -0.05],
+      "maxSpeedGain":     [0.0,       0.10,    0.1 ],
+      "maxGlideGain":     [0.0,      -0.23,   -0.01],
+      "maxGlideShift":    [0.0,       0.00,   0.0],
       "reynolds":         [220000,  150000,   80000]
 }
