@@ -1044,7 +1044,7 @@ class strakData:
         self.maxWeight = 1.5
         self.CL_min = -0.1
         self.intersectionPoint_CL = 0.0
-        self.intersectionPoint_CL_CD = -1.0
+        self.intersectionPoint_CL_CD = 99.0 # Deactivated
         self.intersection_Hysteresis= 0.001
         self.CL_switchpoint_Type2_Type1_polar = 0.05
         self.maxReFactor = 10.0
@@ -3147,6 +3147,8 @@ def get_Parameters(dict):
 
     params.maxSpeedGain = get_MandatoryParameterFromDict(dict, "maxSpeedGain")
 
+    params.maxLiftGain = get_MandatoryParameterFromDict(dict, "maxLiftGain")
+
     # get optional parameters
     params.maxGlideShift = get_ParameterFromDict(dict, "maxGlideShift",
                                                         params.maxGlideShift)
@@ -3432,13 +3434,17 @@ def generate_InputFiles(params):
             # create inputFile of root-airfoil
             newFile = create_new_inputFile(params, 0)
 
-            # calculate the common intersectionPoint, so maxLiftGain can be adjusted
-            # automatically
-            params.intersectionPoint_CL = calculate_intersectionPoint(params, newFile)
+            if (params.intersectionPoint_CL_CD != 99.0):
+                # calculate the common intersectionPoint, so maxLiftGain can be adjusted
+                # automatically
+                params.intersectionPoint_CL = calculate_intersectionPoint(params, newFile)
 
         else:
             # generate file that has an adjusted maxLift-Target
-            newFile = createAdjustedInputFile(params, i)
+            if (params.intersectionPoint_CL_CD != 99.0):
+                newFile = createAdjustedInputFile(params, i)
+            else:
+                newFile = create_new_inputFile(params, i)
 
         # set the importance / weightings of the op-points
         newFile.set_Weightings(params)
