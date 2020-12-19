@@ -1118,7 +1118,9 @@ class strakData:
     # function that calculates dependend values
     def calculate_DependendValues(self):
         # setup tool-calls
-        exeCallString =  " .." + bs + exePath + bs
+        #exeCallString =  " .." + bs + exePath + bs
+        exeCallString =  "echo y | .." + bs + exePath + bs
+
         pythonCallString = pythonInterpreterName + ' ..' + bs + scriptPath + bs
 
         self.xfoilWorkerCall = exeCallString + xfoilWorkerName + '.exe'
@@ -2575,7 +2577,10 @@ def insert_StatusCall(commandLines, params):
 def calculate_MainTaskProgress(params, i):
     # get number of airfoils without root-airfoil
     numFoils = get_NumberOfAirfoils(params)-1
-    progress = (i*100.0)/numFoils
+    if (numFoils > 0):
+        progress = (i*100.0)/numFoils
+    else:
+        progress = 100.0
     return progress
 
 
@@ -3410,22 +3415,30 @@ def generate_InputFiles(params):
     # calculate number of files to be created
     num_files = len(params.ReNumbers)
 
-    # create inputFile of root-airfoil, this is for reference-purposes only
+    # create inputFile of root-airfoil
     newFile = create_new_inputFile(params, 0)
 
-    # append input-file to params
-    params.inputFiles.append(newFile)
-
-    # calculate the common intersectionPoint, so maxLiftGain can be adjusted
-    # automatically
-    params.intersectionPoint_CL = calculate_intersectionPoint(params, newFile)
+##    # append input-file to params
+##    params.inputFiles.append(newFile)
+##
+##    # calculate the common intersectionPoint, so maxLiftGain can be adjusted
+##    # automatically
+##    params.intersectionPoint_CL = calculate_intersectionPoint(params, newFile)
 
 
     # generate files for all Re-numbers
-    for i in range(1, num_files):
+    for i in range(0, num_files):
+        if (i == 0):
+            # create inputFile of root-airfoil
+            newFile = create_new_inputFile(params, 0)
 
-        # generate file that has an adjusted maxLift-Target
-        newFile = createAdjustedInputFile(params, i)
+            # calculate the common intersectionPoint, so maxLiftGain can be adjusted
+            # automatically
+            params.intersectionPoint_CL = calculate_intersectionPoint(params, newFile)
+
+        else:
+            # generate file that has an adjusted maxLift-Target
+            newFile = createAdjustedInputFile(params, i)
 
         # set the importance / weightings of the op-points
         newFile.set_Weightings(params)
