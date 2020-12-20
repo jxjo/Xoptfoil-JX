@@ -395,7 +395,7 @@ subroutine repanel_and_normalize_airfoil (in_foil, npoint_paneling, foil)
   integer,            intent(in)  :: npoint_paneling
 
   type(airfoil_type)  :: tmp_foil
-  integer             :: i
+  integer             :: i, pointst, pointsb
   logical             :: le_fixed
   double precision, dimension(2) :: p, p_next
 
@@ -464,6 +464,33 @@ subroutine repanel_and_normalize_airfoil (in_foil, npoint_paneling, foil)
   else
     write (*,'(1x, A)')      'Set closest point to LE to become new leading edge at (0,0)'
   end if
+
+  ! now split airfoil to get upper and lower polyline 
+  !     if there is a new leading added it will be added to the polylines
+
+  call split_foil(foil)
+
+  ! and rebuild normal x,z coordinates out of polylines to have (new) LE
+
+  pointst = size(foil%xt,1)
+  pointsb = size(foil%xb,1)
+
+  foil%npoint = pointst + pointsb - 1
+
+  deallocate (foil%x)
+  deallocate (foil%z)
+  allocate(foil%x(foil%npoint))
+  allocate(foil%z(foil%npoint))
+
+  do i = 1, pointst
+    foil%x(i) = foil%xt(pointst-i+1)
+    foil%z(i) = foil%zt(pointst-i+1)
+  end do
+  do i = 1, pointsb-1
+    foil%x(i+pointst) = foil%xb(i+1)
+    foil%z(i+pointst) = foil%zb(i+1)
+  end do
+
 
 end subroutine repanel_and_normalize_airfoil
 
@@ -568,74 +595,12 @@ subroutine get_split_points(foil, pointst, pointsb, symmetrical)
 
 end subroutine get_split_points
 
-!-----------------------------------------------------------------------------
-! jx-deprecated: remove this when extended foil-type is implemented
-! Split an airfoil into top (xt,zt) and bottom surface (xb,zb) polyline
-!
-!-----------------------------------------------------------------------------
-subroutine split_airfoil(foil, xt, xb, zt, zb, symmetrical)
 
-  use vardef, only : airfoil_type
-
-  type(airfoil_type), intent(in) :: foil
-  double precision, dimension(:), allocatable, intent(out) :: xt, xb, zt, zb
-  logical, intent(in) :: symmetrical
-  
-  integer i, boundst, boundsb, pointst, pointsb
-
-  ! In le_find the "virtual" leading edge was determined 
-  !    and checked if an additional le point has to be inserted to reflect the le
-  !    dpeending on foil%addpoint_loc a new point will be inserted to 
-  !    become the starting point (0,0) for top and bottom surface
-
-  call get_split_points(foil, pointst, pointsb, symmetrical)
-
-  if (foil%addpoint_loc == 0) then
-    boundst = foil%leclose - 1
-    boundsb = foil%leclose + 1
-  elseif (foil%addpoint_loc == -1) then
-    boundst = foil%leclose - 1
-    boundsb = foil%leclose
-  else
-    boundst = foil%leclose
-    boundsb = foil%leclose + 1
-  end if
-
-! Copy points for the top surface
-
-  allocate(xt(pointst))
-  allocate(zt(pointst))
-  allocate(xb(pointsb))
-  allocate(zb(pointsb))
-
-  xt(1) = foil%xle
-  zt(1) = foil%zle
-  do i = 1, pointst - 1
-    xt(i+1) = foil%x(boundst-i+1)
-    zt(i+1) = foil%z(boundst-i+1)
-  end do
-
-! Copy points for the bottom surface
-
-  xb(1) = foil%xle
-  zb(1) = foil%zle
-  if (.not. symmetrical) then
-    do i = 1, pointsb - 1
-      xb(i+1) = foil%x(boundsb+i-1)
-      zb(i+1) = foil%z(boundsb+i-1)
-    end do
-  else
-    do i = 1, pointsb - 1
-      xb(i+1) =  xt(i+1)
-      zb(i+1) = -zt(i+1)
-    end do
-  end if
-
-end subroutine split_airfoil
 
 !-----------------------------------------------------------------------------
 ! Split an airfoil into top (xt,zt) and bottom surface (xb,zb) polyline
 !-----------------------------------------------------------------------------
+
 subroutine split_foil(foil)
 
   use vardef, only : airfoil_type

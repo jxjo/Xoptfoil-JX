@@ -556,22 +556,19 @@ subroutine check_and_smooth_surface (show_details, do_smoothing, foil)
   use vardef,             only: airfoil_type
   use vardef,             only: curv_threshold, spike_threshold, highlow_threshold, &
                                 max_te_curvature
-  use airfoil_operations, only: split_airfoil,  assess_surface, smooth_it
+  use airfoil_operations, only: assess_surface, smooth_it
   use airfoil_operations, only: get_max_te_curvature, rebuild_airfoil
   use math_deps,          only: nreversals_using_threshold
 
   logical, intent(in)       :: show_details, do_smoothing
   type (airfoil_type), intent (inout)  :: foil
 
-  double precision, dimension(:), allocatable :: xt, xb, yt, yb
   integer             :: overall_quality, top_quality, bot_quality
-
   character (80)      :: text1, text2
   logical             :: done_smoothing
 
   done_smoothing        = .false.
 
-  call split_airfoil   (foil, xt, xb, yt, yb, .false.)
 
 !  ------------ analyze & smooth  top -----
 
@@ -580,39 +577,39 @@ subroutine check_and_smooth_surface (show_details, do_smoothing, foil)
  
   call assess_surface (show_details, 'Analyzing top side', &
                        curv_threshold, spike_threshold, highlow_threshold, max_te_curvature, &
-                       xt, yt, top_quality)
+                       foil%xt, foil%zt, top_quality)
 
   if (top_quality >= Q_BAD .and. do_smoothing) then 
 
-    call smooth_it (.false., spike_threshold, xt, yt)
+    call smooth_it (.false., spike_threshold, foil%xt, foil%zt)
     top_quality     = 0 
     done_smoothing  = .true.
     call assess_surface (show_details, 'smoothed', &
                          curv_threshold, spike_threshold, highlow_threshold, max_te_curvature, &
-                         xt, yt, top_quality)
+                         foil%xt, foil%zt, top_quality)
   end if
  
 !  ------------ analyze & smooth  bot -----
 
   call assess_surface (show_details, 'Analyzing bot side', &
                        curv_threshold, spike_threshold, highlow_threshold, max_te_curvature, &
-                       xb, yb, bot_quality)
+                       foil%xb, foil%zb, bot_quality)
   
   if (bot_quality >= Q_BAD .and. do_smoothing) then 
 
-    call smooth_it (.false., spike_threshold, xb, yb)
+    call smooth_it (.false., spike_threshold, foil%xb, foil%zb)
     bot_quality     = 0 
     done_smoothing  = .true.
     call assess_surface (show_details, 'smoothed', &
                         curv_threshold, spike_threshold, highlow_threshold, max_te_curvature, &
-                        xb, yb, bot_quality)
+                        foil%xb, foil%zb, bot_quality)
   end if
 
   overall_quality = int((top_quality + bot_quality)/2)
 
 ! When smoothed - Rebuild foil out of smoothed polyline 
   if (done_smoothing) then
-    call rebuild_airfoil (xt, xb, yt, yb, foil)
+    call rebuild_airfoil (foil%xt, foil%xb, foil%zt, foil%zb, foil)
   end if 
 
 ! ... printing stuff 
@@ -661,7 +658,7 @@ subroutine auto_curvature_constraints (show_details, foil, &
                     max_curv_reverse_top, max_curv_reverse_bot)
 
   use vardef,             only: airfoil_type
-  use airfoil_operations, only: split_airfoil, le_find, assess_surface, smooth_it
+  use airfoil_operations, only: le_find, assess_surface, smooth_it
   use airfoil_operations, only: get_max_te_curvature, get_best_reversal_threshold
   use airfoil_operations, only: get_best_highlow_threshold
   use math_deps,          only: nreversals_using_threshold
@@ -684,7 +681,10 @@ subroutine auto_curvature_constraints (show_details, foil, &
   write (*,'(1x, A)') 'Evaluating and auto setting of geometric thresholds and constraints '
   write (*,*)
 
-  call split_airfoil   (foil, xt, xb, yt, yb, .false.)
+  xt = foil%xt
+  xb = foil%xb
+  yt = foil%zt
+  yb = foil%zb
 
 !  ------------ curve reversal constraints -----
 
