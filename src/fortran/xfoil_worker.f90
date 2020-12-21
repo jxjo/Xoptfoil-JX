@@ -211,7 +211,7 @@ subroutine check_foil_curvature (input_file, output_prefix, foil, visualizer)
   use vardef,             only: curv_threshold, spike_threshold, highlow_threshold
   use vardef,             only: max_curv_reverse_top, max_curv_reverse_bot
   use vardef,             only: max_te_curvature, check_curvature, auto_curvature
-  use airfoil_operations, only: split_airfoil, le_find, assess_surface, smooth_it
+  use airfoil_operations, only: split_foil, le_find, assess_surface, smooth_it
   use airfoil_operations, only: repanel_and_normalize_airfoil
   use math_deps,          only: nreversals_using_threshold
   use input_sanity,       only: check_and_smooth_surface, auto_curvature_constraints
@@ -227,12 +227,10 @@ subroutine check_foil_curvature (input_file, output_prefix, foil, visualizer)
 
   type (airfoil_type)          :: seed_foil
 
-  double precision, dimension(:), allocatable :: xt, xb, yt, yb
-
   seed_foil = foil 
 
-  call le_find         (foil%x, foil%z, foil%leclose, foil%xle, foil%zle, foil%addpoint_loc)
-  call split_airfoil   (foil, xt, xb, yt, yb, .false.)
+  call le_find      (foil%x, foil%z, foil%leclose, foil%xle, foil%zle, foil%addpoint_loc)
+  call split_foil   (foil)
 
   ! Defaults
 
@@ -293,8 +291,8 @@ subroutine repanel_smooth (input_file, output_prefix, seed_foil, visualizer, do_
   use vardef,             only : max_curv_reverse_top, max_curv_reverse_bot, &
                                  max_curv_highlow_top, max_curv_highlow_bot
   use xfoil_driver,       only : xfoil_geom_options_type
-  use airfoil_operations, only : airfoil_write, transform_airfoil, get_split_points
-  use airfoil_operations, only : split_airfoil, assess_surface, smooth_it, rebuild_airfoil
+  use airfoil_operations, only : airfoil_write, transform_airfoil
+  use airfoil_operations, only : assess_surface, smooth_it, rebuild_airfoil
   use airfoil_operations, only : repanel_and_normalize_airfoil
   use polar_operations,   only : read_xfoil_paneling_inputs
   use input_output,       only : read_geo_constraints_inputs
@@ -304,7 +302,7 @@ subroutine repanel_smooth (input_file, output_prefix, seed_foil, visualizer, do_
   type (airfoil_type), intent (inout)  :: seed_foil
   logical, intent(in)               :: do_smoothing, visualizer
 
-  double precision, dimension(:), allocatable :: xt, xb, zt, zb, zt_smoothed, zb_smoothed
+  double precision, dimension(:), allocatable :: zt_smoothed, zb_smoothed
   type (airfoil_type) :: foil_smoothed, foil
   type (xfoil_geom_options_type) :: geom_options
 
@@ -336,24 +334,22 @@ subroutine repanel_smooth (input_file, output_prefix, seed_foil, visualizer, do_
 ! Prepare airfoil  - Repanel and split 
 
   call repanel_and_normalize_airfoil (seed_foil, geom_options%npan, foil)
-  call split_airfoil   (foil, xt, xb, zt, zb, .false.)
-  call rebuild_airfoil (xt, xb, zt, zb, foil) 
 
 ! Smooth it 
 
   if (do_smoothing) then 
 
     write (*,'(/,1x,A)') 'Smoothing Top surface ...'
-    zt_smoothed = zt
-    call smooth_it (.true., spike_threshold, xt, zt_smoothed) 
+    zt_smoothed = foil%zt
+    call smooth_it (.true., spike_threshold, foil%xt, zt_smoothed) 
 
     write (*,'(/,1x,A)') 'Smoothing Bottom surface ...'
-    zb_smoothed = zb
-    call smooth_it (.true., spike_threshold, xb, zb_smoothed)
+    zb_smoothed = foil%zb
+    call smooth_it (.true., spike_threshold, foil%xb, zb_smoothed)
 
   ! Rebuild foil and write to file
 
-    call rebuild_airfoil (xt, xb, zt_smoothed, zb_smoothed, foil_smoothed)
+    call rebuild_airfoil (foil%xt, foil%xb, zt_smoothed, zb_smoothed, foil_smoothed)
 
     foil_smoothed%name = output_prefix
     call airfoil_write   (trim(output_prefix)//'.dat', trim(foil_smoothed%name), foil_smoothed)
@@ -392,7 +388,7 @@ subroutine blend_foils (input_file, output_prefix, seed_foil_in, blend_foil_in, 
   use xfoil_driver,       only : xfoil_apply_flap_deflection, xfoil_reload_airfoil
   use xfoil_driver,       only : xfoil_set_airfoil
   use airfoil_operations, only : airfoil_write, transform_airfoil, get_split_points
-  use airfoil_operations, only : split_airfoil, rebuild_airfoil, my_stop
+  use airfoil_operations, only : rebuild_airfoil, my_stop
   use airfoil_operations, only : repanel_and_normalize_airfoil
   use polar_operations,   only : read_xfoil_paneling_inputs
 
@@ -430,8 +426,15 @@ subroutine blend_foils (input_file, output_prefix, seed_foil_in, blend_foil_in, 
 
 ! Now split  in upper & lower side 
 
-  call split_airfoil   (seed_foil,  xt, xb, zt, zb, .false.)
-  call split_airfoil   (blend_foil, bxt, bxb, bzt, bzb, .false.)
+  xt = seed_foil%xt
+  xb = seed_foil%xb
+  zt = seed_foil%zt
+  zb = seed_foil%zb
+
+  bxt = blend_foil%xt
+  bxb = blend_foil%xb
+  bzt = blend_foil%zt
+  bzb = blend_foil%zb
 
 ! Interpolate x-vals of blend_foil to match to seed airfoil points to x-vals 
 !    - so the z-values can later be blended
@@ -480,7 +483,7 @@ subroutine set_flap (input_file, output_prefix, seed_foil, visualizer)
   use xfoil_driver,       only : xfoil_apply_flap_deflection, xfoil_reload_airfoil
   use xfoil_driver,       only : xfoil_set_airfoil
   use airfoil_operations, only : airfoil_write, transform_airfoil, get_split_points
-  use airfoil_operations, only : split_airfoil, assess_surface, rebuild_airfoil
+  use airfoil_operations, only : assess_surface
   use airfoil_operations, only : repanel_and_normalize_airfoil
   use polar_operations,   only : read_xfoil_paneling_inputs, read_flap_inputs
 
@@ -489,7 +492,6 @@ subroutine set_flap (input_file, output_prefix, seed_foil, visualizer)
   type (airfoil_type), intent (inout)  :: seed_foil
   logical, intent(in)               :: visualizer
 
-  double precision, dimension(:), allocatable :: xt, xb, zt, zb
   type (airfoil_type) :: foil, foil_flapped
   type (xfoil_geom_options_type) :: geom_options
 
@@ -509,10 +511,6 @@ subroutine set_flap (input_file, output_prefix, seed_foil, visualizer)
 
   call repanel_and_normalize_airfoil (seed_foil, geom_options%npan, foil)
 
-! Now split and rebuild to add a real  LE point at 0,0 
-
-  call split_airfoil   (foil, xt, xb, zt, zb, .false.)
-  call rebuild_airfoil (xt, xb, zt, zb, foil)
   call xfoil_set_airfoil(foil)
 
 ! Write airfoil to _design_coordinates using Xoptfoil format for visualizer
@@ -550,13 +548,12 @@ subroutine set_flap (input_file, output_prefix, seed_foil, visualizer)
 
   end do
 
-
 end subroutine set_flap
+
 
 !-------------------------------------------------------------------------
 ! writes 'output_prefix'_design_coordinates for foil
 !-------------------------------------------------------------------------
-
 
 subroutine write_design_coordinates (output_prefix, designcounter, foil)
 

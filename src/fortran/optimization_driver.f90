@@ -33,8 +33,7 @@ subroutine matchfoils_preprocessing(matchfoil_file)
 
   use vardef,             only : airfoil_type, foil_to_match, symmetrical, npan_fixed
   use vardef,             only : seed_foil
-  use airfoil_operations, only : get_seed_airfoil,  rebuild_airfoil,           &
-                                 split_airfoil, my_stop
+  use airfoil_operations, only : get_seed_airfoil,  rebuild_airfoil, my_stop
   use airfoil_operations, only : repanel_and_normalize_airfoil
   use math_deps,          only : interp_vector
   use naca,               only : naca_options_type
@@ -64,7 +63,11 @@ subroutine matchfoils_preprocessing(matchfoil_file)
 ! Repanel to npan_fixed points and normalize to get LE at 0,0 and TE (1,0) and split
 
   call repanel_and_normalize_airfoil (original_foil, npan_fixed, foil_to_match)
-  call split_airfoil(foil_to_match, xmatcht, xmatchb, zmatcht, zmatchb, .false.)
+
+  xmatcht = foil_to_match%xt
+  xmatchb = foil_to_match%xb
+  zmatcht = foil_to_match%zt
+  zmatchb = foil_to_match%zb
 
 ! Interpolate x-vals of foil to match to seed airfoil points to x-vals 
 !    - so the z-values can later be compared

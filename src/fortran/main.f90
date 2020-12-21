@@ -27,7 +27,7 @@ program main
   use genetic_algorithm,   only : ga_options_type
   use simplex_search,      only : ds_options_type
   use airfoil_evaluation,  only : xfoil_geom_options, xfoil_options
-  use airfoil_operations,  only : get_seed_airfoil, split_airfoil, split_foil
+  use airfoil_operations,  only : get_seed_airfoil
   use airfoil_operations,  only : repanel_and_normalize_airfoil
   use memory_util,         only : deallocate_airfoil, allocate_airfoil_data,   &
                                   deallocate_airfoil_data
@@ -89,12 +89,9 @@ program main
 !   to get seed airfoil ready for optimization 
 
   call get_seed_airfoil(seed_airfoil_type, airfoil_file, naca_options, original_foil)
-
-  call repanel_and_normalize_airfoil (original_foil, npan_fixed, seed_foil)                            !   ... to have run_xfoil results equal airfoil external results
+  call repanel_and_normalize_airfoil (original_foil, npan_fixed, seed_foil)  
+                            !   ... to have run_xfoil results equal airfoil external results
   xfoil_geom_options%npan = seed_foil%npoint    ! will use this constant value now
-
-  call split_foil(seed_foil)                    ! extract upper and lower polyline
-
 
 ! Allocate optimal solution
 
