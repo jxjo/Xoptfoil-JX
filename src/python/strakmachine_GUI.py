@@ -106,6 +106,7 @@ class show_status():
         # The Pack geometry manager packs widgets in rows or columns.
         panel.pack(side = "top", fill = "both", expand = "yes")
 
+        # create sliders
         minCLGain = slider(self.root)
         maxSpeedGain = slider(self.root)
         linearFactor_1 = slider(self.root)
@@ -114,8 +115,24 @@ class show_status():
         linearFactor_2 = slider(self.root)
         maxLiftGain = slider(self.root)
 
+        # create dropdown-menue
+        OptionList = [ "SD_root_220k", "SD_strak_150k", "SD_strak_80k"]
+
+        variable = tk.StringVar(self.root)
+        variable.set(OptionList[0])
+
+        opt = tk.OptionMenu(self.root, variable, *OptionList)
+        opt.config(width=30, font=('Helvetica', 12))
+        opt.pack()
+
         # This button will start the visualizer
         Button(self.root, text = 'updateStrakmachine', command = self.update_strakdata).pack(pady = 10)
+        # This button will start the visualizer
+        Button(self.root, text = 'add strak-airfoil', command = self.addstrak_airfoil).pack(pady = 10)
+        Button(self.root, text = 'remove strak-airfoil', command = self.removestrak_airfoil).pack(pady = 10)
+
+        self.reynolds = Tk()
+        self.reynolds.title('Enter ReSqrt(Cl)-value')
 
         # infinite loop
         self.root.mainloop()
@@ -124,6 +141,12 @@ class show_status():
         self.root.destroy()
 
     def update_strakdata(self):
+        print("TODO update now")
+
+    def addstrak_airfoil(self):
+        print("TODO update now")
+
+    def removestrak_airfoil(self):
         print("TODO update now")
 
 def main():

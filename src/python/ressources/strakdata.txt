@@ -2,14 +2,14 @@
       "quality": "high",
       "seedFoilName": "SD",
       "maxReynoldsFactor": 15.0,
-      "intersectionPoint_CL_CD": 17.0,
       "additionalOpPoints": [0.04],
+      "allGraphs": "False",
       "linearFactor_1":   [0.0,        0.1,   0.95],
       "linearFactor_2":   [0.0,       0.03,   0.21],
       "minCLGain":        [0.0,        0.1,   0.23],
       "maxSpeedGain":     [0.0,       0.10,   0.15],
       "maxGlideGain":     [0.0,      -0.18,  -0.02],
       "maxGlideShift":    [0.0,       0.00,   0.0 ],
-      "maxLiftGain":      [0.0,       0.00,   0.0 ],
+      "maxLiftGain":      [0.0,       0.25,   0.15],
       "reynolds":         [220000,  150000,  80000]
 }

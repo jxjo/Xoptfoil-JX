@@ -1039,6 +1039,7 @@ class strakData:
         self.matchPolarFoilName = ""
         self.ReSqrtCl = 150000
         self.ReAlpha0 = 0
+        self.NCrit = 9.0
         self.numOpPoints = 15
         self.minWeight = 0.7
         self.maxWeight = 1.5
@@ -1050,6 +1051,7 @@ class strakData:
         self.maxReFactor = 10.0
         self.maxLiftDistance = 0.09
         self.optimizationPasses = 3
+        self.allGraphs = True
         self.scriptsAsExe = False
         self.generateBatch = True
         self.xmlFileName = None
@@ -1862,7 +1864,10 @@ class polarGraph:
         plt.style.use('dark_background')
 
         # setup subplots
-        fig, (upper,lower) = plt.subplots(2,2)
+        if (params.allGraphs == True):
+            fig, (upper,lower) = plt.subplots(2,2)
+        else:
+            fig, upper = plt.subplots(1)
 
         # compose diagram-title
         text = ("Analysis of airfoil \"%s\"\n" % airfoilName)
@@ -1889,17 +1894,20 @@ class polarGraph:
 
         fig.suptitle(text, fontsize = 12, color="darkgrey", **csfont)
 
-        # first figure, display strak-machine-logo
-        self.plot_Logo(upper[0], params)
+        if (params.allGraphs == True):
+            # first figure, display strak-machine-logo
+            self.plot_Logo(upper[0], params)
 
-        # second figure, display the Lift / Drag-Polar
-        self.plot_LiftDragPolars(lower[0], polars, targetPolars)
+            # second figure, display the Lift / Drag-Polar
+            self.plot_LiftDragPolars(lower[0], polars, targetPolars)
 
-        # third figure, display the Lift / alpha-Polar
-        self.plot_LiftAlphaPolars(upper[1], polars, targetPolars)
+            # third figure, display the Lift / alpha-Polar
+            self.plot_LiftAlphaPolars(upper[1], polars, targetPolars)
 
-        # fourth figure, display the Glide polar
-        self.plot_GlidePolars(lower[1], polars, targetPolars)
+            # fourth figure, display the Glide polar
+            self.plot_GlidePolars(lower[1], polars, targetPolars)
+        else:
+            self.plot_GlidePolars(upper, polars, targetPolars)
 
         # maximize window
         figManager = plt.get_current_fig_manager()
@@ -2481,10 +2489,10 @@ def generate_polarCreationCommandLines(commandlines, params, strakFoilName, maxR
 
     polarDir = strakFoilName.strip('.dat') + '_polars'
 
-    polarFileName_T1 = compose_Polarfilename_T1(maxRe)
+    polarFileName_T1 = compose_Polarfilename_T1(maxRe, params.NCrit)
     polarFileNameAndPath_T1 = polarDir + bs + polarFileName_T1
 
-    polarFileName_T2 = compose_Polarfilename_T2(Re)
+    polarFileName_T2 = compose_Polarfilename_T2(Re, params.NCrit)
     polarFileNameAndPath_T2 = polarDir + bs + polarFileName_T2
 
     mergedPolarFileName =  polarDir + bs +\
@@ -3183,6 +3191,8 @@ def get_Parameters(dict):
     params.numOpPoints = get_ParameterFromDict(dict, "numOpPoints",
                                                params.numOpPoints)
 
+    params.NCrit = get_ParameterFromDict(dict, "NCrit", params.NCrit)
+
     params.CL_min = get_ParameterFromDict(dict, "CL_min", params.CL_min)
 
     params.weightingMode = get_ParameterFromDict(dict, "weightingMode",
@@ -3199,6 +3209,9 @@ def get_Parameters(dict):
 
 
      # get optional boolean parameters
+    params.allGraphs = get_booleanParameterListFromDict(dict,
+                             "allGraphs", params.allGraphs)
+
     params.optimizeAlpha0 = get_booleanParameterListFromDict(dict,
                              "optimizeAlpha0", params.optimizeAlpha0)
 
@@ -3509,14 +3522,14 @@ def generate_InputFiles(params):
         params.inputFiles.append(newFile)
 
 
-def compose_Polarfilename_T1(Re):
-    return ("T1_Re%d.%03d_M0.00_N9.0.txt"\
-        % (round_Re(Re)/1000, round_Re(Re)%1000))
+def compose_Polarfilename_T1(Re, NCrit):
+    return ("T1_Re%d.%03d_M0.00_N%.1f.txt"\
+        % (round_Re(Re)/1000, round_Re(Re)%1000, NCrit))
 
 
-def compose_Polarfilename_T2(ReSqrt_Cl):
-    return ("T2_Re%d.%03d_M0.00_N9.0.txt"\
- % (round_Re(ReSqrt_Cl)/1000, round_Re(ReSqrt_Cl)%1000))
+def compose_Polarfilename_T2(ReSqrt_Cl, NCrit):
+    return ("T2_Re%d.%03d_M0.00_N%.1f.txt"\
+ % (round_Re(ReSqrt_Cl)/1000, round_Re(ReSqrt_Cl)%1000, NCrit))
 
 
 def generate_Polars(params, rootfoilName):
@@ -3533,12 +3546,12 @@ def generate_Polars(params, rootfoilName):
         maxRe = params.maxReNumbers[ReIdx]
 
         # create polar-file-Name T1-polar from maxRe-Number
-        polarFileName_T1 = compose_Polarfilename_T1(maxRe)
+        polarFileName_T1 = compose_Polarfilename_T1(maxRe, params.NCrit)
         polarFileNameAndPath_T1 = polarDir + bs + polarFileName_T1
         params.polarFileNames_T1.append(polarFileNameAndPath_T1)
 
         # create polar-file-Name T2-polar from Re-Number
-        polarFileName_T2 = compose_Polarfilename_T2(Re)
+        polarFileName_T2 = compose_Polarfilename_T2(Re, params.NCrit)
         polarFileNameAndPath_T2 = polarDir + bs + polarFileName_T2
         params.polarFileNames_T2.append(polarFileNameAndPath_T2)
 
