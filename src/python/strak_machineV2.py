@@ -592,6 +592,25 @@ class inputFile:
         self.linearizeTargetValues(self.idx_maxGlide, self.idx_preClmax, linearFactor)
 
 
+    def apply_maxGlideFactor(self, params, i):
+         # get operating-conditions from dictionary
+        operatingConditions = self.values["operating_conditions"]
+
+         # get op-points / names
+        opPoints = operatingConditions["op_point"]
+        targetValues = operatingConditions["target_value"]
+        opPointNames = operatingConditions["name"]
+
+        # get actual target-value of target-polar
+        targetValue = targetValues[self.idx_maxGlide]
+
+        # calculate new target-value
+        new_targetValue = params.maxGlideFactor[i] * targetValue
+
+        # set new target-value
+        self.change_TargetValue(opPointNames[self.idx_maxGlide], new_targetValue)
+
+
     # Set weighting of all op-points according to the parameters
     # 'weightingMode', 'minWeight' and 'maxWeight'
     def set_Weightings(self, params):
@@ -861,7 +880,7 @@ class inputFile:
         alpha = round(params.targets["alpha0"][i], AL_decimals)
 
         # set weighting to maxWeight
-        weighting = params.maxWeight #2*params.maxWeight #Test
+        weighting = 2*params.maxWeight
 
         # set reynolds
         if params.ReAlpha0 > 0:
@@ -1049,7 +1068,7 @@ class strakData:
         self.intersection_Hysteresis= 0.001
         self.CL_switchpoint_Type2_Type1_polar = 0.05
         self.maxReFactor = 10.0
-        self.maxLiftDistance = 0.09
+        self.maxLiftDistance = 0.01
         self.optimizationPasses = 3
         self.allGraphs = True
         self.scriptsAsExe = False
@@ -1086,6 +1105,7 @@ class strakData:
         self.minCLGain = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
         self.maxGlideShift = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
         self.maxGlideGain = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+        self.maxGlideFactor = [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
         self.maxSpeedGain = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
         self.maxLiftGain = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
         self.linearFactor_1 = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
@@ -3161,6 +3181,9 @@ def get_Parameters(dict):
     params.maxGlideShift = get_ParameterFromDict(dict, "maxGlideShift",
                                                         params.maxGlideShift)
 
+    params.maxGlideFactor  = get_ParameterFromDict(dict, "maxGlideFactor",
+                                                        params.maxGlideFactor)
+
     params.linearFactor_1 = get_ParameterFromDict(dict, "linearFactor_1",
                                                         params.linearFactor_1)
 
@@ -3387,6 +3410,9 @@ def create_new_inputFile(params, i):
     # set the target-values of all intermediate-op-points now
     newFile.set_IntermediateOpPointTargetValues(params, targets, shifted_rootPolar,
                                                 strakPolar, i)
+
+    newFile.apply_maxGlideFactor(params, i)
+
     # not needed anymore
     del shifted_rootPolar
 
