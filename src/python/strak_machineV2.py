@@ -499,7 +499,6 @@ class inputFile:
 
     def set_IntermediateOpPointTargetValues(self, params, targets,
                                             shifted_rootPolar, strakPolar, i):
-
         # shift the CD-values of the root-polar according to change in CD at the
         # maxGlide-point
         target_CD = round(targets["CD_maxGlide"][i], CD_decimals)
@@ -510,12 +509,15 @@ class inputFile:
         # CL_min
         CL_min_strak = targets["CL_min"][i]
         CD_min_strak = targets["CD_min"][i]
-        CD_min_root = shifted_rootPolar.find_CD_From_CL(CL_min_strak)
+        alpha_min_strak = targets["alpha_min"][i]
+        #CD_min_root = shifted_rootPolar.find_CD_From_CL(CL_min_strak)
+        CD_min_root = shifted_rootPolar.find_CD_From_alpha(alpha_min_strak)
         factor_min = CD_min_strak / CD_min_root
 
         # maxGlide
         CL_maxGlide_strak = targets["CL_maxGlide"][i]
         CD_maxGlide_strak = targets["CD_maxGlide"][i]
+        alpha_maxGlide_strak = targets["alpha_maxGlide"][i]
         # factor for maxGlide is alway 1.0, because this correction in the polar
         # was done by shifting the whole polar.
         factor_maxGlide = 1.0
@@ -523,15 +525,19 @@ class inputFile:
         # maxSpeed
         CL_maxSpeed_strak = targets["CL_maxSpeed"][i]
         CD_maxSpeed_strak = targets["CD_maxSpeed"][i]
+        alpha_maxSpeed_strak = targets["alpha_maxSpeed"][i]
         CD_strak = targets["CD_maxSpeed"][i]
-        CD_maxSpeed_root = shifted_rootPolar.find_CD_From_CL(CL_maxSpeed_strak)
+        #CD_maxSpeed_root = shifted_rootPolar.find_CD_From_CL(CL_maxSpeed_strak)
+        CD_maxSpeed_root = shifted_rootPolar.find_CD_From_alpha(alpha_maxSpeed_strak)
         factor_maxSpeed = CD_maxSpeed_strak / CD_maxSpeed_root
 
         # maxLift
         # get strak-polar-values (target-values)
         CL_pre_maxLift_strak = targets["CL_pre_maxLift"][i]
         CD_pre_maxLift_strak = targets["CD_pre_maxLift"][i]
-        CD_pre_maxLift_root = shifted_rootPolar.find_CD_From_CL(CL_pre_maxLift_strak)
+        alpha_pre_maxLift_strak = targets["alpha_pre_maxLift"][i]
+        CD_pre_maxLift_root = shifted_rootPolar.find_CD_From_alpha(alpha_pre_maxLift_strak)
+
         factor_maxLift = CD_pre_maxLift_strak / CD_pre_maxLift_root
 
         # get operating-conditions from dictionary
@@ -668,7 +674,7 @@ class inputFile:
                 self.change_Weighting(idx, weight)
 
             # all op-points from maxGlide up to Clmax
-            for idx in range(self.idx_maxGlide, self.idx_preClmax+1):
+            for idx in range(self.idx_maxGlide, self.idx_preClmax):
                 x1 = opPoints[self.idx_maxGlide]
                 x2 = opPoints[self.idx_preClmax]
                 y1 = pi/2
@@ -678,6 +684,9 @@ class inputFile:
                 diff = (maxWeight - minWeight) * sin(y)
                 weight = round((minWeight + diff), 2)
                 self.change_Weighting(idx, weight)
+
+            # set weighting of max-Lift op-point to maxWeight
+            self.change_Weighting(self.idx_preClmax, maxWeight)
 
         #print(operatingConditions["weighting"])#Debug
         #print("Done.")#Debug
@@ -1067,7 +1076,7 @@ class strakData:
         self.intersectionPoint_CL_CD = 99.0 # Deactivated
         self.intersection_Hysteresis= 0.001
         self.CL_switchpoint_Type2_Type1_polar = 0.05
-        self.maxReFactor = 10.0
+        self.maxReFactor = 15.0
         self.maxLiftDistance = 0.01
         self.optimizationPasses = 3
         self.allGraphs = True
@@ -1113,13 +1122,17 @@ class strakData:
         self.targets ={
                         "CL_min": [],
                         "CD_min": [],
+                        "alpha_min": [],
                         "CL_maxSpeed": [],
                         "CD_maxSpeed": [],
+                        "alpha_maxSpeed": [],
                         "CL_maxGlide": [],
                         "CL_CD_maxGlide": [],
                         "CD_maxGlide": [],
+                        "alpha_maxGlide": [],
                         "CL_pre_maxLift": [],
                         "CD_pre_maxLift": [],
+                        "alpha_pre_maxLift": [],
                         "alpha0": [],
                        }
 
@@ -1234,7 +1247,9 @@ class strakData:
 
             #---------------------- CL_min-targets ----------------------------
             target_CL_min = rootPolar.CL_min
-            polar_CD_min = polar.find_CD_From_CL(target_CL_min)
+            target_alpha_min = rootPolar.alpha[rootPolar.min_idx]
+            #polar_CD_min = polar.find_CD_From_CL(target_CL_min)
+            polar_CD_min = polar.find_CD_From_alpha(target_alpha_min)
 
             # now calculate CD-target-value
             target_CD_min = self.calculate_CD_TargetValue(
@@ -1243,9 +1258,11 @@ class strakData:
             # append the targets
             self.targets["CL_min"].append(target_CL_min)
             self.targets["CD_min"].append(target_CD_min)
+            self.targets["alpha_min"].append(target_alpha_min)
 
             #---------------------- maxSpeed-targets --------------------------
             target_CL_maxSpeed = rootPolar.CL_maxSpeed
+            target_alpha_maxSpeed = rootPolar.alpha[rootPolar.maxSpeed_idx]
 
             # now calculate CD-target-value
             target_CD_maxSpeed = self.calculate_CD_TargetValue(
@@ -1254,11 +1271,14 @@ class strakData:
             # append the targets
             self.targets["CL_maxSpeed"].append(target_CL_maxSpeed)
             self.targets["CD_maxSpeed"].append(target_CD_maxSpeed)
+            self.targets["alpha_maxSpeed"].append(target_alpha_maxSpeed)
 
             #---------------------- maxGlide-targets --------------------------
             # Caution: use CL-target from shifted root-polar
             target_CL_maxGlide = shifted_root_polar.CL_maxGlide
-            polar_CD_maxGlide = polar.find_CD_From_CL(target_CL_maxGlide)
+            target_alpha_maxGlide = rootPolar.alpha[rootPolar.maxGlide_idx]
+            #polar_CD_maxGlide = polar.find_CD_From_CL(target_CL_maxGlide)
+            polar_CD_maxGlide = polar.find_CD_From_alpha(target_alpha_maxGlide)
 
             # now calculate CD-target-value
             target_CD_maxGlide = self.calculate_CD_TargetValue(
@@ -1267,10 +1287,13 @@ class strakData:
             # append the targets
             self.targets["CL_maxGlide"].append(target_CL_maxGlide)
             self.targets["CD_maxGlide"].append(target_CD_maxGlide)
+            self.targets["alpha_maxGlide"].append(target_alpha_maxGlide)
 
             #---------------------- maxLift-targets --------------------------
             target_CL_pre_maxLift = polar.CL_pre_maxLift
-            rootPolar_CD_pre_maxLift = rootPolar.find_CD_From_CL(polar.CL_pre_maxLift)
+            target_alpha_pre_maxLift = rootPolar.alpha[polar.pre_maxLift_idx]
+            #rootPolar_CD_pre_maxLift = rootPolar.find_CD_From_CL(polar.CL_pre_maxLift)
+            rootPolar_CD_pre_maxLift = rootPolar.find_CD_From_alpha(target_alpha_pre_maxLift)
 
             # now calculate CD-target-value
             target_CD_pre_maxLift = self.calculate_CD_TargetValue(
@@ -1279,6 +1302,7 @@ class strakData:
             # append the targets
             self.targets["CL_pre_maxLift"].append(target_CL_pre_maxLift)
             self.targets["CD_pre_maxLift"].append(target_CD_pre_maxLift)
+            self.targets["alpha_pre_maxLift"].append(target_alpha_pre_maxLift)
 
             # append alpha_CL0-target
             self.targets["alpha0"].append(rootPolar.alpha_CL0)
@@ -1707,7 +1731,7 @@ class polarGraph:
 
 
     # plots glide-polars (Xfoil-worker-polars and target-polars)
-    def plot_GlidePolars(self, ax, polars, targetPolars):
+    def plot_GlidePolars(self, ax, polars, targetPolars, allGraphs):
         # set axes and labels
         self.set_AxesAndLabels(ax, 'CL/CD, CL', 'CL', 'CL/CD')
 
@@ -1723,7 +1747,10 @@ class polarGraph:
         numPolars = len(polars)
 
         # set y-axis manually
-        ax.set_ylim(min(rootPolar.CL_CD) - 10, max(rootPolar.CL_CD) + 10)
+        if (allGraphs == True):
+            ax.set_ylim(min(rootPolar.CL_CD) - 10, max(rootPolar.CL_CD) + 10)
+        else:
+            ax.set_ylim(-5, max(rootPolar.CL_CD) + 5)
 
         # all polars
         for polarIdx in range(numPolars):
@@ -1925,9 +1952,10 @@ class polarGraph:
             self.plot_LiftAlphaPolars(upper[1], polars, targetPolars)
 
             # fourth figure, display the Glide polar
-            self.plot_GlidePolars(lower[1], polars, targetPolars)
+            self.plot_GlidePolars(lower[1], polars, targetPolars, params.allGraphs)
         else:
-            self.plot_GlidePolars(upper, polars, targetPolars)
+            # plot only Glide polar
+            self.plot_GlidePolars(upper, polars, targetPolars, params.allGraphs)
 
         # maximize window
         figManager = plt.get_current_fig_manager()
@@ -1967,8 +1995,11 @@ class polarData:
         self.Bot_Xtr= []
         self.CD_min = 0.0
         self.CL_min = 0.0
+        self.alpha_min = 0.0
+        self.min_idx= 0
         self.CD_maxSpeed = 0.0
         self.CL_maxSpeed = 0.0
+        self.alpha_maxSpeed = 0.0
         self.CL_CD_maxSpeed = 0.0
         self.maxSpeed_idx = 0
         self.CL_CD_maxGlide = 0.0
@@ -2182,8 +2213,6 @@ class polarData:
         # stretch the whole polar by factor, changing CL-values
         for i in range(num):
             shiftedPolar.CL[i] = shiftedPolar.CL[i] * CL_factor
-            # invalidate alpha
-            shiftedPolar.alpha[i] = 0
             # calculate new drag-value
             CD_old = shiftedPolar.CD[i]
             shiftedPolar.CD[i] = shiftedPolar.CL[i] / shiftedPolar.CL_CD[i]
@@ -2228,31 +2257,12 @@ class polarData:
         self.CD_maxSpeed = min(self.CD)
         self.maxSpeed_idx = self.find_index_From_CD(self.CD_maxSpeed)
         self.CL_maxSpeed = self.CL[self.maxSpeed_idx]
+        self.alpha_maxSpeed = self.alpha[self.maxSpeed_idx]
         self.CL_CD_maxSpeed = self.CL_maxSpeed / self.CD_maxSpeed
 
         print("max Speed, CD = %f @ CL = %f" %\
                                   (self.CD_maxSpeed, self.CL_maxSpeed))
 
-
-    # determines maxSpeed-values for a strak-polar. Taking the same CL-value
-    # as the root-polar
-    def determine_MaxSpeedOfStrakPolar(self, CL_MaxSpeedRootPolar):
-        self.maxSpeed_idx = self.find_index_From_CL(CL_MaxSpeedRootPolar)
-        self.CD_maxSpeed = self.CD[self.maxSpeed_idx]
-        self.CL_maxSpeed = self.CL[self.maxSpeed_idx]
-        self.CL_CD_maxSpeed = self.CL_maxSpeed / self.CD_maxSpeed
-
-        print("max Speed, CD = %f @ CL = %f" %\
-                                  (self.CD_maxSpeed, self.CL_maxSpeed))
-
-##    def determine_CLminOfStrakPolar(self, CL_minRootPolar):
-##        self.CL_min_idx = self.find_index_From_CL(CL_minRootPolar)
-##        self.CD_min = self.CD[self.CL_min_idx]
-##        self.CL_min = self.CL[self.CL_min_idx]
-##        self.CL_CD_min = self.CL_min / self.CD_min
-##
-##        print("CL_min, CD = %f @ CL = %f" %\
-##                                  (self.CD_min, self.CL_min))
 
     # determines the overall max-value for Cl/Cd (max glide) of a given polar
     # and some corresponding values
@@ -2268,7 +2278,10 @@ class polarData:
 
     def determine_CLmin(self, params):
         self.CL_min = params.CL_min
-        self.CD_min = self.find_CD_From_CL(params.CL_min)
+        self.min_idx = self.find_index_From_CL(params.CL_min)
+        self.CD_min = self.CD[self.min_idx]#self.find_CD_From_CL(params.CL_min)
+        self.alpha_min = self.alpha[self.min_idx]
+
 
     # determines the max-value for Cl (max lift) of a given polar and some
     # corresponding values
@@ -2353,6 +2366,19 @@ class polarData:
                 return CL
 
         ErrorMsg("CL not found, alpha was %f" % alpha)
+        return None
+
+    def find_CD_From_alpha(self, alpha):
+        num = len(self.alpha)
+        for idx in range(num-1):
+            # find CL-values left and right from CL
+            if (self.alpha[idx]<=alpha and self.alpha[idx+1]>=alpha):
+                # interpolate between alpha-values
+                CD = interpolate(self.alpha[idx], self.alpha[idx+1],\
+                                      self.CD[idx], self.CD[idx+1], alpha)
+                return CD
+
+        ErrorMsg("CD not found, alpha was %f" % alpha)
         return None
 
     def find_alpha_From_CL(self, CL):
@@ -3838,9 +3864,9 @@ if __name__ == "__main__":
     (strakDataFileName, workerAction, polarFile_1, polarFile_2,
       mergedPolarFile, mergeCL) = get_Arguments()
 
-##    # check working-directory, have we been started from "scripts"-dir?
-##    if (getcwd().find("scripts")>=0):
-##        chdir("..")
+   ## check working-directory, have we been started from "scripts"-dir?
+   # if (!getcwd().find("scripts")>=0):
+   # chdir("..")
 
     # decide what action to perform.
     if (workerAction == 'merge'):
