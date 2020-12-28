@@ -499,11 +499,19 @@ class inputFile:
 
     def set_IntermediateOpPointTargetValues(self, params, targets,
                                             shifted_rootPolar, strakPolar, i):
-        # shift the CD-values of the root-polar according to change in CD at the
-        # maxGlide-point
-        target_CD = round(targets["CD_maxGlide"][i], CD_decimals)
-        CD_shiftValue = target_CD - shifted_rootPolar.CD_maxGlide
-        shifted_rootPolar.shift_CD(CD_shiftValue)
+
+        if (params.scaleTargetPolars == True):
+            # scale the CL/CD-values of the root-polar according to change in CL_CD at the
+            # maxGlide-point
+            target_CL_CD = round(targets["CL_CD_maxGlide"][i], CL_CD_decimals)
+            CL_CD_scaleValue = target_CL_CD / shifted_rootPolar.CL_CD_maxGlide
+            shifted_rootPolar.scale_CL_CD(CL_CD_scaleValue)
+        else:
+            # shift the CD-values of the root-polar according to change in CD at the
+            # maxGlide-point
+            target_CD = round(targets["CD_maxGlide"][i], CD_decimals)
+            CD_shiftValue = target_CD - shifted_rootPolar.CD_maxGlide
+            shifted_rootPolar.shift_CD(CD_shiftValue)
 
         # determine factors for the main op-points
         # CL_min
@@ -617,6 +625,45 @@ class inputFile:
         self.change_TargetValue(opPointNames[self.idx_maxGlide], new_targetValue)
 
 
+    def set_constantWeighting(self, opPoints, minWeight, maxWeight):
+        # set every op-point to constant minWeight (but not max-Lift-opPoint)
+        for idx in range(self.idx_preClmax):
+            self.change_Weighting(idx, minWeight)
+
+
+    def set_linearProgressionWeighting(self, opPoints, minWeight, maxWeight):
+        # increment weighting from minWeight to maxWeight
+        # do not change alpha_preClmax
+        num_intervals = self.idx_preClmax+1
+        diff = (maxWeight - minWeight) / num_intervals
+
+        for idx in range(num_intervals):
+            weight = round(minWeight + (idx*diff), 2)
+            self.change_Weighting(idx, weight)
+
+
+    def set_sinusWeighting(self, opPoints, minWeight, maxWeight, start, end, y1, y2):
+        for idx in range(start, end):
+            # set up x/y-points for linear-interpolation.
+            # x-values are CL-values of op-points
+            # y-values are 0..pi/2 for sinus- calculation
+            x1 = opPoints[start]
+            x2 = opPoints[end]
+
+            # calculate y by linear interpolation
+            y = interpolate(x1, x2, y1, y2, opPoints[idx])
+
+            # calculate sinus-function. The result is a "delta-" value
+            # that will be added to minWeight
+            diff = (maxWeight - minWeight) * sin(y)
+
+            # calculate new weight
+            weight = round((minWeight + diff), 2)
+
+            # set the new weighting for the op-point now
+            self.change_Weighting(idx, weight)
+
+
     # Set weighting of all op-points according to the parameters
     # 'weightingMode', 'minWeight' and 'maxWeight'
     def set_Weightings(self, params):
@@ -624,72 +671,37 @@ class inputFile:
         operatingConditions = self.values["operating_conditions"]
         opPoints = operatingConditions["op_point"]
 
-        # determine min and max weight
-        maxWeight = params.maxWeight
+         # determine min and max weight
         minWeight = params.minWeight
+        maxWeight = params.maxWeight
 
         # evaluate the weighting-mode
         if (params.weightingMode == 'constant'):
-            # set every op-point to constant minWeight (but not max-Lift-opPoint)
-            for idx in range(self.idx_preClmax):
-                self.change_Weighting(idx, minWeight)
-            # set weighting of max-Lift op-point to maxWeight
-            self.change_Weighting(self.idx_preClmax, maxWeight)
+            self.set_constantWeighting(opPoints, minWeight, maxWeight)
 
         elif (params.weightingMode == 'linear_progression'):
-            # increment weighting from minWeight to maxWeight
-            # do not change alpha_preClmax
-            num_intervals = self.idx_preClmax+1
-            diff = (maxWeight - minWeight) / num_intervals
-
-            for idx in range(num_intervals):
-                weight = round(minWeight + (idx*diff), 2)
-                self.change_Weighting(idx, weight)
+           set_linearProgressionWeighting(self, opPoints, minWeight, maxWeight)
 
         elif (params.weightingMode == 'sinus'):
-            # change weighting with a sinusoidal shape
-            # do not change alpha_preClmax
+            self.set_sinusWeighting(opPoints, minWeight, maxWeight, 0, self.idx_maxGlide-2, 0.0, pi/2)
+            self.set_sinusWeighting(opPoints, minWeight, maxWeight, self.idx_maxGlide-2, self.idx_preClmax, pi/2, 0.0)
 
-            # all op-points from Cl-min up to maxGlide
-            for idx in range(self.idx_maxGlide):
-                # set up x/y-points for linear-interpolation.
-                # x-values are CL-values of op-points
-                # y-values are 0..pi/2 for sinus- calculation
-                x1 = opPoints[0]
-                x2 = opPoints[self.idx_maxGlide]
-                y1 = 0.0
-                y2 = pi/2
+        elif (params.weightingMode == 'doubleSinus'):
+            nodePoint = self.idx_maxGlide - 1
+            self.set_sinusWeighting(opPoints, minWeight, maxWeight, 0, int(nodePoint/2), 0.0, pi/2)
+            self.set_sinusWeighting(opPoints, minWeight, maxWeight, int(nodePoint/2), nodePoint, pi/2, 0.0)
 
-                # calculate y by linear interpolation
-                y = interpolate(x1, x2, y1, y2, opPoints[idx])
+            diff = self.idx_preClmax - nodePoint
+            peak = nodePoint + int(diff/2)
+            self.set_sinusWeighting(opPoints, minWeight, maxWeight, nodePoint, peak, 0.0, pi/2)
+            self.set_sinusWeighting(opPoints, minWeight, maxWeight, peak, self.idx_preClmax, pi/2, 0.0)
 
-                # calculate sinus-function. The result is a "delta-" value
-                # that will be added to minWeight
-                diff = (maxWeight - minWeight) * sin(y)
+        # set weighting of max-Lift op-point to maxWeight
+        self.change_Weighting(self.idx_preClmax, maxWeight)
 
-                # calculate new weight
-                weight = round((minWeight + diff), 2)
-
-                # set the new weighting for the op-point now
-                self.change_Weighting(idx, weight)
-
-            # all op-points from maxGlide up to Clmax
-            for idx in range(self.idx_maxGlide, self.idx_preClmax):
-                x1 = opPoints[self.idx_maxGlide]
-                x2 = opPoints[self.idx_preClmax]
-                y1 = pi/2
-                y2 = 0.0
-                y = interpolate(x1, x2, y1, y2, opPoints[idx])
-
-                diff = (maxWeight - minWeight) * sin(y)
-                weight = round((minWeight + diff), 2)
-                self.change_Weighting(idx, weight)
-
-            # set weighting of max-Lift op-point to maxWeight
-            self.change_Weighting(self.idx_preClmax, maxWeight)
-
-        #print(operatingConditions["weighting"])#Debug
-        #print("Done.")#Debug
+        print(operatingConditions["weighting"])#Debug
+        print(operatingConditions["op_point"])
+        print("Done.")#Debug
 
 
     # adapts 'reynolds'-value of all op-points, that are below a certain
@@ -882,8 +894,8 @@ class inputFile:
         #self.print_OpPoints()#Debug
 
     def insert_alpha0_oppoint(self, params, strakPolar, i):
-        # get maxRe of root
-        maxRe_root = params.maxReNumbers[0]
+        # get maxRe
+        maxRe = params.maxReNumbers[i]
 
         # get alpha0 - target
         alpha = round(params.targets["alpha0"][i], AL_decimals)
@@ -895,7 +907,7 @@ class inputFile:
         if params.ReAlpha0 > 0:
             reynolds = params.ReAlpha0
         else:
-            reynolds = 800000
+            reynolds = maxRe #800000
 
         # insert op-Point, get index
         idx = self.insert_OpPoint('alpha0', 'spec-al', alpha, 'target-lift',
@@ -1059,7 +1071,7 @@ class strakData:
         self.xoptfoilVisualizerCall = "xoptfoil_visualizer-jx.exe"
         self.airfoilComparisonCall = "best_airfoil.py"
         self.xoptfoilInputFileName = 'istrak.txt'
-        self.weightingMode = 'constant'
+        self.weightingMode = 'doubleSinus'
         self.batchfileName = 'make_strak.bat'
         self.xoptfoilTemplate = "iOpt"
         self.operatingMode = 'default'
@@ -1070,7 +1082,7 @@ class strakData:
         self.NCrit = 9.0
         self.numOpPoints = 15
         self.minWeight = 0.7
-        self.maxWeight = 1.5
+        self.maxWeight = 1.9
         self.CL_min = -0.1
         self.intersectionPoint_CL = 0.0
         self.intersectionPoint_CL_CD = 99.0 # Deactivated
@@ -1092,6 +1104,7 @@ class strakData:
         self.smoothStrakFoils = False
         self.smoothMatchPolarFoil = False
         self.plotStrakPolars = True
+        self.scaleTargetPolars = False
         self.ReNumbers = []
         self.additionalOpPoints = [[]]
         self.chordLengths = []
@@ -1287,6 +1300,7 @@ class strakData:
             # append the targets
             self.targets["CL_maxGlide"].append(target_CL_maxGlide)
             self.targets["CD_maxGlide"].append(target_CD_maxGlide)
+            self.targets["CL_CD_maxGlide"].append(target_CL_maxGlide/target_CD_maxGlide)
             self.targets["alpha_maxGlide"].append(target_alpha_maxGlide)
 
             #---------------------- maxLift-targets --------------------------
@@ -2251,6 +2265,18 @@ class polarData:
             self.CL_CD[i] = self.CL[i] / self.CD[i]
 
 
+    # all CL_CD-values will be sscaled by the given scale-factor.
+    # all CD-values will be recalculated
+    def scale_CL_CD(self, scaleFactor):
+        # determine number of values
+        num = len(self.CL_CD)
+
+        # now scale all CL_CD-values, recalculate CD
+        for i in range(num):
+            self.CL_CD[i] = self.CL_CD[i] * scaleFactor
+            self.CD[i] = self.CL[i] / self.CL_CD[i]
+
+
     # determines the overall minimum CL-value of a given polar and some
     # corresponding values
     def determine_MaxSpeed(self):
@@ -3112,7 +3138,8 @@ def get_MandatoryParameterFromDict(dict, key):
 def check_WeightingMode(params):
     if ((params.weightingMode != 'linear_progression') &
         (params.weightingMode != 'constant') &
-        (params.weightingMode != 'sinus')):
+        (params.weightingMode != 'sinus') &
+        (params.weightingMode != 'doubleSinus')):
 
         WarningMsg('weightingMode = \'%s\' is not valid, setting weightingMode'\
         ' to \'constant\'' % params.weightingMode)
