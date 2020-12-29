@@ -580,6 +580,10 @@ class inputFile:
 
         self.set_NewTargetValues(start, end, shifted_rootPolar, x1, x2, y1, y2)
 
+        # now linearize the values by a certain factor
+        linearFactor = params.linearFactor_3[i]
+        self.linearizeTargetValues(0, self.idx_maxSpeed, linearFactor)
+
         # determine start and end-index for all op-points between
         # maxSpeed and preMaxSpeed
         start = self.idx_maxSpeed + 1
@@ -596,6 +600,10 @@ class inputFile:
         #print(targetValues)
         #print("maxSpeed:%d, preMaxSpeed: %d, maxGlide:%d, preClmax: %d" % (self.idx_maxSpeed,self.idx_preMaxSpeed, self.idx_maxGlide, self.idx_preClmax))#Debug
         self.set_NewTargetValues(start, end, shifted_rootPolar, x1, x2, y1, y2)
+
+        # now linearize the values by a certain factor
+        linearFactor = params.linearFactor_0[i]
+        self.linearizeTargetValues(self.idx_maxSpeed, self.idx_preMaxSpeed, linearFactor)
 
         # determine start and end-index for all op-points between
         # preMaxSpeed and maxGlide
@@ -1148,7 +1156,7 @@ class strakData:
         self.xmlFileName = None
         self.wingData = None
         self.useWingPlanform = True
-        self.useAlwaysRootfoil = False
+        self.useAlwaysRootfoil = True
         self.showTargetPolars = True
         self.adaptInitialPerturb = True
         self.smoothSeedfoil = True
@@ -1182,8 +1190,10 @@ class strakData:
         self.maxSpeedGain = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
         self.preMaxSpeedGain = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
         self.maxLiftGain = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+        self.linearFactor_0 = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
         self.linearFactor_1 = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
         self.linearFactor_2 = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+        self.linearFactor_3 = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
         self.targets ={
                         "CL_min": [],
                         "CD_min": [],
@@ -3199,7 +3209,7 @@ def get_booleanParameterFromDict(dict, key, default):
     value = default
     try:
         string = dict[key]
-        if (string == 'true'):
+        if (string == 'true') or (string == 'True'):
             value = True
         else:
             value = False
@@ -3356,11 +3366,18 @@ def get_Parameters(dict):
     params.maxGlideFactor  = get_ParameterFromDict(dict, "maxGlideFactor",
                                                         params.maxGlideFactor)
 
+    params.linearFactor_0 = get_ParameterFromDict(dict, "linearFactor_0",
+                                                        params.linearFactor_0)
+
     params.linearFactor_1 = get_ParameterFromDict(dict, "linearFactor_1",
                                                         params.linearFactor_1)
 
     params.linearFactor_2 = get_ParameterFromDict(dict, "linearFactor_2",
                                                         params.linearFactor_2)
+
+
+    params.linearFactor_3 = get_ParameterFromDict(dict, "linearFactor_3",
+                                                        params.linearFactor_3)
 
     params.intersectionPoint_CL_CD = get_ParameterFromDict(dict, "intersectionPoint_CL_CD",
                                                         params.intersectionPoint_CL_CD)
@@ -3407,7 +3424,7 @@ def get_Parameters(dict):
 
 
      # get optional boolean parameters
-    params.allGraphs = get_booleanParameterListFromDict(dict,
+    params.allGraphs = get_booleanParameterFromDict(dict,
                              "allGraphs", params.allGraphs)
 
     params.optimizeAlpha0 = get_booleanParameterListFromDict(dict,
