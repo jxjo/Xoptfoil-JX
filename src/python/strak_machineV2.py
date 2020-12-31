@@ -452,7 +452,7 @@ class inputFile:
         for idx in range(start, end):
             # get opPoint
             opPoint = opPoints[idx]
-            print(opPointNames[idx])#Debug
+            #print(opPointNames[idx])#Debug
 
             # find CD value of root-polar
             CD = rootPolar.find_CD_From_CL(opPoint)
@@ -735,9 +735,9 @@ class inputFile:
         # set weighting of max-Lift op-point to maxWeight
         self.change_Weighting(self.idx_preClmax, maxWeight)
 
-        print(operatingConditions["weighting"])#Debug
-        print(operatingConditions["op_point"])
-        print("Done.")#Debug
+        #print(operatingConditions["weighting"])#Debug
+        #print(operatingConditions["op_point"])
+        #print("Done.")#Debug
 
 
     # adapts 'reynolds'-value of all op-points, that are below a certain
@@ -1149,6 +1149,7 @@ class strakData:
         self.CL_switchpoint_Type2_Type1_polar = 0.05
         self.maxReFactor = 15.0
         self.maxLiftDistance = 0.02
+        self.alpha_Resolution = 0.001
         self.optimizationPasses = 3
         self.allGraphs = True
         self.scriptsAsExe = False
@@ -1183,11 +1184,12 @@ class strakData:
         self.numberOfCompetitors = [1, 3, 1], # multi-pass optimization
         self.shape_functions = ['camb-thick-plus','hicks-henne','hicks-henne'],
         self.optimizeAlpha0 = [True, True, True, True, True, True, True, True, True, True, True, True]
-        self.minCLGain = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+        self.minCLGain = [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
         self.maxGlideShift = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
         self.maxGlideGain = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
         self.maxGlideFactor = [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
         self.maxSpeedGain = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+        self.maxSpeedShift = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
         self.preMaxSpeedGain = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
         self.maxLiftGain = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
         self.linearFactor_0 = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
@@ -1313,6 +1315,7 @@ class strakData:
                 # no gain / loss / shift for root-polar
                 minCLGain = 0.0
                 maxSpeedGain = 0.0
+                maxSpeedShift = 0.0
                 preMaxSpeedGain = 0.0
                 maxGlideGain = 0.0
                 maxGlideShift = 0.0
@@ -1320,6 +1323,7 @@ class strakData:
             else:
                 minCLGain = params.minCLGain[idx]
                 maxSpeedGain = params.maxSpeedGain[idx]
+                maxSpeedShift = params.maxSpeedShift[idx]
                 preMaxSpeedGain = params.preMaxSpeedGain[idx]
                 maxGlideGain = params.maxGlideGain[idx]
                 maxGlideShift = params.maxGlideShift[idx]
@@ -1341,12 +1345,14 @@ class strakData:
             self.targets["alpha_min"].append(target_alpha_min)
 
             #---------------------- maxSpeed-targets --------------------------
-            target_CL_maxSpeed = rootPolar.CL_maxSpeed
-            target_alpha_maxSpeed = rootPolar.alpha[rootPolar.maxSpeed_idx]
+            target_CL_maxSpeed = rootPolar.CL_maxSpeed + maxSpeedShift
+            maxSpeedIdx = polar.find_index_From_CL(target_CL_maxSpeed)
+            target_alpha_maxSpeed = polar.alpha[maxSpeedIdx]
+            CD_maxSpeed = polar.CD[maxSpeedIdx]
 
             # now calculate CD-target-value
             target_CD_maxSpeed = self.calculate_CD_TargetValue(
-            rootPolar.CD_maxSpeed, polar.CD_maxSpeed, maxSpeedGain)
+            rootPolar.CD_maxSpeed, CD_maxSpeed, maxSpeedGain)
 
             # append the targets
             self.targets["CL_maxSpeed"].append(target_CL_maxSpeed)
@@ -2311,6 +2317,83 @@ class polarData:
 
         DoneMsg()
         return mergedPolar
+
+
+    def set_alphaResolution(self, newResolution):
+        # create empty lists
+        new_alpha =[]
+        new_CL = []
+        new_CD = []
+        new_CL_CD = []
+        new_CDp = []
+        new_Cm = []
+        new_Top_Xtr = []
+        new_Bot_Xtr = []
+
+        # determine actual resoultion of alpha
+        actualResolution = round((self.alpha[1] - self.alpha[0]), 10)
+
+        # number of increments must be an integer
+        num_increments = int(round(actualResolution / newResolution, 0))
+
+        # check number of increments, must be > 1
+        if (num_increments <= 1):
+            # Error-message and return
+            ErrorMsg("set_alphaResolution: newResolution is less than or equal actual resolution")
+            return
+
+        # determine size of an increment
+        increment = actualResolution / float(num_increments)
+
+        # loop over all list elements
+        num_values = len(self.alpha)
+        for i in range(num_values - 1):
+            alpha_left = self.alpha[i]
+            alpha_right = self.alpha[i+1]
+
+            for n in range(num_increments):
+                # calculate new values using linear interpolation
+                alpha = round((alpha_left + n*increment), 10)
+                CL = interpolate(alpha_left, alpha_right, self.CL[i], self.CL[i+1], alpha)
+                CD = interpolate(alpha_left, alpha_right, self.CD[i], self.CD[i+1], alpha)
+                CL_CD = interpolate(alpha_left, alpha_right, self.CL_CD[i], self.CL_CD[i+1], alpha)
+                CDp = interpolate(alpha_left, alpha_right, self.CDp[i], self.CDp[i+1], alpha)
+                Cm = interpolate(alpha_left, alpha_right, self.Cm[i], self.Cm[i+1], alpha)
+                Top_Xtr = interpolate(alpha_left, alpha_right, self.Top_Xtr[i], self.Top_Xtr[i+1], alpha)
+                Bot_Xtr = interpolate(alpha_left, alpha_right, self.Bot_Xtr[i], self.Bot_Xtr[i+1], alpha)
+
+                new_alpha.append(alpha)
+                new_CL.append(CL)
+                new_CD.append(CD)
+                new_CL_CD.append(CL_CD)
+                new_CDp.append(CDp)
+                new_Cm.append(Cm)
+                new_Top_Xtr.append(Top_Xtr)
+                new_Bot_Xtr.append(Bot_Xtr)
+
+        # append last values
+        new_alpha.append(self.alpha[num_values-1])
+        new_CL.append(self.CL[num_values-1])
+        new_CD.append(self.CD[num_values-1])
+        new_CL_CD.append(self.CL_CD[num_values-1])
+        new_CDp.append(self.CDp[num_values-1])
+        new_Cm.append(self.Cm[num_values-1])
+        new_Top_Xtr.append(self.Top_Xtr[num_values-1])
+        new_Bot_Xtr.append(self.Bot_Xtr[num_values-1])
+
+        # now set new values/ overwrite old values
+        self.alpha = new_alpha
+        self.CL = new_CL
+        self.CD = new_CD
+        self.CL_CD = new_CL_CD
+        self.CDp = new_CDp
+        self.Cm = new_Cm
+        self.Top_Xtr = new_Top_Xtr
+        self.Bot_Xtr = new_Bot_Xtr
+
+        #print("Ready")#Debug
+
+
 
     # generate a new shifted polar. The max-glide-point (this means maximum CL/CD)
     # will be shifted left or right. The max Lift point will remain the same.
@@ -3355,6 +3438,8 @@ def get_Parameters(dict):
 
     params.maxSpeedGain = get_MandatoryParameterFromDict(dict, "maxSpeedGain")
 
+    params.maxSpeedShift = get_MandatoryParameterFromDict(dict, "maxSpeedShift")
+
     params.preMaxSpeedGain = get_MandatoryParameterFromDict(dict, "preMaxSpeedGain")
 
     params.maxLiftGain = get_MandatoryParameterFromDict(dict, "maxLiftGain")
@@ -3825,6 +3910,9 @@ def generate_Polars(params, rootfoilName):
         mergedPolar = newPolar_T2.merge(newPolar_T1,
                          params.CL_switchpoint_Type2_Type1_polar, maxRe)
 
+        # change resolution of alpha for accurate conversion between CL /CD/ alpha
+        mergedPolar.set_alphaResolution(params.alpha_Resolution)
+
         # add merged polar to params
         params.merged_polars.append(mergedPolar)
 
@@ -3917,17 +4005,6 @@ def set_PolarDataFromInputFile(polarData, rootPolar, inputFile,
             alpha = op_point
             CL = target_value
             #CD = polarData.find_CD_From_CL(CL) #TODO does not work, needs complete target-polar
-
-        if (CD < 0.00001):
-            opPointNames = operatingConditions["name"]
-            print (opPointNames)
-            print (op_points)
-            print(operatingConditions['target_value'])
-        #print ("Ready.")#Debug
-            print("stop")#Debug
-
-        # calculate CL/CD
-#        CL_CD = CL/CD
 
         # append only 'spec-cl'-data
         if (op_mode == 'spec-cl'):# TODO append all data
