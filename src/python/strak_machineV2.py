@@ -939,7 +939,7 @@ class inputFile:
         # get alpha0 - target
         alpha = round(params.targets["alpha0"][i], AL_decimals)
 
-        # set weighting to maxWeight
+        # set weighting to 2 times maxWeight
         weighting = 2*params.maxWeight
 
         # set reynolds
@@ -953,6 +953,7 @@ class inputFile:
                                      0.0, weighting, reynolds)
 
             #print (idx)#Debug
+
 
     # This function will append an additonal oppoint, that will prevent
     # that the point of maxLift drops too much at lower reynolds-numbers
@@ -2256,11 +2257,7 @@ class polarData:
 
     # analyses a polar
     def analyze(self, params):
-        # yy_sg = savgol_filter(itp(xx), window_size, poly_order) TODO smoothing
         print("analysing polar \'%s\'..." % self.polarName)
-
-        # get root-polar for reference
-        rootPolar = params.merged_polars[0]
 
         self.determine_MaxSpeed()
         self.determine_CLmin(params)
@@ -3678,7 +3675,11 @@ def create_new_inputFile(params, i):
 
     # insert additional opPoints (if there are any):
     if len(params.additionalOpPoints[0])>0:
-        newFile.insert_AdditionalOpPoints(params.additionalOpPoints[i])
+        newFile.insert_AdditionalOpPoints(params.additionalOpPoints[0])
+        # The below line will use "adjusted" addtional oppoints for each
+        # strak-polar. Sometimes this behaviour is not desired, bcause this means
+        # that the CL-value is changed.
+        #newFile.insert_AdditionalOpPoints(params.additionalOpPoints[i])
 
     # now distribute the opPoints between the main opPoints and additional
     # oppoints equally
@@ -3772,9 +3773,6 @@ def generate_InputFiles(params):
         # insert oppoint for alpha @ CL = 0
         if params.optimizeAlpha0[i]:
             newFile.insert_alpha0_oppoint(params, strakPolar,i)
-
-        # insert oppoint for maxLift-protection at lower Re-numbers
-        #newFile.add_maxLift_protection_oppoint(params, strakPolar,i)
 
         # get default-value of initialPerturb from template
         initialPerturb = newFile.get_InitialPerturb()
