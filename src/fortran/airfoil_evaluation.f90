@@ -1046,8 +1046,10 @@ xfoil_options%reinitialize = xfoil_reinitialize
   close(foilunit)
   close(polarunit)
 
-  if (show_details .and. (designcounter > 0)) &
-    call show_op_optimization_progress(drag, lift, moment) 
+  if (show_details .and. (designcounter > 0)) then 
+    call show_op_optimization_progress  (drag, lift, moment) 
+    call show_geo_optimization_progress (foil) 
+  end if
 
 ! Set return value (needed for compiler)
 
@@ -1153,6 +1155,86 @@ subroutine show_op_optimization_progress(drag, lift, moment)
       
 end 
 
+!------------------------------------------------------------------------------
+!
+! Prints geo targets results during optimization 
+!       ! work in progress !
+!------------------------------------------------------------------------------
+subroutine show_geo_optimization_progress(foil) 
+
+  use airfoil_operations, only : my_stop
+
+  use math_deps,          only : interp_vector, interp_point
+  use xfoil_driver,       only : xfoil_set_airfoil, xfoil_get_geometry_info
+
+  type(airfoil_type), intent(in)    :: foil
+
+  integer          :: nptt, nptb, i, nptint, how_close
+  double precision :: tar_value, cur_value
+  double precision :: maxt, xmaxt, maxc, xmaxc
+  double precision, dimension(max(size(foil%xt,1),size(foil%xb,1))) :: x_interp, &
+                      zt_interp, zb_interp
+  ! character(25)    :: outstring
+
+
+! Interpolate bottom, top surface to foil%xt points (to check thickness)
+
+  nptt = size(foil%xt,1)
+  nptb = size(foil%xb,1)
+
+  if (foil%xt(nptt) <= foil%xb(nptb)) then
+    nptint = nptt
+    call interp_vector(foil%xb, foil%zb, foil%xt, zb_interp(1:nptt))
+    x_interp(1:nptt) = foil%xt
+    zt_interp(1:nptt) = foil%zt  
+  else
+    nptint = nptb
+    call interp_vector(foil%xt, foil%zt, foil%xb, zt_interp(1:nptb))
+    x_interp(1:nptb) = foil%xb
+    zb_interp(1:nptb) = foil%zb
+  end if
+
+! get airfoil geometry info from xfoil    
+
+  call xfoil_set_airfoil (foil)        
+  call xfoil_get_geometry_info (maxt, xmaxt, maxc, xmaxc)
+
+! Evaluate current value of geomtry targets 
+  do i = 1, ngeo_targets
+
+    select case (trim(geo_targets(i)%type))
+      case ('zTop')                      ! get z_value top side 
+        cur_value = interp_point(x_interp, zt_interp, geo_targets(i)%x)
+      case ('zBot')                      ! get z_value bot side
+        cur_value = interp_point(x_interp, zb_interp, geo_targets(i)%x)
+      case ('Thickness')                 ! take foil camber from xfoil above
+        cur_value = maxt
+      case ('Camber')                    ! take foil camber from xfoil above
+        cur_value = maxc
+      case default
+        call my_stop("Unknown target_type '"//trim(geo_targets(i)%type))
+    end select
+
+    tar_value    = geo_targets(i)%target_value
+    how_close    = r_quality (abs ((cur_value - tar_value) / tar_value), 0.0005d0, 0.02d0, 0.1d0)
+
+    ! Geo target 1 Tickness  0.07732
+    ! Geo target 2   Camber  0.01587
+    !                        "colored"
+
+    write (*,'(4x,3x,A10,I2,A11)', advance = 'no') 'Geo target',i, trim(geo_targets(i)%type)
+  
+    ! write (outstring, '(F9.5)') tar_value
+    ! call print_colored (COLOR_NOTE,   trim(outstring))
+    call print_colored_r (10,'(F7.5)', how_close, cur_value) 
+
+    write (*,*) 
+
+  end do
+
+  if (ngeo_targets > 0) write (*,*) 
+  
+end subroutine show_geo_optimization_progress
 
 !=============================================================================80
 !

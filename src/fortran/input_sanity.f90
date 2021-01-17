@@ -418,8 +418,9 @@ subroutine check_seed()
     geo_targets(i)%reference_value = ref_value
 
     ! target value negative?  --> take current seed value * |target_value| 
-    if (geo_targets(i)%target_value <= 0.d0)                                  &
+    if ((geo_targets(i)%target_value <= 0.d0) .and. (trim(geo_targets(i)%type) /= 'zBot'))                                 &
         geo_targets(i)%target_value = seed_value * abs(geo_targets(i)%target_value)
+    
     tar_value = geo_targets(i)%target_value
 
     ! will scale objective to 1 ( = no improvement) 
@@ -703,13 +704,17 @@ subroutine auto_curvature_constraints (show_details, foil, &
  
 !  ------------ te curvature -----
 
-  old_max_te_curvature = max_te_curvature
-  if (old_max_te_curvature > 1d10) old_max_te_curvature = 0.2d0
-  
-  call get_max_te_curvature (size(xt), xt,yt, max_te_curvature_top )
-  call get_max_te_curvature (size(xb), xb,yb, max_te_curvature_bot )
+  if (max_te_curvature == 10.d0) then        ! te_curvature was not set in inputs --> auto
 
-  max_te_curvature = max (max_te_curvature_top, max_te_curvature_bot) * 1.05d0 ! little more...
+    old_max_te_curvature = 0.2d0            ! dummy old value
+    
+    call get_max_te_curvature (size(xt), xt,yt, max_te_curvature_top )
+    call get_max_te_curvature (size(xb), xb,yb, max_te_curvature_bot )
+
+    max_te_curvature = max (max_te_curvature_top, max_te_curvature_bot) * 1.1d0 ! little more to breath...
+  else 
+    old_max_te_curvature = max_te_curvature
+  end if 
 
 !  ------------ highlow curvature amplitude -----
 
@@ -721,7 +726,7 @@ subroutine auto_curvature_constraints (show_details, foil, &
   call get_best_highlow_threshold (size(xb), xb,yb, min_highlow_thresh, &
                                    max_curv_highlow_bot, threshold_bot)
 
-  highlow_threshold = max(threshold_top, threshold_bot) * 1.05d0 ! little more...
+  highlow_threshold = max(threshold_top, threshold_bot) * 1.1d0 ! little more to breath...
 
   max_curv_highlow_top = nhighlows_using_threshold (xt, yt, highlow_threshold)
   max_curv_highlow_bot = nhighlows_using_threshold (xb, yb, highlow_threshold)

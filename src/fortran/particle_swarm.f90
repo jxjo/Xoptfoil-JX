@@ -583,9 +583,9 @@ subroutine  show_optimization_header  (pso_pop, max_retries, show_improvement)
   character(:), allocatable     :: var_string
   character(200)                :: blanks = ' '
 
-  write(*,*) "            '+' improved   '~' quite good   '-' bad   'x' xfoil no conv   '.' geometry failed"
+  write(*,'(13x,A)') "'+' improved   '~' quite good   '-' bad   'x' xfoil no conv   '.' geometry failed"
   if (max_retries > 0 ) then 
-    write(*,'(A)', advance = 'no') "            Experimental: Particle retry - affected particles are "
+    write(*,'(13x,A)', advance = 'no') "Experimental: Particle retry - affected particles are "
     call  print_colored (COLOR_WARNING, "colored")
     write (*,*)
   end if
@@ -652,7 +652,7 @@ subroutine  show_iteration_result (radius, fmin, f0, improved, show_improvement)
       write (*,*)
       write (*,*)
     end if
-end if
+  end if
 
 end subroutine  show_iteration_result
 

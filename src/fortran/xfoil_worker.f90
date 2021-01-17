@@ -115,7 +115,8 @@ program xfoil_worker
     case ('blend')         ! blend two airfoils...
       
       if (trim(output_prefix) == '') & 
-        output_prefix = airfoil_filename (1:(index (airfoil_filename,'.', back = .true.) - 1))//'-blend'
+        output_prefix = airfoil_filename (1:(index (airfoil_filename,'.', back = .true.) - 1)) // &
+                        '-blend'//trim(adjustl(value_argument))
 
       call load_airfoil(second_airfoil_filename, blend_foil)
       call blend_foils (input_file, output_prefix, foil, blend_foil, value_argument, visualizer)
@@ -460,7 +461,7 @@ subroutine blend_foils (input_file, output_prefix, seed_foil_in, blend_foil_in, 
 
 ! Write airfoil to _design_coordinates using Xoptfoil format for visualizer
 
-  blended_foil%name = trim(output_prefix)//trim(adjustl(value_argument))
+  blended_foil%name = trim(output_prefix)
   call airfoil_write   (trim(blended_foil%name)//'.dat', trim(blended_foil%name), blended_foil)
 
 
