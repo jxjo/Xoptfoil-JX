@@ -750,14 +750,23 @@ class inputFile:
             self.set_sinusWeighting(opPoints, minWeight, maxWeight, self.idx_maxGlide-2, self.idx_preClmax, pi/2, 0.0)
 
         elif (params.weightingMode == 'doubleSinus'):
-            nodePoint = self.idx_maxGlide - 1
+            # set constant weight to all oppoints first.
+            self.set_constantWeighting(opPoints, minWeight, maxWeight)
+
+            # calculate node-point and endpoint
+            nodePoint = self.idx_maxGlide - 3
+            endPoint = self.idx_maxGlide + int(((self.idx_preClmax - self.idx_maxGlide)/2))
+            #endPoint = self.idx_preClmax
+
+            # now set sinus-weighting to oppoints from Cl_min to node-point.
             self.set_sinusWeighting(opPoints, minWeight, maxWeight, 0, int(nodePoint/2), 0.0, pi/2)
             self.set_sinusWeighting(opPoints, minWeight, maxWeight, int(nodePoint/2), nodePoint, pi/2, 0.0)
 
-            diff = self.idx_preClmax - nodePoint
+            # last set sinus-weighting from node-point to end-point
+            diff = endPoint - nodePoint
             peak = nodePoint + int(diff/2)
             self.set_sinusWeighting(opPoints, minWeight, maxWeight, nodePoint, peak, 0.0, pi/2)
-            self.set_sinusWeighting(opPoints, minWeight, maxWeight, peak, self.idx_preClmax, pi/2, 0.0)
+            self.set_sinusWeighting(opPoints, minWeight, maxWeight, peak, endPoint, pi/2, 0.0)
 
         # set weighting of max-Lift op-point to maxWeight
         self.change_Weighting(self.idx_preClmax, maxWeight)
@@ -1468,6 +1477,7 @@ class strakData:
             # now calculate CD-target-value
             target_CD0 = self.calculate_CD_TargetValue(
             rootPolar_CD0, polar_CD0, CL0Gain)
+            target_CD0 = rootPolar_CD0/(1+CL0Gain) #Test
 
             # append the targets
             self.targets["CL0"].append(target_CL0)
