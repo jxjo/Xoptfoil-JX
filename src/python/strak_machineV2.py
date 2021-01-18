@@ -754,9 +754,9 @@ class inputFile:
             self.set_constantWeighting(opPoints, minWeight, maxWeight)
 
             # calculate node-point and endpoint
-            nodePoint = self.idx_maxGlide - 3
-            endPoint = self.idx_maxGlide + int(((self.idx_preClmax - self.idx_maxGlide)/2))
-            #endPoint = self.idx_preClmax
+            nodePoint = self.idx_maxGlide - 1
+            #endPoint = self.idx_maxGlide + int(((self.idx_preClmax - self.idx_maxGlide)/2))
+            endPoint = self.idx_preClmax
 
             # now set sinus-weighting to oppoints from Cl_min to node-point.
             self.set_sinusWeighting(opPoints, minWeight, maxWeight, 0, int(nodePoint/2), 0.0, pi/2)
@@ -1189,7 +1189,7 @@ class strakData:
         self.xoptfoilVisualizerCall = "xoptfoil_visualizer-jx.exe"
         self.airfoilComparisonCall = "best_airfoil.py"
         self.xoptfoilInputFileName = 'istrak.txt'
-        self.weightingMode = 'doubleSinus'
+        self.weightingMode = 'sinus'
         self.batchfileName = 'make_strak.bat'
         self.xoptfoilTemplate = "iOpt"
         self.operatingMode = 'default'
@@ -3436,21 +3436,27 @@ def check_WeightingMode(params):
 ################################################################################
 # function that checks validity of the 'quality'-input
 def check_quality(params):
-    if ((params.quality != 'medium') &
+    if ((params.quality != 'low') &
+        (params.quality != 'medium') &
         (params.quality != 'high')):
 
         WarningMsg('quality = \'%s\' is not valid, setting quality'\
         ' to \'medium\'' % params.quality)
         params.quality = 'medium'
 
-    if params.quality == 'medium':
-        # single-pass optimization, camb-thick-plus
-        params.maxIterations = [50]
+    if params.quality == 'low':
+        # double-pass optimization, camb-thick-plus / hicks-henne
+        params.maxIterations = [10, 30]
+        params.numberOfCompetitors = [1, 1]
+        params.shape_functions = ['camb-thick-plus', 'hicks-henne'],
+    elif params.quality == 'medium':
+        # double-pass optimization, camb-thick-plus / hicks-henne
+        params.maxIterations = [10, 120]
         params.numberOfCompetitors = [1]
-        params.shape_functions = ['camb-thick-plus'],
+        params.shape_functions = ['camb-thick-plus', 'hicks-henne'],
     else:
         # multi-pass optimization, camb-thick-plus and hicks-henne
-        params.maxIterations = [40,60,160]
+        params.maxIterations = [10,60,160]
         params.numberOfCompetitors = [1, 3, 1]
         params.shape_functions = ['camb-thick-plus','hicks-henne','hicks-henne']
 
@@ -3899,7 +3905,7 @@ def generate_InputFiles(params):
             # physically create the file
             newFile.write_ToFile(iFile)
             # reduce initial perturb for the next pass
-            initialPerturb = initialPerturb/4
+            initialPerturb = initialPerturb/2
 
         # append only input-file of final strak-airfoil to params
         params.inputFiles.append(newFile)
