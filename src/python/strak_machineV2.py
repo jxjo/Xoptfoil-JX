@@ -771,6 +771,9 @@ class inputFile:
         # set weighting of max-Lift op-point to maxWeight
         self.change_Weighting(self.idx_preClmax, maxWeight)
 
+        # set weighting of CL_min to maxWeight
+        self.change_Weighting(0, maxWeight)
+
         #print(operatingConditions["weighting"])#Debug
         #print(operatingConditions["op_point"])
         #print("Done.")#Debug
@@ -992,6 +995,22 @@ class inputFile:
                                      0.0, weighting, reynolds)
 
             #print (idx)#Debug
+
+    def insert_alphaMaxGlide_oppoint(self, params, i):
+        # get maxRe
+        maxRe = params.maxReNumbers[i]
+        rootPolar = params.merged_polars[0]
+
+        # get alpha-maxGlide - target
+        alpha = round(rootPolar.alpha_maxGlide, AL_decimals)
+        CL = round(rootPolar.CL_maxGlide, CL_decimals)
+
+        # set weighting to maxWeight
+        weighting = params.maxWeight
+
+        # insert op-Point, get index
+        idx = self.insert_OpPoint('alphaMaxGlide', 'spec-al', alpha, 'target-lift',
+                                     CL, weighting, None)
 
 
     # This function will append an additonal oppoint, that will prevent
@@ -1239,9 +1258,9 @@ class strakData:
         self.target_polars = []
         self.strak_polars = []
         self.inputFiles = []
-        self.maxIterations = [30,40,160], # multi-pass optimization
+        #self.maxIterations = [30,40,160], # multi-pass optimization
         self.numberOfCompetitors = [1, 3, 1], # multi-pass optimization
-        self.shape_functions = ['camb-thick-plus','hicks-henne','hicks-henne'],
+        #self.shape_functions = ['camb-thick-plus','hicks-henne','hicks-henne'],
         self.optimizeAlpha0 = [True, True, True, True, True, True, True, True, True, True, True, True]
         self.minCLGain = [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
         self.CL0Gain = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
@@ -3452,7 +3471,7 @@ def check_quality(params):
     elif params.quality == 'medium':
         # double-pass optimization, camb-thick-plus / hicks-henne
         params.maxIterations = [10, 120]
-        params.numberOfCompetitors = [1]
+        params.numberOfCompetitors = [1, 1]
         params.shape_functions = ['camb-thick-plus', 'hicks-henne'],
     else:
         # multi-pass optimization, camb-thick-plus and hicks-henne
@@ -3862,6 +3881,9 @@ def generate_InputFiles(params):
         if params.optimizeAlpha0[i]:
             newFile.insert_alpha0_oppoint(params, strakPolar,i)
 
+        # insert oppoint for alpha @maxGlide
+        newFile.insert_alphaMaxGlide_oppoint(params, i)
+
         # get default-value of initialPerturb from template
         initialPerturb = newFile.get_InitialPerturb()
 
@@ -3901,7 +3923,8 @@ def generate_InputFiles(params):
             # set initialPerturb
             newFile.set_InitialPerturb(initialPerturb)
             # set shape_functions
-            newFile.set_shape_functions (params.shape_functions [n])
+            functionLlist = params.shape_functions[0]
+            newFile.set_shape_functions (functionLlist[n])
             # physically create the file
             newFile.write_ToFile(iFile)
             # reduce initial perturb for the next pass
