@@ -688,25 +688,25 @@ class inputFile:
         self.change_TargetValue(opPointNames[self.idx_maxGlide], new_targetValue)
 
 
-    def set_constantWeighting(self, opPoints, minWeight, maxWeight):
-        # set every op-point to constant minWeight (but not max-Lift-opPoint)
-        for idx in range(self.idx_preClmax):
-            self.change_Weighting(idx, minWeight)
-
-
-    def set_linearProgressionWeighting(self, opPoints, minWeight, maxWeight):
-        # increment weighting from minWeight to maxWeight
-        # do not change alpha_preClmax
-        num_intervals = self.idx_preClmax+1
-        diff = (maxWeight - minWeight) / num_intervals
-
-        for idx in range(num_intervals):
-            weight = round(minWeight + (idx*diff), 2)
+    def set_constantWeighting(self, start, end, weight):
+        for idx in range(start, (end+1)):
             self.change_Weighting(idx, weight)
 
 
+    def set_linearProgressionWeighting(self, start, end, startWeight, endWeight):
+        num_intervals = end - start
+        diff = (endWeight - startWeight) / num_intervals
+        interval = 0
+
+        for idx in range(start, (end+1)):
+            weight = round(startWeight + (interval*diff), 2)
+            self.change_Weighting(idx, weight)
+            interval = interval + 1
+            print (idx)
+
+
     def set_sinusWeighting(self, opPoints, minWeight, maxWeight, start, end, y1, y2):
-        for idx in range(start, end):
+        for idx in range(start, (end+1)):
             # set up x/y-points for linear-interpolation.
             # x-values are CL-values of op-points
             # y-values are 0..pi/2 for sinus- calculation
@@ -737,42 +737,48 @@ class inputFile:
          # determine min and max weight
         minWeight = params.minWeight
         maxWeight = params.maxWeight
+        mediumWeight = int((maxWeight + minWeight)/2)
 
         # evaluate the weighting-mode
         if (params.weightingMode == 'constant'):
-            self.set_constantWeighting(opPoints, minWeight, maxWeight)
+            self.set_constantWeighting(0, self.idx_preClmax, minWeight)
 
         elif (params.weightingMode == 'linear_progression'):
-           set_linearProgressionWeighting(self, opPoints, minWeight, maxWeight)
+           self.set_linearProgressionWeighting(self, 0, self.idx_preClmax, minWeight, maxWeight)
 
         elif (params.weightingMode == 'sinus'):
-            self.set_sinusWeighting(opPoints, minWeight, maxWeight, 0, self.idx_maxGlide-2, 0.0, pi/2)
-            self.set_sinusWeighting(opPoints, minWeight, maxWeight, self.idx_maxGlide-2, self.idx_preClmax, pi/2, 0.0)
+            #self.set_sinusWeighting(opPoints, minWeight, maxWeight, 0, self.idx_maxGlide-2, 0.0, pi/2)
+            #self.set_sinusWeighting(opPoints, minWeight, maxWeight, self.idx_maxGlide-2, self.idx_preClmax, pi/2, 0.0)
+            self.set_constantWeighting( 0, self.idx_preClmax, minWeight)
+            self.set_sinusWeighting(opPoints, minWeight, maxWeight, self.idx_preMaxSpeed, self.idx_maxGlide, 0.0, pi/2)
+            self.set_sinusWeighting(opPoints, minWeight, maxWeight, self.idx_maxGlide, self.idx_preClmax, pi/2, 0.0)
 
         elif (params.weightingMode == 'doubleSinus'):
-            # set constant weight to all oppoints first.
-            self.set_constantWeighting(opPoints, minWeight, maxWeight)
+            # set constant-weighting minWeight to all oppoints first.
+            self.set_constantWeighting( 0, self.idx_preClmax, minWeight)
 
-            # calculate node-point and endpoint
-            nodePoint = self.idx_maxGlide - 1
-            #endPoint = self.idx_maxGlide + int(((self.idx_preClmax - self.idx_maxGlide)/2))
-            endPoint = self.idx_preClmax
+            # determine node-point
+            nodePoint = self.idx_preMaxSpeed + int((self.idx_maxGlide - self.idx_preMaxSpeed)/2)
 
             # now set sinus-weighting to oppoints from Cl_min to node-point.
-            self.set_sinusWeighting(opPoints, minWeight, maxWeight, 0, int(nodePoint/2), 0.0, pi/2)
-            self.set_sinusWeighting(opPoints, minWeight, maxWeight, int(nodePoint/2), nodePoint, pi/2, 0.0)
+            self.set_sinusWeighting(opPoints, minWeight, mediumWeight, 0, self.idx_preMaxSpeed, 0.0, pi/2)
+            self.set_sinusWeighting(opPoints, minWeight, mediumWeight, self.idx_preMaxSpeed, nodePoint, pi/2, 0.0)
 
-            # last set sinus-weighting from node-point to end-point
-            diff = endPoint - nodePoint
-            peak = nodePoint + int(diff/2)
-            self.set_sinusWeighting(opPoints, minWeight, maxWeight, nodePoint, peak, 0.0, pi/2)
-            self.set_sinusWeighting(opPoints, minWeight, maxWeight, peak, endPoint, pi/2, 0.0)
+            # set constant-weighting max weight to oppoints from nodepoint up to max glide
+            self.set_constantWeighting( nodePoint, self.idx_maxGlide, maxWeight)
 
-        # set weighting of max-Lift op-point to maxWeight
+            # linear reduction of weighting from maxGlide to preClmax
+            self.set_linearProgressionWeighting(self.idx_maxGlide, self.idx_preClmax, maxWeight, mediumWeight)
+
+            # set weighting of oppoint after pre maxSpeed op-point to maxWeight
+            self.change_Weighting(self.idx_preMaxSpeed+1, maxWeight)
+
+
+         # set weighting of max-Lift op-point to maxWeight
         self.change_Weighting(self.idx_preClmax, maxWeight)
 
         # set weighting of CL_min to maxWeight
-        self.change_Weighting(0, maxWeight)
+        #self.change_Weighting(0, maxWeight)
 
         #print(operatingConditions["weighting"])#Debug
         #print(operatingConditions["op_point"])
@@ -1006,36 +1012,11 @@ class inputFile:
         CL = round(rootPolar.CL_maxGlide, CL_decimals)
 
         # set weighting to maxWeight
-        weighting = params.maxWeight
+        weighting = 2*params.maxWeight
 
         # insert op-Point, get index
         idx = self.insert_OpPoint('alphaMaxGlide', 'spec-al', alpha, 'target-lift',
                                      CL, weighting, None)
-
-
-    # This function will append an additonal oppoint, that will prevent
-    # that the point of maxLift drops too much at lower reynolds-numbers
-    def add_maxLift_protection_oppoint(self, params, strakPolar, i):
-        # get Re of strak-airfoil
-        Re = params.ReNumbers[i]
-
-        # calculate reynolds-number that shall be watched
-        reynolds = int(round((Re*2/3), 0))
-
-        # set weighting of oppoint to half between min and maxWeight
-        weighting = (params.minWeight + params.maxWeight) / 2
-
-        # get data of last oppoint (that is always the point of maximum lift)
-        (lastOppointName, idx) = self.get_LastOpPoint()
-        CL =  self.get_OpPoint(lastOppointName)
-
-        # calculate target-value of maximum Lift-oppoint at lower
-        # reynolds-number (only roughly estimated)
-        targetValue = self.get_TargetValue(lastOppointName) * 1.2
-
-        # append oppoint now
-        self.add_Oppoint('maxLiftGuard', 'spec-cl', CL, 'target-drag',
-                                     targetValue, weighting, reynolds)
 
 
     # All op-points between start and end shall be distributed equally.
@@ -1208,7 +1189,7 @@ class strakData:
         self.xoptfoilVisualizerCall = "xoptfoil_visualizer-jx.exe"
         self.airfoilComparisonCall = "best_airfoil.py"
         self.xoptfoilInputFileName = 'istrak.txt'
-        self.weightingMode = 'sinus'
+        self.weightingMode = 'doubleSinus'
         self.batchfileName = 'make_strak.bat'
         self.xoptfoilTemplate = "iOpt"
         self.operatingMode = 'default'
@@ -3465,17 +3446,17 @@ def check_quality(params):
 
     if params.quality == 'low':
         # double-pass optimization, camb-thick-plus / hicks-henne
-        params.maxIterations = [10, 30]
-        params.numberOfCompetitors = [1, 1]
-        params.shape_functions = ['camb-thick-plus', 'hicks-henne'],
+        params.maxIterations = [40]
+        params.numberOfCompetitors = [1]
+        params.shape_functions = ['camb-thick-plus'],
     elif params.quality == 'medium':
         # double-pass optimization, camb-thick-plus / hicks-henne
-        params.maxIterations = [10, 120]
+        params.maxIterations = [40, 120]
         params.numberOfCompetitors = [1, 1]
         params.shape_functions = ['camb-thick-plus', 'hicks-henne'],
     else:
         # multi-pass optimization, camb-thick-plus and hicks-henne
-        params.maxIterations = [10,60,160]
+        params.maxIterations = [40, 60,160]
         params.numberOfCompetitors = [1, 3, 1]
         params.shape_functions = ['camb-thick-plus','hicks-henne','hicks-henne']
 
