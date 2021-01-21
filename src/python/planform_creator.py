@@ -198,6 +198,7 @@ class wing:
     #class init
     def __init__(self):
         self.rootAirfoilName = ""
+        self.airfoilNames = []
         self.rootchord = 0.223
         self.leadingEdgeOrientation = 'up'
         self.wingspan = 2.54
@@ -229,6 +230,12 @@ class wing:
 
         # get lit of reynolds-numbers
         self.valueList = strakData["reynolds"]
+
+        # get user-defined list of airfoil-names from strakdata
+        try:
+           self.airfoilNames =  strakData["airfoilNames"]
+        except:
+            self.airfoilNames = []
 
         # set number of sections to number of reynolds-numbers found in
         # strakdata.txt
@@ -287,13 +294,24 @@ class wing:
 
     # sets the airfoilname of a section
     def set_AirfoilName(self, section):
-        if (section.number == 1):
-            suffix = '-root'
-        else:
-            suffix = '-strak'
+        try:
+           section.airfoilName = self.airfoilNames[section.number-1]
+        except:
+            if (section.number == 1):
+                suffix = '-root'
+            else:
+                suffix = '-strak'
+            section.airfoilName = (self.rootAirfoilName + "%s-%s.dat") % \
+             (suffix ,get_ReString(section.Re))
 
-        section.airfoilName = (self.rootAirfoilName + "%s-%s.dat") % \
-            (suffix ,get_ReString(section.Re))
+
+    def set_lastSectionAirfoilName(self, section):
+        try:
+            section.airfoilName = self.airfoilNames[section.number-2]
+        except:
+            suffix = '-strak'
+            section.airfoilName = (self.rootAirfoilName + "%s-%s.dat") % \
+             (suffix ,get_ReString(section.Re))
 
 
     # calculate planform-shape of the half-wing (high-resolution wing planform)
@@ -438,7 +456,7 @@ class wing:
         section.Re = lastSectionRe
 
         # set the airfoil-Name
-        self.set_AirfoilName(section)
+        self.set_lastSectionAirfoilName(section)
 
 
     # plot planform of the half-wing

@@ -741,7 +741,7 @@ class inputFile:
 
         # evaluate the weighting-mode
         if (params.weightingMode == 'constant'):
-            self.set_constantWeighting(0, self.idx_preClmax, minWeight)
+            self.set_constantWeighting(0, self.idx_preClmax, mediumWeight)
 
         elif (params.weightingMode == 'linear_progression'):
            self.set_linearProgressionWeighting(self, 0, self.idx_preClmax, minWeight, maxWeight)
@@ -764,17 +764,10 @@ class inputFile:
             self.set_sinusWeighting(opPoints, minWeight, mediumWeight, 0, self.idx_preMaxSpeed, 0.0, pi/2)
             self.set_sinusWeighting(opPoints, minWeight, mediumWeight, self.idx_preMaxSpeed, nodePoint, pi/2, 0.0)
 
-            # set constant-weighting max weight to oppoints from nodepoint up to max glide
-            self.set_constantWeighting( nodePoint, self.idx_maxGlide, maxWeight)
+            self.set_sinusWeighting(opPoints, mediumWeight, maxWeight, nodePoint, self.idx_maxGlide, 0.0, pi/2)
+            self.set_sinusWeighting(opPoints, mediumWeight, maxWeight, self.idx_maxGlide, self.idx_preClmax, pi/2, 0.0)
 
-            # linear reduction of weighting from maxGlide to preClmax
-            self.set_linearProgressionWeighting(self.idx_maxGlide, self.idx_preClmax, maxWeight, mediumWeight)
-
-            # set weighting of oppoint after pre maxSpeed op-point to maxWeight
-            self.change_Weighting(self.idx_preMaxSpeed+1, maxWeight)
-
-
-         # set weighting of max-Lift op-point to maxWeight
+        # set weighting of max-Lift op-point to maxWeight
         self.change_Weighting(self.idx_preClmax, maxWeight)
 
         # set weighting of CL_min to maxWeight
@@ -1018,6 +1011,22 @@ class inputFile:
         idx = self.insert_OpPoint('alphaMaxGlide', 'spec-al', alpha, 'target-lift',
                                      CL, weighting, None)
 
+    def insert_alphaMaxLift_oppoint(self, params, i):
+        # get maxRe
+        maxRe = params.maxReNumbers[i]
+        rootPolar = params.merged_polars[0]
+
+        # get alpha-maxGlide - target
+        alpha = round(params.targets["alpha_pre_maxLift"][i], AL_decimals)
+        CL = round(params.targets["CL_pre_maxLift"][i], CL_decimals)
+
+        # set weighting to maxWeight
+        weighting = 2*params.maxWeight
+
+        # insert op-Point, get index
+        idx = self.insert_OpPoint('alphaMaxLift', 'spec-al', alpha, 'target-lift',
+                                     CL, weighting, None)
+
 
     # All op-points between start and end shall be distributed equally.
     # Equally means: the difference in CL will be constant
@@ -1188,7 +1197,7 @@ class strakData:
         self.showStatusCall = "show_status.py"
         self.xoptfoilVisualizerCall = "xoptfoil_visualizer-jx.exe"
         self.airfoilComparisonCall = "best_airfoil.py"
-        self.xoptfoilInputFileName = 'istrak.txt'
+        self.xoptfoilInputFileName = 'iOpt'
         self.weightingMode = 'doubleSinus'
         self.batchfileName = 'make_strak.bat'
         self.xoptfoilTemplate = "iOpt"
@@ -1239,6 +1248,7 @@ class strakData:
         self.target_polars = []
         self.strak_polars = []
         self.inputFiles = []
+        self.airfoilNames = []
         #self.maxIterations = [30,40,160], # multi-pass optimization
         self.numberOfCompetitors = [1, 3, 1], # multi-pass optimization
         #self.shape_functions = ['camb-thick-plus','hicks-henne','hicks-henne'],
@@ -2800,7 +2810,11 @@ def get_FoilName(params, index):
         airfoilNames = wing.get('airfoilNames')
         foilName = airfoilNames[index]
     else:
-        # compose foilname with seedfoilname and Re-number
+        # try to get airfoilname from user-defined list
+        if (index < len(params.airfoilNames)):
+            return (params.airfoilNames[index] + ".dat")
+
+        # otherwise compose foilname with seedfoilname and Re-number
         Re = params.ReNumbers[index]
 
         if (params.operatingMode == 'matchpolarfoils'):
@@ -2808,12 +2822,7 @@ def get_FoilName(params, index):
         else:
             foilName = params.seedFoilName
 
-        if (index == 0):
-            suffix = '-root'
-        else:
-            suffix = '-strak'
-
-        foilName = (foilName + "%s-%s.dat") % (suffix ,get_ReString(Re))
+        foilName = (foilName + "-%s.dat") % get_ReString(Re)
 
     return (foilName)
 
@@ -2885,26 +2894,26 @@ def insert_preliminaryAirfoilName(commandLines, filename, airfoilname):
     commandLines.append("echo %%TIME%%   creating preliminary-airfoil: %s >> %s\n" % (airfoilname, filename))
 
 def insert_airfoilName(commandLines, filename, airfoilname):
-    commandLines.append("echo %%TIME%%   finalizing strak-airfoil: %s >> %s\n" % (airfoilname, filename))
+    commandLines.append("echo %%TIME%%   finalizing airfoil: %s >> %s\n" % (airfoilname, filename))
 
 def insert_finishedAirfoil(commandLines, filename ):
-     commandLines.append("echo %%TIME%%   finished strak-airfoil >> %s\n" % filename)
+     commandLines.append("echo %%TIME%%   finished airfoil >> %s\n" % filename)
 
 def insert_calculate_polars(commandLines, filename, airfoilname):
-     commandLines.append("echo %%TIME%%   calculating polars for strak-airfoil: %s >> %s\n" % (airfoilname, filename))
+     commandLines.append("echo %%TIME%%   calculating polars for airfoil: %s >> %s\n" % (airfoilname, filename))
 
 def insert_calculate_polars_finished(commandLines, filename):
      commandLines.append("echo %%TIME%%   finished calculating polars >> %s\n" % filename)
 
 def insert_MainTaskStart(commandLines, filename, rootfoilName, ReList):
-    line = "echo main-task start: create whole set of strak-airfoils "
+    line = "echo main-task start: create whole set of airfoils "
     splitlines = rootfoilName.split("root")
     rootfoilName = splitlines[0]
     numStrakfoils = len(ReList)
 
     for i in range(1, numStrakfoils):
         reString = get_ReString(ReList[i])
-        strakfoilname = rootfoilName + "strak-" + reString
+        strakfoilname = rootfoilName + reString
         line = line +"%s" % strakfoilname
 
         if (i < (numStrakfoils-1)):
@@ -2920,7 +2929,7 @@ def insert_MainTaskEnd(commandLines, filename):
 
 
 def insert_SubTaskStart(commandLines, filename, airfoilname):
-    commandLines.append("echo sub-task start: create strak-airfoil %s >> %s\n" % (airfoilname, filename))
+    commandLines.append("echo sub-task start: create airfoil %s >> %s\n" % (airfoilname, filename))
 
 
 def insert_SubTaskEnd(commandLines, filename):
@@ -3187,6 +3196,7 @@ def generate_Batchfile(batchFileName, commandlines):
 def get_strak_commandlines(params, commandlines, idx):
     strak_commandlines = []
     ReString = get_ReString(params.ReNumbers[idx])
+    airfoilName = get_FoilName(params, idx).strip(".dat")
 
     # change current working dir to output folder
     strak_commandlines.append("cd %s\n\n" % buildPath)
@@ -3202,7 +3212,7 @@ def get_strak_commandlines(params, commandlines, idx):
 
     for line_idx in range(len(commandlines)):
         # determine start-line
-        if ((commandlines[line_idx].find(ReString)>=0) and
+        if ((commandlines[line_idx].find(airfoilName)>=0) and
             (commandlines[line_idx].find( 'sub-task start')>=0)):
             start = True
 
@@ -3448,15 +3458,15 @@ def check_quality(params):
         # double-pass optimization, camb-thick-plus / hicks-henne
         params.maxIterations = [40]
         params.numberOfCompetitors = [1]
-        params.shape_functions = ['camb-thick-plus'],
+        params.shape_functions = ['camb-thick-plus']
     elif params.quality == 'medium':
         # double-pass optimization, camb-thick-plus / hicks-henne
         params.maxIterations = [40, 120]
         params.numberOfCompetitors = [1, 1]
-        params.shape_functions = ['camb-thick-plus', 'hicks-henne'],
+        params.shape_functions = ['camb-thick-plus', 'hicks-henne']
     else:
         # multi-pass optimization, camb-thick-plus and hicks-henne
-        params.maxIterations = [40, 60,160]
+        params.maxIterations = [40, 60, 160]
         params.numberOfCompetitors = [1, 3, 1]
         params.shape_functions = ['camb-thick-plus','hicks-henne','hicks-henne']
 
@@ -3530,6 +3540,9 @@ def get_Parameters(dict):
     params.maxLiftGain = get_MandatoryParameterFromDict(dict, "maxLiftGain")
 
     # get optional parameters
+    params.airfoilNames = get_ParameterFromDict(dict, "airfoilNames",
+                                                        params.airfoilNames)
+
     params.maxGlideShift = get_ParameterFromDict(dict, "maxGlideShift",
                                                         params.maxGlideShift)
 
@@ -3835,21 +3848,22 @@ def generate_InputFiles(params):
 
     # generate files for all Re-numbers
     for i in range(0, num_files):
-        if (i == 0):
-            # create inputFile of root-airfoil
-            newFile = create_new_inputFile(params, 0)
+##        if (i == 0):
+##            # create inputFile of root-airfoil
+##            newFile = create_new_inputFile(params, 0)
+##
+##            if (params.intersectionPoint_CL_CD != 99.0):
+##                # calculate the common intersectionPoint, so maxLiftGain can be adjusted
+##                # automatically
+##                params.intersectionPoint_CL = calculate_intersectionPoint(params, newFile)
+##
+##        else:
+##            # generate file that has an adjusted maxLift-Target
+##            if (params.intersectionPoint_CL_CD != 99.0):
+##                newFile = createAdjustedInputFile(params, i)
+##            else:
 
-            if (params.intersectionPoint_CL_CD != 99.0):
-                # calculate the common intersectionPoint, so maxLiftGain can be adjusted
-                # automatically
-                params.intersectionPoint_CL = calculate_intersectionPoint(params, newFile)
-
-        else:
-            # generate file that has an adjusted maxLift-Target
-            if (params.intersectionPoint_CL_CD != 99.0):
-                newFile = createAdjustedInputFile(params, i)
-            else:
-                newFile = create_new_inputFile(params, i)
+        newFile = create_new_inputFile(params, i)
 
         # set the importance / weightings of the op-points
         newFile.set_Weightings(params)
@@ -3899,17 +3913,19 @@ def generate_InputFiles(params):
             maxIterations = params.maxIterations[n]
             if (maxIterations == 0):
                 maxIterations = maxIterationsDefault
-
             newFile.set_maxIterations(maxIterations)
+
             # set initialPerturb
             newFile.set_InitialPerturb(initialPerturb)
+
             # set shape_functions
-            functionLlist = params.shape_functions[0]
-            newFile.set_shape_functions (functionLlist[n])
+            newFile.set_shape_functions (params.shape_functions[n])
+
             # physically create the file
             newFile.write_ToFile(iFile)
+
             # reduce initial perturb for the next pass
-            initialPerturb = initialPerturb/2
+            initialPerturb = initialPerturb*0.3
 
         # append only input-file of final strak-airfoil to params
         params.inputFiles.append(newFile)
@@ -3949,8 +3965,7 @@ def generate_Polars(params, rootfoilName):
         params.polarFileNames_T2.append(polarFileNameAndPath_T2)
 
         # generate inputfilename from Re-number
-        inputFilename = params.xoptfoilInputFileName.strip('.txt')
-        inputFilename = inputFilename + ("_%s.txt" % get_ReString(Re))
+        inputFilename = params.xoptfoilInputFileName + ("_%s.txt" % get_ReString(Re))
 
         # multi-pass-optimization: generate input-filenames for intermediate-airfoils
         for n in range(1, (params.optimizationPasses)):

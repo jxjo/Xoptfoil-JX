@@ -1,5 +1,5 @@
 {
-      "quality": "high",
+      "quality": "medium",
       "seedFoilName": "SD",
       "additionalOpPoints": [-0.02, 0.0025],
       "linearFactor_0":   [0.0,        0.0,   0.0 ],
@@ -17,5 +17,6 @@
       "maxGlideShift":    [0.0,        0.0,   0.0 ],
       "maxLiftGain":      [0.0,        0.0,   0.1 ],
       "lowReGain":        [0.0,        0.4,   0.3 ],
-      "reynolds":         [220000,  150000,  80000]
+      "reynolds":         [220000,  150000,  80000],
+      "airfoilNames":     ["SD-22", "SD-15", "SD-08"]
 }

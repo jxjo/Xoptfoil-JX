@@ -216,7 +216,7 @@ class show_status():
 
         for line in file_content:
             # look for name of current airfoil
-            if (line.find("finalizing strak-airfoil") >= 0) or\
+            if (line.find("finalizing airfoil") >= 0) or\
                (line.find("creating preliminary-airfoil") >=0):
                 splitlines = line.split(": ")
                 airfoilname = splitlines[1]
