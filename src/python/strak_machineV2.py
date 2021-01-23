@@ -32,6 +32,7 @@ from copy import deepcopy
 from colorama import init
 from termcolor import colored
 import change_airfoilname
+import re
 
 # paths and separators
 bs = "\\"
@@ -142,8 +143,12 @@ def interpolate_2(x1, x2, y1, y2, y):
     return x
 
 
-def sigmoid(z):
-    return 1/(1 + np.exp(-z))
+def remove_suffix(text, suffix):
+    try:
+        text = re.sub(suffix, '', text)
+    except:
+        ErrorMsg("remove_suffix failed, text was %s, suffix was %s" % (text, suffix))
+    return text
 
 # get the name and absolute path of an template xoptfoil-input-file, that
 # resides in the 'presets'-folder.
@@ -1197,7 +1202,6 @@ class strakData:
         self.showStatusCall = "show_status.py"
         self.xoptfoilVisualizerCall = "xoptfoil_visualizer-jx.exe"
         self.airfoilComparisonCall = "best_airfoil.py"
-        self.xoptfoilInputFileName = 'iOpt'
         self.weightingMode = 'doubleSinus'
         self.batchfileName = 'make_strak.bat'
         self.xoptfoilTemplate = "iOpt"
@@ -2845,7 +2849,7 @@ def get_NumberOfAirfoils(params):
 # function that generates commandlines to create and merge polars
 def generate_polarCreationCommandLines(commandlines, params, strakFoilName, maxRe, Re):
 
-    polarDir = strakFoilName.strip('.dat') + '_polars'
+    polarDir = remove_suffix(strakFoilName, '.dat') + '_polars'
 
     polarFileName_T1 = compose_Polarfilename_T1(maxRe, params.NCrit)
     polarFileNameAndPath_T1 = polarDir + bs + polarFileName_T1
@@ -2860,14 +2864,15 @@ def generate_polarCreationCommandLines(commandlines, params, strakFoilName, maxR
     inputFilename = get_PresetInputFileName('iPolars_T1', params)
     commandline = params.xfoilWorkerCall + " -i \"%s\" -a \"%s\" -w polar -o \"%s\" -r %d\n" %\
                              (inputFilename, strakFoilName,
-                              strakFoilName.strip('.dat'), maxRe)
+                             remove_suffix(strakFoilName, '.dat'),
+                              maxRe)
     commandlines.append(commandline)
 
     # T2-polar
     inputFilename = get_PresetInputFileName('iPolars_T2', params)
     commandline = params.xfoilWorkerCall + " -i \"%s\" -a \"%s\" -w polar -o \"%s\" -r %d\n" %\
                              (inputFilename, strakFoilName,
-                              strakFoilName.strip('.dat'), Re)
+                              remove_suffix(strakFoilName, '.dat'), Re)
     commandlines.append(commandline)
 
     # merge polars
@@ -3052,7 +3057,7 @@ def generate_Commandlines(params):
             iFile = params.inputFileNames[iFileIndex]
 
             # generate name of the intermediate airfoil
-            intermediateFoilName = strakFoilName.strip('.dat')
+            intermediateFoilName = remove_suffix(strakFoilName, '.dat')
             intermediateFoilName = intermediateFoilName + ("_%d.dat" % (n+1))
 
             # check, if there is more than one competitor for this intermediate stage
@@ -3060,7 +3065,7 @@ def generate_Commandlines(params):
 
             for c in range(num):
                 # append competitor-number to name of intermediate airfoil
-                competitorName = intermediateFoilName.strip('.dat') + ("_%d" % (c+1))
+                competitorName = remove_suffix(intermediateFoilName, '.dat') + ("_%d" % (c+1))
 
                 # insert name of airfoil to be processes into progress-file
                 insert_preliminaryAirfoilName(commandLines, progressFileName, competitorName)
@@ -3088,7 +3093,7 @@ def generate_Commandlines(params):
             # generate commandline for selecting the best airfoil among all
             # competitors
             commandline = params.airfoilComparisonCall + " -a %s -n %d\n" %\
-                (intermediateFoilName.strip('.dat'), num)
+               (remove_suffix(intermediateFoilName, '.dat') , num)
             commandLines.append(commandline)
 
             # the output-airfoil is the new seedfoil
@@ -3102,12 +3107,12 @@ def generate_Commandlines(params):
             iFileIndex = i
 
         # insert name of airfoil to be processes into progress-file
-        insert_airfoilName(commandLines, progressFileName, strakFoilName.strip('.dat'))
+        insert_airfoilName(commandLines, progressFileName, remove_suffix(strakFoilName, '.dat'))
 
         iFile = params.inputFileNames[iFileIndex]
         commandline = params.xoptfoilCall + " -i %s -r %d -a %s -o %s\n" %\
                     (iFile, ReList[i], seedfoilName,
-                      strakFoilName.strip('.dat'))
+                      remove_suffix(strakFoilName, '.dat'))
         commandLines.append(commandline)
 
         # check wheather the strak-airfoils shall be smoothed after their
@@ -3118,7 +3123,7 @@ def generate_Commandlines(params):
 
             # compose commandline for smoothing the airfoil
             commandline = params.xfoilWorkerCall + " -w smooth -i %s -a %s -o %s\n" % \
-                       (inputFilename, strakFoilName, strakFoilName.strip('.dat'))
+                       (inputFilename, strakFoilName, remove_suffix(strakFoilName, '.dat'))
             commandLines.append(commandline)
 
         # set timestamp and progress
@@ -3196,7 +3201,8 @@ def generate_Batchfile(batchFileName, commandlines):
 def get_strak_commandlines(params, commandlines, idx):
     strak_commandlines = []
     ReString = get_ReString(params.ReNumbers[idx])
-    airfoilName = get_FoilName(params, idx).strip(".dat")
+    airfoilName = get_FoilName(params, idx)
+    airfoilName = remove_suffix(airfoilName, '.dat')
 
     # change current working dir to output folder
     strak_commandlines.append("cd %s\n\n" % buildPath)
@@ -3720,7 +3726,8 @@ def generate_rootfoil(params):
     seedFoilName = params.seedFoilName
 
     # get name of root-airfoil
-    rootfoilName = get_FoilName(params, 0).strip('.dat')
+    rootfoilName = get_FoilName(params, 0)
+    rootfoilName = remove_suffix(rootfoilName, '.dat')
 
     # get the path where the seed-airfoil can be found
     srcPath = ".." + bs + ressourcesPath
@@ -3965,11 +3972,12 @@ def generate_Polars(params, rootfoilName):
         params.polarFileNames_T2.append(polarFileNameAndPath_T2)
 
         # generate inputfilename from Re-number
-        inputFilename = params.xoptfoilInputFileName + ("_%s.txt" % get_ReString(Re))
+        inputFilename = params.xoptfoilTemplate + ("_%s.txt" % get_ReString(Re))
 
         # multi-pass-optimization: generate input-filenames for intermediate-airfoils
         for n in range(1, (params.optimizationPasses)):
-            name = inputFilename.strip(".txt")
+            name = inputFilename
+            name = remove_suffix(name, ".txt")
             name = name + ("_%d.txt" % n)
             params.inputFileNames.append(name)
 
@@ -4057,7 +4065,7 @@ def import_strakPolars(params):
         strakFoilName = get_FoilName(params, i)
 
         # compose polar-dir of strak-airfoil-polars
-        polarDir = '.' + bs + strakFoilName.strip('.dat') + '_polars'
+        polarDir = '.' + bs + remove_suffix(strakFoilName, '.dat') + '_polars'
         fileName = "merged_polar_%s.txt" % get_ReString(params.ReNumbers[i+1])
         polarFileNameAndPath = polarDir + bs + fileName
 
@@ -4144,7 +4152,8 @@ def generate_TargetPolars(params):
     rootPolar = params.merged_polars[0]
 
     # get name of the root-airfoil
-    airfoilName = (get_FoilName(params, 0)).strip('.dat')
+    airfoilName = get_FoilName(params, 0)
+    airfoilName = remove_suffix(airfoilName, '.dat')
     print("Generating target polars for airfoil %s..." % airfoilName)
 
     for i in range(numTargetPolars):

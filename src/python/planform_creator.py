@@ -21,7 +21,7 @@
 
 #  !!!!! WORK IN PROGRESS !!!!
 
-
+import re
 import xml.etree.ElementTree as ET
 from copy import deepcopy
 import argparse
@@ -144,6 +144,14 @@ def round_Re(Re):
 # transform reynolds-number into a string e.g. Re = 123500 -> string = 124k
 def get_ReString(Re):
     return ("%03dk" % round_Re(Re))
+
+# remove suffix from a given string
+def remove_suffix(text, suffix):
+    try:
+        text = re.sub(suffix, '', text)
+    except:
+        print("remove_suffix failed, text was %s, suffix was %s" % (text, suffix))
+    return text
 
 ################################################################################
 #
@@ -505,7 +513,7 @@ class wing:
             fontsize=fs_infotext, rotation='vertical')
 
             # plot label for airfoil-name / section-name
-            text = ("%s" % (element.airfoilName.strip('.dat')))
+            text = ("%s" % (remove_suffix(element.airfoilName,'.dat')))
             props=dict(arrowstyle="-", connectionstyle= "angle,angleA=-90,angleB=30,rad=10", color=cl_sections)
 
             ax.annotate(text,
