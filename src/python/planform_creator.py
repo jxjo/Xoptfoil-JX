@@ -31,7 +31,7 @@ from shutil import copyfile
 from matplotlib import pyplot as plt
 from matplotlib import rcParams
 import numpy as np
-from math import log10, floor, tan, pi
+from math import log10, floor, tan, atan, pi
 import json
 
 import tkinter
@@ -203,7 +203,7 @@ class wingGrid:
 #
 ################################################################################
 class wing:
-    #class init
+    # class init
     def __init__(self):
         self.rootAirfoilName = ""
         self.airfoilNames = []
@@ -220,6 +220,7 @@ class wing:
         self.tipDepth = 0
         self.hingeInnerPoint = 0
         self.hingeOuterPoint = 0
+        self.hingeLineAngle = 0.0
         self.showQuarterChordLine = 'true',
         self.showTipLine = 'true',
         self.showHingeLine = 'true',
@@ -260,7 +261,6 @@ class wing:
         self.tipchord = dictData["tipchord"]
         self.tipDepthPercent = (self.tipchord/self.rootchord)*100
         self.halfwingspan = (self.wingspan/2)-(self.fuselageWidth/2)
-        #self.numberOfGridChords = #self.numberOfSections * 256 use fixed number of grid-chords
         self.rootTipSweep = dictData["rootTipSweep"]
         self.leadingEdgeOrientation = dictData["leadingEdgeOrientation"]
         self.hingeDepthPercent = dictData["hingeDepthPercent"]
@@ -348,14 +348,20 @@ class wing:
         # calculate hinge outer-point
         self.hingeOuterPoint = rootQuarterChord + tipOffsetSweep + tipHingeOffset
 
-        # calculate the outer point  of the middle of the tip
+        # calculate the outer point of the middle of the tip
         tippMiddleOuterPoint = rootQuarterChord + tipOffsetSweep + tipMiddleOffset
 
-##        grid_delta_y = (self.wingspan/2) / (self.numberOfGridChords-1)
-##        numGridChordsFuselage = (self.fuselageWidth / self.wingspan) * self.numberOfGridChords
-##        numGridChordsHalfWing = self.numberOfGridChords- numGridChordsFuselage
+        # calculate hinge line angle
+        AK = self.halfwingspan
+        GK = self.hingeOuterPoint - self.hingeInnerPoint
+        hingeLineAngle_radian = atan(GK/AK)
 
+        # convert radian measure --> degree
+        self.hingeLineAngle = (hingeLineAngle_radian / pi) * 180.0
+
+        # calculate interval for setting up the grid
         grid_delta_y = (self.halfwingspan / (self.numberOfGridChords-1))
+
         # calculate all Grid-chords
         for i in range(1, (self.numberOfGridChords + 1)):
             # create new grid
@@ -740,8 +746,10 @@ class wing:
         # compose diagram-title
         wingspan_mm = int(round(self.wingspan*1000))
         rootchord_mm = int(round(self.rootchord*1000))
-        text = "\"%s\"\n wingspan: %d mm, root-chord: %d mm, area: %.2f dm², aspect ratio: %.2f, root-tip sweep: %.2f°\n"\
-         % (self.planformName, wingspan_mm, rootchord_mm, self.area, self.aspectRatio, self.rootTipSweep)
+        text = "\"%s\"\n wingspan: %d mm, rootchord: %d mm, area: %.2f dm², "\
+         "aspect ratio: %.2f, root-tip sweep: %.2f°, hinge line angle: %.2f°\n"\
+         % (self.planformName, wingspan_mm, rootchord_mm, self.area,
+         self.aspectRatio, self.rootTipSweep, self.hingeLineAngle)
 
         fig.suptitle(text, fontsize = 12, color="darkgrey", **csfont)
 
