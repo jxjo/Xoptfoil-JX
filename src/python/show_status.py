@@ -220,6 +220,7 @@ class show_status():
                (line.find("creating preliminary-airfoil") >=0):
                 splitlines = line.split(": ")
                 airfoilname = splitlines[1]
+                airfoilname = airfoilname.strip("\r\n\t '")
 
         return airfoilname
 
