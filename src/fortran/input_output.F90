@@ -101,13 +101,15 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
             seed_airfoil, airfoil_file, shape_functions, nfunctions_top,       &
             nfunctions_bot, initial_perturb, min_bump_width, restart,          &
             restart_write_freq, write_designs,                                 &
-            show_details, echo_input_parms                                                      
+            show_details, echo_input_parms
 
   namelist /operating_conditions/ noppoint, op_mode, op_point, reynolds, mach, &
             use_flap, x_flap, y_flap, y_flap_spec, flap_selection,             &
             target_value,                                                      &
-            re_default_as_resqrtcl, re_default,                                 &
-            flap_degrees, weighting, optimization_type, ncrit_pt
+            re_default_as_resqrtcl, re_default,                                &
+            flap_degrees, weighting, optimization_type, ncrit_pt,              &
+            dynamic_weighting                                      
+
   namelist /constraints/ min_thickness, max_thickness, moment_constraint_type, &
                          min_moment, min_te_angle,                             &
                          check_curvature, auto_curvature,                      &
@@ -251,6 +253,9 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
   reynolds(:) = -1.d0                         ! value in input file
   re(:)%number = 1.0D+05                      ! internal value with 
   re(:)%type   = 1                            ! ... type 1 and type 2 
+
+  ! mb-mod dynamic-weighting
+  dynamic_weighting  = .false.
 
 ! Read operating conditions and constraints
 
@@ -730,6 +735,8 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
 ! jx-mod re_default- to ease Type1 and Type2 polar op points
   write(*,*) " re_default = ", re_default
   write(*,*) " re_default_as_resqrtcl = ", re_default_as_resqrtcl
+! mb-mod dynamic-weighting
+  write(*,*) " dynamic_weighting = ", dynamic_weighting
   write(*,*)
   do i = 1, noppoint
     write(text,*) i

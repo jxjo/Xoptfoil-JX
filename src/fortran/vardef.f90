@@ -63,7 +63,7 @@ module vardef
   character(7), dimension(max_op_points) :: op_mode
   character(8), dimension(max_op_points) :: flap_selection
   double precision, dimension(max_op_points) :: op_point,      &
-                                 flap_degrees, weighting, scale_factor, ncrit_pt
+                                 flap_degrees, weighting, scale_factor, ncrit_pt, saved_weighting
   type (re_type), dimension(max_op_points)   :: re, ma
 
   double precision, dimension(max_op_points) :: target_value
@@ -121,5 +121,8 @@ module vardef
 ! jx-mod Smoothing - parameters for smoothing 
   double precision :: spike_threshold, highlow_threshold
   logical :: do_smoothing
+
+  ! mb-mod dynamic weighting
+  logical :: dynamic_weighting
   
 end module vardef
