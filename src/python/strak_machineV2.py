@@ -3462,12 +3462,12 @@ def check_quality(params):
 
     if params.quality == 'low':
         # double-pass optimization, camb-thick-plus / hicks-henne
-        params.maxIterations = [40]
+        params.maxIterations = [80]
         params.numberOfCompetitors = [1]
         params.shape_functions = ['camb-thick-plus']
     elif params.quality == 'medium':
         # double-pass optimization, camb-thick-plus / hicks-henne
-        params.maxIterations = [40, 120]
+        params.maxIterations = [80, 300]
         params.numberOfCompetitors = [1, 1]
         params.shape_functions = ['camb-thick-plus', 'hicks-henne']
     else:
@@ -3883,8 +3883,9 @@ def generate_InputFiles(params):
         if params.optimizeAlpha0[i]:
             newFile.insert_alpha0_oppoint(params, strakPolar,i)
 
-        # insert oppoint for alpha @maxGlide
+        # insert oppoints for alpha @maxGlide, maxLift
         newFile.insert_alphaMaxGlide_oppoint(params, i)
+        newFile.insert_alphaMaxLift_oppoint(params, i)
 
         # get default-value of initialPerturb from template
         initialPerturb = newFile.get_InitialPerturb()
