@@ -108,7 +108,7 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
             target_value,                                                      &
             re_default_as_resqrtcl, re_default,                                &
             flap_degrees, weighting, optimization_type, ncrit_pt,              &
-            dynamic_weighting                                      
+            dynamic_weighting, dynamic_weighting_p_factor                                      
 
   namelist /constraints/ min_thickness, max_thickness, moment_constraint_type, &
                          min_moment, min_te_angle,                             &
@@ -256,6 +256,7 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
 
   ! mb-mod dynamic-weighting
   dynamic_weighting  = .false.
+  dynamic_weighting_p_factor = 800.0
 
 ! Read operating conditions and constraints
 
@@ -737,6 +738,7 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
   write(*,*) " re_default_as_resqrtcl = ", re_default_as_resqrtcl
 ! mb-mod dynamic-weighting
   write(*,*) " dynamic_weighting = ", dynamic_weighting
+  write(*,*) " dynamic_weighting_p_factor = ", dynamic_weighting_p_factor
   write(*,*)
   do i = 1, noppoint
     write(text,*) i

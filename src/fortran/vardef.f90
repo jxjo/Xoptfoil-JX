@@ -52,7 +52,6 @@ module vardef
     integer          :: type                             ! Type 
   end type re_type
 
-
 ! Global variables (mainly needed to preserve generality of optimization
 ! routines)
 
@@ -63,7 +62,7 @@ module vardef
   character(7), dimension(max_op_points) :: op_mode
   character(8), dimension(max_op_points) :: flap_selection
   double precision, dimension(max_op_points) :: op_point,      &
-                                 flap_degrees, weighting, scale_factor, ncrit_pt, saved_weighting
+                                 flap_degrees, weighting, scale_factor, ncrit_pt
   type (re_type), dimension(max_op_points)   :: re, ma
 
   double precision, dimension(max_op_points) :: target_value
@@ -122,7 +121,13 @@ module vardef
   double precision :: spike_threshold, highlow_threshold
   logical :: do_smoothing
 
-  ! mb-mod dynamic weighting
+! mb-mod dynamic weighting
+  type dynamic_weighting_type
+    double precision, dimension(max_op_points) :: weighting  
+    double precision :: medium_deviation_abs
+  end type dynamic_weighting_type
+
   logical :: dynamic_weighting
-  
+  double precision :: dynamic_weighting_p_factor
+
 end module vardef

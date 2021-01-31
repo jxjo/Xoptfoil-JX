@@ -486,6 +486,73 @@ function geo_objective_function(foil)
 end function geo_objective_function
 
 
+!=============================================================================80
+!
+!  subroutine for setting dynamic weighting
+!
+!  Input: lift, drag and moment as results from xfoil-calculations
+!  Output: internally sets new values for weighting of all target-type oppoints
+!
+!=============================================================================80
+function dynamic_weighting_function(lift, drag, moment, fixed_weighting)
+  double precision, dimension(noppoint),intent(in) :: lift, drag, moment
+  double precision, dimension(noppoint),intent(in) :: fixed_weighting
+  double precision, dimension(noppoint) :: curr_deviation_abs
+  double precision, dimension(noppoint) :: dynamic_weighting
+  double precision :: p_factor, sum_weightings, medium_deviation_abs 
+  type(dynamic_weighting_type) :: dynamic_weighting_function
+  integer          :: i, num
+  logical          :: debug_on
+
+  ! Initialization
+  num = 0
+  medium_deviation_abs = 0.0d0
+  p_factor = dynamic_weighting_p_factor / noppoint
+  debug_on = .false.
+
+  ! Evaluate all oppoints, calculate dynamic weighting (not normalized yet)
+  do i = 1, noppoint
+    curr_deviation_abs(i) = 0.0d0
+
+    if (trim(optimization_type(i)) == 'target-drag') then
+      curr_deviation_abs(i) = ABS((target_value(i)- drag(i) ) * scale_factor(i))
+      dynamic_weighting(i) = curr_deviation_abs(i) * p_factor
+      num = num + 1
+    
+    elseif (trim(optimization_type(i)) == 'target-lift') then
+      curr_deviation_abs(i) = (ABS (target_value(i)- lift(i) ))* scale_factor(i)
+      dynamic_weighting(i) = curr_deviation_abs(i) * p_factor
+      num = num + 1
+    
+    elseif (trim(optimization_type(i)) == 'target-moment') then
+      curr_deviation_abs(i) = (ABS (target_value(i)- moment(i) ))* scale_factor(i)
+      dynamic_weighting(i) = curr_deviation_abs(i) * p_factor
+      num = num + 1
+       
+    else
+      ! no dynamic weighting for this oppoint
+      dynamic_weighting(i) = fixed_weighting(i)
+    end if
+    
+    ! accumulate curr_deviation
+    medium_deviation_abs = medium_deviation_abs + curr_deviation_abs(i)
+  end do
+
+  ! calculate medium deviation of all evaluated oppoints
+  dynamic_weighting_function%medium_deviation_abs = medium_deviation_abs / num
+
+  ! normalize all weightings and write them to the result data-structure
+  sum_weightings = sum(dynamic_weighting(1:noppoint))
+  do i = 1, noppoint
+    dynamic_weighting_function%weighting(i) = dynamic_weighting(i) / sum_weightings
+    if (debug_on .eqv. .true.) then
+      write (*,*) 'normalized weighting:', weighting(i)
+    end if
+  end do
+
+end function dynamic_weighting_function
+
+
 !==============================================================================
 !==============================================================================
 !
@@ -515,6 +582,9 @@ function aero_objective_function(foil, actual_flap_degrees)
   double precision :: pi
   double precision :: cur_value, slope, increment, dist
 
+  ! mb-mod dynamic-weighting
+  type(dynamic_weighting_type) :: dynamic_weighting_result
+  
   pi = acos(-1.d0)
 
 ! Analyze airfoil at requested operating conditions with Xfoil
@@ -540,6 +610,12 @@ function aero_objective_function(foil, actual_flap_degrees)
     end if
   end do
 
+  if (dynamic_weighting) then
+!   perform dynamic weighting of target-type oppoints, thus calculate local weightings
+!   that may differ from the globally fixed weightings. This has to be done
+!   _before_ the following loop !
+    dynamic_weighting_result = dynamic_weighting_function(lift, drag, moment, weighting)
+  end if
 
 ! Get objective function contribution from aerodynamics 
 !    (aero performance times normalized weight)
@@ -585,8 +661,8 @@ function aero_objective_function(foil, actual_flap_degrees)
     
       dist = ABS (target_value(i)-drag(i))
       if (dist < 0.000004d0) dist = 0d0  ! little threshold to achieve target
-    
-      increment = (target_value(i) + dist) * scale_factor(i)
+
+      increment = (target_value(i) + dist) * scale_factor(i) 
       cur_value = drag(i) 
 
     elseif (trim(optimization_type(i)) == 'target-lift') then
@@ -660,11 +736,16 @@ function aero_objective_function(foil, actual_flap_degrees)
     end if
 
 !   Add contribution to the objective function
-
-    aero_objective_function = aero_objective_function + weighting(i)*increment
+    if (dynamic_weighting) then
+!     use the locally calculated dynamic weighting
+      aero_objective_function = aero_objective_function &
+                                + dynamic_weighting_result%weighting(i)*increment
+    else
+!     use weighting that is fixed and globally the same
+      aero_objective_function = aero_objective_function + weighting(i)*increment
+    end if
 
   end do
-
 ! We made it ...
 
   aero_objective_function = aero_objective_function 
