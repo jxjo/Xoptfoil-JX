@@ -471,18 +471,18 @@ def plot_airfoil_coordinates(seedfoil, matchfoil, designfoils, plotnum, firsttim
   if firsttime:
     plt.close(window_name)
     cfig = plt.figure(num= window_name)
-    if plot_matchfoil:
-      try:                          # in this case bigger window
-          plt.get_current_fig_manager().window.setGeometry(600,400,1300,550)
-      except:
-        # not supported in this specific python-version, skip
-        pass
+    if plot_matchfoil:                # in this case bigger window
+      try:                            # Qt4Agg
+        plt.get_current_fig_manager().window.setGeometry(600,400,1300,550)
+      except:                         # TkAgg
+        plt.get_current_fig_manager().window.wm_geometry("+600+400")    # position
+        plt.get_current_fig_manager().resize(1300, 550)                 # size
     else:
-      try:
-         plt.get_current_fig_manager().window.setGeometry(850,630,1000,400)
-      except:
-        # not supported in this specific python-version, skip
-        pass
+      try:                            # Qt4Agg
+        plt.get_current_fig_manager().window.setGeometry(850,630,1000,400)
+      except:                         # TkAgg
+        plt.get_current_fig_manager().window.wm_geometry("+850+650")    # position
+        plt.get_current_fig_manager().resize(1000, 350)                 # size
     ax = plt.subplot(111)
     mirrorax = ax.twinx()
   else:
@@ -705,11 +705,11 @@ def plot_polars(seedfoil, designfoils, plotnum, firsttime=True, animation=False,
     pfig, dummy = plt.subplots(2, 3, num= window_name)
     pfig.subplots_adjust(hspace=0.3, wspace=0.3)
     pfig.set_size_inches(11, 8, forward=True)
-    try:
-        plt.get_current_fig_manager().window.setGeometry(100,30,1300,550)
-    except:
-        # not supported in this specific python-version, skip
-        pass
+    try:                            # Qt4Agg
+      plt.get_current_fig_manager().window.setGeometry(100,30,1300,550)
+    except:                         # TkAgg
+      plt.get_current_fig_manager().window.wm_geometry("+150+30")    # position
+      plt.get_current_fig_manager().resize(1230, 580)                # size
   else:
     pfig = plt.figure(num= window_name)
     if (len(pfig.get_axes()) == 0): exit()     # User closed the window - stop
@@ -1013,11 +1013,11 @@ def plot_optimization_history(steps, fmins, relfmins, rads, firsttime=True,
     ofig, dummy  = plt.subplots(2, 1, num= window_name)
     axarr = ofig.get_axes()
     mirrorax0   = axarr[0].twinx()
-    try:
-        plt.get_current_fig_manager().window.setGeometry(1420,70,480,380)
-    except:
-        # not supported in this specific python-version, skip
-        pass
+    try:                            # Qt4Agg
+      plt.get_current_fig_manager().window.setGeometry(1420,70,480,380)
+    except:                         # TkAgg
+      plt.get_current_fig_manager().window.wm_geometry("+1400+30")    # position
+      plt.get_current_fig_manager().resize(500, 380)                  # size
   else:
     ofig  = plt.figure(num= window_name)
     axarr = ofig.get_axes()
