@@ -499,7 +499,7 @@ function dynamic_weighting_function(lift, drag, moment, fixed_weighting)
   double precision, dimension(noppoint),intent(in) :: fixed_weighting
   double precision, dimension(noppoint) :: curr_deviation_abs
   double precision, dimension(noppoint) :: dynamic_weighting
-  double precision :: p_factor, sum_weightings, medium_deviation_abs 
+  double precision :: sum_weightings, medium_deviation_abs 
   type(dynamic_weighting_type) :: dynamic_weighting_function
   integer          :: i, num
   logical          :: debug_on
@@ -507,7 +507,6 @@ function dynamic_weighting_function(lift, drag, moment, fixed_weighting)
   ! Initialization
   num = 0
   medium_deviation_abs = 0.0d0
-  p_factor = dynamic_weighting_p_factor / noppoint
   debug_on = .false.
 
   ! Evaluate all oppoints, calculate dynamic weighting (not normalized yet)
@@ -516,17 +515,17 @@ function dynamic_weighting_function(lift, drag, moment, fixed_weighting)
 
     if (trim(optimization_type(i)) == 'target-drag') then
       curr_deviation_abs(i) = ABS((target_value(i)- drag(i) ) * scale_factor(i))
-      dynamic_weighting(i) = curr_deviation_abs(i) * p_factor
+      dynamic_weighting(i) = curr_deviation_abs(i) * dynamic_weighting_p_factor
       num = num + 1
     
     elseif (trim(optimization_type(i)) == 'target-lift') then
       curr_deviation_abs(i) = (ABS (target_value(i)- lift(i) ))* scale_factor(i)
-      dynamic_weighting(i) = curr_deviation_abs(i) * p_factor
+      dynamic_weighting(i) = curr_deviation_abs(i) * dynamic_weighting_p_factor
       num = num + 1
     
     elseif (trim(optimization_type(i)) == 'target-moment') then
       curr_deviation_abs(i) = (ABS (target_value(i)- moment(i) ))* scale_factor(i)
-      dynamic_weighting(i) = curr_deviation_abs(i) * p_factor
+      dynamic_weighting(i) = curr_deviation_abs(i) * dynamic_weighting_p_factor
       num = num + 1
        
     else

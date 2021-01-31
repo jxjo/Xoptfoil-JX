@@ -256,7 +256,7 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
 
   ! mb-mod dynamic-weighting
   dynamic_weighting  = .false.
-  dynamic_weighting_p_factor = 800.0
+  dynamic_weighting_p_factor = 40.d0
 
 ! Read operating conditions and constraints
 
