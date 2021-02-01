@@ -515,17 +515,18 @@ function dynamic_weighting_function(lift, drag, moment, fixed_weighting)
 
     if (trim(optimization_type(i)) == 'target-drag') then
       curr_deviation_abs(i) = ABS((target_value(i)- drag(i) ) * scale_factor(i))
-      dynamic_weighting(i) = curr_deviation_abs(i) * dynamic_weighting_p_factor
+      ! fixed weighting is used as an override-factor for dynamic weighting factor.
+      dynamic_weighting(i) = curr_deviation_abs(i) * dynamic_weighting_p_factor * fixed_weighting(i)
       num = num + 1
     
     elseif (trim(optimization_type(i)) == 'target-lift') then
       curr_deviation_abs(i) = (ABS (target_value(i)- lift(i) ))* scale_factor(i)
-      dynamic_weighting(i) = curr_deviation_abs(i) * dynamic_weighting_p_factor
+      dynamic_weighting(i) = curr_deviation_abs(i) * dynamic_weighting_p_factor * fixed_weighting(i)
       num = num + 1
     
     elseif (trim(optimization_type(i)) == 'target-moment') then
       curr_deviation_abs(i) = (ABS (target_value(i)- moment(i) ))* scale_factor(i)
-      dynamic_weighting(i) = curr_deviation_abs(i) * dynamic_weighting_p_factor
+      dynamic_weighting(i) = curr_deviation_abs(i) * dynamic_weighting_p_factor * fixed_weighting(i)
       num = num + 1
        
     else
