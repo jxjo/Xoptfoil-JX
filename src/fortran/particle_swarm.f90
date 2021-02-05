@@ -49,7 +49,7 @@ module particle_swarm
                                   ! solutions 
     logical :: write_particlefile ! Whether to write particle-values for each
                                   ! iteration to file
-    integer :: max_retries = 0    ! experimental: max. number of retries a single 
+    integer :: max_retries = 0    ! #exp-retry max. number of retries a single 
                                   ! particle tries to get a valid geometry
 
                                          ! experimental: for direct maipulation in inputs 
@@ -120,7 +120,7 @@ subroutine particleswarm(xopt, fmin, step, fevals, objfunc, x0, xmin, xmax,    &
   character(20) :: fminchar, radchar
   character(25) :: relfminchar
   character(80), dimension(20) :: commands
-  integer       :: i_retry
+  integer       :: i_retry                              ! #exp-retry
   integer       :: total_geo_fail = 0 
   
   nconstrained = size(constrained_dvs,1)
@@ -310,7 +310,7 @@ subroutine particleswarm(xopt, fmin, step, fevals, objfunc, x0, xmin, xmax,    &
 !     Evaluate objecte function - if this returns a geometry violation retry to get a valid
 !                                 evaluation 
 
-      do                            ! ... max_retries
+      do                            ! ... max_retries   #exp-retry
 
         ! Update position and bring back to side constraints if necessary
         dv(:,i) = dv(:,i) + vel(:,i)
@@ -350,7 +350,7 @@ subroutine particleswarm(xopt, fmin, step, fevals, objfunc, x0, xmin, xmax,    &
 
 ! $OMP ORDERED
 !     Display some info about success of single particle 
-      call show_particle_info (fmin, objval(i), i_retry)
+      call show_particle_info (fmin, objval(i), i_retry)        !#exp-retry
 ! $OMP END ORDERED
 
 !     Update local best design if appropriate
@@ -579,12 +579,12 @@ subroutine  show_optimization_header  (pso_pop, max_retries, show_improvement)
   use os_util
 
   logical, intent(in)           :: show_improvement
-  integer, intent(in)           :: pso_pop, max_retries
+  integer, intent(in)           :: pso_pop, max_retries           !#exp-retry
   character(:), allocatable     :: var_string
   character(200)                :: blanks = ' '
 
   write(*,'(13x,A)') "'+' improved   '~' quite good   '-' bad   'x' xfoil no conv   '.' geometry failed"
-  if (max_retries > 0 ) then 
+  if (max_retries > 0 ) then                                      ! #exp-retry
     write(*,'(13x,A)', advance = 'no') "Experimental: Particle retry - affected particles are "
     call  print_colored (COLOR_WARNING, "colored")
     write (*,*)
@@ -670,7 +670,7 @@ subroutine  show_particle_info (fmin, objval, i_retry)
   integer, intent(in)           :: i_retry
   integer         :: color 
 
-  if (i_retry /= 0) then  
+  if (i_retry /= 0) then                           ! #exp-retry
     color = COLOR_WARNING 
   else
     if (objval < fmin) then 
@@ -686,8 +686,6 @@ subroutine  show_particle_info (fmin, objval, i_retry)
     end if 
   end if 
   
-!  write (*,'(I1)', advance = 'no') i_retry
-
   if (objval < fmin) then 
     call print_colored (color, '+')                 ! improved (+x%)
   else if (objval == OBJ_XFOIL_FAIL) then     
