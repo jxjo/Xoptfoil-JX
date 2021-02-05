@@ -816,7 +816,6 @@ end function write_function
 
 subroutine create_airfoil_form_design (seed, designvars, foil)
 
-  use vardef,             only: symmetrical   ! jx-deprecated remove global
   use vardef,             only: airfoil_type
   use vardef,             only: shape_functions
   use airfoil_operations, only: rebuild_airfoil
@@ -863,11 +862,10 @@ subroutine create_airfoil_form_design (seed, designvars, foil)
 ! Overwrite lower DVs for symmetrical airfoils or camb-thickness-shaping
 ! (they are not used)
 
-  if (symmetrical) then
-    ! jx-deprecated
-    write (*,*) 'JX: symmetrical not supported anymore'
+  if (seed%symmetrical) then
     dvbbnd1 = 1
     dvbbnd2 = dvtbnd2
+    foil%symmetrical = .true.
   end if
   
   if (trim(shape_functions) == 'camb-thick') then
@@ -883,7 +881,7 @@ subroutine create_airfoil_form_design (seed, designvars, foil)
     ! Create top and bottom surfaces by perturbation of seed airfoil 
     call create_airfoil(seed%xt, seed%zt, seed%xb, seed%zb,                      &
                       designvars(dvtbnd1:dvtbnd2), designvars(dvbbnd1:dvbbnd2),&
-                      zt_new, zb_new, shape_functions, symmetrical)
+                      zt_new, zb_new, shape_functions, seed%symmetrical)
   end if
 
 ! Rebuild airfoil out of new top and bottom surface

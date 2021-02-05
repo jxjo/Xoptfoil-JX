@@ -31,7 +31,7 @@ module optimization_driver
 !=============================================================================80
 subroutine matchfoils_preprocessing(matchfoil_file)
 
-  use vardef,             only : airfoil_type, foil_to_match, symmetrical, npan_fixed
+  use vardef,             only : airfoil_type, foil_to_match, npan_fixed
   use vardef,             only : seed_foil
   use airfoil_operations, only : get_seed_airfoil,  rebuild_airfoil, my_stop
   use airfoil_operations, only : repanel_and_normalize_airfoil
@@ -49,12 +49,6 @@ subroutine matchfoils_preprocessing(matchfoil_file)
 
   call print_note ('Using the optimizer to match the seed airfoil to the '//&
                    'airfoil about to be loaded.')
-
-! Check if symmetrical airfoil was requested (not allowed for this type)
-
-  if (symmetrical)                                                             &
-    call my_stop("Symmetrical airfoil constraint not permitted for non-"//&
-                 "aerodynamic optimizations.")
 
 ! Load airfoil to match
 

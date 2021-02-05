@@ -57,7 +57,7 @@ program main
   double precision, dimension(:), allocatable :: optdesign
   integer, dimension(:), allocatable :: constrained_dvs
   double precision :: f0, fmin
-  logical :: restart
+  logical :: restart, symmetrical
 
 !-------------------------------------------------------------------------------
   
@@ -82,13 +82,16 @@ program main
                    seed_airfoil_type, airfoil_file, nparams_top, nparams_bot,  &
                    restart, restart_write_freq, constrained_dvs, naca_options, &
                    pso_options, ga_options, ds_options, matchfoil_file,        &
-                   xfoil_geom_options, xfoil_options)
+                   xfoil_geom_options, xfoil_options, symmetrical)
 
 
 ! Load original airfoil into memory, repanel, normalize 
 !   to get seed airfoil ready for optimization 
 
   call get_seed_airfoil(seed_airfoil_type, airfoil_file, naca_options, original_foil)
+
+  if (symmetrical) seed_foil%symmetrical = .true.
+
   call repanel_and_normalize_airfoil (original_foil, npan_fixed, seed_foil)  
                             !   ... to have run_xfoil results equal airfoil external results
   xfoil_geom_options%npan = seed_foil%npoint    ! will use this constant value now
