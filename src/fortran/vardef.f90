@@ -30,6 +30,7 @@ module vardef
     integer :: leclose                                  ! index closest to LE
     integer :: addpoint_loc                             ! whether to add point for LE before or after leclose
                                                         ! coordinates of top and bot side
+    logical :: symmetrical                              ! airfoil symmetrical? -> bot equals top side
     double precision, dimension(:), allocatable :: xb, xt, zb, zt 
 
   end type airfoil_type
@@ -96,8 +97,6 @@ module vardef
   logical :: match_foils
   double precision :: match_foils_scale_factor 
   
-  logical :: symmetrical
-
   integer :: nparams_top, nparams_bot
   double precision :: initial_perturb
   double precision :: min_bump_width

@@ -33,7 +33,7 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
                        nfunctions_bot, restart, restart_write_freq,            &
                        constrained_dvs, naca_options, pso_options, ga_options, &
                        ds_options, matchfoil_file,                             &
-                       xfoil_geom_options, xfoil_options)
+                       xfoil_geom_options, xfoil_options, symmetrical)
 
   use vardef
   use particle_swarm,     only : pso_options_type
@@ -51,6 +51,7 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
   character(80), intent(out) :: search_type, global_search, local_search,      &
                                 seed_airfoil, airfoil_file, matchfoil_file
   integer, intent(out) :: nfunctions_top, nfunctions_bot
+  logical, intent(out) :: symmetrical
   integer, dimension(:), allocatable, intent(inout) :: constrained_dvs
   integer, dimension(max_addthickconst) :: sort_idxs
   double precision, dimension(max_addthickconst) :: temp_thickmin, temp_thickmax
@@ -1083,7 +1084,7 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
   end do
   if (min_te_angle < 0.d0) call my_stop("min_te_angle must be >= 0.")
   if (symmetrical)                                                             &
-    write(*,*) "Mirroring top half of seed airfoil for symmetrical constraint."
+    call print_note ("Mirroring top half of seed airfoil for symmetrical constraint.")
   if (min_flap_degrees >= max_flap_degrees)                                    &
     call my_stop("min_flap_degrees must be < max_flap_degrees.")
   if (min_flap_degrees <= -90.d0)                                              &

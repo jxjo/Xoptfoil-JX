@@ -57,7 +57,7 @@ program main
   double precision, dimension(:), allocatable :: optdesign
   integer, dimension(:), allocatable :: constrained_dvs
   double precision :: f0, fmin
-  logical :: restart
+  logical :: restart, symmetrical
 
 !-------------------------------------------------------------------------------
   
@@ -65,8 +65,28 @@ program main
   write(*,'(A)') 'Xoptfoil-JX  The Airfoil Optimizer                  Version '//trim(PACKAGE_VERSION)
   write(*,'(A)') 
   write(*,'(A)') '         (c) 2017-2019 Daniel Prosser (original Xoptfoil)'
-  write(*,'(A)') '         (c) 2019-2020 Jochen Guenzel, Matthias Boese'
+  write(*,'(A)') '         (c) 2019-2021 Jochen Guenzel, Matthias Boese'
   write(*,'(A)') 
+  write(*,'(A)') '         Actual experimental features: '
+  write(*,'(A)') 
+  write(*,'(A)') '           - Particle retry when geometry is violated (jo)' ! see #exp-retry
+  write(*,'(A)') 
+
+! Handle multithreading - be careful with screen output in multi-threaded code parts
+!   macro OPENMP is set in CMakeLists.txt as _OPENMP is not set by default (..?) 
+#ifdef OPENMP                       
+  if (omp_get_max_threads() > 1) then 
+    if (.false. ) then                        ! activate for testing purposes
+      call print_warning ("Because of option 'show_details' CPU multi threading will be switched off")
+      call omp_set_num_threads( 1 )
+    else
+      write (text,'(I2,A)') omp_get_max_threads(),' CPU threads will be used during optimization' 
+      call print_note (text)
+   end if 
+  end if 
+#else
+  text = 'dummy' 
+#endif
 
 ! Set default names and read command line arguments
   
@@ -82,13 +102,16 @@ program main
                    seed_airfoil_type, airfoil_file, nparams_top, nparams_bot,  &
                    restart, restart_write_freq, constrained_dvs, naca_options, &
                    pso_options, ga_options, ds_options, matchfoil_file,        &
-                   xfoil_geom_options, xfoil_options)
+                   xfoil_geom_options, xfoil_options, symmetrical)
 
 
 ! Load original airfoil into memory, repanel, normalize 
 !   to get seed airfoil ready for optimization 
 
   call get_seed_airfoil(seed_airfoil_type, airfoil_file, naca_options, original_foil)
+
+  if (symmetrical) seed_foil%symmetrical = .true.
+
   call repanel_and_normalize_airfoil (original_foil, npan_fixed, seed_foil)  
                             !   ... to have run_xfoil results equal airfoil external results
   xfoil_geom_options%npan = seed_foil%npoint    ! will use this constant value now
@@ -131,26 +154,7 @@ program main
     write(*,*)
     write(*,*) "Optimizing for requested operating points."
   end if
-
-! Handle multithreading - be careful with screen output in multi-threaded code parts
-!   macro OPENMP is set in CMakeLists.txt as _OPENMP is not set by default (..?) 
-#ifdef OPENMP                       
-  if (omp_get_max_threads() > 1) then 
-    if (.false. ) then                        ! for testing purposes
-      call print_warning ("Because of option 'show_details' CPU multi threading will be switched off")
-      write(*,*)
-      call omp_set_num_threads( 1 )
-    else
-      write (text,'(I2,A)') omp_get_max_threads(),' CPU threads will be used during optimization' 
-      call print_note (text)
-      write(*,*)
-   end if 
-  end if 
-#else
-  text = 'dummy' 
-#endif
-
-  
+ 
 ! Make sure seed airfoil passes constraints, and get scaling factors for
 ! operating points, smooth foil if requested
 

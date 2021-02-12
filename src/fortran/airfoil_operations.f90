@@ -19,7 +19,7 @@ module airfoil_operations
 
 ! Performs transformations and other operations on airfoils
 
-  use os_util
+  use os_util 
 
   implicit none
 
@@ -390,9 +390,9 @@ subroutine repanel_and_normalize_airfoil (in_foil, npoint_paneling, foil)
   use math_deps,    only : norm_2
   use xfoil_driver, only : smooth_paneling
 
-  type(airfoil_type), intent(in)  :: in_foil
-  type(airfoil_type), intent(out) :: foil
-  integer,            intent(in)  :: npoint_paneling
+  type(airfoil_type), intent(in)    :: in_foil
+  type(airfoil_type), intent(inout) :: foil
+  integer,            intent(in)    :: npoint_paneling
 
   type(airfoil_type)  :: tmp_foil
   integer             :: i, pointst, pointsb
@@ -550,7 +550,7 @@ subroutine transform_airfoil (foil)
   foilscale_upper = 1.d0 / foil%x(1)
   foilscale_lower = 1.d0 / foil%x(npoints)
 
-  call get_split_points(foil, pointst, pointsb, .false.)
+  call get_split_points(foil, pointst, pointsb)
 
   do i = 1, npoints
     if (i >= (npoints - pointsb)) then 
@@ -570,13 +570,12 @@ end subroutine transform_airfoil
 ! an airfoil
 !
 !=============================================================================80
-subroutine get_split_points(foil, pointst, pointsb, symmetrical)
+subroutine get_split_points(foil, pointst, pointsb)
 
   use vardef, only : airfoil_type
 
   type(airfoil_type), intent(in) :: foil
   integer, intent(out) :: pointst, pointsb
-  logical, intent(in) :: symmetrical
 
   if (foil%addpoint_loc == 0) then
     pointst = foil%leclose
@@ -591,7 +590,7 @@ subroutine get_split_points(foil, pointst, pointsb, symmetrical)
 
 ! Modify for symmetrical airfoil (top surface will be mirrored)
 
-  if (symmetrical) pointsb = pointst
+  if (foil%symmetrical) pointsb = pointst
 
 end subroutine get_split_points
 
@@ -606,7 +605,6 @@ subroutine split_foil(foil)
   use vardef, only : airfoil_type
 
   type(airfoil_type), intent(inout) :: foil
-  logical :: symmetrical        !jx-deprecated
   
   integer i, boundst, boundsb, pointst, pointsb
 
@@ -615,10 +613,8 @@ subroutine split_foil(foil)
   !    dpeending on foil%addpoint_loc a new point will be inserted to 
   !    become the starting point (0,0) for top and bottom surface
 
-  !jx-deprecated
-  symmetrical = .false.
 
-  call get_split_points(foil, pointst, pointsb, symmetrical)
+  call get_split_points(foil, pointst, pointsb)
 
   if (foil%addpoint_loc == 0) then
     boundst = foil%leclose - 1
@@ -649,10 +645,17 @@ subroutine split_foil(foil)
 
   foil%xb(1) = foil%xle
   foil%zb(1) = foil%zle
-  do i = 1, pointsb - 1
-    foil%xb(i+1) = foil%x(boundsb+i-1)
-    foil%zb(i+1) = foil%z(boundsb+i-1)
-  end do
+  if (.not. foil%symmetrical) then
+    do i = 1, pointsb - 1
+      foil%xb(i+1) = foil%x(boundsb+i-1)
+      foil%zb(i+1) = foil%z(boundsb+i-1)
+    end do
+  else
+    do i = 1, pointsb - 1
+      foil%xb(i+1) =  foil%xt(i+1)
+      foil%zb(i+1) = -foil%zt(i+1)
+    end do
+  end if
 
 end subroutine split_foil
 
