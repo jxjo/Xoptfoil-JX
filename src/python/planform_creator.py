@@ -1113,12 +1113,14 @@ def update_airfoilNames(wingData, strakdata):
     seedIdx = determine_SeedFoilIdx(wingData)
 
     # first append name of the seedfoil
-    airfoilNames.append(wingData.airfoilNames[seedIdx])
+    foilName = remove_suffix(wingData.airfoilNames[seedIdx], ".dat")
+    airfoilNames.append(foilName)
 
     # create list of airfoilnames that shall be created by the strak-machine
     for idx in range(num):
         if (wingData.airfoilTypes[idx] == "opt"):
-            airfoilNames.append(wingData.airfoilNames[idx])
+            foilName = remove_suffix(wingData.airfoilNames[idx], ".dat")
+            airfoilNames.append(foilName)
 
     # now set the new list in the strakdata-dictionary
     strakdata["airfoilNames"] = airfoilNames
