@@ -37,6 +37,9 @@ xcopy .\Strakmachine_pure\XFLR5\*.* Strakmachine_instant\XFLR5\ /Y /E /H /C /I
 rem copy build-results from strakmachine-pure
 xcopy .\Strakmachine_pure\build\*.* Strakmachine_instant\build\ /Y /E /H /C /I
 
+rem copy airfoil-library
+xcopy .\airfoil_library\*.* .\Strakmachine_pure\airfoil_library\ /Y /E /H /C /I
+
 rem create program calls
 del .\Strakmachine_instant\start_strakmachine.bat
 echo .\bin\strak_machineV2.exe >>.\Strakmachine_instant\start_strakmachine.bat

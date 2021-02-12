@@ -32,6 +32,9 @@ copy ..\doc\Strak_Machine_Reference.pdf .\Strakmachine_pure\doc
 rem copy all ressource-files
 xcopy ..\src\python\ressources\*.* .\Strakmachine_pure\ressources\ /Y /E /H /C /I
 
+rem copy airfoil-library
+xcopy .\airfoil_library\*.* .\Strakmachine_pure\airfoil_library\ /Y /E /H /C /I
+
 rem create program calls
 del .\Strakmachine_pure\start_strakmachine.bat
 echo python .\scripts\strak_machineV2.py >>.\Strakmachine_pure\start_strakmachine.bat
