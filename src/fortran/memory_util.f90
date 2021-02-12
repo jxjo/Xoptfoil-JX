@@ -84,6 +84,12 @@ subroutine allocate_airfoil_data()
           (trim(shape_functions) == 'camb-thick-plus')) then
     allocate(modest(nparams_top))
     modest(:) = 0.d0
+  else if (trim(shape_functions) == 'hicks-henne-plus') then !#exp-HH-plus               
+    ! allocate additional 6 parameters for modest used for camb-thick-preshaping
+    allocate(modest((nparams_top + 2)*3))
+    allocate(modesb(nparams_bot*3))
+    modest(:) = 0.d0
+    modesb(:) = 0.d0
   else
     allocate(modest(nparams_top*3))
     allocate(modesb(nparams_bot*3))

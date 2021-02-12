@@ -61,6 +61,7 @@ end subroutine deallocate_shape_functions
 !
 ! Creates shape functions for top and bottom surfaces
 ! shapetype may be 'naca', 'camb-thick', 'camb-thick-plus' or 'hicks-henne'
+! or 'hicks-henne-plus'                                                       !#exp-HH-plus
 ! For Hicks-Henne shape functions, number of elements in modes must be a 
 ! multiple of 3.
 !=============================================================================80
@@ -83,6 +84,10 @@ subroutine create_shape_functions(xtop, xbot, modestop, modesbot, shapetype,   &
            (trim(shapetype) == 'camb-thick-plus')) then
     nmodestop = size(modestop,1)
     nmodesbot = 0
+  else if ((trim(shapetype) == 'hicks-henne-plus')) then !#exp-HH-plus
+    ! 2 modestop reserved for camb-thick-preshaping
+    nmodestop = size(modestop,1)/3 - 2
+    nmodesbot = size(modesbot,1)/3
   else
     nmodestop = size(modestop,1)/3
     nmodesbot = size(modesbot,1)/3
@@ -191,7 +196,8 @@ subroutine create_shape(x, modes, shapetype, shape_function)
       shape_function(i,:) = shape_function(i,:)*dvscale
     end do
 
-  elseif (trim(shapetype) == 'hicks-henne') then
+  else if ((trim(shapetype) == 'hicks-henne') .or. & 
+           (trim(shapetype) == 'hicks-henne-plus')) then !#exp-HH-plus
       
     nmodes = size(modes,1)/3
     t1fact = initial_perturb/(1.d0 - 0.001d0)
@@ -267,6 +273,10 @@ subroutine create_airfoil(xt_seed, zt_seed, xb_seed, zb_seed, modest, modesb,  &
            (trim(shapetype) == 'camb-thick-plus')) then
     nmodest = size(modest,1)
     nmodesb = 0
+  else if (trim(shapetype) == 'hicks-henne-plus') then !#exp-HH-plus
+    ! First 2 modes reserved for camb-thick preshaping
+    nmodest = size(modest,1)/3 -2
+    nmodesb = size(modesb,1)/3
   else
     nmodest = size(modest,1)/3
     nmodesb = size(modesb,1)/3
@@ -276,7 +286,8 @@ subroutine create_airfoil(xt_seed, zt_seed, xb_seed, zb_seed, modest, modesb,  &
 
 ! Create shape functions for Hicks-Henne
 
-  if (trim(shapetype) == 'hicks-henne') then
+  if ((trim(shapetype) == 'hicks-henne') .or. &
+      (trim(shapetype) == 'hicks-henne-plus')) then !#exp-HH-plus
     call create_shape_functions(xt_seed, xb_seed, modest, modesb, shapetype,   &
                                 first_time=.false.)
   end if

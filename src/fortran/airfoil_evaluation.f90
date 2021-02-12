@@ -830,8 +830,11 @@ subroutine create_airfoil_form_design (seed, designvars, foil)
   double precision, dimension(:), intent(in)  :: designvars
 
   integer :: nmodest, nmodesb, dvtbnd1, dvtbnd2, dvbbnd1, dvbbnd2
+  integer :: dvtbnd1_cambthick, dvtbnd2_cambthick !#exp-HH-plus
   double precision, dimension(size(seed%xt,1)) :: zt_new
   double precision, dimension(size(seed%xb,1)) :: zb_new
+  double precision, dimension(size(seed%xt,1)) :: zt_new_cambthick !#exp-HH-plus
+  double precision, dimension(size(seed%xb,1)) :: zb_new_cambthick !#exp-HH-plus
 
 
 ! Build airfoil to evaluate out of seed airfoil plus shape functions applied
@@ -852,6 +855,14 @@ subroutine create_airfoil_form_design (seed, designvars, foil)
     dvtbnd2 = nmodest
     dvbbnd1 = 1
     dvbbnd2 = dvtbnd2
+  else if (trim(shape_functions) == 'hicks-henne-plus') then !#exp-HH-plus
+    dvtbnd1_cambthick = 1
+    dvtbnd2_cambthick = 6 
+    dvtbnd1 = dvtbnd2_cambthick + 1
+    ! camb-thick uses the first "2 modes" of top-surface (6 parameters)
+    dvtbnd2 = dvtbnd2_cambthick + (nmodest-2)*3 
+    dvbbnd1 = dvtbnd2 + 1
+    dvbbnd2 = nmodest*3 + nmodesb*3 
   else
     dvtbnd1 = 1
     dvtbnd2 = nmodest*3
@@ -877,6 +888,17 @@ subroutine create_airfoil_form_design (seed, designvars, foil)
     ! top and bottom seperately
     call create_airfoil_camb_thick_plus(seed%xt, seed%zt, seed%xb, seed%zb,       &
                       designvars(dvtbnd1:dvtbnd2), zt_new, zb_new)
+  else if (trim(shape_functions) == 'hicks-henne-plus') then !#exp-HH-plus
+    ! Create new airfoil by _first_ changing camber and thickness of seed airfoil 
+    call create_airfoil_camb_thick(seed%xt, seed%zt, seed%xb, seed%zb,       &
+                      designvars(dvtbnd1_cambthick:dvtbnd2_cambthick),       &
+                      zt_new_cambthick, zb_new_cambthick)
+    ! Change airfoil _second_ by perturbation of the just created camb- / 
+    ! thick- adjusted airfoil
+    call create_airfoil(seed%xt, zt_new_cambthick, seed%xb, zb_new_cambthick,    &
+                      designvars(dvtbnd1:dvtbnd2), designvars(dvbbnd1:dvbbnd2),&
+                               zt_new, zb_new, shape_functions, seed%symmetrical)                   
+                      
   else 
     ! Create top and bottom surfaces by perturbation of seed airfoil 
     call create_airfoil(seed%xt, seed%zt, seed%xb, seed%zb,                      &
@@ -909,6 +931,7 @@ subroutine get_flap_degrees_from_design (designvars, actual_flap_degrees)
   double precision, dimension(noppoint), intent(out) :: actual_flap_degrees
  
   integer :: nmodest, nmodesb, dvtbnd1, dvtbnd2, dvbbnd1, dvbbnd2, ndvs, dvcounter
+  integer :: dvtbnd1_cambthick, dvtbnd2_cambthick !#exp-HH-plus
   integer :: i, flap_idx
   double precision :: ffact
 
@@ -935,6 +958,14 @@ subroutine get_flap_degrees_from_design (designvars, actual_flap_degrees)
     dvtbnd2 = nmodest
     dvbbnd1 = 1
     dvbbnd2 = dvtbnd2
+  else if (trim(shape_functions) == 'hicks-henne-plus') then !#exp-HH-plus
+    dvtbnd1_cambthick = 1
+    dvtbnd2_cambthick = 6 
+    dvtbnd1 = dvtbnd2_cambthick + 1
+    ! camb-thick uses the first "2 modes" of top-surface (6 parameters)
+    dvtbnd2 = dvtbnd2_cambthick + (nmodest-2)*3 
+    dvbbnd1 = dvtbnd2 + 1
+    dvbbnd2 = nmodest*3 + nmodesb*3 
   else
     dvtbnd1 = 1
     dvtbnd2 = nmodest*3

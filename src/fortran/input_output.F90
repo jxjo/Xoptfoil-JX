@@ -954,10 +954,11 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
       trim(seed_airfoil) /= 'naca')                                            &
     call my_stop("seed_airfoil must be 'from_file' or 'naca'.")
   if (trim(shape_functions) /= 'hicks-henne' .and.                             &
+      trim(shape_functions) /= 'hicks-henne-plus' .and.                        &  !#exp-HH-plus 
       trim(shape_functions) /= 'camb-thick' .and.                              &
       trim(shape_functions) /= 'camb-thick-plus' .and.                         &
       trim(shape_functions) /= 'naca')                                         &
-    call my_stop("shape_functions must be 'hicks-henne', 'camb-thick', 'camb-thick-plus' or 'naca'.")
+    call my_stop("shape_functions must be 'hicks-henne', hicks-henne-plus', 'camb-thick', 'camb-thick-plus' or 'naca'.") !#exp-HH-plus
   if ((nfunctions_top < 0) .and.   & 
       trim(shape_functions) /= 'camb-thick' .and.                              &
       trim(shape_functions) /= 'camb-thick-plus')                              &

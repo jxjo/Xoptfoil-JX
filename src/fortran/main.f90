@@ -70,6 +70,7 @@ program main
   write(*,'(A)') '         Actual experimental features: '
   write(*,'(A)') 
   write(*,'(A)') '           - Particle retry when geometry is violated (jo)' ! see #exp-retry
+  write(*,'(A)') '           - shaping function hicks-henne-plus (mb)' ! see #exp-HH-plus
   write(*,'(A)') 
 
 ! Handle multithreading - be careful with screen output in multi-threaded code parts
@@ -132,6 +133,10 @@ program main
     !Top and Bottom are treated seperately
     nshapedvtop = 12
     nshapedvbot = 0
+  else if (trim(shape_functions) == 'hicks-henne-plus') then !#exp-HH-plus
+    ! use 6 additional params for camb-thick-preshaping of the airfoil
+    nshapedvtop = (nparams_top + 2) *3
+    nshapedvbot = nparams_bot*3
   else
     nshapedvtop = nparams_top*3
     nshapedvbot = nparams_bot*3
