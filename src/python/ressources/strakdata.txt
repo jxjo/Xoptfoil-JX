@@ -1,22 +1,118 @@
 {
-      "quality": "medium",
-      "seedFoilName": "SD",
-      "additionalOpPoints": [-0.02, 0.0025],
-      "linearFactor_0":   [0.0,        0.0,   0.0 ],
-      "linearFactor_1":   [0.0,        0.0,   0.0 ],
-      "linearFactor_2":   [0.0,        0.0,   0.0 ],
-      "linearFactor_3":   [0.0,        0.1,   0.3 ],
-      "linearFactor_4":   [0.0,        0.0,  -0.04],
-      "minCLGain":        [0.0,        0.1,   0.23],
-      "CL0Gain":          [0.0,        0.0,   0.0 ],
-      "maxSpeedGain":     [0.0,        0.0,   0.0 ],
-      "maxSpeedShift":    [0.0,        0.0,   0.0 ],
-      "preMaxSpeedGain":  [0.0,        0.1,   0.3 ],
-      "maxGlideGain":     [0.0,        0.05,  0.05],
-      "maxGlideFactor":   [1.0,        1.015, 1.02],
-      "maxGlideShift":    [0.0,        0.0,   0.0 ],
-      "maxLiftGain":      [0.0,        0.0,   0.1 ],
-      "lowReGain":        [0.0,        0.4,   0.3 ],
-      "reynolds":         [220000,  150000,  80000],
-      "airfoilNames":     ["SD-22", "SD-15", "SD-08"]
+    "quality": "medium", 
+    "seedFoilName": "JX-GS-150k", 
+    "NCrit": 7.0, 
+    "useAlwaysRootfoil": "True", 
+    "weighting": "constant", 
+    "reynolds": [
+        150000, 
+        120000, 
+        90000, 
+        60000, 
+        40000
+    ], 
+    "airfoilNames": [
+        "JX-GS-150k.dat", 
+        "JX-GS-120k.dat", 
+        "JX-GS-090k.dat", 
+        "JX-GS-060k.dat", 
+        "JX-GS-040k.dat"
+    ], 
+    "additionalOpPoints": [
+        0.014, 
+        0.024, 
+        0.042, 
+        0.78
+    ], 
+    "linearFactor_1": [
+        0.0, 
+        0.2, 
+        1.0, 
+        0.8, 
+        1.2
+    ], 
+    "linearFactor_2": [
+        0.0, 
+        2.0, 
+        2.1, 
+        2.9, 
+        3.3
+    ], 
+    "linearFactor_3": [
+        0.0, 
+        0.07, 
+        0.02, 
+        0.05, 
+        0.05
+    ], 
+    "linearFactor_4": [
+        0.0, 
+        0.02, 
+        0.0, 
+        0.02, 
+        0.02
+    ], 
+    "minCLGain": [
+        0.0, 
+        -0.15, 
+        -0.35, 
+        -0.35, 
+        -0.35
+    ], 
+    "CL0Gain": [
+        0.0, 
+        -0.014, 
+        -0.042, 
+        -0.17, 
+        -0.15
+    ], 
+    "maxSpeedGain": [
+        0.0, 
+        0.36, 
+        0.19, 
+        0.24, 
+        0.17
+    ], 
+    "maxSpeedShift": [
+        0.0, 
+        -0.01, 
+        -0.019, 
+        -0.029, 
+        -0.054
+    ], 
+    "preMaxSpeedGain": [
+        0.0, 
+        0.25, 
+        0.16, 
+        0.23, 
+        0.23
+    ], 
+    "maxGlideGain": [
+        0.0, 
+        -0.71, 
+        -0.54, 
+        -0.37, 
+        -0.15
+    ], 
+    "maxGlideShift": [
+        0.0, 
+        0.023, 
+        0.042, 
+        0.043, 
+        0.03
+    ], 
+    "maxGlideFactor": [
+        1.0, 
+        1.005, 
+        1.01, 
+        1.011, 
+        1.012
+    ], 
+    "maxLiftGain": [
+        0.0, 
+        0.26, 
+        -0.12, 
+        0.05, 
+        -0.14
+    ]
 }

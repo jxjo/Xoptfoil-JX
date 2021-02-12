@@ -33,32 +33,27 @@ from matplotlib import rcParams
 import numpy as np
 from math import log10, floor, tan, atan, pi
 import json
-
 import tkinter
 from matplotlib.backends.backend_tkagg import (
     FigureCanvasTkAgg, NavigationToolbar2Tk)
 # Implement the default Matplotlib key bindings.
 from matplotlib.backend_bases import key_press_handler
 import tkinter.font as font
+from strak_machineV2 import (copyAndSmooth_Airfoil, get_ReString,
+                             ErrorMsg, WarningMsg, NoteMsg, DoneMsg,
+                             remove_suffix, interpolate, round_Re,
+                             bs, buildPath, ressourcesPath, airfoilPath,
+                             scriptPath, exePath,
+                             strakMachineInputFileName)
+from colorama import init
+from termcolor import colored
 
 ################################################################################
 # some global variables
 
-# paths and separators
-bs = "\\"
-
-# folder containing the inputs-files
-ressourcesPath = 'ressources'
-
-# build-folder
-buildPath = 'build'
 
 # folder containing the output / result-files
 outputFolder = buildPath + bs +'planforms'
-
-airfoilPath = 'airfoils'
-scriptPath = 'scripts'
-exePath = 'bin'
 
 # fonts
 csfont = {'fontname':'DejaVu Sans'}
@@ -83,6 +78,8 @@ lw_planform = 1.0
 cl_sections = 'grey'
 ls_sections = 'solid'
 lw_sections = 0.4
+cl_userAirfoil = 'aqua'
+cl_optAirfoil = 'yellow'
 
 fs_tick = 7
 cl_infotext = 'aqua'
@@ -122,36 +119,19 @@ PLanformDict =	{
             "showTipLine": 'true',
             # whether to show the hinge-line
             "showHingeLine" : 'true',
+            # positions of the airfoils
+            "airfoilPositions": [   0.0,     0.3,     0.6,     0.9,     1.2,    1.5,     1.6,    1.8],
+            # user-defined names of the airfoils
+            "airfoilNames":     ["SD-1",  "SD-2",  "SD-3",  "SD-4",  "SD-5", "SD-6",  "SD-7", "SD-8"],
+            # types of the airfoils (user / blend / opt
+            "airfoilTypes":     ["user", "blend", "blend", "blend", "blend", "user", "blend", "user"],
+            # user-defined airfoils and where to find them
+            "userAirfoils":     [".\\airfoil_library\\Scale_Glider\\SD\\SD-220.dat",
+                                 ".\\airfoil_library\\Scale_Glider\\SD\\SD-150.dat",
+                                 ".\\airfoil_library\\Scale_Glider\\SD\\SD-80.dat"]
             }
 
-################################################################################
-#
-# helper functions
-#
-################################################################################
-#simple linear equation
-def linearEquation(x1, x2, y1, y2, x):
-    y = ((y2-y1)/(x2-x1)) * (x-x1) + y1
-    return y
 
-# function that rounds Re and returns a rounded decimal number
-def round_Re(Re):
-    floatRe = Re/1000.0
-    decRe = round(floatRe, 0)
-    return int(decRe)
-
-
-# transform reynolds-number into a string e.g. Re = 123500 -> string = 124k
-def get_ReString(Re):
-    return ("%03dk" % round_Re(Re))
-
-# remove suffix from a given string
-def remove_suffix(text, suffix):
-    try:
-        text = re.sub(suffix, '', text)
-    except:
-        print("remove_suffix failed, text was %s, suffix was %s" % (text, suffix))
-    return text
 
 ################################################################################
 #
@@ -205,7 +185,7 @@ class wingGrid:
 class wing:
     # class init
     def __init__(self):
-        self.rootAirfoilName = ""
+        self.airfoilBasicName = ""
         self.airfoilNames = []
         self.rootchord = 0.223
         self.leadingEdgeOrientation = 'up'
@@ -228,30 +208,40 @@ class wing:
         self.sections = []
         self.grid = []
         self.valueList = []
+        self.chords = []
         self.area = 0.0
         self.aspectRatio = 0.0
 
 
+    # set airfoilnames from basic name and Re-number
+    def set_AirfoilNamesFromRe(self):
+        for Re in self.airfoilReynolds:
+                airfoilName = (self.airfoilBasicName + "-%s.dat") % get_ReString(Re)
+                self.airfoilNames.append(airfoilName)
+
+
     # set basic data of the wing
-    def set_Data(self, dictData, strakData):
-        # evaluate strakdata, get root-airfoilname first
-        self.rootAirfoilName = strakData["seedFoilName"]
+    def set_Data(self, dictData):
+        self.airfoilPositions = dictData["airfoilPositions"]
+        self.airfoilReynolds = dictData["airfoilReynolds"]
 
-        # get lit of reynolds-numbers
-        self.valueList = strakData["reynolds"]
-
-        # get user-defined list of airfoil-names from strakdata
+        # get user-defined list of airfoil-names
         try:
-           self.airfoilNames =  strakData["airfoilNames"]
+            self.airfoilNames = dictData["airfoilNames"]
         except:
+            # no user defined list was found. In this case at least the
+            # name of the root airfoil has to be specified.
+            self.airfoilBasicName = dictData["airfoilBasicName"]
             self.airfoilNames = []
 
-        # set number of sections to number of reynolds-numbers found in
-        # strakdata.txt
-        self.numberOfSections = len(self.valueList)
+        self.airfoilTypes = dictData["airfoilTypes"]
+        self.userAirfoils = dictData["userAirfoils"]
 
-        # determine reynolds-nuiber for root-airfoil
-        self.rootReynolds = self.valueList[0]
+        # set number of sections to number of positions
+        self.numberOfSections = len(self.airfoilPositions)
+
+        # determine reynolds-number for root-airfoil
+        self.rootReynolds = self.airfoilReynolds[0]
 
         # evaluate planformdata
         self.rootchord = dictData["rootchord"]
@@ -275,6 +265,26 @@ class wing:
             self.showHingeLine = dictData["showHingeLine"]
         except:
             pass
+
+
+    # get name of the user defined airfoil, as it will appear in the planform
+    def get_UserAirfoilName(self, userAirfoil_idx):
+        userAirfol_num = 0
+        # loop through all airfoils
+        for idx in range(len(self.airfoilTypes)):
+            # Is the airfoil a user-defined airfoil ?
+            if self.airfoilTypes[idx] == "user":
+                # was the desired index found?
+                if (userAirfoil_idx == userAirfol_num):
+                    # Found
+                    return self.airfoilNames[idx]
+                else:
+                    # only increment number of user-airfoil
+                    userAirfol_num = userAirfol_num + 1
+
+        # nothing was found
+        return None
+
 
 
     # find planform-values for a given chord-length
@@ -305,21 +315,16 @@ class wing:
         try:
            section.airfoilName = self.airfoilNames[section.number-1]
         except:
-            if (section.number == 1):
-                suffix = '-root'
-            else:
-                suffix = '-strak'
-            section.airfoilName = (self.rootAirfoilName + "%s-%s.dat") % \
-             (suffix ,get_ReString(section.Re))
+            section.airfoilName = (self.airfoilBasicName + "-%s.dat") % \
+             (get_ReString(section.Re))
 
 
     def set_lastSectionAirfoilName(self, section):
         try:
             section.airfoilName = self.airfoilNames[section.number-2]
         except:
-            suffix = '-strak'
-            section.airfoilName = (self.rootAirfoilName + "%s-%s.dat") % \
-             (suffix ,get_ReString(section.Re))
+            section.airfoilName = (self.airfoilBasicName + "-%s.dat") % \
+             (get_ReString(section.Re))
 
 
     # calculate planform-shape of the half-wing (high-resolution wing planform)
@@ -404,21 +409,85 @@ class wing:
             element.y = element.y + self.fuselageWidth/2
 
 
+    # get chordlength from position, according to the planform-data
+    def get_chordFromPosition(self, position):
+        # valid position specified ?
+        if (position == None):
+            ErrorMsg("invalid position")
+            return None
+
+        # get chord from planform
+        for gridData in self.grid:
+            if (gridData.y >= position):
+                return gridData.chord
+        ErrorMsg("no chordlength was found for position %f" % position)
+        return None
+
+
+    # get Re from position, according to the planform-data
+    def get_ReFromPosition(self, position):
+        chord = self.get_chordFromPosition(position)
+        if (chord != None):
+            chordRatio = chord / self.rootchord
+            Re = self.airfoilReynolds[0] * chordRatio
+            return Re
+        else:
+            ErrorMsg("no Re could not be caclulated for position %f" % position)
+            return None
+
+
+    # get chordlength from position, according to the planform-data
+    def get_chordFromPositionOrReynolds(self, position, reynolds):
+        # valid reynolds number specified ?
+        if (reynolds != None):
+            # calculate chord from ratio reynolds to rootReynolds
+            return (reynolds / self.rootReynolds) * self.rootchord
+
+        # valid position specified ?
+        elif (position != None):
+            # get chord from planform
+            for gridData in self.grid:
+                if (gridData.y >= position):
+                    return gridData.chord
+
+        # nothing was found
+        ErrorMsg("position or reynolds not found inside planform")
+        NoteMsg("position was: %f, reynolds was %d" % (position, reynolds))
+        return None
+
+
+    # calculate all chordlenghts from the list of airfoil positions
+    # and the given planform-data
+    def calculate_chordlengths(self):
+        for idx in range(len(self.airfoilPositions)):
+            position = self.airfoilPositions[idx]
+            reynolds = self.airfoilReynolds[idx]
+            chord = self.get_chordFromPositionOrReynolds(position, reynolds)
+            self.chords.append(chord)
+
+
+    # calculate missing Re-numbers from positions
+    def calculate_ReNumbers(self):
+        num = len(self.airfoilReynolds)
+
+        # loop over list of specified Re-numbers
+        for idx in range(num):
+            if self.airfoilReynolds[idx] == None:
+                # for this position no reynolds-number has been specified.
+                # calculate the number from postition now
+                Re = self.get_ReFromPosition(self.airfoilPositions[idx])
+                self.airfoilReynolds[idx] = int(round(Re ,0))
+
+
     # calculate all sections of the wing, oriented at the grid
     def calculate_sections(self):
-        # calculate decrement of chord from section to section
-        chord_decrement = (self.rootchord - self.tipDepth) / (self.numberOfSections)
-
-        # set chord-length of root-section
-        chord = self.rootchord
-
-        # create all sections
-        for i in range(1, (self.numberOfSections + 1)):
+        # create all sections, according to the precalculated chords
+        for chord in self.chords:
             # find grid-values matching the chordlength of the section
             grid = self.find_PlanformData(chord)
 
             if (grid == None):
-                print("Error, chord-length %f not found in planform-data\n")
+                ErrorMsg("chord-length %f not found in planform-data\n")
                 # end the loop
                 break
 
@@ -429,7 +498,7 @@ class wing:
             self.sections.append(section)
 
             # set number of the section
-            section.number = i
+            section.number = len(self.sections)
 
             # find grid-values matching the chordlength of the section
             grid = self.find_PlanformData(chord)
@@ -443,14 +512,6 @@ class wing:
             # store last Re value for the tip
             lastSectionRe = section.Re
 
-            # calculate chord for the next section
-            if (i < len(self.valueList)):
-                # calculate cordlangths from given valueList
-                chord = (self.rootchord * self.valueList[i]) / self.valueList[0]
-            else:
-                # calculate chord with fixed difference
-                chord = chord - chord_decrement
-
         # create last section
         section = wingSection()
 
@@ -458,7 +519,7 @@ class wing:
         self.sections.append(section)
 
         # set number of the section
-        section.number = i+1
+        section.number = len(self.sections)
 
         # get the tip grid-values
         grid = self.grid[len(self.grid)-1]
@@ -471,6 +532,17 @@ class wing:
 
         # set the airfoil-Name
         self.set_lastSectionAirfoilName(section)
+
+
+    def get_colorFromAirfoilType(self, airfoilType):
+        if (airfoilType == 'user'):
+            color = cl_userAirfoil
+        elif (airfoilType == 'opt'):
+            color = cl_optAirfoil
+        else:
+            color = cl_sections
+
+        return color
 
 
     # plot planform of the half-wing
@@ -491,9 +563,18 @@ class wing:
         self.set_AxesAndLabels(ax, "Half-wing planform")
 
         # plot sections in reverse order
+        idx = len(self.airfoilTypes)
         for element in reversed(self.sections):
+            # determine type of airfoil of this section
+            try:
+                airfoilType = self.airfoilTypes[idx]
+            except:
+                airfoilType = 'blend'
+
+            labelColor = self.get_colorFromAirfoilType(airfoilType)
+
             ax.plot([element.y, element.y] ,[element.leadingEdge, element.trailingEdge],
-            color=cl_sections, linestyle = ls_sections, linewidth = lw_sections)
+            color=labelColor, linestyle = ls_sections, linewidth = lw_sections)
 
             # determine x and y Positions of the labels
             xPos = element.y
@@ -511,21 +592,22 @@ class wing:
                 text = ("%d mm" % int(round(element.chord*1000)))
             except:
                 text = ("0 mm" )
-                print("error")
+                ErrorMsg("label for chordlength of section could not be plotted")
 
             ax.annotate(text,
             xy=(xPos, yPosChordLabel), xycoords='data',
             xytext=(2, 5), textcoords='offset points', color = 'white',
             fontsize=fs_infotext, rotation='vertical')
 
+
             # plot label for airfoil-name / section-name
             text = ("%s" % (remove_suffix(element.airfoilName,'.dat')))
-            props=dict(arrowstyle="-", connectionstyle= "angle,angleA=-90,angleB=30,rad=10", color=cl_sections)
+            props=dict(arrowstyle="-", connectionstyle= "angle,angleA=-90,angleB=30,rad=10", color=labelColor)
 
             ax.annotate(text,
             xy=(xPos, yPosSectionLabel), xycoords='data',
             xytext=(8, yPosOffsetSectionLabel), textcoords='offset points', color = 'white',
-            bbox=dict(boxstyle="round", facecolor = 'gray', alpha=0.5), fontsize=fs_infotext, rotation='vertical', arrowprops=props)
+            bbox=dict(boxstyle="round", facecolor = labelColor, alpha=0.5), fontsize=fs_infotext, rotation='vertical', arrowprops=props)
 
             # append position of section to x-axis ticks
             x_tick_locations.append(xPos)
@@ -533,6 +615,7 @@ class wing:
             # append position of leading edge and trailing edge to y-axis-ticks
             y_tick_locations.append(element.leadingEdge)
             #y_tick_locations.append(element.trailingEdge)
+            idx = idx - 1
 
         # set new ticks for the x-axis according to the positions of the sections
         ax.set_xticks(x_tick_locations)
@@ -589,9 +672,16 @@ class wing:
                 linewidth = lw_planform)#, label = "planform")
         ax.plot(xValues, trailingeEge, color=cl_planform,
                 linewidth = lw_planform)
-        ax.plot(rootJoint_x, rootJoint_y, color=cl_planform,
+        try:
+            airfoilType = self.airfoilTypes[0]
+        except:
+             airfoilType = 'blend'
+
+        ax.plot(rootJoint_x, rootJoint_y,
+                color = self.get_colorFromAirfoilType(airfoilType),
                 linewidth = lw_planform)
-        ax.plot(tipJoint_x, tipJoint_y, color=cl_planform,
+
+        ax.plot(tipJoint_x, tipJoint_y, color= cl_planform,
                 linewidth = lw_planform)
 
         # plot additional point (invisible) to expand the y-axis and
@@ -816,7 +906,7 @@ def insert_PlanformDataIntoXFLR5_File(data, inFileName, outFileName):
     wing = get_wing(root, data.wingFinSwitch)
 
     if (wing == None):
-        print("Error, wing not found\n")
+        ErrorMsg("wing not found\n")
         return
 
     # find sections-data-template
@@ -860,7 +950,7 @@ def insert_PlanformDataIntoXFLR5_File(data, inFileName, outFileName):
         # add the new section to the tree
         wing.append(newSection)
 
-        print("Section %d: position: %.0f mm, chordlength %.0f mm, airfoilName %s was inserted" %
+        NoteMsg("Section %d: position: %.0f mm, chordlength %.0f mm, airfoilName %s was inserted" %
           (section.number, section.y*1000, section.chord*1000, section.airfoilName))
 
     # write all data to the new file file
@@ -877,7 +967,7 @@ def get_planformDataFileName(args):
         inFileName = ressourcesPath + bs + 'planformdata'
 
     inFileName = inFileName + '.txt'
-    print("filename for planform input-data is: %s" % inFileName)
+    NoteMsg("filename for planform input-data is: %s" % inFileName)
     return inFileName
 
 
@@ -889,11 +979,206 @@ def get_strakDataFileName(args):
         inFileName = args.strakinput
     else:
         # use Default-name
-        inFileName = ressourcesPath + bs + 'strakdata'
+        inFileName = ressourcesPath + bs + strakMachineInputFileName
 
-    inFileName = inFileName + '.txt'
-    print("filename for strak input-data is: %s" % inFileName)
+    NoteMsg("filename for strak input-data is: %s" % inFileName)
     return inFileName
+
+
+def copy_userAirfoils(wingData):
+    userAirfoil_idx = 0
+
+    for airfoil in wingData.userAirfoils:
+        splitnames = airfoil.split("\\")
+        airfoilName = splitnames[-1]
+        airfoilName = remove_suffix(airfoilName, ".dat")
+        srcPath = '\\'.join(splitnames[0:-1])
+        destName = wingData.get_UserAirfoilName(userAirfoil_idx)
+        destName = remove_suffix(destName, ".dat")
+
+        copyAndSmooth_Airfoil(airfoilName, srcPath, destName, False)
+        userAirfoil_idx = userAirfoil_idx + 1
+
+
+def get_rightFoilData(wingData, start):
+    end = len(wingData.airfoilTypes)
+
+    # loop over all airfoil-Types
+    for idx in range(start, end):
+        # Get the first "non-blend" airfoil beginning from "start"
+        if (wingData.airfoilTypes[idx] != "blend"):
+            return ( wingData.airfoilNames[idx], wingData.chords[idx])
+
+    # Nothing was found
+    return (None, None)
+
+
+def calculate_Blend(chord_left, chord_blend, chord_right):
+    if (chord_left < chord_blend < chord_right):
+        # decreasing chord from left to right (normal)
+        diff = chord_right - chord_left
+        diff_blend = chord_blend - chord_left
+    elif (chord_left > chord_blend > chord_right):
+        # increasing chord from left to right (unusual)
+        diff = chord_left - chord_right
+        diff_blend = chord_left - chord_blend
+    else:
+        # unknown behaviour
+        ErrorMsg("calculate_Blend()")
+        diff = diff_blend = 1
+
+    # calculate blend now
+    blend = (diff_blend / diff) * 100
+    blend = round(blend, 0)
+    return int(blend)
+
+
+def check_airfFoilsExist(name_1, name_2):
+    try:
+        file = open(name_1)
+        file.close()
+        file = open(name_2)
+        file.close()
+    except:
+        return False
+
+    return True
+
+
+
+def create_blendedArifoils(wingData):
+    num = len(wingData.airfoilTypes)
+
+    # loop over all airfoil-Types
+    for idx in range(num):
+        # not a "blend" airfoil ?
+        if (wingData.airfoilTypes[idx] != "blend"):
+            # yes, take this airfoil as the "left-side" airfoil for blending
+            leftFoilName = wingData.airfoilNames[idx]
+            leftFoilChord = wingData.chords[idx]
+        else:
+            # no, this is a "blend" airfoil that must be created
+            blendFoilName = wingData.airfoilNames[idx]
+            blendFoilName = remove_suffix(blendFoilName , ".dat")
+            blendFoilChord = wingData.chords[idx]
+
+            # get data of the "right-side" airfoil for blending
+            (rightFoilName, rightFoilChord) = get_rightFoilData(wingData, idx+1)
+            # check if left- and right-side airfoils exist
+
+            if (check_airfFoilsExist(leftFoilName, rightFoilName) == True):
+                NoteMsg("creating blended airfoil %s" % blendFoilName)
+
+                # calculate the blend-factor
+                blend = calculate_Blend(leftFoilChord, blendFoilChord, rightFoilChord)
+
+                # compose XFOIL-worker-call
+                worker_call = ".." + bs +".." + bs +"bin" + bs +\
+                          "xfoil_worker.exe -w blend %d -a %s -a2 %s -o %s"\
+                        % (blend, leftFoilName, rightFoilName, blendFoilName)
+
+                # call worker now by system call
+                os.system(worker_call)
+            else:
+                NoteMsg("at least one airfoil for blending does not exist,"\
+                 "skipping blending for airfoil %s" % blendFoilName)
+
+
+def determine_SeedFoilIdx(wingData):
+    num = len(wingData.airfoilTypes)
+
+    # loop backwards
+    for idx in range(num-1,-1,-1):
+        # first user-airfoil that is found (loop-backwards) will be the seedfoil
+        if (wingData.airfoilTypes[idx] == "user"):
+            return idx
+
+    # at least the airfoil at idx 0 must be the seedfoil
+    return 0
+
+
+def update_seedfoilName(wingData, strakdata):
+    idx = determine_SeedFoilIdx(wingData)
+    seedFoilName = wingData.airfoilNames[idx]
+
+    # set the new seedfoilname
+    strakdata["seedFoilName"] = remove_suffix(seedFoilName, ".dat")
+
+
+def update_airfoilNames(wingData, strakdata):
+    num = len(wingData.airfoilTypes)
+    airfoilNames = []
+
+    # get index of the seedfoil
+    seedIdx = determine_SeedFoilIdx(wingData)
+
+    # first append name of the seedfoil
+    airfoilNames.append(wingData.airfoilNames[seedIdx])
+
+    # create list of airfoilnames that shall be created by the strak-machine
+    for idx in range(num):
+        if (wingData.airfoilTypes[idx] == "opt"):
+            airfoilNames.append(wingData.airfoilNames[idx])
+
+    # now set the new list in the strakdata-dictionary
+    strakdata["airfoilNames"] = airfoilNames
+
+
+def update_reynolds(wingData, strakdata):
+    num = len(wingData.airfoilTypes)
+    reynolds = []
+
+    # get index of the seedfoil
+    seedIdx = determine_SeedFoilIdx(wingData)
+
+    # first append reynolds-number of the seedfoil
+    reynolds.append(wingData.airfoilReynolds[seedIdx])
+
+    # create list of reynolds-numbers for the airfoils that shall be created by
+    # the strak-machine
+    for idx in range(num):
+        if (wingData.airfoilTypes[idx] == "opt"):
+            reynolds.append(wingData.airfoilReynolds[idx])
+
+    # now set the new list in the strakdata-dictionary
+    strakdata["reynolds"] = reynolds
+
+
+def create_strakdataFile(strakDataFileName):
+    data = { "seedFoilName": " ", "reynolds": [0,0], "airfoilNames": [" "," "]}
+    json.dump(data, open(strakDataFileName,'w'))
+    NoteMsg("strakdata was successfully created")
+
+
+# write Re-numbers and seedfoil to strakdata.txt
+def update_strakdata(wingData):
+    # try to open .json-file
+    try:
+        strakDataFile = open(strakDataFileName, "r")
+    except:
+        NoteMsg('failed to open file %s, creating new one' % strakDataFileName)
+        create_strakdataFile(strakDataFileName)
+        strakDataFile = open(strakDataFileName, "r")
+
+    # load dictionary from .json-file
+    try:
+        strakdata = json.load(strakDataFile)
+        strakDataFile.close()
+    except:
+        ErrorMsg('failed to read data from file %s' % strakDataFileName)
+        return
+
+    # update data coming from planform-creator
+    update_seedfoilName(wingData, strakdata)
+    update_airfoilNames(wingData, strakdata)
+    update_reynolds(wingData, strakdata)
+
+    # write json-File
+    with open(strakDataFileName, "w") as write_file:
+        json.dump(strakdata, write_file, indent=4, separators=(", ", ": "), sort_keys=False)
+        write_file.close()
+    NoteMsg("strakdata was successfully updated")
+
 
 
 # GUI-Handling
@@ -990,6 +1275,7 @@ def GUI():
 
 # Main program
 if __name__ == "__main__":
+    init()
 
     #get command-line-arguments or user-input
     (planformDataFileName, strakDataFileName) = get_Arguments()
@@ -1008,7 +1294,7 @@ if __name__ == "__main__":
     try:
      planform = open(planformDataFileName)
     except:
-        print('Error, failed to open file %s' % planformDataFileName)
+        ErrorMsg("failed to open file %s" % planformDataFileName)
         exit(-1)
 
     # load dictionary of planform-data from .json-file
@@ -1016,32 +1302,18 @@ if __name__ == "__main__":
         planformData = json.load( planform)
         planform.close()
     except:
-        print('Error, failed to read data from file %s' % planformDataFileName)
+        ErrorMsg('Error, failed to read data from file %s' % planformDataFileName)
         planform.close()
         exit(-1)
 
-
-    # try to open .json-file
-    try:
-        strakDataFile = open(strakDataFileName)
-    except:
-        print('failed to open file %s' % strakDataFileName)
-        exit(-1)
-
-    # load dictionary of strakdata from .json-file
-    try:
-        strakdata = json.load(strakDataFile)
-        strakDataFile.close()
-    except:
-        print('failed to read data from file %s' % strakDataFileName)
-        strakDataFile.close()
-        exit(-1)
-
     # set data for the planform
-    newWing.set_Data(planformData, strakdata)
+    newWing.set_Data(planformData)
 
-    # calculate the grid and sections
+    # calculate the grid, the chordlengths of the airfoils and the sections
     newWing.calculate_planform()
+    newWing.calculate_ReNumbers()
+    newWing.calculate_chordlengths()
+    newWing.set_AirfoilNamesFromRe()
     newWing.calculate_sections()
 
     # get filename of plane-template
@@ -1049,7 +1321,6 @@ if __name__ == "__main__":
 
     # compose output-filename for planform-xml-file
     outputFileName = outputFolder + bs + planformData["outFileName"]
-    print (outputFileName)
 
     # create outputfolder, if it does not exist
     if not os.path.exists(outputFolder):
@@ -1058,5 +1329,32 @@ if __name__ == "__main__":
     # insert the generated-data into the XML-File for XFLR5
     insert_PlanformDataIntoXFLR5_File(newWing, inputFileName, outputFileName)
 
-    # plot the result
+    # get current working dir
+    workingDir = os.getcwd()
+
+    # check if output-folder exists. If not, create folder.
+    if not os.path.exists(buildPath):
+        os.makedirs(buildPath)
+
+    # check if airfoil-folder exists. If not, create folder.
+    if not os.path.exists(buildPath + bs + airfoilPath):
+        os.makedirs(buildPath + bs + airfoilPath)
+
+    # change working-directory to output-directory
+    os.chdir(workingDir + bs + buildPath + bs + airfoilPath)
+
+    # copy and rename user-airfoils, the results will be copied to the
+    # airfoil-folder specified in the strak-machine
+    copy_userAirfoils(newWing)
+
+    # create blended airfoils using XFOIL_worker
+    create_blendedArifoils(newWing)
+
+    # change working-directory back
+    os.chdir(workingDir)
+
+    # update "strakdata.txt" for the strakmachine
+    update_strakdata(newWing)
+
+    # plot the planform
     newWing.draw()

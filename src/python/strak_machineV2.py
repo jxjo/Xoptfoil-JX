@@ -433,7 +433,7 @@ class inputFile:
         perturbList_ReDiff = [(0.0025/2), 0.0025]
 
         ReFactorList = [(150/220),(80/150)]
-        perturbList_ReFactor = [(0.0025), (0.0025*1.5)]
+        perturbList_ReFactor = [(0.0025), (0.0025*2.2)]
 
         # calculate corresponding perturb according to Re-Diff
         perturb_fromDiff = interpolate(ReDiffList[0],ReDiffList[1],
@@ -1234,7 +1234,7 @@ class strakData:
         self.showTargetPolars = True
         self.adaptInitialPerturb = True
         self.smoothSeedfoil = True
-        self.smoothStrakFoils = False
+        self.smoothStrakFoils = True
         self.smoothMatchPolarFoil = False
         self.plotStrakPolars = True
         self.ReNumbers = []
@@ -3462,19 +3462,19 @@ def check_quality(params):
 
     if params.quality == 'low':
         # double-pass optimization, camb-thick-plus / hicks-henne
-        params.maxIterations = [80]
+        params.maxIterations = [160]
         params.numberOfCompetitors = [1]
         params.shape_functions = ['camb-thick-plus']
     elif params.quality == 'medium':
         # double-pass optimization, camb-thick-plus / hicks-henne
-        params.maxIterations = [80, 300]
+        params.maxIterations = [160, 400]
         params.numberOfCompetitors = [1, 1]
-        params.shape_functions = ['camb-thick-plus', 'hicks-henne']
+        params.shape_functions = ['camb-thick-plus', 'hicks-henne-plus']
     else:
         # multi-pass optimization, camb-thick-plus and hicks-henne
-        params.maxIterations = [40, 60, 160]
+        params.maxIterations = [160, 80, 300]
         params.numberOfCompetitors = [1, 3, 1]
-        params.shape_functions = ['camb-thick-plus','hicks-henne','hicks-henne']
+        params.shape_functions = ['camb-thick-plus','hicks-henne-plus','hicks-henne-plus']
 
     params.optimizationPasses = len(params.maxIterations)
 
@@ -3708,7 +3708,7 @@ def copy_Matchpolarfoils(params):
     seedFoilName = params.seedFoilName
 
     # get the path where the airfoil can be found
-    srcPath = ".." + bs + ressourcesPath
+    srcPath = "." + bs + airfoilPath
 
     # copy and smooth the matchfoil
     copyAndSmooth_Airfoil(matchfoilName, srcPath, matchfoilName,
@@ -3730,7 +3730,7 @@ def generate_rootfoil(params):
     rootfoilName = remove_suffix(rootfoilName, '.dat')
 
     # get the path where the seed-airfoil can be found
-    srcPath = ".." + bs + ressourcesPath
+    srcPath = "." + bs + airfoilPath
 
     # copy and smooth the airfoil, also rename
     copyAndSmooth_Airfoil(seedFoilName, srcPath, rootfoilName,
@@ -3933,7 +3933,7 @@ def generate_InputFiles(params):
             newFile.write_ToFile(iFile)
 
             # reduce initial perturb for the next pass
-            initialPerturb = initialPerturb*0.3
+            initialPerturb = initialPerturb*0.5
 
         # append only input-file of final strak-airfoil to params
         params.inputFiles.append(newFile)
