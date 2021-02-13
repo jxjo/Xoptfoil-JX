@@ -22,7 +22,7 @@ import xml.etree.ElementTree as ET
 import argparse
 import sys
 from json import load
-from os import listdir, path, system, makedirs, chdir, getcwd
+from os import listdir, path, system, makedirs, chdir, getcwd, remove
 from matplotlib import pyplot as plt
 from matplotlib import image as mpimg
 from math import pi, sin
@@ -1307,6 +1307,31 @@ class strakData:
 
 
     ############################################################################
+    # function to change the NCrit-value in a given Namelist-file
+    def change_NCritInNamelistFile(self, NCrit, filename):
+        fileNameAndPath = ressourcesPath + bs + filename
+
+        # read namelist form file
+        dictData = f90nml.read(fileNameAndPath)
+
+        # change ncrit in namelist / dictionary
+        xfoil_run_options = dictData["xfoil_run_options"]
+        xfoil_run_options['ncrit'] = NCrit
+
+        # delete file and writeback namelist
+        remove(fileNameAndPath)
+        f90nml.write(dictData, fileNameAndPath)
+
+
+    ############################################################################
+    # function to set the NCrit-value in polar-creation-files
+    def set_NCrit(self):
+        # change both files
+        self.change_NCritInNamelistFile(self.NCrit, T1_polarInputFile)
+        self.change_NCritInNamelistFile(self.NCrit, T2_polarInputFile)
+
+
+    ############################################################################
     # function that calculates dependend values
     def calculate_DependendValues(self):
         # setup tool-calls
@@ -1330,6 +1355,8 @@ class strakData:
             self.showStatusCall = "start \"\" \"%s\" %s\n" % (pythonInterpreterName +"w", \
                          (' ..' + bs + scriptPath + bs + showStatusName + '.py'))
 
+        # set value of NCrit for polar creation
+        self.set_NCrit()
 
         # calculate List of Re-numers, if wingdata available
         if (self.wingData != None):
