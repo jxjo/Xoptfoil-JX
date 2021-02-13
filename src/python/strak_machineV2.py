@@ -3685,10 +3685,10 @@ def copyAndSmooth_Airfoil(srcName, srcPath, destName, smooth):
         print("Smoothing airfoil \'%s\', creating airfoil \'%s\'\n" %\
                        (srcName, destName))
         # smooth, rename and copy the airfoil
-        inputFilename = get_PresetInputFileName(smoothInputFile, params)
+        inputFilename = ".." + bs + ressourcesPath + bs + smoothInputFile
 
         # compose system-string for smoothing the seed-airfoil
-        systemString = params.xfoilWorkerCall + " -w smooth -i %s -a %s -o %s" % \
+        systemString = xfoilWorkerName + '.exe' + " -w smooth -i %s -a %s -o %s" % \
                        (inputFilename, srcfoilNameAndPath, destName)
 
         # execute xfoil-worker / create the smoothed root-airfoil

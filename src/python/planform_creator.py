@@ -211,11 +211,20 @@ class wing:
         self.chords = []
         self.area = 0.0
         self.aspectRatio = 0.0
+        self.smoothUserAirfoils = False
 
 
-    # set airfoilnames from basic name and Re-number
-    def set_AirfoilNamesFromRe(self):
-        for Re in self.airfoilReynolds:
+    # set missing airfoilnames from basic name and Re-number
+    def set_AirfoilNames(self):
+        num = len(self.airfoilTypes)
+        numAirfoilNames = len(self.airfoilNames)
+
+        # loop over all airfoils
+        for idx in range(num):
+            # has the user specified a name for the airfoil ?
+            if ((idx + 1) > numAirfoilNames):
+                # No, compose a name from the airfoil basic name and the Re-number
+                Re = self.airfoilReynolds[idx]
                 airfoilName = (self.airfoilBasicName + "-%s.dat") % get_ReString(Re)
                 self.airfoilNames.append(airfoilName)
 
@@ -229,13 +238,24 @@ class wing:
         try:
             self.airfoilNames = dictData["airfoilNames"]
         except:
+            NoteMsg("No user-defined airfoil names specified")
             # no user defined list was found. In this case at least the
             # name of the root airfoil has to be specified.
-            self.airfoilBasicName = dictData["airfoilBasicName"]
             self.airfoilNames = []
+
+        try:
+            self.airfoilBasicName = dictData["airfoilBasicName"]
+        except:
+             NoteMsg("No basic airfoil name specified")
 
         self.airfoilTypes = dictData["airfoilTypes"]
         self.userAirfoils = dictData["userAirfoils"]
+
+        try:
+            if (dictData["smoothUserAirfoils"]) == "True":
+                self.smoothUserAirfoils = True
+        except:
+            pass
 
         # set number of sections to number of positions
         self.numberOfSections = len(self.airfoilPositions)
@@ -312,19 +332,10 @@ class wing:
 
     # sets the airfoilname of a section
     def set_AirfoilName(self, section):
-        try:
-           section.airfoilName = self.airfoilNames[section.number-1]
-        except:
-            section.airfoilName = (self.airfoilBasicName + "-%s.dat") % \
-             (get_ReString(section.Re))
-
+        section.airfoilName = self.airfoilNames[section.number-1]
 
     def set_lastSectionAirfoilName(self, section):
-        try:
             section.airfoilName = self.airfoilNames[section.number-2]
-        except:
-            section.airfoilName = (self.airfoilBasicName + "-%s.dat") % \
-             (get_ReString(section.Re))
 
 
     # calculate planform-shape of the half-wing (high-resolution wing planform)
@@ -996,7 +1007,8 @@ def copy_userAirfoils(wingData):
         destName = wingData.get_UserAirfoilName(userAirfoil_idx)
         destName = remove_suffix(destName, ".dat")
 
-        copyAndSmooth_Airfoil(airfoilName, srcPath, destName, False)
+        copyAndSmooth_Airfoil(airfoilName, srcPath, destName,
+                              wingData.smoothUserAirfoils)
         userAirfoil_idx = userAirfoil_idx + 1
 
 
@@ -1315,7 +1327,7 @@ if __name__ == "__main__":
     newWing.calculate_planform()
     newWing.calculate_ReNumbers()
     newWing.calculate_chordlengths()
-    newWing.set_AirfoilNamesFromRe()
+    newWing.set_AirfoilNames()
     newWing.calculate_sections()
 
     # get filename of plane-template

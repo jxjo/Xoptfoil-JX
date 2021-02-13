@@ -1,6 +1,6 @@
 {
 	"templateFileName": "plane_template.xml", 
-	"outFileName": "rocketeerMainWing.xml",
+	"outFileName": "MainWing.xml",
 	"planformName": "main wing",
 	"isFin": "false",
 	"wingspan": 2.98,
@@ -16,9 +16,11 @@
         "showTipLine": "true",
 	"showHingeLine": "true",
 	"airfoilBasicName": "JX-GS",
-        "airfoilPositions": [   0.0,     0.4,     0.7,    0.95,     null,    1.27,    null,  null],
-        "airfoilReynolds":  [150000,    null,    null,    null,   100000,    null,   60000, 40000], 
-	"airfoilTypes":     ["user", "blend", "blend", "blend",   "user",  "blend", "user", "opt"],
+        "airfoilPositions": [   0.0,           0.4,        0.7,      0.95,       null,      1.27,      null,      null],
+        "airfoilReynolds":  [  150000,        null,       null,      null,     100000,      null,     60000,     40000], 
+	"airfoilTypes":     [  "user",     "blend",    "blend",   "blend",     "user",   "blend",    "user",     "opt"],
+	"airfoilNames":     ["JX-GS-1",  "JX-GS-2",  "JX-GS-3",  "JX-GS-4", "JX-GS-5", "JX-GS-6", "JX-GS-7", "JX-GS-8"],
+	"smoothUserAirfoils" : "False",
         "userAirfoils":     ["..\\..\\airfoil_library\\F3F\\JX\\JX-GS\\JX-GS-15.dat",
 		             "..\\..\\airfoil_library\\F3F\\JX\\JX-GS\\JX-GS-10.dat",
                              "..\\..\\airfoil_library\\F3F\\JX\\JX-GS\\JX-GS-06.dat"]
