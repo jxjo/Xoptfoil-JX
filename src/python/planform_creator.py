@@ -43,8 +43,8 @@ from strak_machineV2 import (copyAndSmooth_Airfoil, get_ReString,
                              ErrorMsg, WarningMsg, NoteMsg, DoneMsg,
                              remove_suffix, interpolate, round_Re,
                              bs, buildPath, ressourcesPath, airfoilPath,
-                             scriptPath, exePath,
-                             strakMachineInputFileName)
+                             scriptPath, exePath, smoothInputFile,
+                             strakMachineInputFileName, xfoilWorkerName)
 from colorama import init
 from termcolor import colored
 
@@ -84,6 +84,8 @@ cl_optAirfoil = 'yellow'
 fs_tick = 7
 cl_infotext = 'aqua'
 
+xfoilWorkerCall = "..\\..\\bin\\" + xfoilWorkerName + '.exe'
+inputFilename = "..\\..\\ressources\\" + smoothInputFile
 
 # example-dictionary, containing all data of the planform
 PLanformDict =	{
@@ -228,11 +230,56 @@ class wing:
                 airfoilName = (self.airfoilBasicName + "-%s.dat") % get_ReString(Re)
                 self.airfoilNames.append(airfoilName)
 
+    # get the number of user defined airfoils
+    def get_numUserAirfoils(self):
+        num = 0
+        for foilType in self.airfoilTypes:
+            if (foilType == "user"):
+                num = num + 1
+
+        return num
 
     # set basic data of the wing
     def set_Data(self, dictData):
         self.airfoilPositions = dictData["airfoilPositions"]
         self.airfoilReynolds = dictData["airfoilReynolds"]
+
+        # get airfoil-types
+        self.airfoilTypes = dictData["airfoilTypes"]
+
+        # After all types are known, the number of user airfoils can be determined
+        numUserAirfoils = self.get_numUserAirfoils()
+
+        # check number of user-airfoils
+        if (numUserAirfoils == 0):
+            ErrorMsg("number of user-airfoils must be >= 1")
+            exit(-1)
+
+        if (self.airfoilTypes[0] != "user"):
+            ErrorMsg("type of first airfoils must \"user\"")
+            exit(-1)
+
+        # get user-defined airfoils
+        self.userAirfoils = dictData["userAirfoils"]
+
+        # check userAirfoil names against number
+        numDefinedUserAirfoils = len(self.userAirfoils)
+        if (numDefinedUserAirfoils < numUserAirfoils):
+            ErrorMsg("%d airfoils have type \"user\", but only %d user-airfoils"\
+            " were defined in \"user-airfoils\""\
+             % (numUserAirfoils, numDefinedUserAirfoils))
+            exit(-1)
+        elif (numDefinedUserAirfoils > numUserAirfoils):
+            WarningMsg("%d airfoils have type \"user\", but %d user-airfoils"\
+            " were defined in \"user-airfoils\""\
+             % (numUserAirfoils, numDefinedUserAirfoils))
+            self.userAirfoils = self.userAirfoils[0:numUserAirfoils]
+
+        try:
+            if (dictData["smoothUserAirfoils"]) == "True":
+                self.smoothUserAirfoils = True
+        except:
+            pass
 
         # get user-defined list of airfoil-names
         try:
@@ -247,15 +294,6 @@ class wing:
             self.airfoilBasicName = dictData["airfoilBasicName"]
         except:
              NoteMsg("No basic airfoil name specified")
-
-        self.airfoilTypes = dictData["airfoilTypes"]
-        self.userAirfoils = dictData["userAirfoils"]
-
-        try:
-            if (dictData["smoothUserAirfoils"]) == "True":
-                self.smoothUserAirfoils = True
-        except:
-            pass
 
         # set number of sections to number of positions
         self.numberOfSections = len(self.airfoilPositions)
@@ -1007,8 +1045,8 @@ def copy_userAirfoils(wingData):
         destName = wingData.get_UserAirfoilName(userAirfoil_idx)
         destName = remove_suffix(destName, ".dat")
 
-        copyAndSmooth_Airfoil(airfoilName, srcPath, destName,
-                              wingData.smoothUserAirfoils)
+        copyAndSmooth_Airfoil(xfoilWorkerCall, inputFilename, airfoilName,
+                              srcPath, destName, wingData.smoothUserAirfoils)
         userAirfoil_idx = userAirfoil_idx + 1
 
 
@@ -1085,9 +1123,9 @@ def create_blendedArifoils(wingData):
                 blend = calculate_Blend(leftFoilChord, blendFoilChord, rightFoilChord)
 
                 # compose XFOIL-worker-call
-                worker_call = ".." + bs +".." + bs +"bin" + bs +\
-                          "xfoil_worker.exe -w blend %d -a %s -a2 %s -o %s"\
+                worker_call = xfoilWorkerCall + " -w blend %d -a %s -a2 %s -o %s"\
                         % (blend, leftFoilName, rightFoilName, blendFoilName)
+                print(worker_call)
 
                 # call worker now by system call
                 os.system(worker_call)

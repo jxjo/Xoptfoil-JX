@@ -1,6 +1,6 @@
 {
     "quality": "medium", 
-    "seedFoilName": "JX-GS-7", 
+    "seedFoilName": "JX-GS-060k", 
     "NCrit": 7.0, 
     "useAlwaysRootfoil": "True", 
     "weighting": "constant", 
@@ -9,8 +9,8 @@
         40000
     ], 
     "airfoilNames": [
-        "JX-GS-7", 
-        "JX-GS-8"
+        "JX-GS-060k", 
+        "JX-GS-040k"
     ], 
     "additionalOpPoints": [
         0.014, 

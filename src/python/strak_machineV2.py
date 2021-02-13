@@ -3705,26 +3705,24 @@ def get_WingDataFromXML(params):
     return planeData[0]
 
 
-def copyAndSmooth_Airfoil(srcName, srcPath, destName, smooth):
+def copyAndSmooth_Airfoil(xfoilWorkerCall, inputFilename, srcName, srcPath, destName, smooth):
     srcfoilNameAndPath = srcPath + bs + srcName + '.dat'
 
-    if (smooth):
-        print("Smoothing airfoil \'%s\', creating airfoil \'%s\'\n" %\
-                       (srcName, destName))
-        # smooth, rename and copy the airfoil
-        inputFilename = ".." + bs + ressourcesPath + bs + smoothInputFile
+    # first always rename and copy the airfoil
+    NoteMsg("Renaming airfoil \'%s\' to \'%s\'\n" % (srcName, destName))
+    change_airfoilname.change_airfoilName(srcfoilNameAndPath, destName + '.dat')
 
-        # compose system-string for smoothing the seed-airfoil
-        systemString = xfoilWorkerName + '.exe' + " -w smooth -i %s -a %s -o %s" % \
-                       (inputFilename, srcfoilNameAndPath, destName)
+    if (smooth):
+        NoteMsg("Smoothing airfoil \'%s\'" % destName)
+
+        # compose system-string for smoothing the airfoil
+        systemString = xfoilWorkerCall + " -w smooth -i %s -a %s -o %s" % \
+                       (inputFilename, destName +'.dat', destName)
 
         # execute xfoil-worker / create the smoothed root-airfoil
         system(systemString)
-    else:
-        print("Renaming airfoil \'%s\' to \'%s\'\n" % (srcName, destName))
-        # only rename and copy the airfoil
-        change_airfoilname.change_airfoilName(srcfoilNameAndPath, destName + '.dat')
-        DoneMsg()
+
+    DoneMsg()
 
 
 def copy_Matchpolarfoils(params):
@@ -3737,13 +3735,17 @@ def copy_Matchpolarfoils(params):
     # get the path where the airfoil can be found
     srcPath = "." + bs + airfoilPath
 
+    inputFilename = ".." + bs + ressourcesPath + bs + smoothInputFile
+
     # copy and smooth the matchfoil
-    copyAndSmooth_Airfoil(matchfoilName, srcPath, matchfoilName,
-                                             params.smoothMatchPolarFoil)
+    copyAndSmooth_Airfoil(params.xfoilWorkerCall, inputFilename,
+                          matchfoilName, srcPath, matchfoilName,
+                          params.smoothMatchPolarFoil)
 
     # copy and smooth the seedfoil
-    copyAndSmooth_Airfoil(seedFoilName, srcPath, seedFoilName,
-                                             params.smoothSeedfoil)
+    copyAndSmooth_Airfoil(params.xfoilWorkerCall, inputFilename,
+                          seedFoilName, srcPath, seedFoilName,
+                          params.smoothSeedfoil)
 
     return matchfoilName
 
@@ -3759,9 +3761,11 @@ def generate_rootfoil(params):
     # get the path where the seed-airfoil can be found
     srcPath = "." + bs + airfoilPath
 
+    inputFilename = ".." + bs + ressourcesPath + bs + smoothInputFile
+
     # copy and smooth the airfoil, also rename
-    copyAndSmooth_Airfoil(seedFoilName, srcPath, rootfoilName,
-                                           params.smoothSeedfoil)
+    copyAndSmooth_Airfoil(params.xfoilWorkerCall, inputFilename, seedFoilName, srcPath,
+                          rootfoilName, params.smoothSeedfoil)
 
     return rootfoilName
 
