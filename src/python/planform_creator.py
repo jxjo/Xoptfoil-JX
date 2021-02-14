@@ -1041,7 +1041,12 @@ def copy_userAirfoils(wingData):
         splitnames = airfoil.split("\\")
         airfoilName = splitnames[-1]
         airfoilName = remove_suffix(airfoilName, ".dat")
-        srcPath = '\\'.join(splitnames[0:-1])
+
+        if (splitnames[0]=='.'):
+            srcPath = "..\\..\\" + '\\'.join(splitnames[1:-1])
+        else:
+            srcPath = '\\'.join(splitnames[0:-1])
+
         destName = wingData.get_UserAirfoilName(userAirfoil_idx)
         destName = remove_suffix(destName, ".dat")
 
