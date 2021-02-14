@@ -580,7 +580,7 @@ subroutine check_and_smooth_surface (show_details, do_smoothing, foil)
                        curv_threshold, spike_threshold, highlow_threshold, max_te_curvature, &
                        foil%xt, foil%zt, top_quality)
 
-  if (top_quality >= Q_BAD .and. do_smoothing) then 
+  if (top_quality >= Q_BAD .or. do_smoothing) then 
 
     call smooth_it (.false., spike_threshold, foil%xt, foil%zt)
     top_quality     = 0 
@@ -596,7 +596,7 @@ subroutine check_and_smooth_surface (show_details, do_smoothing, foil)
                        curv_threshold, spike_threshold, highlow_threshold, max_te_curvature, &
                        foil%xb, foil%zb, bot_quality)
   
-  if (bot_quality >= Q_BAD .and. do_smoothing) then 
+  if (bot_quality >= Q_BAD .or. do_smoothing) then 
 
     call smooth_it (.false., spike_threshold, foil%xb, foil%zb)
     bot_quality     = 0 
@@ -610,7 +610,7 @@ subroutine check_and_smooth_surface (show_details, do_smoothing, foil)
 
 ! When smoothed - Rebuild foil out of smoothed polyline 
   if (done_smoothing) then
-    call rebuild_airfoil (foil%xt, foil%xb, foil%zt, foil%zb, foil)
+    call rebuild_airfoil ((foil%xt), (foil%xb), (foil%zt), (foil%zb), foil)
   end if 
 
 ! ... printing stuff 

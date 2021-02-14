@@ -316,7 +316,8 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
   !Set defaults for smoothing and read namelist 
 
   spike_threshold = 0.8d0
-  do_smoothing    = .true.                ! now default - smoothing done only if needed
+  do_smoothing    = .false.         ! now default - smoothing will be forced if 
+                                    !               quality of surface is bad
 
   rewind(iunit)
   read(iunit, iostat=iostat1, nml=smoothing_options)
