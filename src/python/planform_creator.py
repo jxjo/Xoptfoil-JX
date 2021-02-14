@@ -229,6 +229,9 @@ class wing:
                 Re = self.airfoilReynolds[idx]
                 airfoilName = (self.airfoilBasicName + "-%s.dat") % get_ReString(Re)
                 self.airfoilNames.append(airfoilName)
+            else:
+                if (self.airfoilNames[idx].find('.dat')<0):
+                    self.airfoilNames[idx] = self.airfoilNames[idx] +'.dat'
 
     # get the number of user defined airfoils
     def get_numUserAirfoils(self):
