@@ -196,7 +196,7 @@ class wing:
         self.planformShape = 'elliptical'
         self.halfwingspan = 0.0
         self.numberOfSections = 0
-        self.numberOfGridChords = 2048
+        self.numberOfGridChords = 16384
         self.hingeDepthPercent = 23.0
         self.tipDepthPercent = 8.0
         self.tipDepth = 0
@@ -243,6 +243,12 @@ class wing:
     def set_Data(self, dictData):
         self.airfoilPositions = dictData["airfoilPositions"]
         self.airfoilReynolds = dictData["airfoilReynolds"]
+
+        # also possible to place an airfoil inside the planform via chordlength
+        try:
+            self.airfoilChordLengths = dictData["airfoilChordLengths"]
+        except:
+            pass
 
         # get airfoil-types
         self.airfoilTypes = dictData["airfoilTypes"]
