@@ -1149,13 +1149,13 @@ def create_blendedArifoils(wingData):
 
 
 def determine_SeedFoilIdx(wingData):
-    num = len(wingData.airfoilTypes)
-
-    # loop backwards
-    for idx in range(num-1,-1,-1):
-        # first user-airfoil that is found (loop-backwards) will be the seedfoil
-        if (wingData.airfoilTypes[idx] == "user"):
-            return idx
+##    num = len(wingData.airfoilTypes)
+##
+##    # loop backwards
+##    for idx in range(num-1,-1,-1):
+##        # first user-airfoil that is found (loop-backwards) will be the seedfoil
+##        if (wingData.airfoilTypes[idx] == "user"):
+##            return idx
 
     # at least the airfoil at idx 0 must be the seedfoil
     return 0
