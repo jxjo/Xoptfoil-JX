@@ -1233,7 +1233,7 @@ class strakData:
         self.useAlwaysRootfoil = True
         self.showTargetPolars = True
         self.adaptInitialPerturb = True
-        self.smoothSeedfoil = True
+        self.smoothSeedfoil = False
         self.smoothStrakFoils = True
         self.smoothMatchPolarFoil = False
         self.plotStrakPolars = True
