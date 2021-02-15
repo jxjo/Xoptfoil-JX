@@ -384,15 +384,16 @@ end subroutine le_find
 !    offset. SO this is iterated until the offset is small than epsilon
 !
 !-----------------------------------------------------------------------------
-subroutine repanel_and_normalize_airfoil (in_foil, npoint_paneling, foil)
+subroutine repanel_and_normalize_airfoil (in_foil, npoint_paneling, symmetrical, foil)
 
   use vardef,       only : airfoil_type         ! jx-deprecated:  oil_transform
   use math_deps,    only : norm_2
   use xfoil_driver, only : smooth_paneling
 
   type(airfoil_type), intent(in)    :: in_foil
-  type(airfoil_type), intent(inout) :: foil
+  type(airfoil_type), intent(out)   :: foil
   integer,            intent(in)    :: npoint_paneling
+  logical,            intent(in)    :: symmetrical
 
   type(airfoil_type)  :: tmp_foil
   integer             :: i, pointst, pointsb
@@ -467,6 +468,8 @@ subroutine repanel_and_normalize_airfoil (in_foil, npoint_paneling, foil)
 
   ! now split airfoil to get upper and lower polyline 
   !     if there is a new leading added it will be added to the polylines
+
+  foil%symmetrical = symmetrical
 
   call split_foil(foil)
 

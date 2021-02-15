@@ -206,7 +206,7 @@ end subroutine set_geometry_value
 ! Checks curvature quality of foil 
 !-------------------------------------------------------------------------
 
-subroutine check_foil_curvature (input_file, output_prefix, foil, visualizer)
+subroutine check_foil_curvature (input_file, output_prefix, seed_foil, visualizer)
 
   use vardef,             only: airfoil_type
   use vardef,             only: curv_threshold, spike_threshold, highlow_threshold
@@ -223,15 +223,15 @@ subroutine check_foil_curvature (input_file, output_prefix, foil, visualizer)
 
   character(*), intent(in)     :: input_file
   character(*), intent(in)     :: output_prefix
-  type (airfoil_type), intent (inout)  :: foil
+  type (airfoil_type), intent (in)  :: seed_foil
   logical, intent(in)          :: visualizer
 
-  type (airfoil_type)          :: seed_foil
+  type (airfoil_type)          :: foil, tmp_foil
 
-  seed_foil = foil 
+  tmp_foil = seed_foil
 
-  call le_find      (foil%x, foil%z, foil%leclose, foil%xle, foil%zle, foil%addpoint_loc)
-  call split_foil   (foil)
+  call le_find      (seed_foil%x, seed_foil%z, tmp_foil%leclose, tmp_foil%xle, tmp_foil%zle, tmp_foil%addpoint_loc)
+  call split_foil   (tmp_foil)
 
   ! Defaults
 
@@ -258,7 +258,7 @@ subroutine check_foil_curvature (input_file, output_prefix, foil, visualizer)
 !  ------------ analyze & smooth  -----
 
   ! do checks on repanel foil - also needed for LE point handling (!)
-  call repanel_and_normalize_airfoil (seed_foil, foil%npoint, foil)
+  call repanel_and_normalize_airfoil (tmp_foil, tmp_foil%npoint, .false., foil)
   call check_and_smooth_surface (.true., .true., foil)
 
 
@@ -334,7 +334,7 @@ subroutine repanel_smooth (input_file, output_prefix, seed_foil, visualizer, do_
 
 ! Prepare airfoil  - Repanel and split 
 
-  call repanel_and_normalize_airfoil (seed_foil, geom_options%npan, foil)
+  call repanel_and_normalize_airfoil (seed_foil, geom_options%npan, .false., foil)
 
 ! Smooth it 
 
@@ -388,7 +388,7 @@ subroutine blend_foils (input_file, output_prefix, seed_foil_in, blend_foil_in, 
   use xfoil_driver,       only : xfoil_geom_options_type
   use xfoil_driver,       only : xfoil_apply_flap_deflection, xfoil_reload_airfoil
   use xfoil_driver,       only : xfoil_set_airfoil
-  use airfoil_operations, only : airfoil_write, transform_airfoil, get_split_points
+  use airfoil_operations, only : airfoil_write
   use airfoil_operations, only : rebuild_airfoil, my_stop
   use airfoil_operations, only : repanel_and_normalize_airfoil
   use polar_operations,   only : read_xfoil_paneling_inputs
@@ -399,7 +399,7 @@ subroutine blend_foils (input_file, output_prefix, seed_foil_in, blend_foil_in, 
 
   double precision, dimension(:), allocatable :: xt, xb, zt, zb, bxt, bxb, bzt, bzb
   double precision, dimension(:), allocatable :: zttmp, zbtmp, zt_blended, zb_blended
-  type (airfoil_type) :: blended_foil, seed_foil, blend_foil
+  type (airfoil_type) :: blended_foil, in_foil, blend_foil
   type (xfoil_geom_options_type) :: geom_options
   integer       :: pointst, pointsb
   double precision :: blend_factor
@@ -422,15 +422,15 @@ subroutine blend_foils (input_file, output_prefix, seed_foil_in, blend_foil_in, 
 
 ! Prepare - Repanel both airfoils 
 
-  call repanel_and_normalize_airfoil (seed_foil_in,  geom_options%npan, seed_foil)
-  call repanel_and_normalize_airfoil (blend_foil_in, geom_options%npan, blend_foil)
+  call repanel_and_normalize_airfoil (seed_foil_in,  geom_options%npan, .false., in_foil)
+  call repanel_and_normalize_airfoil (blend_foil_in, geom_options%npan, .false., blend_foil)
 
 ! Now split  in upper & lower side 
 
-  xt = seed_foil%xt
-  xb = seed_foil%xb
-  zt = seed_foil%zt
-  zb = seed_foil%zb
+  xt = in_foil%xt
+  xb = in_foil%xb
+  zt = in_foil%zt
+  zb = in_foil%zb
 
   bxt = blend_foil%xt
   bxb = blend_foil%xb
@@ -466,7 +466,7 @@ subroutine blend_foils (input_file, output_prefix, seed_foil_in, blend_foil_in, 
 
 
   if (visualizer) then 
-    call write_design_coordinates (blended_foil%name, 0, seed_foil)
+    call write_design_coordinates (blended_foil%name, 0, in_foil)
     call write_design_coordinates (blended_foil%name, 1, blend_foil)
     call write_design_coordinates (blended_foil%name, 2, blended_foil)
   end if 
@@ -510,7 +510,7 @@ subroutine set_flap (input_file, output_prefix, seed_foil, visualizer)
 
 ! Repanel seed airfoil with xfoil PANGEN 
 
-  call repanel_and_normalize_airfoil (seed_foil, geom_options%npan, foil)
+  call repanel_and_normalize_airfoil (seed_foil, geom_options%npan, .false., foil)
 
   call xfoil_set_airfoil(foil)
 

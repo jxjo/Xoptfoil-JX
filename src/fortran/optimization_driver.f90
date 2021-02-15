@@ -56,7 +56,7 @@ subroutine matchfoils_preprocessing(matchfoil_file)
 
 ! Repanel to npan_fixed points and normalize to get LE at 0,0 and TE (1,0) and split
 
-  call repanel_and_normalize_airfoil (original_foil, npan_fixed, foil_to_match)
+  call repanel_and_normalize_airfoil (original_foil, npan_fixed, .false., foil_to_match)
 
   xmatcht = foil_to_match%xt
   xmatchb = foil_to_match%xb

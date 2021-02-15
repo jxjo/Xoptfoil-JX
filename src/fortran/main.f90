@@ -111,9 +111,7 @@ program main
 
   call get_seed_airfoil(seed_airfoil_type, airfoil_file, naca_options, original_foil)
 
-  if (symmetrical) seed_foil%symmetrical = .true.
-
-  call repanel_and_normalize_airfoil (original_foil, npan_fixed, seed_foil)  
+  call repanel_and_normalize_airfoil (original_foil, npan_fixed, symmetrical, seed_foil)  
                             !   ... to have run_xfoil results equal airfoil external results
   xfoil_geom_options%npan = seed_foil%npoint    ! will use this constant value now
 
