@@ -19,6 +19,7 @@ copy ..\src\python\xoptfoil_visualizer-jx.py .\Strakmachine_pure\scripts\
 copy ..\src\python\best_airfoil.py .\Strakmachine_pure\scripts\
 copy ..\src\python\change_airfoilname.py .\Strakmachine_pure\scripts\
 copy ..\src\python\show_status.py .\Strakmachine_pure\scripts\
+copy ..\src\python\FLZ_Vortex_export.py .\Strakmachine_pure\scripts\
 
 rem copy xoptfoil and xfoil-worker to bin-folder
 copy ..\windows\bin\*.exe .\Strakmachine_pure\bin\
