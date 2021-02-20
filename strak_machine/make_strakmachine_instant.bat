@@ -32,22 +32,25 @@ rem copy all ressource-files to strakmachine instant
 xcopy ..\src\python\ressources\*.* .\Strakmachine_instant\ressources\ /Y /E /H /C /I
 
 rem copy XFLR5-Projects from strak-machine pure
-xcopy .\Strakmachine_pure\XFLR5\*.* Strakmachine_instant\XFLR5\ /Y /E /H /C /I
+rem xcopy .\Strakmachine_pure\XFLR5\*.* Strakmachine_instant\XFLR5\ /Y /E /H /C /I
 
 rem copy build-results from strakmachine-pure
-xcopy .\Strakmachine_pure\build\*.* Strakmachine_instant\build\ /Y /E /H /C /I
+rem xcopy .\Strakmachine_pure\build\*.* Strakmachine_instant\build\ /Y /E /H /C /I
 
 rem copy airfoil-library
-xcopy .\airfoil_library\*.* .\Strakmachine_pure\airfoil_library\ /Y /E /H /C /I
+xcopy .\airfoil_library\*.* .\Strakmachine_instant\airfoil_library\ /Y /E /H /C /I
 
 rem create program calls
 del .\Strakmachine_instant\start_strakmachine.bat
 echo .\bin\strak_machineV2.exe >>.\Strakmachine_instant\start_strakmachine.bat
 echo pause >>.\Strakmachine_instant\start_strakmachine.bat
 
-del .\Strakmachine_instant\start_visualizer.bat
-echo .\bin\start_visu.exe >>.\Strakmachine_instant\start_visualizer.bat 
-echo pause >>.\Strakmachine_instant\start_visualizer.bat 
+del .\Strakmachine_pure\create_wingplanform.bat
+echo .\bin\planform_creator.exe >>.\Strakmachine_instant\create_wingplanform.bat
+echo pause >>.\Strakmachine_instant\\create_wingplanform.bat
+
+del .\Strakmachine_pure\show_status.bat
+echo .\bin\show_status.exe >>.\Strakmachine_instant\show_status.bat
 
 rem create zip-archive
 rem 7z a .\Strakmachine_instant\ strakmachine_instant_1_1.zip
