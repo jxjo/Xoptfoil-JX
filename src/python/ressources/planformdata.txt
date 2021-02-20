@@ -1,6 +1,8 @@
 {
- "templateFileName": "plane_template.xml",
- "outFileName": "MainWing.xml",
+ "XFLR5_inFileName": "plane_template.xml",
+ "XFLR5_outFileName": "MainWing.xml",
+ "FLZVortex_inFileName" : "plane_template.flz",
+ "FLZVortex_outFileName" : "FLZ_plane.flz",
  "planformName": "main wing",
  "isFin": "false",
  "wingspan": 2.98,
