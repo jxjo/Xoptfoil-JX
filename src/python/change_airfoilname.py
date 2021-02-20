@@ -26,9 +26,13 @@ def getArguments():
 
 
 def change_airfoilName(old, new):
-    oldfile = open(old, 'r')
-    oldfile_content = oldfile.readlines()
-    oldfile.close()
+    try:
+        oldfile = open(old, 'r')
+        oldfile_content = oldfile.readlines()
+        oldfile.close()
+    except:
+        print("Error, failed to open file %s" % old)
+        return
 
     if (new.find("\\") >= 0):
         splitlines = new.split("\\")
@@ -42,7 +46,12 @@ def change_airfoilName(old, new):
         newName = new
     newName = newName.strip('.dat')
 
-    newfile = open(new, 'w+')
+    try:
+        newfile = open(new, 'w+')
+    except:
+        print("Error, failed to open file %s" % new)
+        return
+
     i = 0
     for line in oldfile_content:
         if (i > 0):
