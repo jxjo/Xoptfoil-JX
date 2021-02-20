@@ -47,6 +47,7 @@ from strak_machineV2 import (copyAndSmooth_Airfoil, get_ReString,
                              strakMachineInputFileName, xfoilWorkerName)
 from colorama import init
 from termcolor import colored
+from FLZ_Vortex_export import export_toFLZ
 
 ################################################################################
 # some global variables
@@ -189,6 +190,7 @@ class wing:
     def __init__(self):
         self.airfoilBasicName = ""
         self.airfoilNames = []
+        self.planformName= "Main Wing"
         self.rootchord = 0.223
         self.leadingEdgeOrientation = 'up'
         self.wingspan = 2.54
@@ -1382,18 +1384,9 @@ if __name__ == "__main__":
     newWing.set_AirfoilNames()
     newWing.calculate_sections()
 
-    # get filename of plane-template
-    inputFileName =  ressourcesPath + bs + planformData["templateFileName"]
-
-    # compose output-filename for planform-xml-file
-    outputFileName = outputFolder + bs + planformData["outFileName"]
-
     # create outputfolder, if it does not exist
     if not os.path.exists(outputFolder):
         os.makedirs(outputFolder)
-
-    # insert the generated-data into the XML-File for XFLR5
-    insert_PlanformDataIntoXFLR5_File(newWing, inputFileName, outputFileName)
 
     # get current working dir
     workingDir = os.getcwd()
@@ -1421,6 +1414,40 @@ if __name__ == "__main__":
 
     # update "strakdata.txt" for the strakmachine
     update_strakdata(newWing)
+
+    # insert the generated-data into the XFLR5 File
+    try:
+        # get filename of XFLR5-File
+        XFLR5_inFileName =  planformData["XFLR5_inFileName"]
+        if (XFLR5_inFileName.find(bs) < 0):
+            XFLR5_inFileName = ressourcesPath + bs + XFLR5_inFileName
+
+        # compose output-filename for planform-xml-file
+        XFLR5_outFileName =  planformData["XFLR5_outFileName"]
+        if (XFLR5_outFileName.find(bs) < 0):
+            XFLR5_outFileName = outputFolder + bs + XFLR5_outFileName
+
+
+        if ((XFLR5_inFileName != None) and (XFLR5_outFileName != None)):
+            insert_PlanformDataIntoXFLR5_File(newWing, XFLR5_inFileName, XFLR5_outFileName)
+            NoteMsg("XFLR5 file \"%s\" was successfully created" % XFLR5_outFileName)
+    except:
+        NoteMsg("creating XFLR5 file was skipped")
+
+    # insert the generated-data into the FLZ-Vortex File
+    try:
+        FLZ_inFileName  = planformData["FLZVortex_inFileName"]
+        if (FLZ_inFileName.find(bs) < 0):
+            FLZ_inFileName = ressourcesPath + bs + FLZ_inFileName
+
+        FLZ_outFileName = planformData["FLZVortex_outFileName"]
+        if (FLZ_outFileName.find(bs) < 0):
+            FLZ_outFileName = outputFolder + bs + FLZ_outFileName
+
+        export_toFLZ(newWing, FLZ_inFileName, FLZ_outFileName)
+        NoteMsg("FLZ vortex file \"%s\" was successfully created" % FLZ_outFileName)
+    except:
+        NoteMsg("creating FLZ vortex file was skipped")
 
     # plot the planform
     newWing.draw()
