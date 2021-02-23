@@ -13,14 +13,10 @@ module polar_operations
 
 ! Contains subroutines to create and write xfoil based polars
 
-  use vardef,             only : re_type
+  use xfoil_driver,       only : re_type, op_point_specification_type
+  use xfoil_driver,       only : op_point_result_type
 
   implicit none
-
-  type op_point_type
-    double precision :: value, lift, drag, moment, alpha, xtrt, xtrb
-    logical:: converged
-  end type op_point_type
 
   type polar_type
     character(250)   :: airfoil_name    ! Name of airfoil
@@ -28,12 +24,15 @@ module polar_operations
     type(re_type)    :: re              ! Re number of this polar (re*sqrt(cl) if Type2)
     type(re_type)    :: ma              ! Ma number of this polar (mach*sqrt(cl) if Type2)
     double precision :: ncrit           ! ncrit of polar
-    character(7)  :: base_value_type    ! base value of polar either 'spec_al' or 'spec_cl'
+    logical          :: spec_cl         ! base value of polar either cl or alpha
     double precision :: start_value     ! polar starting from ...
     double precision :: end_value       ! ... to end value ...
     double precision :: increment       ! ... incremented by 
     integer :: n_op_points              ! number of all op_poins of this polar
-    type(op_point_type), dimension (:), allocatable :: op_points !array with all calculated op_points
+    type(op_point_specification_type), dimension (:), allocatable :: &
+                        op_points_spec  !array with specified op_points
+    type(op_point_result_type), dimension (:), allocatable :: & 
+                        op_points       !array with all calculated op_points
    end type polar_type
 
    integer :: MAXPOLARS = 30            ! max number of polars
@@ -75,7 +74,7 @@ subroutine check_and_do_polar_generation (input_file, output_prefix, foil)
 end subroutine check_and_do_polar_generation
 
 
-
+ 
 !=============================================================================
 ! Generate and write to file all 'npolars' 'polars' for an airfoil
 !
@@ -261,7 +260,7 @@ subroutine read_polar_inputs  (input_file, foil_name, npolars, polars, xfoil_opt
   do i = 1, size(polar_reynolds)
     if (polar_reynolds(i) > 1000d0) then 
       polars(i)%airfoil_name    = trim(foil_name)
-      polars(i)%base_value_type = op_mode
+      polars(i)%spec_cl         = (op_mode == 'spec_cl')
       polars(i)%start_value     = op_point_range (1)
       polars(i)%end_value       = op_point_range (2)
       polars(i)%increment       = op_point_range (3)
@@ -343,14 +342,17 @@ end subroutine read_xfoil_paneling_inputs
 !   (separated from read_inputs to be more modular)
 !=============================================================================
 
-subroutine read_flap_inputs  (input_file, x_flap, y_flap, y_flap_spec, ndegrees, flap_degrees) 
+subroutine read_flap_inputs  (input_file, flap_spec, ndegrees, flap_degrees) 
 
   use airfoil_operations, only : my_stop
+  use vardef,             only : flap_spec_type
   use input_output,       only : namelist_check
 
-  character(*), intent(in)      :: input_file
-  double precision , intent(out):: x_flap, y_flap
-  character(3), intent(out)     :: y_flap_spec
+  character(*), intent(in)          :: input_file
+  type(flap_spec_type), intent(out) :: flap_spec
+
+  double precision              :: x_flap, y_flap
+  character(3)                  :: y_flap_spec
   integer, intent(out)          :: ndegrees
   double precision, dimension(:), intent(inout) :: flap_degrees
 
@@ -399,6 +401,9 @@ subroutine read_flap_inputs  (input_file, x_flap, y_flap, y_flap_spec, ndegrees,
       call my_stop ('Flap angle must be less than 70 degrees')
   end do
 
+  flap_spec%x_flap  = x_flap
+  flap_spec%y_flap  = y_flap
+  flap_spec%y_flap_spec = y_flap_spec
 
 end subroutine read_flap_inputs
 
@@ -417,6 +422,7 @@ subroutine init_polar (polar)
   polar%n_op_points = get_n_op_points (polar) 
   if (polar%n_op_points >= 0) then
     allocate (polar%op_points(polar%n_op_points))
+    allocate (polar%op_points_spec(polar%n_op_points))
   else
     write (*,*) "Error: No valid value boundaries for polar"
     stop
@@ -432,12 +438,11 @@ subroutine init_polar (polar)
 
   do i = 1, polar%n_op_points
 
-    polar%op_points(i)%value    = cur_value
-    if (polar%base_value_type == 'spec_al') then
-      polar%op_points(i)%alpha = cur_value
-    else
-      polar%op_points(i)%lift  = cur_value
-    end if 
+    polar%op_points_spec(i)%value    = cur_value
+    polar%op_points_spec(i)%spec_cl  = polar%spec_cl
+    polar%op_points_spec(i)%re       = polar%re
+    polar%op_points_spec(i)%ma       = polar%ma
+    polar%op_points_spec(i)%ncrit    = polar%ncrit
 
     cur_value = cur_value + polar%increment
 
@@ -454,7 +459,8 @@ end subroutine init_polar
 subroutine calculate_polar (foil, polar, xfoil_geom_options, xfoil_options)
 
   use vardef,             only : airfoil_type
-  use xfoil_driver,       only : run_xfoil, xfoil_driver_reset
+  use vardef,             only : flap_spec_type
+  use xfoil_driver,       only : run_op_points, xfoil_driver_reset
   use xfoil_driver,       only : xfoil_geom_options_type, xfoil_options_type
 
   type (polar_type), intent (inout) :: polar
@@ -465,29 +471,18 @@ subroutine calculate_polar (foil, polar, xfoil_geom_options, xfoil_options)
   character(7),     dimension(polar%n_op_points) :: op_modes
   type(re_type)   , dimension(polar%n_op_points) :: ma, re
   double precision, dimension(polar%n_op_points) :: flap_degrees
-  double precision :: x_flap, y_flap
-  character(3) :: y_flap_spec
-  logical :: use_flap
+  type(flap_spec_type) :: flap_spec               ! dummy - no flaps used
+  logical              :: use_flap
 
-  op_modes (:)     = polar%base_value_type
-  re(:)%number     = polar%re%number
-  re(:)%type       = polar%re%type
-  ma(:)%number     = polar%ma%number
-  ma(:)%type       = polar%ma%type
   flap_degrees (:) = 0.d0 
   use_flap         = .false. 
-  x_flap           = 0.d0
-  y_flap           = 0.d0
-  y_flap_spec      = 'y/c'
 
   ! reset out lier detection tect. for a new polar 
   call xfoil_driver_reset
 
-  call run_xfoil(foil, xfoil_geom_options, polar%op_points%value,  op_modes,     &
-    re, ma, use_flap, x_flap, y_flap,                                            &
-    y_flap_spec, flap_degrees, xfoil_options,                                    &
-    polar%op_points%converged, polar%op_points%lift, polar%op_points%drag,       &
-    polar%op_points%moment, polar%op_points%alpha, polar%op_points%xtrt, polar%op_points%xtrb)
+  call run_op_points (foil, xfoil_geom_options, xfoil_options,        &
+                    use_flap, flap_spec, flap_degrees, &
+                    polar%op_points_spec, polar%op_points)
 
 end subroutine calculate_polar
 
@@ -498,10 +493,12 @@ end subroutine calculate_polar
 !------------------------------------------------------------------------------
 subroutine write_polar_data (out_unit, polar)
 
+  use xfoil_driver,       only : op_point_result_type
+
   type (polar_type), intent (in) :: polar
   integer,           intent (in) :: out_unit
 
-  type (op_point_type) :: op
+  type (op_point_result_type) :: op
   integer              :: i 
 
 ! xflr5 example
@@ -519,10 +516,10 @@ subroutine write_polar_data (out_unit, polar)
     op = polar%op_points(i)
     if (op%converged) then
       write (out_unit,  "(   F8.3,   F9.4,    F10.5,    F10.5,    F9.4,   F8.4,   F8.4)") &
-                          op%alpha, op%lift, op%drag,    0d0,  op%moment,op%xtrt,op%xtrb
+                          op%alpha, op%cl, op%cd,    0d0,  op%cm,op%xtrt,op%xtrb
     else
       write(*,'(15x,A,I2,A, F6.2)') "Warning: No convergence - Skipped writing of" // &
-      " op",i," - ",op%value
+      " op",i," - ",polar%op_points_spec(i)%value
     end if
 
   end do 

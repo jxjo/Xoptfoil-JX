@@ -32,10 +32,10 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
                        seed_airfoil, airfoil_file, nfunctions_top,             &
                        nfunctions_bot, restart, restart_write_freq,            &
                        constrained_dvs, naca_options, pso_options, ga_options, &
-                       ds_options, matchfoil_file,                             &
-                       xfoil_geom_options, xfoil_options, symmetrical)
+                       ds_options, matchfoil_file, symmetrical)
 
   use vardef
+  use airfoil_evaluation
   use particle_swarm,     only : pso_options_type
   use genetic_algorithm,  only : ga_options_type
   use simplex_search,     only : ds_options_type
@@ -45,7 +45,7 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
   use math_deps,          only : sort_vector
   use os_util,            only : print_note
 
-
+ 
  
   character(*), intent(in) :: input_file 
   character(80), intent(out) :: search_type, global_search, local_search,      &
@@ -53,16 +53,26 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
   integer, intent(out) :: nfunctions_top, nfunctions_bot
   logical, intent(out) :: symmetrical
   integer, dimension(:), allocatable, intent(inout) :: constrained_dvs
-  integer, dimension(max_addthickconst) :: sort_idxs
-  double precision, dimension(max_addthickconst) :: temp_thickmin, temp_thickmax
   type(naca_options_type), intent(out) :: naca_options
   type(pso_options_type), intent(out) :: pso_options
   type(ga_options_type), intent(out) :: ga_options
   type(ds_options_type), intent(out) :: ds_options
-  type (xfoil_geom_options_type), intent(out) :: xfoil_geom_options
-  type (xfoil_options_type), intent(out)      :: xfoil_options
+
+! Op_point specification 
+  character(7),     dimension(max_op_points)  :: op_mode
+  character(15),    dimension(max_op_points)  :: optimization_type
+  double precision, dimension(max_op_points)  :: op_point, weighting, scale_factor, &
+                                                 ncrit_pt, target_value, reynolds, mach
+  double precision :: re_default
+  logical          :: re_default_as_resqrtcl
+  type(op_point_specification_type) :: op_spec
+
+  double precision :: x_flap, y_flap 
+  character(3)     :: y_flap_spec
 
 
+  integer, dimension(max_addthickconst) :: sort_idxs
+  double precision, dimension(max_addthickconst) :: temp_thickmin, temp_thickmax
   logical :: viscous_mode, silent_mode, fix_unconverged, feasible_init,        &
              reinitialize, restart, write_designs, reflexed,                   &
              pso_write_particlefile, repanel
@@ -85,16 +95,12 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
   character(10) :: parents_selection_method
   character :: choice
 
-  ! jx-mod Geo targets 
+  ! Geo targets 
   double precision :: sum_weightings
   double precision, dimension(max_geo_targets) :: x_pos, target_geo
   double precision, dimension(max_geo_targets) :: weighting_geo
   character(30), dimension(max_geo_targets) :: target_type
 
-  ! jx-mod re_default - to ease Type1 and Type2 polar op points
-  double precision :: re_default
-  logical          :: re_default_as_resqrtcl
-  double precision, dimension(max_op_points)  :: reynolds, mach
   ! jx-mod show/suppress extensive echo of input parms
   logical :: echo_input_parms
   
@@ -209,17 +215,17 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
   x_flap = 0.75d0
   y_flap = 0.d0
   y_flap_spec = 'y/c'
+
   op_mode(:) = 'spec-cl'
   op_point(:) = 0.d0
   optimization_type(:) = 'min-drag'
-
   mach(:) = 0.d0
-  flap_selection(:) = 'specify'
-  flap_degrees(:) = 0.d0
   weighting(:) = 1.d0
   ncrit_pt(:) = -1.d0
-! jx-mod Aero target - new option 
   target_value(:) = -1.d3 
+
+  flap_selection(:) = 'specify'
+  flap_degrees(:) = 0.d0
 
   min_thickness = 0.04d0
   max_thickness = 1000.d0
@@ -248,12 +254,10 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
   addthick_min(:) = -1000.d0
   addthick_max(:) = 1000.d0
 
-  ! jx-mod re_default - to ease Type1 and Type2 polar op points
+  ! re_default - to ease Type1 and Type2 polar op points
   re_default_as_resqrtcl = .false.
   re_default  =  1.0D+05                                              
   reynolds(:) = -1.d0                         ! value in input file
-  re(:)%number = 1.0D+05                      ! internal value with 
-  re(:)%type   = 1                            ! ... type 1 and type 2 
 
   ! mb-mod dynamic-weighting
   dynamic_weighting  = .false.
@@ -280,36 +284,55 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
     end do
   end if
 
-! jx-mod re_default - overwrite from command line 
+! store op_point specification in global array ------------------------
+
+  allocate (op_points_spec(noppoint)) 
+
+  do i = 1, noppoint
+    op_points_spec(i)%spec_cl = (op_mode(i) == 'spec-cl')
+    op_points_spec(i)%value   = op_point(i)
+    op_points_spec(i)%weighting  = weighting(i)
+    op_points_spec(i)%scale_factor = 1d0
+    
+    op_points_spec(i)%ncrit = ncrit_pt(i)    
+    op_points_spec(i)%optimization_type = optimization_type (i)
+    op_points_spec(i)%target_value = target_value (i)
+    
+  end do 
+
+! re_default - overwrite from command line and set Re per-point
   re_default =  read_cl_re_default (re_default)                                              
-
-! jx-mod Set per-point (default) Reynolds if not specified in namelist
-
   do i = 1, noppoint
     if (reynolds(i) /= -1.d0) then
-      re(i)%number  = reynolds(i)
-      re(i)%type    = 1
-    else                                  ! take default Re number
-      re(i)%number  = re_default
+      op_points_spec(i)%re%number  = reynolds(i)
+      op_points_spec(i)%re%type    = 1
+    else                                    ! take default Re number
+      op_points_spec(i)%re%number  = re_default
       if (re_default_as_resqrtcl) then
-        re(i)%type    = 2
+        op_points_spec(i)%re%type    = 2
       else
-        re(i)%type    = 1
+        op_points_spec(i)%re%type    = 1
       end if
     end if
-    ma(i)%number  = mach(i)               ! mach number only Type 1
-    ma(i)%type    = 1
+    op_points_spec(i)%ma%number  = mach(i)   ! mach number only Type 1
+    op_points_spec(i)%ma%type    = 1
   end do
 
-! jx-mod May the king of xfoil polars be lenient ...
+! May the king of xfoil polars be lenient ...
 !        ... when patching to support negative cl for Type 2 based op_points
-
   do i = 1, noppoint
-    if ((re(i)%type == 2) .and. (op_mode(i) == 'spec-cl') .and. (op_point(i) < 0d0)) then
-      re(i)%type    = 1
-      re(i)%number  = re(i)%number / (abs(op_point(i)) ** 0.5d0)
+    if ((op_points_spec(i)%re%type == 2) .and. (op_points_spec(i)%spec_cl) .and. (op_points_spec(i)%value < 0d0)) then
+      op_points_spec(i)%re%type    = 1
+      op_points_spec(i)%re%number  = op_points_spec(i)%re%number / & 
+                                    (abs(op_points_spec(i)%value) ** 0.5d0)
     end if
   end do 
+
+! Gneral flap settings 
+
+  flap_spec%x_flap  = x_flap
+  flap_spec%y_flap  = y_flap
+  flap_spec%y_flap_spec = y_flap_spec
 
 ! jx-mod Smoothing - start read options-----------------------------------------
   
@@ -322,7 +345,7 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
   rewind(iunit)
   read(iunit, iostat=iostat1, nml=smoothing_options)
 
-! jx-mod Geo targets - start read and weight options---------------------
+! Geo targets - start read and weight options---------------------
 
   !Set defaults for geometry targets and read namelist 
 
@@ -345,16 +368,16 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
     geo_targets(i)%weighting    = weighting_geo(i)
   end do   
 
-! jx-mod Geo targets - end read options-----------------------------------------
+! Geo targets - end read options-----------------------------------------
 
-! jx-mod Modify normalize weightings for operating points
+! Modify normalize weightings for operating points
 !          now includis geo targets and smoothing progress
 
-  sum_weightings = sum(weighting(1:noppoint))               &
+  sum_weightings = sum(op_points_spec%weighting)               &
                  + sum(weighting_geo(1:ngeo_targets))
 
-  weighting           = weighting/sum_weightings
-  weighting_geo       = weighting_geo/sum_weightings
+  op_points_spec%weighting = op_points_spec%weighting / sum_weightings
+  weighting_geo            = weighting_geo/sum_weightings
 
   geo_targets%weighting = weighting_geo
 
@@ -400,7 +423,7 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
     naca_options%xmaxt = xmaxt
     naca_options%maxc = maxc
     naca_options%xmaxc = xmaxc
-    naca_options%design_cl = design_cl
+    naca_options%design_cl = design_cl 
     naca_options%a = a
     naca_options%leidx = leidx
     naca_options%reflexed = reflexed
@@ -408,7 +431,7 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
 
 ! Set default initialization options
 
-  feasible_init = .true.
+  feasible_init = .true. 
   feasible_limit = 5.0D+04
   feasible_init_attempts = 1000
 
@@ -680,7 +703,7 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
 ! Set per-point ncrit if not specified in namelist
 
   do i = 1, noppoint
-    if (ncrit_pt(i) == -1.d0) ncrit_pt(i) = ncrit
+    if (op_points_spec(i)%ncrit == -1.d0) op_points_spec(i)%ncrit = ncrit
   end do
 
 ! Option to match seed airfoil to another instead of aerodynamic optimization
@@ -742,28 +765,30 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
   write(*,*) " dynamic_weighting = ", dynamic_weighting
   write(*,*) " dynamic_weighting_p_factor = ", dynamic_weighting_p_factor
   write(*,*)
-  do i = 1, noppoint
-    write(text,*) i
-    text = adjustl(text)
-    write(*,*) " optimization_type("//trim(text)//") = '"//                    &
-               trim(optimization_type(i))//"'"
-    write(*,*) " op_mode("//trim(text)//") = '"//trim(op_mode(i))//"'"
-    write(*,*) " op_point("//trim(text)//") = ", op_point(i)
-    write(*,'(A,es17.8,A,I1,A)') "  reynolds("//trim(text)//") = ", re(i)%number,  &
-                  " (Type ", re(i)%type, ")"
-    write(*,'(A,es17.8,A,I1,A)') "  mach("//trim(text)//") = ", ma(i)%number,                     &
-                  " (Type ", ma(i)%type, ")"
-    write(*,*) " flap_selection("//trim(text)//") = '"//                       &
-               trim(flap_selection(i))//"'"
-    write(*,*) " flap_degrees("//trim(text)//") = ", flap_degrees(i)
-! jx-mod Aero target -new parameter target value
-    write(*,*) " target_value("//trim(text)//") = ", target_value(i)
-    write(*,*) " weighting("//trim(text)//") = ", weighting(i)
-    if (ncrit_pt(i) /= -1.d0)                                                  &
-      write(*,*) " ncrit_pt("//trim(text)//") = ", ncrit_pt(i)
-    if (i < noppoint) write(*,*)
-  end do
-  write(*,'(A)') " /"
+
+  ! #todo rewrite output as table with new op_point_spec
+  write (*,*) " ! JX: echo of operating points has to be newly implemented"
+!  do i = 1, noppoint
+!    write(text,*) i
+!    text = adjustl(text)
+!    write(*,*) " optimization_type("//trim(text)//") = '"//                    &
+!               trim(optimization_type(i))//"'"
+!    write(*,*) " op_mode("//trim(text)//") = '"//trim(op_mode(i))//"'"
+!    write(*,*) " op_point("//trim(text)//") = ", op_point(i)
+!    write(*,'(A,es17.8,A,I1,A)') "  reynolds("//trim(text)//") = ", re(i)%number,  &
+!                  " (Type ", re(i)%type, ")"
+!    write(*,'(A,es17.8,A,I1,A)') "  mach("//trim(text)//") = ", ma(i)%number,                     &
+!                  " (Type ", ma(i)%type, ")"
+!    write(*,*) " flap_selection("//trim(text)//") = '"//                       &
+!               trim(flap_selection(i))//"'"
+!    write(*,*) " flap_degrees("//trim(text)//") = ", flap_degrees(i)
+!    write(*,*) " target_value("//trim(text)//") = ", target_value(i)
+!    write(*,*) " weighting("//trim(text)//") = ", weighting(i)
+!    if (ncrit_pt(i) /= -1.d0)                                                  &
+!      write(*,*) " ncrit_pt("//trim(text)//") = ", ncrit_pt(i)
+!    if (i < noppoint) write(*,*)
+!  end do
+!  write(*,'(A)') " /"
   write(*,*)
 
 ! Constraints namelist
@@ -995,56 +1020,62 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
     call my_stop("y_flap_spec must be 'y/c' or 'y/t'.")
 
   do i = 1, noppoint
+
+    op_spec  = op_points_spec(i) 
+
     if (trim(op_mode(i)) /= 'spec-cl' .and. trim(op_mode(i)) /= 'spec-al')     &
       call my_stop("op_mode must be 'spec-al' or 'spec-cl'.")
-    if (re(i)%number <= 0.d0) call my_stop("reynolds must be > 0." //           &
+    if (op_spec%re%number <= 0.d0) call my_stop("reynolds must be > 0." //           &
                              " Default value (re_default) could not be set")
-    if (ma(i)%number < 0.d0) call my_stop("mach must be >= 0.")
+    if (op_spec%ma%number < 0.d0) call my_stop("mach must be >= 0.")
     if (trim(flap_selection(i)) /= 'specify' .and.                             &
         trim(flap_selection(i)) /= 'optimize')                                 &
       call my_stop("flap_selection must be 'specify' or 'optimize'.")
     if (flap_degrees(i) < -90.d0) call my_stop("flap_degrees must be > -90.")
     if (flap_degrees(i) > 90.d0) call my_stop("flap_degrees must be < 90.")
-    if (weighting(i) <= 0.d0) call my_stop("weighting must be > 0.")
-    if (trim(optimization_type(i)) /= 'min-drag' .and.                         &
-      trim(optimization_type(i)) /= 'max-glide' .and.                          &
-      trim(optimization_type(i)) /= 'min-sink' .and.                           &
-      trim(optimization_type(i)) /= 'max-lift' .and.                           &
-      trim(optimization_type(i)) /= 'target-moment' .and.                      &
-      trim(optimization_type(i)) /= 'target-drag' .and.                        &
-      trim(optimization_type(i)) /= 'target-lift' .and.                        &
-      trim(optimization_type(i)) /= 'max-xtr' .and.                            &
-      trim(optimization_type(i)) /= 'min-lift-slope' .and.                     &
-      trim(optimization_type(i)) /= 'min-glide-slope' .and.                    &
-      trim(optimization_type(i)) /= 'max-lift-slope')                          &
+    if (op_spec%weighting <= 0.d0) call my_stop("weighting must be > 0.")
+    if (trim(op_spec%optimization_type) /= 'min-drag' .and.                         &
+      trim(op_spec%optimization_type) /= 'max-glide' .and.                          &
+      trim(op_spec%optimization_type) /= 'min-sink' .and.                           &
+      trim(op_spec%optimization_type) /= 'max-lift' .and.                           &
+      trim(op_spec%optimization_type) /= 'target-moment' .and.                      &
+      trim(op_spec%optimization_type) /= 'target-drag' .and.                        &
+      trim(op_spec%optimization_type) /= 'target-lift' .and.                        &
+      trim(op_spec%optimization_type) /= 'max-xtr' .and.                            &
+      trim(op_spec%optimization_type) /= 'min-lift-slope' .and.                     &
+      trim(op_spec%optimization_type) /= 'min-glide-slope' .and.                    &
+      trim(op_spec%optimization_type) /= 'max-lift-slope')                          &
       call my_stop("optimization_type must be 'min-drag', 'max-glide', "//     &
                    "'min-sink', 'max-lift', 'max-xtr', 'target-moment', "//    &
                    "'target-drag', 'min-lift-slope', , 'min-glide-slope'"//    &
                    " or 'max-lift-slope'.")
-    if ((trim(optimization_type(i)) == 'max-lift-slope') .and. (noppoint == 1))&
+    if ((trim(op_spec%optimization_type) == 'max-lift-slope') .and. (noppoint == 1))&
       call my_stop("at least two operating points are required for to "//      &
                    "maximize lift curve slope.")
-    if ((trim(optimization_type(i)) == 'min-lift-slope') .and. (noppoint == 1))&
+    if ((trim(op_spec%optimization_type) == 'min-lift-slope') .and. (noppoint == 1))&
       call my_stop("at least two, better three operating points are required"//&
                    " for to minimize lift curve slope.")
-    if ((trim(optimization_type(i)) == 'min-glide-slope') .and. (noppoint == 1))&
+    if ((trim(op_spec%optimization_type) == 'min-glide-slope') .and. (noppoint == 1))&
       call my_stop("at least two, better three operating points are required"//&
                    " for to minimize lift curve slope.")
-    if (ncrit_pt(i) <= 0.d0) call my_stop("ncrit_pt must be > 0 or -1.")
+    if (op_spec%ncrit <= 0.d0) call my_stop("ncrit_pt must be > 0 or -1.")
   end do
 
-! jx-mod Aero targets - Check for an existing target value 
+! Aero targets - Check for an existing target value 
 !              if optimization_type is target-moment or Target-drag
   do i = 1, noppoint
-    if (((trim(optimization_type(i)) == 'target-moment') .and.                &
+
+    op_spec  = op_points_spec(i) 
+
+    if (((trim(op_spec%optimization_type) == 'target-moment') .and.                &
         (target_value(i)) == -1.d3) )                                         &
       call my_stop("No 'target-value' defined for "//  &
                  "for optimization_type 'target-moment'")
-    if (((trim(optimization_type(i)) == 'target-drag') .and.                  &
+    if (((trim(op_spec%optimization_type) == 'target-drag') .and.                  &
         (target_value(i)) == -1.d3) )                                         &
       call my_stop("No 'target-value' defined for "//  &
                      "for optimization_type 'target-drag'")
-    if (((trim(optimization_type(i)) == 'target-lift') .and.                  &
+    if (((trim(op_spec%optimization_type) == 'target-lift') .and.                  &
         (target_value(i)) == -1.d3) )                                         &
       call my_stop("No 'target-value' defined for "//  &
                      "for optimization_type 'target-lift'")

@@ -70,7 +70,8 @@ program main
   write(*,'(A)') '         Actual experimental features: '
   write(*,'(A)') 
   write(*,'(A)') '           - Particle retry when geometry is violated (jo)' ! see #exp-retry
-  write(*,'(A)') '           - shaping function hicks-henne-plus (mb)' ! see #exp-HH-plus
+  write(*,'(A)') '           - Shaping function hicks-henne-plus (mb)' ! see #exp-HH-plus
+  write(*,'(A)') '           - Dynamic weighing (mb)'                  ! see #exp-dynamic
   write(*,'(A)') 
 
 ! Handle multithreading - be careful with screen output in multi-threaded code parts
@@ -103,7 +104,7 @@ program main
                    seed_airfoil_type, airfoil_file, nparams_top, nparams_bot,  &
                    restart, restart_write_freq, constrained_dvs, naca_options, &
                    pso_options, ga_options, ds_options, matchfoil_file,        &
-                   xfoil_geom_options, xfoil_options, symmetrical)
+                   symmetrical) 
 
 
 ! Load original airfoil into memory, repanel, normalize 

@@ -21,25 +21,68 @@ module airfoil_evaluation
 
   use vardef
   use xfoil_driver, only : xfoil_options_type, xfoil_geom_options_type
+  use xfoil_driver, only : op_point_specification_type, re_type
   use os_util
 
-  implicit none
+  implicit none 
+  
+  public
+
+! Defines a geometric target eg thickness of the optimization 
+
+  type geo_target_type  
+    character(30) :: type                               ! eg 'zBot' zTop'
+    double precision :: x                               ! x-value of target
+    double precision :: target_value                    ! target value to achieve
+    double precision :: seed_value                      ! the value of the seed airfoil
+    double precision :: reference_value                 ! to scale improvement (depends on type)
+    double precision :: weighting                       ! weighting within objective function
+    double precision :: scale_factor                    ! scale for objective function
+  end type geo_target_type
 
   public :: objective_function, objective_function_nopenalty
   public :: write_function 
   public :: create_airfoil_form_design, get_flap_degrees_from_design
+  double precision, parameter    :: OBJ_XFOIL_FAIL = 55.55d0
+  double precision, parameter    :: OBJ_GEO_FAIL   = 1000d0
 
-  type(xfoil_options_type),      public :: xfoil_options
-  type(xfoil_geom_options_type), public :: xfoil_geom_options
+! -------------------------------------------------------
+
+! Parms for geometry constraints
+  double precision    :: min_thickness, max_thickness, min_te_angle,              &
+                         growth_allowed, min_camber, max_camber
+  integer             :: naddthickconst
+  integer, parameter  :: max_addthickconst = 10
+  double precision, dimension(max_addthickconst) :: addthick_x, addthick_min,  &
+                                                    addthick_max
+! Parms for moment constraints
+  character(8), dimension(max_op_points) :: moment_constraint_type
+  double precision, dimension(max_op_points) :: min_moment
+
+! Parms for curvature control  
+  logical :: check_curvature, auto_curvature, do_smoothing
+  integer :: max_curv_reverse_top, max_curv_reverse_bot
+  integer :: max_curv_highlow_top, max_curv_highlow_bot
+  double precision :: curv_threshold, spike_threshold, highlow_threshold
+  double precision :: max_te_curvature
+
+! Geo targets 
+  integer :: ngeo_targets
+  integer, parameter :: max_geo_targets = 10
+  type(geo_target_type), dimension(max_geo_targets) :: geo_targets
+                        
+! Parms for operating point specification
+  integer :: noppoint
+  type (op_point_specification_type), dimension (:), allocatable :: op_points_spec 
+
+
+
+  type(xfoil_options_type)       :: xfoil_options
+  type(xfoil_geom_options_type)  :: xfoil_geom_options
   
-  double precision, dimension(max_op_points), public :: op_seed_value
 
-  double precision, parameter, public   :: OBJ_XFOIL_FAIL = 55.55d0
-  double precision, parameter, public   :: OBJ_GEO_FAIL   = 1000d0
+contains
 
-  private 
-
-  contains
 
 !=============================================================================80
 !
@@ -486,6 +529,7 @@ function geo_objective_function(foil)
 end function geo_objective_function
 
 
+! #exp-dynamic mb-mod dynamic weighting
 !=============================================================================80
 !
 !  subroutine for setting dynamic weighting
@@ -494,15 +538,24 @@ end function geo_objective_function
 !  Output: internally sets new values for weighting of all target-type oppoints
 !
 !=============================================================================80
-function dynamic_weighting_function(lift, drag, moment, fixed_weighting)
-  double precision, dimension(noppoint),intent(in) :: lift, drag, moment
+function dynamic_weighting_function(op_points_result, fixed_weighting)
+
+  use xfoil_driver,       only : op_point_result_type
+
+  type(op_point_result_type), dimension(:), intent(in) :: op_points_result
   double precision, dimension(noppoint),intent(in) :: fixed_weighting
+
   double precision, dimension(noppoint) :: curr_deviation_abs
   double precision, dimension(noppoint) :: dynamic_weighting
   double precision :: sum_weightings, medium_deviation_abs 
   type(dynamic_weighting_type) :: dynamic_weighting_function
   integer          :: i, num
   logical          :: debug_on
+  type(op_point_specification_type) :: op_spec
+  type(op_point_result_type)        :: op
+
+  character(15)    :: opt_type
+
 
   ! Initialization
   num = 0
@@ -511,21 +564,25 @@ function dynamic_weighting_function(lift, drag, moment, fixed_weighting)
 
   ! Evaluate all oppoints, calculate dynamic weighting (not normalized yet)
   do i = 1, noppoint
+
     curr_deviation_abs(i) = 0.0d0
 
-    if (trim(optimization_type(i)) == 'target-drag') then
-      curr_deviation_abs(i) = ABS((target_value(i)- drag(i) ) * scale_factor(i))
+    op_spec  = op_points_spec(i) 
+    opt_type = op_spec%optimization_type
+
+    if (trim(opt_type) == 'target-drag') then
+      curr_deviation_abs(i) = ABS((op_spec%target_value- op%cd ) * op_spec%scale_factor)
       ! fixed weighting is used as an override-factor for dynamic weighting factor.
       dynamic_weighting(i) = curr_deviation_abs(i) * dynamic_weighting_p_factor * fixed_weighting(i)
       num = num + 1
     
-    elseif (trim(optimization_type(i)) == 'target-lift') then
-      curr_deviation_abs(i) = (ABS (target_value(i)- lift(i) ))* scale_factor(i)
+    elseif (trim(opt_type) == 'target-lift') then
+      curr_deviation_abs(i) = (ABS (op_spec%target_value- op%cl ))* op_spec%scale_factor
       dynamic_weighting(i) = curr_deviation_abs(i) * dynamic_weighting_p_factor * fixed_weighting(i)
       num = num + 1
     
-    elseif (trim(optimization_type(i)) == 'target-moment') then
-      curr_deviation_abs(i) = (ABS (target_value(i)- moment(i) ))* scale_factor(i)
+    elseif (trim(opt_type) == 'target-moment') then
+      curr_deviation_abs(i) = (ABS (op_spec%target_value- op%cm ))* op_spec%scale_factor
       dynamic_weighting(i) = curr_deviation_abs(i) * dynamic_weighting_p_factor * fixed_weighting(i)
       num = num + 1
        
@@ -546,7 +603,7 @@ function dynamic_weighting_function(lift, drag, moment, fixed_weighting)
   do i = 1, noppoint
     dynamic_weighting_function%weighting(i) = dynamic_weighting(i) / sum_weightings
     if (debug_on .eqv. .true.) then
-      write (*,*) 'normalized weighting:', weighting(i)
+      write (*,*) 'normalized weighting:', op_spec%weighting
     end if
   end do
 
@@ -569,20 +626,23 @@ function aero_objective_function(foil, actual_flap_degrees)
 
   use airfoil_operations, only : my_stop
   use math_deps,          only : derivation_at_point
-  use xfoil_driver,       only : run_xfoil, xfoil_set_airfoil 
+  use xfoil_driver,       only : run_op_points, xfoil_set_airfoil, op_point_result_type 
 
   type(airfoil_type), intent(in)    :: foil
   double precision, dimension(:), intent(in)  :: actual_flap_degrees
   double precision                  :: aero_objective_function
 
-  double precision, dimension(noppoint) :: lift, drag, moment, alpha, xtrt, xtrb
-  logical,          dimension(noppoint) :: op_converged
+  type(op_point_specification_type) :: op_spec
+  type(op_point_result_type)        :: op
+  type(op_point_result_type), dimension(:), allocatable :: op_points_result
 
   integer          :: i
   double precision :: pi
   double precision :: cur_value, slope, increment, dist
+  character(15)    :: opt_type
 
-  ! mb-mod dynamic-weighting
+
+! #exp-dynamic mb-mod dynamic weighting
   type(dynamic_weighting_type) :: dynamic_weighting_result
   
   pi = acos(-1.d0)
@@ -593,18 +653,16 @@ function aero_objective_function(foil, actual_flap_degrees)
   
   xfoil_options%show_details = .false.      ! switch off because of multi-threading
 
-  call run_xfoil(foil, xfoil_geom_options, op_point(1:noppoint),               &
-                 op_mode(1:noppoint), re(1:noppoint), ma(1:noppoint),          &
-                 use_flap, x_flap, y_flap, y_flap_spec,                        &
-                 actual_flap_degrees(1:noppoint), xfoil_options,               &
-                 op_converged, lift, drag, moment, alpha, xtrt, xtrb, ncrit_pt)
+  call run_op_points (foil, xfoil_geom_options, xfoil_options,        &
+                      use_flap, flap_spec, actual_flap_degrees(1:noppoint), &
+                      op_points_spec, op_points_result)
 
   xfoil_options%show_details = show_details  
 
 ! Early exit if an op_point didn't converge - further calculations wouldn't make sense
 
   do i = 1, noppoint
-    if (.not. op_converged(i)) then 
+    if (.not. op_points_result(i)%converged) then 
       aero_objective_function = 55.55d0
       return
     end if
@@ -614,7 +672,7 @@ function aero_objective_function(foil, actual_flap_degrees)
 !   perform dynamic weighting of target-type oppoints, thus calculate local weightings
 !   that may differ from the globally fixed weightings. This has to be done
 !   _before_ the following loop !
-    dynamic_weighting_result = dynamic_weighting_function(lift, drag, moment, weighting)
+    dynamic_weighting_result = dynamic_weighting_function(op_points_result, op_points_spec%weighting)
   end if
 
 ! Get objective function contribution from aerodynamics 
@@ -624,107 +682,117 @@ function aero_objective_function(foil, actual_flap_degrees)
 
   do i = 1, noppoint
 
+    op_spec  = op_points_spec(i)
+    op       = op_points_result(i) 
+    opt_type = op_spec%optimization_type
+
+
 !   Objective function evaluation
 
-    if (trim(optimization_type(i)) == 'min-sink') then
+    if (trim(opt_type) == 'min-sink') then
 
 !     Maximize Cl^1.5/Cd
 
-      if (lift(i) > 0.d0) then
-        increment = drag(i)/lift(i)**1.5d0*scale_factor(i)
+      if (op%cl > 0.d0) then
+        increment = op%cd/op%cl**1.5d0 * op_spec%scale_factor
       else
         increment = 1.D9   ! Big penalty for lift <= 0
       end if
-      cur_value  = lift(i)**1.5d0 / drag(i) 
+      cur_value  = op%cl**1.5d0 / op%cd
 
-    elseif (trim(optimization_type(i)) == 'max-glide') then
+    elseif (trim(opt_type) == 'max-glide') then
 
 !     Maximize Cl/Cd
 
-      if (lift(i) > 0.d0) then
-        increment = drag(i)/lift(i)*scale_factor(i)
+      if (op%cl > 0.d0) then
+        increment = op%cd / op%cl * op_spec%scale_factor
       else
         increment = 1.D9   ! Big penalty for lift <= 0
       end if
-      cur_value  = lift(i) / drag(i) 
+      cur_value  = op%cl / op%cd 
 
-    elseif (trim(optimization_type(i)) == 'min-drag') then
+    elseif (trim(opt_type) == 'min-drag') then
 
 !     Minimize Cd
 
-      increment = drag(i)*scale_factor(i)
-      cur_value = drag(i) 
+      increment = op%cd * op_spec%scale_factor
+      cur_value = op%cd 
 
-    elseif (trim(optimization_type(i)) == 'target-drag') then
+    elseif (trim(opt_type) == 'target-drag') then
 
 ! Minimize difference between target cd value and current value 
     
-      dist = ABS (target_value(i)-drag(i))
+      dist = ABS (op_spec%target_value - op%cd)
       if (dist < 0.000004d0) dist = 0d0  ! little threshold to achieve target
 
-      increment = (target_value(i) + dist) * scale_factor(i) 
-      cur_value = drag(i) 
+      increment = (op_spec%target_value + dist) * op_spec%scale_factor 
+      cur_value = op%cd 
 
-    elseif (trim(optimization_type(i)) == 'target-lift') then
+    elseif (trim(opt_type) == 'target-lift') then
 
 ! jx-mod Minimize difference between target cl value and current value 
 !        Add a base value to the lift difference
     
-      increment = (1.d0 + ABS (target_value(i)-lift(i))) * scale_factor(i) 
-      cur_value = lift(i)
+      increment = (1.d0 + ABS (op_spec%target_value-op%cl)) * op_spec%scale_factor 
+      cur_value = op%cl
 
-    elseif (trim(optimization_type(i)) == 'target-moment') then
+    elseif (trim(opt_type) == 'target-moment') then
 
 ! jx-mod Minimize difference between target moment value and current value 
 !        Add a base value (Clark y or so ;-) to the moment difference
 !        so the relative change won't be to high
-      increment = (ABS (target_value(i)-moment(i))+ 0.05d0)*scale_factor(i)
-      cur_value = moment(i)
+      increment = (ABS (op_spec%target_value - op%cm) + 0.05d0) * op_spec%scale_factor
+      cur_value = op%cm
 
-    elseif (trim(optimization_type(i)) == 'max-lift') then
+    elseif (trim(opt_type) == 'max-lift') then
 
 !     Maximize Cl (at given angle of attack)
 
-      if (lift(i) > 0.d0) then
-        increment = scale_factor(i)/lift(i)
+      if (op%cl > 0.d0) then
+        increment = op_spec%scale_factor / op%cl
       else
         increment = 1.D9   ! Big penalty for lift <= 0
       end if
-      cur_value = lift(i)
+      cur_value = op%cl
 
-    elseif (trim(optimization_type(i)) == 'max-xtr') then
+    elseif (trim(opt_type) == 'max-xtr') then
 
 !     Maximize laminar flow on top and bottom (0.1 factor to ensure no
 !     division by 0)
 
-      increment = scale_factor(i)/(0.5d0*(xtrt(i)+xtrb(i))+0.1d0)
-      cur_value = 0.5d0*(xtrt(i)+xtrb(i))
+      increment = op_spec%scale_factor/(0.5d0*(op%xtrt + op%xtrb)+0.1d0)
+      cur_value = 0.5d0*(op%xtrt + op%xtrb)
 
       ! jx-mod Following optimization based on slope of the curve of op_point
 !         convert alpha in rad to get more realistic slope values
 !         convert slope in rad to get a linear target 
 !         factor eg 4.d0*pi to adjust range of objective function (not negative)
 
-    elseif (trim(optimization_type(i)) == 'max-lift-slope') then
+    elseif (trim(opt_type) == 'max-lift-slope') then
 
 !     Maximize dCl/dalpha (0.1 factor to ensure no division by 0)
 
-      slope     = derivation_at_point (noppoint, i, (alpha * pi/180.d0) , lift)
-      increment = scale_factor(i) / (atan(abs(slope))  + 2.d0*pi)
+      slope = derivation_at_point (i, (op_points_result%alpha * pi/180.d0) , &
+                                      (op_points_result%cl))
+      increment = op_spec%scale_factor / (atan(abs(slope))  + 2.d0*pi)
       cur_value = atan(abs(slope))
 
-    elseif (trim(optimization_type(i)) == 'min-lift-slope') then
+    elseif (trim(opt_type) == 'min-lift-slope') then
 
-!     jx-mod  New: Minimize dCl/dalpha e.g. to reach clmax at alpha(i) 
-      slope     = derivation_at_point (noppoint, i, (alpha * pi/180.d0) , lift)
-      increment = scale_factor(i) * (atan(abs(slope)) + 2.d0*pi)
+!     New: Minimize dCl/dalpha e.g. to reach clmax at alpha(i) 
+      slope = derivation_at_point (i, (op_points_result%alpha * pi/180.d0) , &
+                                      (op_points_result%cl))
+
+      increment = op_spec%scale_factor * (atan(abs(slope)) + 2.d0*pi)
       cur_value = atan(abs(slope))
 
-    elseif (trim(optimization_type(i)) == 'min-glide-slope') then
+    elseif (trim(opt_type) == 'min-glide-slope') then
 
-!     jx-mod  New: Minimize d(cl/cd)/dcl e.g. to reach best glide at alpha(i) 
-      slope     = derivation_at_point (noppoint, i,  (lift * 20d0), (lift/drag))
-      increment = scale_factor(i) * (atan(abs(slope))  + 2.d0*pi)
+!     New: Minimize d(cl/cd)/dcl e.g. to reach best glide at alpha(i) 
+      slope = derivation_at_point (i, (op_points_result%cl * 20d0), &
+                                      (op_points_result%cl/op_points_result%cd))
+
+      increment = op_spec%scale_factor * (atan(abs(slope))  + 2.d0*pi)
       cur_value = atan(abs(slope))  
 
     else
@@ -742,7 +810,7 @@ function aero_objective_function(foil, actual_flap_degrees)
                                 + dynamic_weighting_result%weighting(i)*increment
     else
 !     use weighting that is fixed and globally the same
-      aero_objective_function = aero_objective_function + weighting(i)*increment
+      aero_objective_function = aero_objective_function + op_spec%weighting*increment
     end if
 
   end do
@@ -923,7 +991,7 @@ subroutine get_flap_degrees_from_design (designvars, actual_flap_degrees)
 
   use vardef,             only: shape_functions
   use vardef,             only: initial_perturb
-  use vardef,             only: noppoint, use_flap, nflap_optimize, flap_optimize_points
+  use vardef,             only: use_flap, nflap_optimize, flap_optimize_points
   use vardef,             only: max_flap_degrees, min_flap_degrees, flap_degrees
   use parametrization,    only: top_shape_function, bot_shape_function
 
@@ -1006,7 +1074,7 @@ function write_airfoil_optimization_progress(designvars, designcounter)
 
   use math_deps,          only : interp_vector 
   use airfoil_operations, only : airfoil_write_to_unit
-  use xfoil_driver,       only : run_xfoil
+  use xfoil_driver,       only : run_op_points, op_point_result_type
   use xfoil_driver,       only : xfoil_get_geometry_info, xfoil_set_airfoil
 
   double precision, dimension(:), intent(in) :: designvars
@@ -1015,8 +1083,11 @@ function write_airfoil_optimization_progress(designvars, designcounter)
 
   type(airfoil_type)       :: foil
   integer :: i
-  double precision, dimension(noppoint) :: alpha, lift, drag, moment, xtrt, xtrb
-  logical,          dimension(noppoint) :: op_converged
+
+  type(op_point_specification_type) :: op_spec
+  type(op_point_result_type)        :: op
+  type(op_point_result_type), dimension(:), allocatable :: op_points_result
+
   double precision, dimension(noppoint) :: actual_flap_degrees
   double precision :: maxt, xmaxt, maxc, xmaxc
  
@@ -1059,14 +1130,13 @@ function write_airfoil_optimization_progress(designvars, designcounter)
   if (show_details) write (*,*) 
 
 ! Analyze airfoil at requested operating conditions with Xfoil
-  call run_xfoil(foil, xfoil_geom_options, op_point(1:noppoint),          &
-                 op_mode(1:noppoint), re(1:noppoint), ma(1:noppoint),          &
-                 use_flap, x_flap, y_flap, y_flap_spec,                        &
-                 actual_flap_degrees(1:noppoint), xfoil_options,               &
-                 op_converged, lift, drag, moment, alpha, xtrt, xtrb, ncrit_pt)
+
+  call run_op_points (foil, xfoil_geom_options, xfoil_options,        &
+                      use_flap, flap_spec, actual_flap_degrees, &
+                      op_points_spec, op_points_result)
 
 
-xfoil_options%reinitialize = xfoil_reinitialize 
+  xfoil_options%reinitialize = xfoil_reinitialize 
              
 ! Get geometry info 
   call xfoil_set_airfoil (foil)   ! last set could have been a flaped version     
@@ -1140,15 +1210,18 @@ xfoil_options%reinitialize = xfoil_reinitialize
 ! Write polars to file
 
   do i = 1, noppoint
-    if (.not. op_converged(i)) then 
+
+    op = op_points_result(i) 
+
+    if (.not. op%converged) then 
       write(text,*) i
       text = adjustl(text)
       call print_error ('  Error: Op '//trim(text) // &
                         ' not converged in final calculation (this should not happen...)')
     end if 
     ! Add current flap angle to polars to show it in visualizer
-    write(polarunit,'(6ES14.6, 1ES14.3)') alpha(i), lift(i), drag(i), moment(i), &
-                                 xtrt(i), xtrb(i), actual_flap_degrees (i)
+    write(polarunit,'(6ES14.6, 1ES14.3)') op%alpha, op%cl, op%cd, op%cm, &
+                                          op%xtrt, op%xtrb, actual_flap_degrees (i)
   end do
 
 ! Close output files
@@ -1157,7 +1230,7 @@ xfoil_options%reinitialize = xfoil_reinitialize
   close(polarunit)
 
   if (show_details .and. (designcounter > 0)) then 
-    call show_op_optimization_progress  (drag, lift, moment) 
+    call show_op_optimization_progress  (op_points_result) 
     call show_geo_optimization_progress (foil) 
   end if
 
@@ -1185,7 +1258,9 @@ end function write_airfoil_optimization_progress
 ! Prints op results during optimization 
 !       ! work in progress !
 !------------------------------------------------------------------------------
-subroutine show_op_optimization_progress(drag, lift, moment) 
+subroutine show_op_optimization_progress(op_points_result) 
+
+  use xfoil_driver,       only : op_point_result_type
 
   type target_info_type
     integer           :: i 
@@ -1194,9 +1269,11 @@ subroutine show_op_optimization_progress(drag, lift, moment)
     integer           :: how_close
   end type 
 
-  double precision, dimension(noppoint), intent(in) :: lift, drag, moment
+  type(op_point_result_type), dimension(:),  intent(in) :: op_points_result
 
+  type(op_point_result_type)        :: op
   type (target_info_type), dimension (noppoint) :: target_info
+  character(15) :: opt_type
   integer :: i, j, nt
 
   nt = 0
@@ -1204,23 +1281,27 @@ subroutine show_op_optimization_progress(drag, lift, moment)
   ! currently only aero targets support - if no targets - return 
 
   do i= 1, noppoint
-    if (trim(optimization_type(i) (1:6)) == 'target') then
+
+    opt_type = op_points_spec(i)%optimization_type
+    op       = op_points_result(i) 
+
+    if (trim(opt_type (1:6)) == 'target') then
       nt = nt + 1
 
       target_info(nt)%i = i
 
-      select case  (trim(optimization_type(i)))
+      select case  (trim(opt_type))
         case ('target-drag')
           target_info(nt)%variable  = 'cd'
-          target_info(nt)%delta     = drag(i) - target_value(i)
+          target_info(nt)%delta     = op%cd - op_points_spec(i)%target_value
           target_info(nt)%how_close = r_quality (abs(target_info(nt)%delta), 0.000005d0, 0.0002d0, 0.005d0)
         case ('target-lift')
           target_info(nt)%variable  = 'cl'
-          target_info(nt)%delta     = lift(i) - target_value(i)
+          target_info(nt)%delta     = op%cl - op_points_spec(i)%target_value
           target_info(nt)%how_close = r_quality (abs(target_info(nt)%delta), 0.01d0, 0.05d0, 0.5d0)
         case ('target-moment')
           target_info(nt)%variable = 'cm'
-          target_info(nt)%delta     = moment(i) - target_value(i)
+          target_info(nt)%delta     = op%cm - op_points_spec(i)%target_value
           target_info(nt)%how_close = r_quality (abs(target_info(nt)%delta), 0.005d0, 0.02d0, 0.05d0)
         end select
 

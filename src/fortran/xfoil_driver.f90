@@ -21,33 +21,62 @@ module xfoil_driver
 
   implicit none
 
+! defines an op_point for xfoil calculation
+
+  type re_type 
+    double precision :: number            ! Reynolds Number
+    integer          :: type              ! Type 1 or 2 (fixed lift)
+  end type re_type
+
+  type op_point_specification_type                              
+    logical          :: spec_cl           ! op based on alpha or cl
+    double precision :: value             ! base value of cl or alpha
+    double precision :: weighting         ! weighting within objective function
+    double precision :: scale_factor      ! scale for objective function
+    type (re_type)   :: re, ma            ! Reynolds and Mach 
+    double precision :: ncrit             ! xfoil ncrit
+    character(15)    :: optimization_type ! eg 'min-drag'
+    double precision :: target_value      ! target value to achieve
+  end type op_point_specification_type
+
+! Hold result of xfoil aero calculation of an op_pooint
+
+  type op_point_result_type                              
+    double precision :: cl                ! lift coef. - see also spec_cl
+    double precision :: alpha             ! alpha (aoa) - see also spec_cl
+    double precision :: cd                ! drag coef.  
+    double precision :: cm                ! moment coef. 
+    double precision :: xtrt              ! point of transition - top side 
+    double precision :: xtrb              ! point of transition - bottom side 
+    logical :: converged                  ! did xfoil converge? 
+  end type op_point_result_type                              
+
+
+! defines xfoils calculation environment
+
   type xfoil_options_type
-
-    double precision :: ncrit          !Critical ampl. ratio
-    double precision :: xtript, xtripb !Trip locations
-    logical :: viscous_mode                       
-    logical :: silent_mode             !Toggle xfoil screen write
-    logical :: repanel                 ! = true (default) do re-paneling (PANGEN)
-                                       ! before xfoil is called for aero calcs 
-    logical :: show_details            ! show some user entertainment during xfoil loop
-    integer :: maxit                   !Iterations for BL calcs
-    double precision :: vaccel         !Xfoil BL convergence accelerator
-    logical :: fix_unconverged         !Reinitialize to fix unconverged pts.
-    logical :: reinitialize            !Reinitialize BLs at every operating
-                                       !  point (recommended for optimization)
-
+    double precision :: ncrit             ! Critical ampl. ratio
+    double precision :: xtript, xtripb    ! forced trip locations
+    logical :: viscous_mode               ! do viscous calculation           
+    logical :: silent_mode                ! Toggle xfoil screen write
+    logical :: repanel                    ! do re-paneling (PANGEN) before xfoil aero calcs 
+    logical :: show_details               ! show some user entertainment 
+    integer :: maxit                      ! max. iterations for BL calcs
+    double precision :: vaccel            ! xfoil BL convergence accelerator
+    logical :: fix_unconverged            ! try to fix unconverged pts.
+    logical :: reinitialize               ! reinitialize BLs per op_point
   end type xfoil_options_type
 
+
   type xfoil_geom_options_type   
-
-    integer :: npan
+    integer :: npan                       ! number of panels 
     double precision :: cvpar, cterat, ctrrat, xsref1, xsref2, xpref1, xpref2
-
   end type xfoil_geom_options_type
 
 
+! result statistics for drag(lift) outlier detetction 
+
   type value_statistics_type   
-                                       ! for drag(lift) outlier detetction 
     logical :: no_check                ! deactivate detection e.g. when flaps are set
     integer :: nvalue                  ! total numer of values tested
     double precision :: minval         ! the smallest value up to now 
@@ -59,6 +88,396 @@ module xfoil_driver
   type (value_statistics_type), dimension(:), allocatable, private :: drag_statistics
 
   contains
+
+
+!=============================================================================
+!
+! Core routine to run xfoil calculation for each operating points
+!      returns Cl, Cd, Cm, ... for an airfoil
+!
+!=============================================================================
+
+subroutine run_op_points (foil, geom_options, xfoil_options,         &
+                          use_flap, flap_spec, flap_degrees, &
+                          op_points_spec, op_points_result)
+
+  use xfoil_inc    
+  use vardef,    only : airfoil_type
+  use vardef,    only : flap_spec_type
+  use os_util
+
+  type(airfoil_type), intent(in)            :: foil
+  type(xfoil_geom_options_type), intent(in) :: geom_options
+  type(xfoil_options_type),      intent(in) :: xfoil_options
+  type(flap_spec_type),          intent(in) :: flap_spec
+  type(op_point_specification_type), dimension(:), intent(in)  :: op_points_spec
+  type(op_point_result_type), dimension(:), allocatable, intent(out) :: op_points_result
+
+! #todo
+  double precision, dimension(:), intent(in) :: flap_degrees
+  logical, intent(in) :: use_flap
+
+
+  integer :: i, noppoint
+  integer :: iretry, nretry
+  double precision :: prev_op_delta, op_delta, prev_flap_degree, prev_op_spec_value
+  logical:: point_fixed, show_details, flap_changed, prev_op_spec_cl
+  type(op_point_specification_type) :: op_spec, tmp_op_spec
+  type(op_point_result_type)        :: op
+
+
+  noppoint = size(op_points_spec,1)  
+
+! Sanity checks
+
+  if (.not. allocated(AIJ)) then
+    write(*,*) "Error: xfoil is not initialized!  Call xfoil_init() first."
+    stop
+  end if
+  if (noppoint == 0) then 
+    write(*,*) "Error in xfoil_driver: No operating points"
+    stop
+  end if
+
+! Init variables
+
+  
+  allocate (op_points_result(noppoint))
+
+  prev_op_delta   = 0d0
+  prev_op_spec_cl = op_points_spec(1)%spec_cl
+  flap_changed = .false.
+  prev_flap_degree = flap_degrees (1) 
+  show_details = xfoil_options%show_details
+
+
+! init statistics for out lier detection the first time and when polar changes
+  if (.not. allocated(drag_statistics)) then
+    call init_statistics (noppoint, drag_statistics)
+  else if (size(drag_statistics) /= noppoint) then 
+    call init_statistics (noppoint, drag_statistics)
+  end if
+
+
+! Set default Xfoil parameters 
+  call xfoil_defaults(xfoil_options)
+
+! Set paneling options
+  call xfoil_set_paneling(geom_options)
+
+  if (show_details) then 
+    write (*,'(7x,A)',advance = 'no') 'Xfoil  '
+    if (xfoil_options%repanel)      write (*,'(A)',advance = 'no') 'repanel '
+    if (xfoil_options%reinitialize) write (*,'(A)',advance = 'no') 'init_BL '
+  end if
+
+
+! Run xfoil for requested operating points -----------------------------------
+!
+! Rules for initialization of xfoil boundary layer - xfoil_init_BL 
+!
+!   xfoil_options%reinitialize = 
+!   .true.    init will bed one before *every* xfoil calculation 
+!   .false.   init will be done only
+!             - at the first op_point
+!             - when the flap angle is changed (new foil is set)
+!             - when a point didn't converge
+!             - when the direction of alpha or cl changes along op points
+
+  do i = 1, noppoint
+
+    op_spec = op_points_spec(i)
+
+!   print newline if output gets too long
+    if (show_details .and.( mod(i,25) == 0)) write (*,'(/,7x,A)',advance = 'no') '       '
+
+!   if flpas are activated, check if the angle has changed to reinit foil
+
+    if(use_flap .and. (flap_degrees(i) /= prev_flap_degree)) then
+      flap_changed = .true.
+      prev_flap_degree = flap_degrees(i)
+    else
+      flap_changed = .false.
+    end if 
+
+!   set airfoil, apply flap deflection, init BL if needed
+    if (flap_changed .or. (i == 1)) then
+
+      ! set airfoil into xfoil buffer
+      call xfoil_set_airfoil(foil)              ! "restore" current airfoil
+
+      ! apply flap only if set to non zero degrees
+      if (flap_changed) then
+        call xfoil_apply_flap_deflection(flap_spec, flap_degrees(i))
+      end if     
+
+      ! repanel geometry only if requested...
+      if (xfoil_options%repanel) call PANGEN(.not. SILENT_MODE)
+      ! In case of flaps (or first op) always init boundary layer 
+      call xfoil_init_BL (show_details)
+
+    else
+      ! Init BL always if set in parameters 
+      if (xfoil_options%reinitialize) then 
+        call xfoil_init_BL (.false.)
+      else
+        if (op_spec%spec_cl .neqv. prev_op_spec_cl) then  ! init if op_mode changed
+          call xfoil_init_BL (show_details)
+          prev_op_delta = 0d0
+        else                                    ! Init BL if the direction of alpha or cl changes 
+          op_delta = op_spec%value - prev_op_spec_value
+          if ((prev_op_delta * op_delta) < 0d0) then 
+            call xfoil_init_BL (show_details)
+            prev_op_delta = 0d0
+          else
+            prev_op_delta = op_delta
+          end if 
+        end if
+      end if
+    end if
+
+    prev_op_spec_value = op_spec%value
+    prev_op_spec_cl    = op_spec%spec_cl
+
+!   Now finally run xfoil at op_point
+    call run_op_point (op_spec, &
+                      xfoil_options%viscous_mode, xfoil_options%maxit, show_details, & 
+                      op)
+
+
+!   Handling of unconverged points
+    if (op%converged) then
+      if (is_out_lier (drag_statistics(i), op%cd)) then
+        op%converged = .false.
+        if (show_details) call print_colored (COLOR_WARNING, 'flip')
+      else if (cl_changed (op_spec%spec_cl, op_spec%value, op%cl)) then
+        op%converged = .false.
+        if (show_details) call print_colored (COLOR_WARNING, 'lift')
+        if (show_details) write (*,'(A)',advance = 'no') 'lift'
+      end if 
+    end if
+
+    if (.not. op%converged .and. xfoil_options%fix_unconverged) then
+
+      if (show_details) write (*,'(A)',advance = 'no') '['
+
+!     Try to initialize BL at intermediate new point (in the direction away from stall)
+      tmp_op_spec = op_spec
+      if (op_spec%spec_cl) then
+        tmp_op_spec%value = op_spec%value - 0.02d0
+        if (tmp_op_spec%value == 0.d0) tmp_op_spec%value = 0.01d0       !because of Type 2 polar calc
+      else
+        tmp_op_spec%value = op_spec%value - 0.25d0
+      end if
+
+      ! init BL for this new point to start for fix with little increased Re
+      tmp_op_spec%re%number = tmp_op_spec%re%number * 1.001d0
+      call xfoil_init_BL (show_details .and. (.not. xfoil_options%reinitialize))
+      call run_op_point  (tmp_op_spec, &
+                          xfoil_options%viscous_mode, xfoil_options%maxit, show_details , & 
+                          op)
+
+!     Now try to run again at the old operating point increasing RE a little ...
+
+      iretry = 1
+      nretry = 3
+      point_fixed = .false.
+
+      do while (.not. point_fixed .and. (iretry <= nretry)) 
+
+        op_spec%re%number = op_spec%re%number * 1.002d0
+
+        if (xfoil_options%reinitialize) call xfoil_init_BL (.false.)
+
+        call run_op_point (op_spec, &
+                           xfoil_options%viscous_mode, xfoil_options%maxit, show_details, & 
+                          op)
+                              
+        if (.not. op%converged    & 
+            .or. (is_out_lier (drag_statistics(i), op%cd))  &
+            .or. (cl_changed (op_spec%spec_cl, op_spec%value, op%cl))) then 
+
+        ! Re-init the second try
+          call xfoil_init_BL (show_details .and. (.not. xfoil_options%reinitialize))
+
+        else 
+          point_fixed = .true.
+        end if 
+
+        iretry = iretry + 1
+
+      end do 
+
+      if(show_details) then 
+        write (*,'(A)',advance = 'no') ']'
+        if (point_fixed) then 
+          call print_colored (COLOR_NOTE, 'fixed')
+        else
+          call print_colored (COLOR_ERROR,  'x')
+        end if  
+      end if 
+
+!     no fix achieved - reinit BL (for the next op) - set converged flag to .false.
+      if(.not. point_fixed) then
+        if (.not. xfoil_options%reinitialize) call xfoil_init_BL (show_details)
+        op%converged = .false.
+      end if
+    end if
+
+    op_points_result(i) = op
+ 
+  end do 
+
+
+! Print warnings about unconverged points
+!        Update statistics
+
+  if(show_details) write (*,*) 
+
+  do i = 1, noppoint
+
+    op = op_points_result(i)    
+    if (.not. is_out_lier (drag_statistics(i), op%cd)) then 
+      call update_statistic (drag_statistics(i), op%cd)
+    end if 
+
+    ! jx-mod Support Type 1 and 2 re numbers - cl may not be negative  
+    if ((op_spec%re%type == 2) .and. (op%cl <= 0d0) .and. op%converged) then 
+      write (*,*)
+      write(*,'(15x,A,I2,A, F6.2)') "Warning: Negative lift for Re-Type 2 at" // &
+       " op",i," - cl:",op%cl
+    end if 
+
+  end do
+  
+end subroutine run_op_points
+
+  
+
+!===============================================================================
+!
+! Runs Xfoil at a specified op_point which is either
+!  - at an angle of attack
+!  - at an lift coefficient
+!
+! Assumes airfoil geometry, reynolds number, and mach number have already been 
+! set in Xfoil.
+!
+!===============================================================================
+
+subroutine run_op_point (op_point_spec,        &
+                         viscous_mode, maxit, show_details,  &
+                         op_point_result)
+
+  use xfoil_inc
+  use os_util
+
+  type(op_point_specification_type), intent(in)  :: op_point_spec
+  logical,                           intent(in)  :: viscous_mode, show_details
+  integer,                           intent(in)  :: maxit
+  type(op_point_result_type),        intent(out) :: op_point_result
+
+  integer       :: niter_needed  
+  character(20) :: outstring 
+
+  op_point_result%cl    = 0.d0
+  op_point_result%cd    = 0.d0
+  op_point_result%alpha = 0.d0
+  op_point_result%cm    = 0.d0
+  op_point_result%xtrt  = 0.d0
+  op_point_result%xtrb  = 0.d0
+  op_point_result%converged = .true.
+
+! Support Type 1 and 2 re numbers  
+  REINF1 = op_point_spec%re%number
+  RETYP  = op_point_spec%re%type 
+  MATYP  = op_point_spec%ma%type 
+  call MINFSET(op_point_spec%ma%number)
+
+! Set compressibility parameters from MINF
+  CALL COMSET
+
+! Set ncrit per point
+  ACRIT = op_point_spec%ncrit
+
+! Inviscid calculations for specified cl or alpha
+  if (op_point_spec%spec_cl) then
+    LALFA = .FALSE.
+    ALFA = 0.d0
+    CLSPEC = op_point_spec%value
+    call SPECCL
+  else 
+    LALFA = .TRUE.
+    ALFA = op_point_spec%value * DTOR
+    call SPECAL
+  end if
+
+  if (abs(ALFA-AWAKE) .GT. 1.0E-5) LWAKE  = .false.
+  if (abs(ALFA-AVISC) .GT. 1.0E-5) LVCONV = .false.
+  if (abs(MINF-MVISC) .GT. 1.0E-5) LVCONV = .false.
+
+  ! Viscous calculations (if requested)
+
+  op_point_result%converged = .true. 
+
+  if (viscous_mode) then 
+    
+    call VISCAL(maxit, niter_needed)
+
+    ! coverged? 
+
+    if (niter_needed > maxit) then 
+      op_point_result%converged = .false.
+    ! RMSBL equals to viscrms() formerly used...
+    else if (.not. LVCONV .or. (RMSBL > 1.D-4)) then 
+      op_point_result%converged = .false.
+    else 
+      op_point_result%converged = .true.
+    end if
+
+  end if
+   
+  ! Outputs
+
+  op_point_result%cl    = CL
+  op_point_result%cm    = CM
+  op_point_result%alpha = ALFA/DTOR
+
+  if (viscous_mode) then 
+    op_point_result%cd   = CD
+    op_point_result%xtrt = XOCTR(1)
+    op_point_result%xtrb = XOCTR(2)
+  else
+    op_point_result%cd   = CDP
+    op_point_result%xtrt = 0.d0
+    op_point_result%xtrb = 0.d0
+  end if
+
+! Final check for NaNs
+
+  if (isnan(op_point_result%cl)) then
+    op_point_result%cl = -1.D+08
+    op_point_result%converged = .false.
+  end if
+  if (isnan(op_point_result%cd)) then
+    op_point_result%cd = 1.D+08
+    op_point_result%converged = .false.
+  end if
+  if (isnan(op_point_result%cm)) then
+    op_point_result%cm = -1.D+08
+    op_point_result%converged = .false.
+  end if
+
+  if(show_details) then 
+    write (outstring,'(I4)') niter_needed
+    if (op_point_result%converged) then
+      call print_colored (COLOR_NORMAL,  ' ' // trim(adjustl(outstring)))
+    else
+      call print_colored (COLOR_WARNING, ' ' // trim(adjustl(outstring)))
+    end if
+  end if
+
+end subroutine run_op_point
 
 
 !=============================================================================80
@@ -171,16 +590,18 @@ end subroutine smooth_paneling
 ! current airfoil.  For best results, this should be called after PANGEN.
 !
 !=============================================================================80
-subroutine xfoil_apply_flap_deflection(xflap, yflap, y_flap_spec, degrees)
+subroutine xfoil_apply_flap_deflection(flap_spec, degrees)
 
   use xfoil_inc
+  use vardef,     only : flap_spec_type        
  
-  double precision, intent(in) :: xflap, yflap, degrees
-  character(3), intent(in) :: y_flap_spec
+  type(flap_spec_type),   intent(in) :: flap_spec
+
+  double precision, intent(in) :: degrees
   
   integer y_flap_spec_int
 
-  if (y_flap_spec == 'y/c') then
+  if (flap_spec%y_flap_spec == 'y/c') then
     y_flap_spec_int = 0
   else
     y_flap_spec_int = 1
@@ -189,392 +610,9 @@ subroutine xfoil_apply_flap_deflection(xflap, yflap, y_flap_spec, degrees)
 ! Apply flap deflection
 
   ! caution: FLAP will change y_flap a little --> ()
-  call FLAP((xflap), (yflap), y_flap_spec_int, degrees)
+  call FLAP((flap_spec%x_flap), (flap_spec%y_flap), y_flap_spec_int, degrees)
 
 end subroutine xfoil_apply_flap_deflection
-
-!=============================================================================80
-!
-! Subroutine to get Cl, Cd, Cm for an airfoil from Xfoil at given operating
-! conditions.  Reynolds numbers and mach numbers should be specified for each
-! operating point.  Additionally, op_mode determines whether each point is run
-! at a constant alpha or cl - use 'spec-al' for specified alpha and 'spec-cl'
-! for specified cl.  
-! 
-! Outputs:
-!   alpha, Cl, Cd, Cm each operating point
-!   op_converged of viscous calculations each operating point
-!
-!=============================================================================80
-subroutine run_xfoil(foil, geom_options, operating_points, op_modes,           &
-                     re, ma, use_flap, x_flap, y_flap,                         &
-                     y_flap_spec, flap_degrees, xfoil_options,                 &
-                     op_converged, lift, drag, moment, alpha, xtrt, xtrb,      &
-                     ncrit_per_point)
-
-  use xfoil_inc
-  use vardef,    only : airfoil_type, re_type
-  use os_util,   only: print_colored, COLOR_WARNING, COLOR_NOTE, COLOR_ERROR
-
-
-  type(airfoil_type), intent(in) :: foil
-  type(xfoil_geom_options_type), intent(in) :: geom_options
-  double precision, dimension(:), intent(in) :: operating_points,  flap_degrees
-  type(re_type), dimension(:), intent(in) :: re, ma
-  double precision, intent(in) :: x_flap, y_flap
-  character(3), intent(in) :: y_flap_spec
-  logical, intent(in) :: use_flap
-  character(7), dimension(:), intent(in) :: op_modes
-  type(xfoil_options_type), intent(in) :: xfoil_options
-  double precision, dimension(size(operating_points,1)), intent(out) ::  & 
-              lift, drag, moment, alpha, xtrt, xtrb
-  logical, dimension(:), intent(out) :: op_converged
-  double precision, dimension(:), intent(in), optional :: ncrit_per_point
-
-  integer :: i, noppoint
-  integer :: iretry, nretry
-  double precision :: newpoint, prev_op_delta, op_delta, prev_flap_degree
-  logical:: point_fixed, show_details, flap_changed
-
-  lift(:)   = 0.d0
-  drag(:)   = 0.d0
-  moment(:) = 0.d0
-  alpha(:)  = 0.d0
-  xtrt(:)   = 0.d0
-  xtrb(:)   = 0.d0
-  op_converged (:) = .true.
-
-  prev_op_delta = 0d0
-  flap_changed = .false.
-  prev_flap_degree = flap_degrees (1) 
-  show_details = xfoil_options%show_details
-
-  noppoint = size(operating_points,1)
-
-! Check to make sure xfoil is initialized
-
-  if (.not. allocated(AIJ)) then
-    write(*,*) "Error: xfoil is not initialized!  Call xfoil_init() first."
-    stop
-  end if
-
-! jx-mod init statistics for out lier detection the first time and when polar changes
-  if (.not. allocated(drag_statistics)) then
-    call init_statistics (size(operating_points,1), drag_statistics)
-  else if (size(drag_statistics) /= size(operating_points,1)) then 
-    call init_statistics (size(operating_points,1), drag_statistics)
-  end if
-
-
-! Set default Xfoil parameters
-  call xfoil_defaults(xfoil_options)
-
-! Set paneling options
-  call xfoil_set_paneling(geom_options)
-
-
-! Run xfoil for requested operating points -----------------------------------
-!
-! Rules for initialization of xfoil boundary layer - xfoil_init_BL 
-!
-!   xfoil_options%reinitialize = 
-!   .true.    init will bed one before *every* xfoil calculation 
-!   .false.   init will be done only
-!             - at the first op_point
-!             - when the flap angle is changed (new foil is set)
-!             - when a point didn't converge
-!             - when the direction of alpha or cl changes along op points
-
-  if (show_details) then 
-    write (*,'(7x,A)',advance = 'no') 'Xfoil  '
-    if (xfoil_options%repanel)      write (*,'(A)',advance = 'no') 'repanel '
-    if (xfoil_options%reinitialize) write (*,'(A)',advance = 'no') 'init_BL '
-  end if
-
-  run_oppoints: do i = 1, noppoint
-
-!   print newline if output gets too long
-    if (show_details .and.( mod(i,25) == 0)) write (*,'(/,7x,A)',advance = 'no') '       '
-
-!   if flpas are activated, check if the angle has changed to reinit foil
-
-    if(use_flap .and. (flap_degrees(i) /= prev_flap_degree)) then
-      flap_changed = .true.
-      prev_flap_degree = flap_degrees(i)
-    else
-      flap_changed = .false.
-    end if 
-
-!   set airfoil, apply flap deflection, init BL if needed
-    if (flap_changed .or. (i == 1)) then
-
-      ! set airfoil into xfoil buffer
-      call xfoil_set_airfoil(foil)              ! "restore" current airfoil
-
-      ! apply flap only if set to non zero degrees
-      if (flap_changed) then
-        call xfoil_apply_flap_deflection(x_flap, y_flap, y_flap_spec, flap_degrees(i))
-      end if     
-
-      ! repanel geometry only if requested...
-      if (xfoil_options%repanel) call PANGEN(.not. SILENT_MODE)
-      ! In case of flaps (or first op) always init boundary layer 
-      call xfoil_init_BL (show_details)
-
-    else
-      ! Init BL always if set in parameters 
-      if (xfoil_options%reinitialize) then 
-        call xfoil_init_BL (.false.)
-      else
-        if (op_modes(i) /= op_modes(i-1)) then  ! init if op_mode changed
-          call xfoil_init_BL (show_details)
-          prev_op_delta = 0d0
-        else                                    ! Init BL if the direction of alpha or cl changes 
-          op_delta = operating_points(i) - operating_points(i-1)
-          if ((prev_op_delta * op_delta) < 0d0) then 
-            call xfoil_init_BL (show_details)
-            prev_op_delta = 0d0
-          else
-            prev_op_delta = op_delta
-          end if 
-        end if
-      end if
-    end if
-
-
-!   Support Type 1 and 2 re numbers  
-    REINF1 = re(i)%number
-    RETYP  = re(i)%type 
-    MATYP  = ma(i)%type 
-    call MINFSET(ma(i)%number)
-
-!   Set compressibility parameters from MINF
-    CALL COMSET
-
-!   Set ncrit per point
-    if (present(ncrit_per_point)) ACRIT = ncrit_per_point(i)
-
-
-!   Now finally run xfoil at op_point
-    call run_xfoil_op_point (op_modes(i), operating_points(i), xfoil_options%viscous_mode, &
-                             xfoil_options%maxit, show_details, & 
-                             op_converged(i), lift(i), drag(i), moment(i), alpha(i),xtrt(i),xtrb(i))
-
-
-!   Handling of unconverged points
-    if (op_converged(i)) then
-      if (is_out_lier (drag_statistics(i), drag(i))) then
-        op_converged(i) = .false.
-        if (show_details) call print_colored (COLOR_WARNING, 'flip')
-      else if (lift_changed (op_modes(i), operating_points(i), lift(i))) then
-        op_converged(i) = .false.
-        if (show_details) call print_colored (COLOR_WARNING, 'lift')
-        if (show_details) write (*,'(A)',advance = 'no') 'lift'
-      end if 
-    end if
-
-    if (.not. op_converged(i) .and. xfoil_options%fix_unconverged) then
-
-      if (show_details) write (*,'(A)',advance = 'no') '['
-
-!     + Try to initialize BL at intermediate new point (in the direction away from stall)
-      if (trim(op_modes(i)) == 'spec-al') then
-        newpoint = operating_points(i) - 0.25d0
-      else
-        newpoint = operating_points(i) - 0.02d0
-        if (newpoint == 0.d0) newpoint = 0.01d0       !because of Type 2 polar calc
-      end if
-
-      ! init BL for this new point to start for fix with little increased Re
-      REINF1 =  REINF1 * 1.001d0
-      call xfoil_init_BL (show_details .and. (.not. xfoil_options%reinitialize))
-      call run_xfoil_op_point (op_modes(i), newpoint, xfoil_options%viscous_mode, &
-                               xfoil_options%maxit, show_details , & 
-                               op_converged(i), lift(i), drag(i), moment(i), alpha(i),xtrt(i),xtrb(i))
-
-!     Now try to run again at the old operating point increasing RE a little ...
-
-      iretry = 1
-      nretry = 3
-      point_fixed = .false.
-
-      do while (.not. point_fixed .and. (iretry <= nretry)) 
-
-        if (xfoil_options%reinitialize) call xfoil_init_BL (.false.)
-
-        call run_xfoil_op_point (op_modes(i), operating_points(i), xfoil_options%viscous_mode, &
-                                 xfoil_options%maxit, show_details, & 
-                                 op_converged(i), lift(i), drag(i), moment(i),alpha(i),xtrt(i),xtrb(i))
-                              
-        if (.not. op_converged(i)    & 
-            .or. (is_out_lier (drag_statistics(i), drag(i)))  &
-            .or. (lift_changed (op_modes(i), operating_points(i), lift(i)))) then 
-
-        ! increase a little RE again to converge and try again
-          REINF1 =  REINF1 * 1.002d0
-        ! Re-init the second try
-          call xfoil_init_BL (show_details .and. (.not. xfoil_options%reinitialize))
-
-        else 
-          point_fixed = .true.
-        end if 
-
-        iretry = iretry + 1
-
-      end do 
-
-      if(show_details) then 
-        write (*,'(A)',advance = 'no') ']'
-        if (point_fixed) then 
-          call print_colored (COLOR_NOTE, 'fixed')
-        else
-          call print_colored (COLOR_ERROR,  'x')
-        end if  
-      end if 
-
-!     no fix achieved - reinit BL (for the next op) - set converged flag to .false.
-      if(.not. point_fixed) then
-        if (.not. xfoil_options%reinitialize) call xfoil_init_BL (show_details)
-        op_converged(i) = .false.
-      end if
-    end if
-    
-
-  end do run_oppoints
-
-
-! Print warnings about unconverged points
-!        Update statistics
-
-  if(show_details) write (*,*) 
-
-  do i = 1, noppoint
-    if (.not. is_out_lier (drag_statistics(i), drag(i))) then 
-      call update_statistic (drag_statistics(i), drag(i))
-    end if 
-
-    ! jx-mod Support Type 1 and 2 re numbers - cl may not be negative  
-    if ((re(i)%type == 2) .and. (lift(i) <= 0d0) .and. op_converged(i)) then 
-      write (*,*)
-      write(*,'(15x,A,I2,A, F6.2)') "Warning: Negative lift for Re-Type 2 at" // &
-       " op",i," - cl:",lift(i)
-    end if 
-
-  end do
-
-end subroutine run_xfoil
-
-
-!===============================================================================
-!
-! Runs Xfoil at a specified op_point which is either
-!  - at an angle of attack
-!  - at an lift coefficient
-!
-! Assumes airfoil geometry, reynolds number, and mach number have already been 
-! set in Xfoil.
-!
-!===============================================================================
-
-subroutine run_xfoil_op_point (op_mode, op_point, viscous_mode,       &
-                               maxit, show_details,                   &
-                               converged, lift, drag, moment, alpha, xtrt, xtrb)
-
-  use xfoil_inc
-  use os_util, only: print_colored, COLOR_WARNING, COLOR_NORMAL
-
-
-  character(7), intent(in)      :: op_mode  
-  double precision, intent(in)  :: op_point
-  logical, intent(in)           :: viscous_mode, show_details
-  integer, intent(in)           :: maxit
-  logical, intent(out)          :: converged
-  double precision, intent(out) :: lift, drag, moment, alpha, xtrt, xtrb
-
-  integer       :: niter_needed  
-  character(20) :: outstring 
-
-  ! Inviscid calculations for specified angle of attack
-
-  if (trim(op_mode) == 'spec-al') then
-    LALFA = .TRUE.
-    ALFA = op_point * DTOR
-    call SPECAL
-  elseif (trim(op_mode) == 'spec-cl') then
-    LALFA = .FALSE.
-    ALFA = 0.d0
-    CLSPEC = op_point
-    call SPECCL
-  else
-    write(*,*)
-    write(*,*) "Error in xfoil_driver: op_mode must be 'spec-al' or 'spec-cl'"
-    write(*,*)
-    stop
-  end if
-
-  if (abs(ALFA-AWAKE) .GT. 1.0E-5) LWAKE  = .false.
-  if (abs(ALFA-AVISC) .GT. 1.0E-5) LVCONV = .false.
-  if (abs(MINF-MVISC) .GT. 1.0E-5) LVCONV = .false.
-
-  ! Viscous calculations (if requested)
-
-  converged = .true. 
-
-  if (viscous_mode) then 
-    
-    call VISCAL(maxit, niter_needed)
-
-    ! coverged? 
-
-    if (niter_needed > maxit) then 
-      converged = .false.
-    ! RMSBL equals to viscrms() formerly used...
-    else if (.not. LVCONV .or. (RMSBL > 1.D-4)) then 
-      converged = .false.
-    else 
-      converged = .true.
-    end if
-
-  end if
-   
-  ! Outputs
-
-  lift = CL
-  moment = CM
-  alpha = ALFA/DTOR
-  if (viscous_mode) then
-    drag = CD
-    xtrt  = XOCTR(1)
-    xtrb  = XOCTR(2)
-  else
-    drag = CDP
-  end if
-
-  ! Final check for NaNs
-
-  if (isnan(lift)) then
-    lift = -1.D+08
-    converged = .false.
-  end if
-  if (isnan(drag)) then
-    drag = 1.D+08
-    converged = .false.
-  end if
-  if (isnan(moment)) then
-    moment = -1.D+08
-    converged = .false.
-  end if
-
-  if(show_details) then 
-    write (outstring,'(I4)') niter_needed
-    if (converged) then
-      call print_colored (COLOR_NORMAL,  ' ' // trim(adjustl(outstring)))
-    else
-      call print_colored (COLOR_WARNING, ' ' // trim(adjustl(outstring)))
-    end if
-  end if
-
-end subroutine run_xfoil_op_point
 
 
 !=============================================================================80
@@ -1070,6 +1108,7 @@ subroutine update_statistic (value_statistic, new_value)
   value_statistic%nvalue  = value_statistic%nvalue + 1
 
 end subroutine update_statistic
+
 !------------------------------------------------------------------------------
 function is_out_lier (value_statistic, check_value)
 
@@ -1102,6 +1141,7 @@ subroutine show_out_lier (ipoint, value_statistic, check_value)
 end subroutine show_out_lier
 !------------------------------------------------------------------------------
 
+! #todo remove
 !----Check if lift has changed although it should be fix with spec_cl ---------
 function lift_changed (op_mode, op_point, lift)
 
@@ -1117,6 +1157,21 @@ function lift_changed (op_mode, op_point, lift)
 
 end function lift_changed
 !------------------------------------------------------------------------------
+
+!----Check if lift has changed although it should be fix with spec_cl ---------
+function cl_changed (spec_cl, op_point, cl)
+
+  doubleprecision, intent (in) :: op_point, cl
+  logical, intent (in) :: spec_cl
+  logical :: cl_changed
+
+  if (spec_cl .and. (abs(cl - op_point) > 0.01d0)) then
+    cl_changed = .true.
+  else
+    cl_changed = .false.
+  end if 
+
+end function cl_changed
 
 end module xfoil_driver
 

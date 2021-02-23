@@ -1002,11 +1002,14 @@ end function derivation1
 !     For center the mean of backward and forward approximation is taken
 !     which could be more precise ...
 !------------------------------------------------------------------------------
-function derivation_at_point (npt, i, x, y)
+function derivation_at_point (i, x, y)
 
-  integer, intent(in) :: npt, i 
-  double precision, dimension(npt), intent(in) :: x, y
+  integer, intent(in) :: i 
+  double precision, dimension(:), intent(in) :: x, y
   double precision :: derivation_at_point
+  integer :: npt 
+
+  npt = size(x)
 
   derivation_at_point = 0.d0
   if (i < npt) then

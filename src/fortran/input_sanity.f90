@@ -32,22 +32,25 @@ module input_sanity
 subroutine check_seed()
 
   use vardef
+  use airfoil_evaluation 
   use math_deps,          only : interp_vector, curvature, derv1f1, derv1b1, norm_2
   use math_deps,          only : interp_point, derivation_at_point
-  use xfoil_driver,       only : run_xfoil
+  use xfoil_driver,       only : run_op_points, op_point_result_type
   use xfoil_driver,       only : xfoil_geometry_amax, xfoil_set_airfoil, &
                                  xfoil_get_geometry_info
-  use airfoil_evaluation, only : xfoil_options, xfoil_geom_options, op_seed_value
+  use airfoil_evaluation, only : xfoil_options, xfoil_geom_options
   use airfoil_operations, only : assess_surface, smooth_it, my_stop, rebuild_airfoil
   use airfoil_operations, only : get_curv_violations, show_reversals_highlows
   use airfoil_operations, only : get_max_te_curvature
 
+  type(op_point_specification_type) :: op_spec
+  type(op_point_result_type)        :: op
+  type(op_point_result_type), dimension(:), allocatable :: op_points_result
+
   double precision, dimension(:), allocatable :: x_interp, thickness
   double precision, dimension(:), allocatable :: zt_interp, zb_interp
   double precision, dimension(:), allocatable :: xt,xb,zt,zb
-  double precision, dimension(naddthickconst) :: add_thickvec
-  double precision, dimension(noppoint) :: lift, drag, moment, alpha, xtrt, xtrb
-  logical,          dimension(noppoint) :: op_converged
+  double precision, dimension(naddthickconst) :: add_thickvec 
   double precision :: penaltyval, tegap, gapallow, maxthick, heightfactor
   double precision :: maxt, xmaxt, maxc, xmaxc
   double precision :: panang1, panang2, maxpanang, slope
@@ -298,11 +301,13 @@ subroutine check_seed()
 ! Check for bad combinations of operating conditions and optimization types
 
   do i = 1, noppoint
+
     write(text,*) i
     text = adjustl(text)
 
-    opt_type = optimization_type(i)
-    if ((op_point(i) <= 0.d0) .and. (op_mode(i) == 'spec-cl')) then
+    op_spec  = op_points_spec(i) 
+    opt_type = op_spec%optimization_type
+    if ((op_spec%value <= 0.d0) .and. (op_spec%spec_cl)) then
       if ( (trim(opt_type) /= 'min-drag') .and.                                &
            (trim(opt_type) /= 'max-xtr') .and.                                 &
             ! jx-mod - allow geo target and min-lift-slope, min-glide-slope
@@ -315,14 +320,12 @@ subroutine check_seed()
         write(*,*) 
         stop
       end if
-    elseif ((op_mode(i) == 'spec-cl') .and.                                    &
-            (trim(optimization_type(i)) == 'max-lift')) then
+    elseif (op_spec%spec_cl .and. (trim(opt_type) == 'max-lift')) then
       write(*,*) "Error: Cl is specified for operating point "//trim(text)//   &
                  ". Cannot use 'max-lift' optimization type in this case."
       write(*,*) 
       stop
-    elseif ((op_mode(i) == 'spec-cl') .and.                                    &
-           (trim(optimization_type(i)) == 'target-lift')) then              
+    elseif (op_spec%spec_cl .and. (trim(opt_type) == 'target-lift')) then              
       write (*,*) ("op_mode = 'spec_cl' doesn't make sense "//                &
                    "for optimization_type 'target-lift'")
       write(*,*) 
@@ -348,11 +351,9 @@ subroutine check_seed()
 
 ! Analyze airfoil at requested operating conditions with Xfoil
 
-  call run_xfoil(seed_foil, xfoil_geom_options, op_point(1:noppoint),          &
-                 op_mode(1:noppoint), re(1:noppoint), ma(1:noppoint),          &
-                 use_flap, x_flap, y_flap, y_flap_spec,                        &
-                 flap_degrees(1:noppoint), xfoil_options,                      &
-                 op_converged, lift, drag, moment, alpha, xtrt, xtrb, ncrit_pt)
+  call run_op_points (seed_foil, xfoil_geom_options, xfoil_options,        &
+                      use_flap, flap_spec, flap_degrees, &
+                      op_points_spec, op_points_result)
 
   xfoil_options%show_details = show_details
   xfoil_options%reinitialize = xfoil_reinitialize 
@@ -435,101 +436,106 @@ subroutine check_seed()
   deallocate(zb_interp)
   deallocate(thickness)
 
-! jx-mod Geo targets - end --------------------------------------------
-
-
-! Check for unconverged points
-
-  do i = 1, noppoint
-    if (.not. op_converged(i)) then
-      write(text,*) i
-      text = adjustl(text)
-      call ask_stop("Xfoil calculations did not converge for operating "//&
-                    "point "//trim(text)//".")
-    end if
-  end do
+! Geo targets - end --------------------------------------------
 
 
 ! Evaluate objectives to establish scale factors for each point
 
   do i = 1, noppoint
+
     write(text,*) i
     text = adjustl(text)
 
-    if (lift(i) <= 0.d0 .and. (trim(optimization_type(i)) == 'min-sink' .or.   &
-        trim(optimization_type(i)) == 'max-glide') ) then
+    op_spec  = op_points_spec(i)
+    op       = op_points_result(i) 
+    opt_type = op_spec%optimization_type
+
+    ! Check for unconverged points
+
+    if (.not. op%converged) then
+      write(text,*) i
+      text = adjustl(text)
+      call ask_stop("Xfoil calculations did not converge for operating "//&
+                    "point "//trim(text)//".")
+    end if
+
+    if (op%cl <= 0.d0 .and. (trim(opt_type) == 'min-sink' .or.   &
+        trim(opt_type) == 'max-glide') ) then
       write(*,*) "Error: operating point "//trim(text)//" has Cl <= 0. "//     &
-                 "Cannot use "//trim(optimization_type(i))//" optimization "// &
+                 "Cannot use "//trim(opt_type)//" optimization "// &
                  "in this case."
       write(*,*)
       stop
     end if
 
-    if (trim(optimization_type(i)) == 'min-sink') then
-      checkval   = drag(i)/lift(i)**1.5d0
-      seed_value = lift(i) ** 1.5d0 / drag(i) 
+    if (trim(opt_type) == 'min-sink') then
+      checkval   = op%cd / op%cl**1.5d0
+      seed_value = op%cl ** 1.5d0 / op%cd
 
-    elseif (trim(optimization_type(i)) == 'max-glide') then
-      checkval   = drag(i)/lift(i)
-      seed_value = lift(i) / drag(i) 
+    elseif (trim(opt_type) == 'max-glide') then
+      checkval   = op%cd / op%cl
+      seed_value = op%cl / op%cd
 
-    elseif (trim(optimization_type(i)) == 'min-drag') then
-      checkval   = drag(i)
-      seed_value = drag(i) 
+    elseif (trim(opt_type) == 'min-drag') then
+      checkval   = op%cd
+      seed_value = op%cd
 
     ! Op point type 'target-....'
     !      - minimize the difference between current value and target value
     !      - target_value negative?  --> take current seed value * |target_value| 
 
-    elseif (trim(optimization_type(i)) == 'target-drag') then
-      if (target_value(i) < 0.d0) target_value(i) = drag(i) * abs(target_value(i))
+    elseif (trim(opt_type) == 'target-drag') then
+      if (op_spec%target_value < 0.d0) op_spec%target_value = op%cd * abs(op_spec%target_value)
 
-      dist = ABS (target_value(i)-drag(i))
+      dist = ABS (op_spec%target_value - op%cd)
       if (dist < 0.000004d0) dist = 0d0  ! little threshold to achieve target
 
-      checkval   = target_value(i) + dist
-      seed_value = drag(i)
+      checkval   = op_spec%target_value + dist
+      seed_value = op%cd
 
-    elseif (trim(optimization_type(i)) == 'target-lift') then
-      if (target_value(i) < 0.d0) target_value(i) = lift(i) * abs(target_value(i))
+    elseif (trim(opt_type) == 'target-lift') then
+      if (op_spec%target_value < 0.d0) op_spec%target_value = op%cl * abs(op_spec%target_value)
       ! add a constant base value to the lift difference so the relative change won't be to high
-      checkval   = 1.d0 + ABS (target_value(i)-lift(i))
-      seed_value = lift(i)
+      checkval   = 1.d0 + ABS (op_spec%target_value - op%cl)
+      seed_value = op%cl
 
-    elseif (trim(optimization_type(i)) == 'target-moment') then
-      if (target_value(i) < 0.d0) target_value(i) = moment(i) * abs(target_value(i)) 
+    elseif (trim(opt_type) == 'target-moment') then
+      if (op_spec%target_value < 0.d0) op_spec%target_value = op%cm * abs(op_spec%target_value) 
       ! add a base value (Clark y or so ;-) to the moment difference so the relative change won't be to high
-      checkval   = ABS (target_value(i)-moment(i)) + 0.05d0
-      seed_value = moment(i) 
+      checkval   = ABS (op_spec%target_value - op%cm) + 0.05d0
+      seed_value = op%cm
 
-    elseif (trim(optimization_type(i)) == 'max-lift') then
-      checkval   = 1.d0/lift(i)
-      seed_value = lift(i) 
+    elseif (trim(opt_type) == 'max-lift') then
+      checkval   = 1.d0/op%cl
+      seed_value = op%cl
 
-    elseif (trim(optimization_type(i)) == 'max-xtr') then
-      checkval   = 1.d0/(0.5d0*(xtrt(i)+xtrb(i))+0.1d0)  ! Ensure no division by 0
-      seed_value = 0.5d0*(xtrt(i)+xtrb(i))
+    elseif (trim(opt_type) == 'max-xtr') then
+      checkval   = 1.d0/(0.5d0*(op%xtrt + op%xtrb) + 0.1d0)  ! Ensure no division by 0
+      seed_value = 0.5d0*(op%xtrt + op%xtrb)
 
 ! jx-mod Following optimization based on slope of the curve of op_point
 !         convert alpha in rad to get more realistic slope values
 !         convert slope in rad to get a linear target 
 !         factor 4.d0*pi to adjust range of objective function (not negative)
 
-    elseif (trim(optimization_type(i)) == 'max-lift-slope') then
+    elseif (trim(opt_type) == 'max-lift-slope') then
     ! Maximize dCl/dalpha (0.1 factor to ensure no division by 0)
-      slope = derivation_at_point (noppoint, i, (alpha * pi/180.d0) , lift)
+      slope = derivation_at_point (i, (op_points_result%alpha * pi/180.d0) , &
+                                      (op_points_result%cl))
       checkval   = 1.d0 / (atan(abs(slope))  + 2.d0*pi)
       seed_value = atan(abs(slope))
 
-    elseif (trim(optimization_type(i)) == 'min-lift-slope') then
-    ! jx-mod  New: Minimize dCl/dalpha e.g. to reach clmax at alpha(i) 
-      slope = derivation_at_point (noppoint, i,  (alpha * pi/180.d0) , lift)
+    elseif (trim(opt_type) == 'min-lift-slope') then
+    ! New: Minimize dCl/dalpha e.g. to reach clmax at alpha(i) 
+      slope = derivation_at_point (i, (op_points_result%alpha * pi/180.d0) , &
+                                      (op_points_result%cl))
       checkval   = atan(abs(slope)) + 2.d0*pi
       seed_value = atan(abs(slope))
 
-    elseif (trim(optimization_type(i)) == 'min-glide-slope') then
-    ! jx-mod  New: Minimize d(cl/cd)/dcl e.g. to reach best glide at alpha(i) 
-      slope = derivation_at_point (noppoint, i,  (lift * 20d0), (lift/drag))
+    elseif (trim(opt_type) == 'min-glide-slope') then
+    ! New: Minimize d(cl/cd)/dcl e.g. to reach best glide at alpha(i) 
+      slope = derivation_at_point (i, (op_points_result%cl * 20d0), &
+                                      (op_points_result%cl/op_points_result%cd))
       checkval   = atan(abs(slope)) + 2.d0*pi
       seed_value = atan(abs(slope)) 
      
@@ -539,8 +545,11 @@ subroutine check_seed()
                  trim(text)//" not recognized."
       stop
     end if
-    scale_factor(i)  = 1.d0/checkval
-    op_seed_value(i) = seed_value
+
+    op_spec%scale_factor = 1.d0/checkval
+
+    op_points_spec(i) = op_spec             ! write back target, scale, ...
+
   end do
 
 end subroutine check_seed
@@ -555,7 +564,7 @@ end subroutine check_seed
 subroutine check_and_smooth_surface (show_details, do_smoothing, foil)
 
   use vardef,             only: airfoil_type
-  use vardef,             only: curv_threshold, spike_threshold, highlow_threshold, &
+  use airfoil_evaluation, only: curv_threshold, spike_threshold, highlow_threshold, &
                                 max_te_curvature
   use airfoil_operations, only: assess_surface, smooth_it
   use airfoil_operations, only: get_max_te_curvature, rebuild_airfoil
@@ -844,7 +853,7 @@ end subroutine ask_stop
 
 subroutine  check_handle_curve_violations (info, x, y, max_curv_reverse, max_curv_highlow)
 
-  use vardef,             only : curv_threshold, highlow_threshold
+  use airfoil_evaluation, only : curv_threshold, highlow_threshold
   use airfoil_operations, only : show_reversals_highlows, get_curv_violations
 
 
