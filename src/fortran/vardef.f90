@@ -54,11 +54,6 @@ module vardef
   integer, dimension(max_op_points) :: flap_optimize_points
 
 
-! Match foil mode
-  type(airfoil_type) :: foil_to_match
-  logical :: match_foils
-  double precision :: match_foils_scale_factor 
-
 ! Parms for shaping geomtery 
   integer :: nparams_top, nparams_bot
   double precision :: initial_perturb
@@ -72,6 +67,7 @@ module vardef
 ! Show more infos during optimization
   logical :: show_details
 
+! --------------------------------------------------------------------------------
 
 ! #exp-dynamic mb-mod dynamic weighting
   type dynamic_weighting_type

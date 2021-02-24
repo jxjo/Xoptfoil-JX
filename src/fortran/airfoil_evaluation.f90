@@ -19,7 +19,7 @@ module airfoil_evaluation
 
 ! Sets up and evaluates the objective function for an airfoil design
 
-  use vardef
+  use vardef       
   use xfoil_driver, only : xfoil_options_type, xfoil_geom_options_type
   use xfoil_driver, only : op_point_specification_type, re_type
   use os_util
@@ -75,6 +75,10 @@ module airfoil_evaluation
   integer :: noppoint
   type (op_point_specification_type), dimension (:), allocatable :: op_points_spec 
 
+! Match foil mode
+  type(airfoil_type) :: foil_to_match 
+  logical :: match_foils
+  double precision :: match_foils_scale_factor 
 
 
   type(xfoil_options_type)       :: xfoil_options
@@ -832,7 +836,6 @@ end function aero_objective_function
 function matchfoil_objective_function(foil)
 
   use math_deps,       only : norm_2
-  use vardef,          only : foil_to_match
 
   type(airfoil_type), intent(in)    :: foil
   double precision :: matchfoil_objective_function

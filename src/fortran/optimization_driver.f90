@@ -31,8 +31,8 @@ module optimization_driver
 !=============================================================================80
 subroutine matchfoils_preprocessing(matchfoil_file)
 
-  use vardef,             only : airfoil_type, foil_to_match, npan_fixed
-  use vardef,             only : seed_foil
+  use vardef,             only : airfoil_type,  npan_fixed, seed_foil
+  use airfoil_evaluation, only : foil_to_match
   use airfoil_operations, only : get_seed_airfoil,  rebuild_airfoil, my_stop
   use airfoil_operations, only : repanel_and_normalize_airfoil
   use math_deps,          only : interp_vector
@@ -353,7 +353,7 @@ subroutine write_final_design(optdesign, f0, fmin, final_airfoil)
   use xfoil_driver,       only : op_point_specification_type
   use airfoil_evaluation, only : create_airfoil_form_design, get_flap_degrees_from_design
   use airfoil_evaluation, only : xfoil_geom_options, xfoil_options, noppoint
-  use airfoil_evaluation, only : op_points_spec
+  use airfoil_evaluation, only : op_points_spec, match_foils
 
   double precision, dimension(:), intent(in) :: optdesign
   double precision, intent(in)               :: f0, fmin
@@ -466,7 +466,8 @@ end subroutine write_final_design
 !-----------------------------------------------------------------------------
 subroutine write_matchfoil_summary (zt_new, zb_new)
 
-  use vardef, only    : seed_foil, foil_to_match
+  use vardef,             only : seed_foil
+  use airfoil_evaluation, only : foil_to_match
   
   double precision, dimension(size(seed_foil%xt,1)), intent(in) :: zt_new
   double precision, dimension(size(seed_foil%xb,1)), intent(in) :: zb_new
