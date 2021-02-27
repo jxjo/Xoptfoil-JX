@@ -209,9 +209,9 @@ end subroutine set_geometry_value
 subroutine check_foil_curvature (input_file, output_prefix, seed_foil, visualizer)
 
   use vardef,             only: airfoil_type
-  use vardef,             only: curv_threshold, spike_threshold, highlow_threshold
-  use vardef,             only: max_curv_reverse_top, max_curv_reverse_bot
-  use vardef,             only: max_te_curvature, check_curvature, auto_curvature
+  use airfoil_evaluation, only: curv_threshold, spike_threshold, highlow_threshold
+  use airfoil_evaluation, only: max_curv_reverse_top, max_curv_reverse_bot
+  use airfoil_evaluation, only: max_te_curvature, check_curvature, auto_curvature
   use airfoil_operations, only: split_foil, le_find, assess_surface, smooth_it
   use airfoil_operations, only: repanel_and_normalize_airfoil
   use math_deps,          only: nreversals_using_threshold
@@ -286,10 +286,10 @@ end subroutine check_foil_curvature
 subroutine repanel_smooth (input_file, output_prefix, seed_foil, visualizer, do_smoothing)
 
   use vardef,             only : airfoil_type
-  use vardef,             only : spike_threshold, highlow_threshold, curv_threshold
-  use vardef,             only : check_curvature, auto_curvature
-  use vardef,             only : max_te_curvature
-  use vardef,             only : max_curv_reverse_top, max_curv_reverse_bot, &
+  use airfoil_evaluation, only : spike_threshold, highlow_threshold, curv_threshold
+  use airfoil_evaluation, only : check_curvature, auto_curvature
+  use airfoil_evaluation, only : max_te_curvature
+  use airfoil_evaluation, only : max_curv_reverse_top, max_curv_reverse_bot, &
                                  max_curv_highlow_top, max_curv_highlow_bot
   use xfoil_driver,       only : xfoil_geom_options_type
   use airfoil_operations, only : airfoil_write, transform_airfoil
@@ -479,7 +479,7 @@ end subroutine blend_foils
 
 subroutine set_flap (input_file, output_prefix, seed_foil, visualizer)
 
-  use vardef,             only : airfoil_type
+  use vardef,             only : airfoil_type, flap_spec_type
   use xfoil_driver,       only : xfoil_geom_options_type
   use xfoil_driver,       only : xfoil_apply_flap_deflection, xfoil_reload_airfoil
   use xfoil_driver,       only : xfoil_set_airfoil
@@ -493,12 +493,10 @@ subroutine set_flap (input_file, output_prefix, seed_foil, visualizer)
   type (airfoil_type), intent (inout)  :: seed_foil
   logical, intent(in)               :: visualizer
 
-  type (airfoil_type) :: foil, foil_flapped
-  type (xfoil_geom_options_type) :: geom_options
-
-  double precision :: x_flap, y_flap
+  type (airfoil_type)             :: foil, foil_flapped
+  type (flap_spec_type)           :: flap_spec
+  type (xfoil_geom_options_type)  :: geom_options
   double precision, dimension(50) :: flap_degrees
-  character(3)  :: y_flap_spec
   character(20) :: text_degrees
   integer       :: ndegrees
 
@@ -506,7 +504,7 @@ subroutine set_flap (input_file, output_prefix, seed_foil, visualizer)
 ! Read inputs file to get xfoil paneling options  
 
   call read_xfoil_paneling_inputs  (input_file, geom_options)
-  call read_flap_inputs            (input_file, x_flap, y_flap, y_flap_spec, ndegrees, flap_degrees)
+  call read_flap_inputs            (input_file, flap_spec, ndegrees, flap_degrees)
 
 ! Repanel seed airfoil with xfoil PANGEN 
 
@@ -531,11 +529,12 @@ subroutine set_flap (input_file, output_prefix, seed_foil, visualizer)
       write (text_degrees,'(SP,F6.1)') flap_degrees(i)
     end if
 
-    write (*,'(1x,A,I2,A,F4.1,A)') 'Setting flaps at ', int (x_flap*1d2), '% ('//y_flap_spec//'=', &
-                                y_flap,') to '//trim(adjustl(text_degrees))//' degrees'
+    write (*,'(1x,A,I2,A,F4.1,A)') 'Setting flaps at ', int (x_flap*1d2), &
+          '% ('//flap_spec%y_flap_spec//'=', &
+          flap_spec%y_flap,') to '//trim(adjustl(text_degrees))//' degrees'
 
     call xfoil_set_airfoil(foil)
-    call xfoil_apply_flap_deflection(x_flap, y_flap, y_flap_spec, flap_degrees(i))
+    call xfoil_apply_flap_deflection(flap_spec, flap_degrees(i))
     call xfoil_reload_airfoil(foil_flapped)
 
     foil_flapped%name   = trim(output_prefix) // trim(adjustl(text_degrees))

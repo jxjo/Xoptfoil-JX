@@ -31,8 +31,8 @@ module optimization_driver
 !=============================================================================80
 subroutine matchfoils_preprocessing(matchfoil_file)
 
-  use vardef,             only : airfoil_type, foil_to_match, npan_fixed
-  use vardef,             only : seed_foil
+  use vardef,             only : airfoil_type,  npan_fixed, seed_foil
+  use airfoil_evaluation, only : foil_to_match
   use airfoil_operations, only : get_seed_airfoil,  rebuild_airfoil, my_stop
   use airfoil_operations, only : repanel_and_normalize_airfoil
   use math_deps,          only : interp_vector
@@ -349,16 +349,19 @@ subroutine write_final_design(optdesign, f0, fmin, final_airfoil)
 
   use vardef
   use airfoil_operations, only : airfoil_write
-  use xfoil_driver,       only : run_xfoil
+  use xfoil_driver,       only : run_op_points, op_point_result_type
+  use xfoil_driver,       only : op_point_specification_type
   use airfoil_evaluation, only : create_airfoil_form_design, get_flap_degrees_from_design
-  use airfoil_evaluation, only : xfoil_geom_options, xfoil_options
+  use airfoil_evaluation, only : xfoil_geom_options, xfoil_options, noppoint
+  use airfoil_evaluation, only : op_points_spec, match_foils
 
   double precision, dimension(:), intent(in) :: optdesign
   double precision, intent(in)               :: f0, fmin
   type(airfoil_type), intent(out)            :: final_airfoil
 
-  double precision, dimension(noppoint) :: alpha, lift, drag, moment, xtrt, xtrb
-  logical,          dimension(noppoint) :: op_converged
+  type(op_point_specification_type) :: op_spec
+  type(op_point_result_type)        :: op
+  type(op_point_result_type), dimension(:), allocatable :: op_points_result
   double precision, dimension(noppoint) :: actual_flap_degrees
   integer :: i, iunit
   character(80) :: output_file, aero_file
@@ -381,11 +384,9 @@ subroutine write_final_design(optdesign, f0, fmin, final_airfoil)
 
 !   Run xfoil for requested operating points
 
-    call run_xfoil(final_airfoil, xfoil_geom_options, op_point(1:noppoint),    &
-                   op_mode(1:noppoint), re(1:noppoint), ma(1:noppoint),        &
-                   use_flap, x_flap, y_flap, y_flap_spec,                      &
-                   actual_flap_degrees(1:noppoint), xfoil_options,             &
-                   op_converged, lift, drag, moment, alpha, xtrt, xtrb, ncrit_pt)
+    call run_op_points (final_airfoil, xfoil_geom_options, xfoil_options,        &
+                    use_flap, flap_spec, actual_flap_degrees,  &
+                    op_points_spec, op_points_result)
 
 !   Write summary to screen and file
 
@@ -411,6 +412,9 @@ subroutine write_final_design(optdesign, f0, fmin, final_airfoil)
 
     do i = 1, noppoint
 
+      op_spec  = op_points_spec(i)
+      op       = op_points_result(i) 
+
       if (use_flap) then
         write (flapnote, '(F6.2)') actual_flap_degrees(i)
         if (flap_selection(i) == "specify") then
@@ -423,11 +427,11 @@ subroutine write_final_design(optdesign, f0, fmin, final_airfoil)
       end if 
 
       write (iunit,  "(I2,   F8.3,   F9.4,    F10.5, F9.4,   F8.4,   F8.4, ES9.2     F8.3     F7.1, 3X, A)") &
-        i, alpha(i), lift(i), drag(i), moment(i), xtrt(i), xtrb (i), &
-        re(i)%number, ma(i)%number, ncrit_pt(i), trim(flapnote)
+        i, op%alpha, op%cl, op%cd, op%cm, op%xtrt, op%xtrb, &
+        op_spec%re%number, op_spec%ma%number, op_spec%ncrit, trim(flapnote)
       write (*    ,  "(I2,   F8.3,   F9.4,    F10.5, F9.4,   F8.4,   F8.4, ES9.2     F8.3     F7.1, 3X, A)") &
-        i, alpha(i), lift(i), drag(i), moment(i), xtrt(i), xtrb (i), &
-        re(i)%number, ma(i)%number, ncrit_pt(i), trim(flapnote)
+        i, op%alpha, op%cl, op%cd, op%cm, op%xtrt, op%xtrb, &
+        op_spec%re%number, op_spec%ma%number, op_spec%ncrit, trim(flapnote)
 
     end do
 
@@ -462,7 +466,8 @@ end subroutine write_final_design
 !-----------------------------------------------------------------------------
 subroutine write_matchfoil_summary (zt_new, zb_new)
 
-  use vardef, only    : seed_foil, foil_to_match
+  use vardef,             only : seed_foil
+  use airfoil_evaluation, only : foil_to_match
   
   double precision, dimension(size(seed_foil%xt,1)), intent(in) :: zt_new
   double precision, dimension(size(seed_foil%xb,1)), intent(in) :: zb_new
