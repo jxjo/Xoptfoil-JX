@@ -693,7 +693,16 @@ class wing:
 
         # plot sections in reverse order
         idx = len(self.airfoilTypes)
-        for element in reversed(self.sections):
+
+        # check if there is a fuselage section
+        if self.fuselageIsPresent():
+            # skip fuselage section
+            sectionsList = self.sections[1:]
+        else:
+            # plot all sections
+            sectionsList = self.sections
+
+        for element in reversed(sectionsList):
             # determine type of airfoil of this section
             try:
                 airfoilType = self.airfoilTypes[idx]
