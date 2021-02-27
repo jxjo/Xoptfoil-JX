@@ -268,4 +268,4 @@ def export_toFLZ(wingData, inFileName, outFileName):
 
     # Everything is done
     FLZ_outfile.close()
-    NoteMsg("wing data was succesfully written.")
+    NoteMsg("wing data was successfully written.")
