@@ -40,6 +40,8 @@ from matplotlib.backends.backend_tkagg import (
 from matplotlib.backend_bases import key_press_handler
 import tkinter.font as font
 from strak_machineV2 import (copyAndSmooth_Airfoil, get_ReString,
+                             get_MandatoryParameterFromDict,
+                             get_booleanParameterFromDict,
                              ErrorMsg, WarningMsg, NoteMsg, DoneMsg,
                              remove_suffix, interpolate, round_Re,
                              bs, buildPath, ressourcesPath, airfoilPath,
@@ -117,11 +119,11 @@ PLanformDict =	{
             # dihedral of the of the wing in degree
             "dihedral": 2.5,
             # whether to show the line at 25% of wing depth
-            "showQuarterChordLine" : 'true',
+            "showQuarterChordLine" : 'True',
             # whether to show line from root-chord to middle of the tip
-            "showTipLine": 'true',
+            "showTipLine": 'True',
             # whether to show the hinge-line
-            "showHingeLine" : 'true',
+            "showHingeLine" : 'True',
             # positions of the airfoils
             "airfoilPositions": [   0.0,     0.3,     0.6,     0.9,     1.2,    1.5,     1.6,    1.8],
             # user-defined names of the airfoils
@@ -190,6 +192,7 @@ class wing:
     def __init__(self):
         self.airfoilBasicName = ""
         self.airfoilNames = []
+        self.numAirfoils= 0
         self.planformName= "Main Wing"
         self.rootchord = 0.223
         self.leadingEdgeOrientation = 'up'
@@ -197,7 +200,6 @@ class wing:
         self.fuselageWidth = 0.035
         self.planformShape = 'elliptical'
         self.halfwingspan = 0.0
-        self.numberOfSections = 0
         self.numberOfGridChords = 16384
         self.hingeDepthPercent = 23.0
         self.tipDepthPercent = 8.0
@@ -205,35 +207,49 @@ class wing:
         self.hingeInnerPoint = 0
         self.hingeOuterPoint = 0
         self.hingeLineAngle = 0.0
-        self.showQuarterChordLine = 'true',
-        self.showTipLine = 'true',
-        self.showHingeLine = 'true',
         self.dihedral = 0.00
+        self.area = 0.0
+        self.aspectRatio = 0.0
         self.sections = []
         self.grid = []
         self.valueList = []
         self.chords = []
-        self.area = 0.0
-        self.aspectRatio = 0.0
-        self.smoothUserAirfoils = False
+        self.isFin = False
+        self.showQuarterChordLine = True
+        self.showTipLine = True
+        self.showHingeLine = True
+        self.smoothUserAirfoils = True
+
+    # compose a name from the airfoil basic name and the Re-number
+    def set_AirfoilNamesFromRe(self):
+        # loop over all airfoils (without tip and fuselage section)
+        for idx in range(self.numAirfoils):
+            Re = self.airfoilReynolds[idx]
+            airfoilName = (self.airfoilBasicName + "-%s.dat") % get_ReString(Re)
+            self.airfoilNames.append(airfoilName)
 
 
     # set missing airfoilnames from basic name and Re-number
     def set_AirfoilNames(self):
-        num = len(self.airfoilTypes)
-        numAirfoilNames = len(self.airfoilNames)
+        if (len(self.airfoilNames) == 0):
+            # list is empty and has to be created
+            set_AirfoilNamesFromRe()
 
-        # loop over all airfoils
-        for idx in range(num):
-            # has the user specified a name for the airfoil ?
-            if ((idx + 1) > numAirfoilNames):
-                # No, compose a name from the airfoil basic name and the Re-number
-                Re = self.airfoilReynolds[idx]
-                airfoilName = (self.airfoilBasicName + "-%s.dat") % get_ReString(Re)
-                self.airfoilNames.append(airfoilName)
-            else:
-                if (self.airfoilNames[idx].find('.dat')<0):
-                    self.airfoilNames[idx] = self.airfoilNames[idx] +'.dat'
+        # check if the .dat ending was appended to all airfoils.
+        # if not, append the ending
+        for idx in range(self.numAirfoils):
+            if (self.airfoilNames[idx].find('.dat')<0):
+                self.airfoilNames[idx] = self.airfoilNames[idx] +'.dat'
+
+        # append airfoilName for the tip section which is the same a sfor the
+        # last regular section
+        self.airfoilNames.append(self.airfoilNames[-1])
+
+        # if there is a fuselage, insert an airfoilname for the fuselage section
+        # at the beginning of the list.
+        if self.fuselageIsPresent():
+            self.airfoilNames.insert(0, self.airfoilNames[0])
+
 
     # get the number of user defined airfoils
     def get_numUserAirfoils(self):
@@ -244,19 +260,40 @@ class wing:
 
         return num
 
+
     # set basic data of the wing
     def set_Data(self, dictData):
-        self.airfoilPositions = dictData["airfoilPositions"]
-        self.airfoilReynolds = dictData["airfoilReynolds"]
+        # -------------- get mandatory parameters --------------------
 
-        # also possible to place an airfoil inside the planform via chordlength
-        try:
-            self.airfoilChordLengths = dictData["airfoilChordLengths"]
-        except:
-            pass
+        # get basic planformdata
+        self.planformName = get_MandatoryParameterFromDict(dictData, "planformName")
+        self.rootchord =  get_MandatoryParameterFromDict(dictData, "rootchord")
+        self.wingspan =  get_MandatoryParameterFromDict(dictData, "wingspan")
+        self.fuselageWidth =  get_MandatoryParameterFromDict(dictData, "fuselageWidth")
+        self.planformShape =  get_MandatoryParameterFromDict(dictData, "planformShape")
+        self.tipchord =  get_MandatoryParameterFromDict(dictData, "tipchord")
+        self.rootTipSweep =  get_MandatoryParameterFromDict(dictData, "rootTipSweep")
+        self.hingeDepthPercent = get_MandatoryParameterFromDict(dictData, "hingeDepthPercent")
+        self.dihedral = get_MandatoryParameterFromDict(dictData, "dihedral")
 
-        # get airfoil-types
-        self.airfoilTypes = dictData["airfoilTypes"]
+        # get airfoil- / section data
+        self.airfoilTypes = get_MandatoryParameterFromDict(dictData, 'airfoilTypes')
+        self.airfoilPositions = get_MandatoryParameterFromDict(dictData, 'airfoilPositions')
+        self.airfoilReynolds = get_MandatoryParameterFromDict(dictData, 'airfoilReynolds')
+
+        # number of airfoils equals number of specified airfoil types
+        self.numAirfoils = len(self.airfoilTypes)
+
+        # check number of airfoils
+        if (self.numAirfoils == 0):
+            ErrorMsg("number of airfoils must be >= 1")
+            exit(-1)
+
+        # check if the above parameters have the same number of elements
+        if ((self.numAirfoils != len(self.airfoilPositions)) or
+            (self.numAirfoils != len(self.airfoilReynolds))):
+            ErrorMsg("airfoilTypes, airfoilPositions and airfoilReynolds must have the same number of elements")
+            exit(-1)
 
         # After all types are known, the number of user airfoils can be determined
         numUserAirfoils = self.get_numUserAirfoils()
@@ -266,11 +303,20 @@ class wing:
             ErrorMsg("number of user-airfoils must be >= 1")
             exit(-1)
 
+        # check if first airfoil is user-airfoil
         if (self.airfoilTypes[0] != "user"):
             ErrorMsg("type of first airfoils must \"user\"")
             exit(-1)
 
-        # get user-defined airfoils
+        # check if there is a valid reynolds number specified for the first airfoil
+        if (self.airfoilReynolds[0] == None):
+            ErrorMsg("reynolds of first airfoils must not be \"None\"")
+            exit(-1)
+        else:
+            # determine reynolds-number for root-airfoil
+            self.rootReynolds = self.airfoilReynolds[0]
+
+        # get names and paths of user-defined airfoils
         self.userAirfoils = dictData["userAirfoils"]
 
         # check userAirfoil names against number
@@ -286,54 +332,56 @@ class wing:
              % (numUserAirfoils, numDefinedUserAirfoils))
             self.userAirfoils = self.userAirfoils[0:numUserAirfoils]
 
+        # calculate dependent parameters
+        self.tipDepthPercent = (self.tipchord/self.rootchord)*100
+        self.halfwingspan = (self.wingspan/2)-(self.fuselageWidth/2)
+
+        # -------------- get optional parameters --------------------
         try:
-            if (dictData["smoothUserAirfoils"]) == "True":
-                self.smoothUserAirfoils = True
+            self.leadingEdgeOrientation = dictData["leadingEdgeOrientation"]
         except:
-            pass
+              NoteMsg("leadingEdgeOrientation not defined")
+
 
         # get user-defined list of airfoil-names
         try:
             self.airfoilNames = dictData["airfoilNames"]
         except:
             NoteMsg("No user-defined airfoil names specified")
-            # no user defined list was found. In this case at least the
-            # name of the root airfoil has to be specified.
             self.airfoilNames = []
 
         try:
             self.airfoilBasicName = dictData["airfoilBasicName"]
         except:
              NoteMsg("No basic airfoil name specified")
+             self.airfoilBasicName = None
 
-        # set number of sections to number of positions
-        self.numberOfSections = len(self.airfoilPositions)
+        # if there are user defined airfoilnames, check if every airfoil has a
+        # user defined name
+        if ((len(self.airfoilNames) != self.numAirfoils) and
+            (len(self.airfoilNames) != 0)):
+            ErrorMsg("number of airfoilNames does not match the number of airfoils, which is %d" % self.numAirfoils)
+            exit(-1)
 
-        # determine reynolds-number for root-airfoil
-        self.rootReynolds = self.airfoilReynolds[0]
+        # if no basic airfoil name was defined, check if there are user defined arifoil names
+        if ((len(self.airfoilNames) == 0) and (self.airfoilBasicName == None)):
+            ErrorMsg("\"airfoilBasicName\" not defined and also \"airfoilNames\" not defined")
+            exit(-1)
 
-        # evaluate planformdata
-        self.rootchord = dictData["rootchord"]
-        self.wingspan = dictData["wingspan"]
-        self.fuselageWidth = dictData["fuselageWidth"]
-        self.planformShape = dictData["planformShape"]
-        self.tipchord = dictData["tipchord"]
-        self.tipDepthPercent = (self.tipchord/self.rootchord)*100
-        self.halfwingspan = (self.wingspan/2)-(self.fuselageWidth/2)
-        self.rootTipSweep = dictData["rootTipSweep"]
-        self.leadingEdgeOrientation = dictData["leadingEdgeOrientation"]
-        self.hingeDepthPercent = dictData["hingeDepthPercent"]
-        self.dihedral = dictData["dihedral"]
-        self.planformName = dictData["planformName"]
-        self.wingFinSwitch = dictData["isFin"]
+        # evaluate additional boolean data
+        self.isFin = get_booleanParameterFromDict(dictData, "isFin", self.isFin)
 
-        # evaluate additional data
-        try:
-            self.showQuarterChordLine = dictData["showQuarterChordLine"]
-            self.showTipLine = dictData["showTipLine"]
-            self.showHingeLine = dictData["showHingeLine"]
-        except:
-            pass
+        self.smoothUserAirfoils = get_booleanParameterFromDict(dictData,
+                                  "smoothUserAirfoils", self.smoothUserAirfoils)
+
+        self.showQuarterChordLine = get_booleanParameterFromDict(dictData,
+                                  "showQuarterChordLine", self.showQuarterChordLine)
+
+        self.showTipLine = get_booleanParameterFromDict(dictData,
+                                  "showTipLine", self.showTipLine)
+
+        self.showHingeLine = get_booleanParameterFromDict(dictData,
+                                   "showHingeLine", self.showHingeLine)
 
 
     # get name of the user defined airfoil, as it will appear in the planform
@@ -539,40 +587,18 @@ class wing:
                 self.airfoilReynolds[idx] = int(round(Re ,0))
 
 
-    # calculate all sections of the wing, oriented at the grid
-    def calculate_sections(self):
-        # create all sections, according to the precalculated chords
-        for chord in self.chords:
-            # find grid-values matching the chordlength of the section
-            grid = self.find_PlanformData(chord)
+    # determine weather a fuselage shall be used
+    def fuselageIsPresent(self):
+        # check, if a fuselageWidth > 0 was defined
+        if self.fuselageWidth >= 0.0001:
+            return True
+        else:
+            return False
 
-            if (grid == None):
-                ErrorMsg("chord-length %f not found in planform-data\n")
-                # end the loop
-                break
 
-            # create new section
-            section = wingSection()
-
-            # append section to section-list of wing
-            self.sections.append(section)
-
-            # set number of the section
-            section.number = len(self.sections)
-
-            # find grid-values matching the chordlength of the section
-            grid = self.find_PlanformData(chord)
-
-            # copy grid-coordinates to section
-            self.copy_PlanformDataToSection(grid, section)
-
-            # set the airfoil-Name
-            self.set_AirfoilName(section)
-
-            # store last Re value for the tip
-            lastSectionRe = section.Re
-
-        # create last section
+    # adds a section using given grid-values
+    def add_sectionFromGrid(self, grid):
+         # create new section
         section = wingSection()
 
         # append section to section-list of wing
@@ -581,19 +607,62 @@ class wing:
         # set number of the section
         section.number = len(self.sections)
 
-        # get the tip grid-values
-        grid = self.grid[len(self.grid)-1]
-
         # copy grid-coordinates to section
         self.copy_PlanformDataToSection(grid, section)
 
-        # set same Re as for the last section so the same airfoil-name will be given
-        section.Re = lastSectionRe
-
         # set the airfoil-Name
-        self.set_lastSectionAirfoilName(section)
+        self.set_AirfoilName(section)
 
 
+    # adds a section using given chord
+    def add_sectionFromChord(self, chord):
+        # find grid-values matching the chordlength of the section
+        grid = self.find_PlanformData(chord)
+
+        if (grid == None):
+            ErrorMsg("chord-length %f not found in planform-data\n")
+            exit(-1)
+        else:
+            self.add_sectionFromGrid(grid)
+
+
+    # add an own section for the fuselage and use rootchord
+    def add_fuselageSection(self):
+        # check if fuselageWidth is > 0
+        if self.fuselageIsPresent():
+            # get the root grid-values
+            grid = deepcopy(self.grid[0])
+
+            # set offset to zero so the section will start exactly in the center
+            grid.y = 0
+
+            # add section now
+            self.add_sectionFromGrid(grid)
+
+
+    def add_tipSection(self):
+        # get the tip grid-values
+        grid = self.grid[len(self.grid)-1]
+
+        # add section
+        self.add_sectionFromGrid(grid)
+
+
+    # calculate all sections of the wing, oriented at the grid
+    def calculate_sections(self):
+        # first add section for fuselage
+        self.add_fuselageSection()
+
+        # create all sections, according to the precalculated chords
+        for chord in self.chords:
+            # add section according to chord
+            self.add_sectionFromChord(chord)
+
+        # create last section
+        self.add_tipSection()
+
+
+    # get color for plotting
     def get_colorFromAirfoilType(self, airfoilType):
         if (airfoilType == 'user'):
             color = cl_userAirfoil
@@ -711,18 +780,18 @@ class wing:
         labelHingeLine = ("hinge line (%.1f %%)" % self.hingeDepthPercent)
 
         # plot quarter-chord-line
-        if (self.showQuarterChordLine == 'true'):
+        if (self.showQuarterChordLine == True):
             ax.plot(xValues, quarterChordLine, color=cl_quarterChordLine,
               linestyle = ls_quarterChordLine, linewidth = lw_quarterChordLine,
               label = "quarter-chord line")
 
-        if (self.showTipLine == 'true'):
+        if (self.showTipLine == True):
             ax.plot(xValues, tipLine, color=cl_tipLine,
               linestyle = ls_tipLine, linewidth = lw_tipLine,
               label = "tip line")
 
         # plot hinge-line
-        if (self.showHingeLine == 'true'):
+        if (self.showHingeLine == True):
             ax.plot(xValues, hingeLine, color=cl_hingeLine,
               linestyle = ls_hingeLine, linewidth = lw_hingeLine,
               label = labelHingeLine)
@@ -949,7 +1018,14 @@ class wing:
 def get_wing(root, wingFinSwitch):
     for wing in root.iter('wing'):
         for XMLwingFinSwitch in wing.iter('isFin'):
-            if (XMLwingFinSwitch.text == wingFinSwitch):
+            # convert string to boolean value
+            if (XMLwingFinSwitch.text == 'true') or (XMLwingFinSwitch.text == 'True'):
+                value = True
+            else:
+                value = False
+
+            # check against value of wingFinswitch
+            if (value == wingFinSwitch):
                 return wing
 
 
@@ -963,7 +1039,7 @@ def insert_PlanformDataIntoXFLR5_File(data, inFileName, outFileName):
     root = tree.getroot()
 
     # find wing-data
-    wing = get_wing(root, data.wingFinSwitch)
+    wing = get_wing(root, data.isFin)
 
     if (wing == None):
         ErrorMsg("wing not found\n")
