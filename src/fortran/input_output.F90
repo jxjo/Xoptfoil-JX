@@ -615,7 +615,7 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
   xtripb = 1.d0
   viscous_mode = .true.
   silent_mode = .true.
-  bl_maxit = 50             ! reduced to 50 as above the potential result is rarely usable..
+  bl_maxit = 40             ! reduced to 40 as above the potential result is rarely usable..
   vaccel = 0.005d0          ! the original value of 0.01 leads to too many non convergences at 
                             !   higher lift --> reduced 
   fix_unconverged = .true.
@@ -671,6 +671,7 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
   xfoil_options%maxit = bl_maxit
   xfoil_options%vaccel = vaccel
   xfoil_options%fix_unconverged = fix_unconverged
+  xfoil_options%exit_if_unconverged = .false.
   xfoil_options%reinitialize = reinitialize
 ! jx-mod swtich to avoid PANGEN before each xfoil calculation as 
 !        it could have influence at high cl (TE micro stuff) 
@@ -1443,6 +1444,9 @@ subroutine print_usage(exeprint)
 
   character(*), intent(in) :: exeprint
 
+  write(*,'(A)') 
+  write(*,'(A)') '         (c) 2017-2019 Daniel Prosser (original Xoptfoil)'
+  write(*,'(A)') '         (c) 2019-2021 Jochen Guenzel, Matthias Boese'
   write(*,'(A)')
   write(*,'(A)') "Usage: "//trim(exeprint)//" [OPTION]"
   write(*,'(A)')

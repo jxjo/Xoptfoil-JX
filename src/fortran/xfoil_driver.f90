@@ -21,12 +21,21 @@ module xfoil_driver
 
   implicit none
 
-! defines an op_point for xfoil calculation
 
   type re_type 
     double precision :: number            ! Reynolds Number
     integer          :: type              ! Type 1 or 2 (fixed lift)
   end type re_type
+
+  ! Hold result of xfoil boundary layer (BL) infos of an op_pooint #exp-bubble
+
+  type bubble_type      
+    logical          :: found             ! a bubble was detected           
+    double precision :: xstart            ! start of separation: CF (shear stress) < 0
+    double precision :: xend              ! end   of separation: CF (shear stress) > 0
+  end type bubble_type                              
+
+  ! defines an op_point for xfoil calculation
 
   type op_point_specification_type                              
     logical          :: spec_cl           ! op based on alpha or cl
@@ -42,13 +51,14 @@ module xfoil_driver
 ! Hold result of xfoil aero calculation of an op_pooint
 
   type op_point_result_type                              
-    double precision :: cl                ! lift coef. - see also spec_cl
+    logical :: converged                  ! did xfoil converge? 
+    double precision :: cl                ! lift coef.  - see also spec_cl
     double precision :: alpha             ! alpha (aoa) - see also spec_cl
     double precision :: cd                ! drag coef.  
     double precision :: cm                ! moment coef. 
     double precision :: xtrt              ! point of transition - top side 
     double precision :: xtrb              ! point of transition - bottom side 
-    logical :: converged                  ! did xfoil converge? 
+    type (bubble_type) :: bubblet, bubbleb! bubble info - top and bottom #exp-bubble
   end type op_point_result_type                              
 
 
@@ -64,6 +74,7 @@ module xfoil_driver
     integer :: maxit                      ! max. iterations for BL calcs
     double precision :: vaccel            ! xfoil BL convergence accelerator
     logical :: fix_unconverged            ! try to fix unconverged pts.
+    logical :: exit_if_unconverged        ! exit die op point loop if a point is unconverged
     logical :: reinitialize               ! reinitialize BLs per op_point
   end type xfoil_options_type
 
@@ -113,7 +124,6 @@ subroutine run_op_points (foil, geom_options, xfoil_options,         &
   type(op_point_specification_type), dimension(:), intent(in)  :: op_points_spec
   type(op_point_result_type), dimension(:), allocatable, intent(out) :: op_points_result
 
-! #todo
   double precision, dimension(:), intent(in) :: flap_degrees
   logical, intent(in) :: use_flap
 
@@ -189,7 +199,7 @@ subroutine run_op_points (foil, geom_options, xfoil_options,         &
     op_spec = op_points_spec(i)
 
 !   print newline if output gets too long
-    if (show_details .and.( mod(i,25) == 0)) write (*,'(/,7x,A)',advance = 'no') '       '
+    if (show_details .and.( mod(i,80) == 0)) write (*,'(/,7x,A)',advance = 'no') '       '
 
 !   if flpas are activated, check if the angle has changed to reinit foil
 
@@ -325,7 +335,13 @@ subroutine run_op_points (foil, geom_options, xfoil_options,         &
     end if
 
     op_points_result(i) = op
- 
+
+!   early exit if not converged for speed optimization 
+    if ((.not. op%converged) .and. xfoil_options%exit_if_unconverged) then 
+      exit
+    end if 
+
+
   end do 
 
 
@@ -336,16 +352,18 @@ subroutine run_op_points (foil, geom_options, xfoil_options,         &
 
   do i = 1, noppoint
 
-    op = op_points_result(i)    
-    if (.not. is_out_lier (drag_statistics(i), op%cd)) then 
-      call update_statistic (drag_statistics(i), op%cd)
-    end if 
+    op = op_points_result(i)   
+    if (op%converged) then 
+      if (.not. is_out_lier (drag_statistics(i), op%cd)) then 
+        call update_statistic (drag_statistics(i), op%cd)
+      end if 
 
-    ! jx-mod Support Type 1 and 2 re numbers - cl may not be negative  
-    if ((op_spec%re%type == 2) .and. (op%cl <= 0d0) .and. op%converged) then 
-      write (*,*)
-      write(*,'(15x,A,I2,A, F6.2)') "Warning: Negative lift for Re-Type 2 at" // &
-       " op",i," - cl:",op%cl
+      ! jx-mod Support Type 1 and 2 re numbers - cl may not be negative  
+      if ((op_spec%re%type == 2) .and. (op%cl <= 0d0)) then 
+        write (*,*)
+        write(*,'(15x,A,I2,A, F6.2)') "Warning: Negative lift for Re-Type 2 at" // &
+        " op",i," - cl:",op%cl
+      end if 
     end if 
 
   end do
@@ -447,10 +465,14 @@ subroutine run_op_point (op_point_spec,        &
     op_point_result%cd   = CD
     op_point_result%xtrt = XOCTR(1)
     op_point_result%xtrb = XOCTR(2)
+    if (op_point_result%converged) &
+      call detect_bubble (op_point_result%bubblet, op_point_result%bubbleb)
   else
     op_point_result%cd   = CDP
     op_point_result%xtrt = 0.d0
     op_point_result%xtrb = 0.d0
+    op_point_result%bubblet%found = .false.
+    op_point_result%bubbleb%found = .false.
   end if
 
 ! Final check for NaNs
@@ -469,15 +491,127 @@ subroutine run_op_point (op_point_spec,        &
   end if
 
   if(show_details) then 
-    write (outstring,'(I4)') niter_needed
+!   write (outstring,'(I4)') niter_needed
     if (op_point_result%converged) then
-      call print_colored (COLOR_NORMAL,  ' ' // trim(adjustl(outstring)))
+!     call print_colored (COLOR_NORMAL,  ' ' // trim(adjustl(outstring)))
+      call print_colored (COLOR_NORMAL,  '.')
     else
-      call print_colored (COLOR_WARNING, ' ' // trim(adjustl(outstring)))
+!     call print_colored (COLOR_WARNING, ' ' // trim(adjustl(outstring)))
+      call print_colored (COLOR_WARNING, 'x')
     end if
   end if
 
 end subroutine run_op_point
+
+
+!-------------------------------------------------------------------------------
+! #exp-bubble
+! Detect a bubble on top or bottom side using xfoil TAU (shear stress) info
+!    
+!       If TAU < 0 and end of laminar separation is before transition point 
+!       it should be a bubble
+! 
+! Code is inspired from Enno Eyb / xoper.f from xfoil source code
+!-------------------------------------------------------------------------------
+
+subroutine detect_bubble (bubblet, bubbleb)
+
+  use xfoil_inc
+
+  type (bubble_type), intent(inout) :: bubblet, bubbleb
+  double precision :: CF 
+  double precision :: detect_xstart, detect_xend 
+  integer :: I, IS, IBL
+    
+  bubblet%found  = .false.
+  bubblet%xstart = 0d0
+  bubblet%xend   = 0d0
+
+  bubbleb%found  = .false.
+  bubbleb%xstart = 0d0
+  bubbleb%xend   = 0d0
+
+  detect_xstart = 0.05d0              ! detection range 
+  detect_xend   = 1d0
+  
+
+  !!Write CF to file together with results
+  !open  (unit=iunit, file='CF.txt')
+  ! write(*,'(A)') '    X       Y       CF'
+
+! Detect range on upper/lower side where shear stress < 0 
+
+! --- This is the Original stripped down from XFOIL 
+  DO I=1, N
+
+    if((X(I) >= detect_xstart) .and. (X(I) <= detect_xend)) then
+
+      IS = 1
+      IF(GAM(I) .LT. 0.0) IS = 2
+    
+      IF(LIPAN .AND. LVISC) THEN        ! bl calc done and viscous mode? 
+        IF(IS.EQ.1) THEN
+          IBL = IBLTE(IS) - I + 1
+        ELSE
+          IBL = IBLTE(IS) + I - N
+        ENDIF
+        CF =  TAU(IBL,IS)/(0.5*QINF**2)
+      ELSE
+        CF = 0.
+      ENDIF
+  ! --- End Original stripped down from XFOIL 
+
+      if (IS == 1) then                 ! top side - going from TE to LE 
+        if ((X(I) <= XOCTR(1)) .and. (.not.bubblet%found) )  then  ! no bubbles after transition point
+          if     ((CF < 0d0) .and. (bubblet%xend == 0d0)) then
+            bubblet%xend = X(I) 
+          elseif ((CF < 0d0) .and. (bubblet%xend > 0d0)) then 
+            bubblet%xstart   = X(I) 
+          elseif ((CF >= 0d0) .and. (bubblet%xstart > 0d0)) then 
+            bubblet%found = .true.
+          else
+          end if 
+        end if 
+      else                              ! bottom side - going from LE to TE 
+        if((X(I) <= XOCTR(2)) .and. (.not.bubblet%found) )  then      ! no bubbles after transition point
+          if     ((CF < 0d0) .and. (bubbleb%xstart == 0d0)) then
+            bubbleb%xstart = X(I) 
+          elseif ((CF < 0d0) .and. (bubbleb%xstart > 0d0)) then 
+            bubbleb%xend   = X(I) 
+          elseif ((CF >= 0d0) .and. (bubbleb%xend > 0d0)) then 
+            bubbleb%found = .true.
+          else
+          end if 
+        end if  
+      end if  
+    
+      ! write(*,'(3F14.6)') X(I), Y(I), CF
+    end if 
+
+  ENDDO		
+
+  if ((bubblet%xstart > 0d0) .and. (bubblet%xend == 0d0)) then 
+    bubblet%xend = XOCTR(1)
+    bubblet%found  = .true.
+  end if
+  if ((bubbleb%xstart > 0d0) .and. (bubbleb%xend == 0d0)) then 
+    bubbleb%xend = XOCTR(2)
+    bubbleb%found  = .true.
+  end if
+ 
+  ! write (*,*) 
+  ! if (bubblet%found)  &
+  ! write (*,'(A,L,3(3x,F6.4))') '   -- Top ', & 
+  !                          bubblet%found, bubblet%xstart, bubblet%xend, XOCTR(1)
+  !if (bubbleb%found)  &
+  !  write (*,'(A,L,3(3x,F6.4))') '   -- Bot ', &
+  !                          bubbleb%found, bubbleb%xstart, bubbleb%xend, XOCTR(2)
+   !close (iunit)
+  
+  return
+
+end subroutine detect_bubble
+  
 
 
 !=============================================================================80
@@ -856,7 +990,7 @@ subroutine xfoil_init_BL (show_details)
   LIPAN  = .false.
   LBLINI = .false.
 
-  if(show_details) call print_colored (COLOR_NOTE, ' i')
+  if(show_details) call print_colored (COLOR_NOTE, 'i')
 
 end subroutine xfoil_init_BL 
 
@@ -1128,6 +1262,7 @@ function is_out_lier (value_statistic, check_value)
   end if 
 
 end function is_out_lier
+
 !------------------------------------------------------------------------------
 subroutine show_out_lier (ipoint, value_statistic, check_value)
 
@@ -1139,24 +1274,7 @@ subroutine show_out_lier (ipoint, value_statistic, check_value)
               '    meanvalue: ', value_statistic%meanval
 
 end subroutine show_out_lier
-!------------------------------------------------------------------------------
 
-! #todo remove
-!----Check if lift has changed although it should be fix with spec_cl ---------
-function lift_changed (op_mode, op_point, lift)
-
-  doubleprecision, intent (in) :: op_point, lift
-  character (*), intent (in) :: op_mode
-  logical :: lift_changed
-
-  if ((op_mode == 'spec_cl') .and. (abs(lift - op_point) > 0.01d0)) then
-    lift_changed = .true.
-  else
-    lift_changed = .false.
-  end if 
-
-end function lift_changed
-!------------------------------------------------------------------------------
 
 !----Check if lift has changed although it should be fix with spec_cl ---------
 function cl_changed (spec_cl, op_point, cl)

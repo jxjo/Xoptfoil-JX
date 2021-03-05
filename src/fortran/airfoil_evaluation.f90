@@ -630,7 +630,7 @@ function aero_objective_function(foil, actual_flap_degrees)
 
   use airfoil_operations, only : my_stop
   use math_deps,          only : derivation_at_point
-  use xfoil_driver,       only : run_op_points, xfoil_set_airfoil, op_point_result_type 
+  use xfoil_driver,       only : run_op_points, xfoil_set_airfoil, op_point_result_type
 
   type(airfoil_type), intent(in)    :: foil
   double precision, dimension(:), intent(in)  :: actual_flap_degrees
@@ -639,6 +639,7 @@ function aero_objective_function(foil, actual_flap_degrees)
   type(op_point_specification_type) :: op_spec
   type(op_point_result_type)        :: op
   type(op_point_result_type), dimension(:), allocatable :: op_points_result
+  type(xfoil_options_type)          :: local_xfoil_options
 
   integer          :: i
   double precision :: pi
@@ -650,18 +651,19 @@ function aero_objective_function(foil, actual_flap_degrees)
   type(dynamic_weighting_type) :: dynamic_weighting_result
   
   pi = acos(-1.d0)
+  local_xfoil_options = xfoil_options
 
 ! Analyze airfoil at requested operating conditions with Xfoil
 
   call xfoil_set_airfoil (foil) 
   
-  xfoil_options%show_details = .false.      ! switch off because of multi-threading
+  local_xfoil_options%show_details        = .false.  ! switch off because of multi-threading
+  local_xfoil_options%exit_if_unconverged = .true.   ! speed up if an op point uncoverges
 
-  call run_op_points (foil, xfoil_geom_options, xfoil_options,        &
+  call run_op_points (foil, xfoil_geom_options, local_xfoil_options,        &
                       use_flap, flap_spec, actual_flap_degrees(1:noppoint), &
                       op_points_spec, op_points_result)
 
-  xfoil_options%show_details = show_details  
 
 ! Early exit if an op_point didn't converge - further calculations wouldn't make sense
 
@@ -1090,6 +1092,8 @@ function write_airfoil_optimization_progress(designvars, designcounter)
   type(op_point_specification_type) :: op_spec
   type(op_point_result_type)        :: op
   type(op_point_result_type), dimension(:), allocatable :: op_points_result
+  type(xfoil_options_type)          :: local_xfoil_options
+
 
   double precision, dimension(noppoint) :: actual_flap_degrees
   double precision :: maxt, xmaxt, maxc, xmaxc
@@ -1099,13 +1103,12 @@ function write_airfoil_optimization_progress(designvars, designcounter)
   integer :: foilunit, polarunit
   logical :: xfoil_reinitialize
 
+  local_xfoil_options = xfoil_options
+
   write(text,*) designcounter
   text = adjustl(text)
 
-  if (designcounter == 0) then
-    write (*,'(4x,A)') '-> Writing seed airfoil as design #'  //&
-           trim(text)//' to file '//trim(output_prefix)//'[...].dat'
-  else
+  if (designcounter > 0) then
     write (*,'(2x,A)', advance ='no') '-> Writing design '
     call  print_colored (COLOR_HIGH,'#'//trim(text))
     write (*,*)
@@ -1114,13 +1117,10 @@ function write_airfoil_optimization_progress(designvars, designcounter)
 ! Design 0 is seed airfoil to output - take the original values 
 !     Smoothing - Restore the original, not smoothed seed airfoil to
 !                 ...design_coordinates.dat to show it in visualizer
-  xfoil_reinitialize = xfoil_options%reinitialize
 
   if (designcounter == 0) then
-    foil = seed_foil_not_smoothed
-
-  ! ensure convergence for seed airfoil - see also check_seed
-    xfoil_options%reinitialize = .true. 
+    foil = seed_foil
+    local_xfoil_options%reinitialize = .true.    ! ensure convergence for seed 
 
 ! Design > 0 - Build current foil out seed foil and current design 
   else 
@@ -1130,16 +1130,16 @@ function write_airfoil_optimization_progress(designvars, designcounter)
 ! Get actual flap angles based on design variables
   call get_flap_degrees_from_design (designvars, actual_flap_degrees)
 
-  if (show_details) write (*,*) 
 
 ! Analyze airfoil at requested operating conditions with Xfoil
 
-  call run_op_points (foil, xfoil_geom_options, xfoil_options,        &
+  if (show_details .and. (designcounter > 0)) write (*,*) 
+  
+  call run_op_points (foil, xfoil_geom_options, local_xfoil_options,  &
                       use_flap, flap_spec, actual_flap_degrees, &
                       op_points_spec, op_points_result)
 
 
-  xfoil_options%reinitialize = xfoil_reinitialize 
              
 ! Get geometry info 
   call xfoil_set_airfoil (foil)   ! last set could have been a flaped version     
@@ -1208,7 +1208,16 @@ function write_airfoil_optimization_progress(designvars, designcounter)
 
 ! Write coordinates to file
 
-  call  airfoil_write_to_unit (foilunit, title, foil, .True.)
+  ! Design 0 is seed airfoil to output - take the original values 
+  ! Take the original, not smoothed seed airfoil to
+  !      ...design_coordinates.dat to show it in visualizer
+
+  if (designcounter == 0) then
+    call  airfoil_write_to_unit (foilunit, title, seed_foil_not_smoothed, .True.)
+    foil = seed_foil_not_smoothed
+  else 
+    call  airfoil_write_to_unit (foilunit, title, foil, .True.)
+  end if 
 
 ! Write polars to file
 
@@ -1235,6 +1244,8 @@ function write_airfoil_optimization_progress(designvars, designcounter)
   if (show_details .and. (designcounter > 0)) then 
     call show_op_optimization_progress  (op_points_result) 
     call show_geo_optimization_progress (foil) 
+    ! #exp-bubble
+    call show_op_bubbles (op_points_spec, op_points_result) 
   end if
 
 ! Set return value (needed for compiler)
@@ -1348,6 +1359,71 @@ subroutine show_op_optimization_progress(op_points_result)
   write (*,*)
       
 end 
+
+!------------------------------------------------------------------------------
+! #exp-bubble
+! Prints op transition / bubble results during optimization 
+!       ! work in progress !
+!------------------------------------------------------------------------------
+subroutine show_op_bubbles (op_points_spec, op_points_result) 
+
+  use xfoil_driver,       only : op_point_result_type, op_point_specification_type
+
+  type(op_point_specification_type), dimension(:),  intent(in) :: op_points_spec
+  type(op_point_result_type),        dimension(:),  intent(in) :: op_points_result
+
+  integer :: i, noppoint
+  logical :: bubbles_found 
+
+  noppoint = size(op_points_spec,1)  
+
+  bubbles_found = .false.
+  do i= 1, noppoint
+    if (op_points_result(i)%bubblet%found .or. op_points_result(i)%bubbleb%found) then
+      bubbles_found = .true.
+      exit 
+    end if
+  end do
+  if (.not. bubbles_found ) return
+   
+  write (*,'(7x)',   advance = 'no')  
+  call  print_colored (COLOR_NOTE,'Experimental: Bubbles detected')
+  write (*,'(1x,A)') '           from   to        Transition    '
+
+  !                   Op 7   cd 0.42     top  0.45 - 0.65      0.88
+  do i= 1, noppoint
+    if (op_points_result(i)%bubblet%found) then 
+      write (*,'(7x,15x,"Op",I2)',   advance = 'no') i 
+      if (op_points_spec(i)%spec_cl) then
+        write (*,'("     cd",F5.2)', advance = 'no') op_points_result(i)%cl 
+      else
+        write (*,'("  alpha",F5.2)', advance = 'no') op_points_result(i)%alpha 
+      end if 
+      write (*,'("      top ")', advance = 'no')     
+      write (*,'(F5.2)',         advance = 'no') op_points_result(i)%bubblet%xstart    
+      write (*,'(" -",F5.2)',    advance = 'no') op_points_result(i)%bubblet%xend    
+      write (*,'("     ",F5.2)', advance = 'no') op_points_result(i)%xtrt   
+      write (*,*)
+    end if
+    if (op_points_result(i)%bubbleb%found) then 
+      write (*,'(7x,15x, "Op",I2)',   advance = 'no') i 
+      if (op_points_spec(i)%spec_cl) then
+        write (*,'("     cd",F5.2)', advance = 'no') op_points_result(i)%cl 
+      else
+        write (*,'("  alpha",F5.1)', advance = 'no') op_points_result(i)%alpha
+      end if 
+      write (*,'("      bot ")', advance = 'no')     
+      write (*,'(F5.2)',         advance = 'no') op_points_result(i)%bubbleb%xstart    
+      write (*,'(" -",F5.2)',    advance = 'no') op_points_result(i)%bubbleb%xend    
+      write (*,'("     ",F5.2)', advance = 'no') op_points_result(i)%xtrb   
+      write (*,*)
+    end if
+  end do
+
+  write (*,*)
+
+end 
+
 
 !------------------------------------------------------------------------------
 !
