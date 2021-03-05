@@ -14,13 +14,14 @@ module os_util
 
   implicit none
 
-  integer, parameter, public  :: COLOR_GOOD   = 1
-  integer, parameter, public  :: COLOR_BAD    = 2
-  integer, parameter, public  :: COLOR_NORMAL = 3
-  integer, parameter, public  :: COLOR_HIGH   = 4
-  integer, parameter, public  :: COLOR_ERROR  = 5
-  integer, parameter, public  :: COLOR_WARNING= 6
-  integer, parameter, public  :: COLOR_NOTE   = 7
+  integer, parameter, public  :: COLOR_GOOD    = 1
+  integer, parameter, public  :: COLOR_BAD     = 2
+  integer, parameter, public  :: COLOR_NORMAL  = 3
+  integer, parameter, public  :: COLOR_HIGH    = 4
+  integer, parameter, public  :: COLOR_ERROR   = 5
+  integer, parameter, public  :: COLOR_WARNING = 6
+  integer, parameter, public  :: COLOR_NOTE    = 7
+  integer, parameter, public  :: COLOR_PROGRAM = 8
 
   integer, parameter, public  :: Q_GOOD     = 0         ! must be ordered
   integer, parameter, public  :: Q_OK       = 1
@@ -239,6 +240,8 @@ subroutine print_colored_windows (color_typ, text)
       color_attribute = iany([FOREGROUND_INTENSITY])
 !     grey is better then thi light blue
 !      color_attribute = iany([FOREGROUND_BLUE, FOREGROUND_GREEN])
+    case (COLOR_PROGRAM)
+      color_attribute = iany([FOREGROUND_BLUE, FOREGROUND_INTENSITY])
     case default
       color_attribute = iany([FOREGROUND_RED, FOREGROUND_GREEN, FOREGROUND_BLUE])
   end select
@@ -372,7 +375,7 @@ subroutine print_colored_r (strlen, format_string, quality, rvalue)
     case (Q_OK)
       color = COLOR_NORMAL
     case (Q_BAD)
-      color = COLOR_WARNING
+      color = COLOR_NOTE
     case default 
       color = COLOR_BAD
   end select

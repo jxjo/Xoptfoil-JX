@@ -1,21 +1,15 @@
 !-------------------------------------------------------------------------
 !
-!   Xfoil-Worker  *work in progress*
+!   Xfoil-Worker  
 !
 !   Utility Functions based on xfoil to complement Xoptfoil-JX
 !   
 !   Xfoil-Worker uses an Xoptfoil input-file to get the paramters.
 !     only a few sections are needed
 !   
-!   -o polars    generate polar (set)for an airfoil
-!                inputs.txt namelists used: polar_generation, xfoil_run_options        
-!   
-!   -o smooth    repanels and optionally smoothes an airfoil
-!                inputs.txt namelists used: xfoil_paneling_options, xfoil_run_options        
-!                                           smoothing_options 
 !   This file is part of XOPTFOIL-JX.
 !                       Copyright (C) 2017-2019 Daniel Prosser
-!                       Copyright (C) 2020      Jochen Guenzel
+!                       Copyright (C) 2021      Jochen Guenzel
 !-------------------------------------------------------------------------
 
 program xfoil_worker
@@ -57,6 +51,13 @@ program xfoil_worker
     call my_stop("Must specify an action for the worker with -w option.")
   if (trim(airfoil_filename) == "") &
     call my_stop("Must specify an airfoil file with the -a option.")
+
+! Let's start
+
+  write (*,'(1x)', advance = 'no') 
+  call print_colored (COLOR_PROGRAM,'Worker on '//trim(airfoil_filename))
+
+  write (*,'(3x,A,A,3x)', advance = 'no') '-',trim(action)  
 
 ! Load airfoil defined in command line 
   call load_airfoil(airfoil_filename, foil)
@@ -129,6 +130,8 @@ program xfoil_worker
 
   end select 
 
+  write (*,*)
+
   call xfoil_cleanup()
   call deallocate_airfoil (foil)
 
@@ -155,6 +158,9 @@ subroutine set_geometry_value (output_prefix, seed_foil, value_argument, visuali
   character (20)     :: value_str, label
   character (2)      :: value_type
 
+  write (*,*) 'Max thickness or camber' 
+  write (*,*) 
+
   value_type = value_argument (1:(index (value_argument,'=') - 1))
   value_str  = value_argument ((index (value_argument,'=') + 1):)
 
@@ -163,24 +169,22 @@ subroutine set_geometry_value (output_prefix, seed_foil, value_argument, visuali
   if(ierr /= 0) & 
     call my_stop ("Wrong argument format '"//trim(value_argument)//"' in set command") 
 
-  write (*,*) 
-
   select case (trim(value_type))
 
     case ('t') 
-      write (*,'(1x,A)') 'Setting thickness to '//trim(adjustl(value_str))//'%'
+      write (*,'(" - ",A)') 'Setting thickness to '//trim(adjustl(value_str))//'%'
       call xfoil_set_thickness_camber (seed_foil, (value_number / 100d0), 0d0, 0d0, 0d0, foil)
 
     case ('xt') 
-      write (*,'(1x,A)') 'Setting max. thickness position to '//trim(adjustl(value_str))//'%'
+      write (*,'(" - ",A)') 'Setting max. thickness position to '//trim(adjustl(value_str))//'%'
       call xfoil_set_thickness_camber (seed_foil, 0d0, (value_number / 100d0), 0d0, 0d0, foil)
 
     case ('c') 
-      write (*,'(1x,A)') 'Setting camber to '//trim(adjustl(value_str))//'%'
+      write (*,'(" - ",A)') 'Setting camber to '//trim(adjustl(value_str))//'%'
       call xfoil_set_thickness_camber (seed_foil, 0d0, 0d0, (value_number / 100d0), 0d0, foil)
 
     case ('xc') 
-      write (*,'(1x,A)') 'Setting max. camber position to '//trim(adjustl(value_str))//'%'
+      write (*,'(" - ",A)') 'Setting max. camber position to '//trim(adjustl(value_str))//'%'
       call xfoil_set_thickness_camber (seed_foil, 0d0, 0d0, 0d0, (value_number / 100d0), foil)
 
     case default
@@ -227,6 +231,9 @@ subroutine check_foil_curvature (input_file, output_prefix, seed_foil, visualize
   logical, intent(in)          :: visualizer
 
   type (airfoil_type)          :: foil, tmp_foil
+
+  write (*,*) 'Surface curvature with reversals, high lows and spikes'
+  write (*,*) 
 
   tmp_foil = seed_foil
 
@@ -307,6 +314,14 @@ subroutine repanel_smooth (input_file, output_prefix, seed_foil, visualizer, do_
   type (airfoil_type) :: foil_smoothed, foil
   type (xfoil_geom_options_type) :: geom_options
 
+  if (do_smoothing) then 
+    write (*,*) 'Repanel, normalize and smooth the airfoil'
+  else
+    write (*,*) 'Repanel and normalize the airfoil'
+  end if 
+
+  write (*,*) 
+
 ! Read inputs file to get options needed 
 
   call read_xfoil_paneling_inputs  (input_file, geom_options)
@@ -340,11 +355,11 @@ subroutine repanel_smooth (input_file, output_prefix, seed_foil, visualizer, do_
 
   if (do_smoothing) then 
 
-    write (*,'(/,1x,A)') 'Smoothing Top surface ...'
+    write (*,'(" - ",A)', advance = 'no') 'Smoothing top surface.   '
     zt_smoothed = foil%zt
     call smooth_it (.true., spike_threshold, foil%xt, zt_smoothed) 
 
-    write (*,'(/,1x,A)') 'Smoothing Bottom surface ...'
+    write (*,'(" - ",A)', advance = 'no') 'Smoothing bottom surface.'
     zb_smoothed = foil%zb
     call smooth_it (.true., spike_threshold, foil%xb, zb_smoothed)
 
@@ -404,6 +419,9 @@ subroutine blend_foils (input_file, output_prefix, seed_foil_in, blend_foil_in, 
   integer       :: pointst, pointsb
   double precision :: blend_factor
 
+  write (*,*) 'The coordinates of two airfoils'
+  write (*,*) 
+
   read (value_argument ,*, iostat = ierr) blend_factor  
 
   if(ierr /= 0) & 
@@ -449,7 +467,7 @@ subroutine blend_foils (input_file, output_prefix, seed_foil_in, blend_foil_in, 
 
 ! now blend the z-values of the two poylines to become the new one
 
-  write (*,'(/1x,A, I3,A)') 'Blending '//trim(seed_foil_in%name)//' and '//&
+  write (*,'(" - ",A, I3,A)') 'Blending '//trim(seed_foil_in%name)//' and '//&
            trim(blend_foil_in%name)//' with', int(blend_factor * 100),'%'
  
   zt_blended = (1d0 - blend_factor) * zt + blend_factor * zttmp
@@ -506,6 +524,16 @@ subroutine set_flap (input_file, output_prefix, seed_foil, visualizer)
   call read_xfoil_paneling_inputs  (input_file, geom_options)
   call read_flap_inputs            (input_file, flap_spec, ndegrees, flap_degrees)
 
+  if (ndegrees == 1) then 
+    write (*,'(A)', advance = 'no') 'Setting one flap position'
+  else
+    write (*,'(A,I2,A)', advance = 'no') 'Setting',ndegrees,' flap positions'
+  end if
+  write (*,'(1x,A,I2,A,F4.1,A)') 'at ', int (flap_spec%x_flap*1d2), &
+                '% ('//flap_spec%y_flap_spec//'=', flap_spec%y_flap,')'
+
+  write (*,*)
+
 ! Repanel seed airfoil with xfoil PANGEN 
 
   call repanel_and_normalize_airfoil (seed_foil, geom_options%npan, .false., foil)
@@ -529,9 +557,7 @@ subroutine set_flap (input_file, output_prefix, seed_foil, visualizer)
       write (text_degrees,'(SP,F6.1)') flap_degrees(i)
     end if
 
-    write (*,'(1x,A,I2,A,F4.1,A)') 'Setting flaps at ', int (x_flap*1d2), &
-          '% ('//flap_spec%y_flap_spec//'=', &
-          flap_spec%y_flap,') to '//trim(adjustl(text_degrees))//' degrees'
+    write (*,'(" - ",A,F4.1,A)') 'Setting flaps to '//trim(adjustl(text_degrees))//' degrees'
 
     call xfoil_set_airfoil(foil)
     call xfoil_apply_flap_deflection(flap_spec, flap_degrees(i))
@@ -595,8 +621,8 @@ subroutine write_design_coordinates (output_prefix, designcounter, foil)
 
 !   Header for coordinate file
 
-    write(*,*) "Writing "//trim(foil%name)//" coordinates for seed airfoil to file "//               &
-               trim(foilfile)//" ..."
+    write(*,'(" - ",A)') "Writing coordinates for visualizer to "//trim(foilfile)
+
     open(unit=foilunit, file=foilfile, status='replace')
     write(foilunit,'(A)') 'title="Airfoil coordinates"'
 
@@ -614,8 +640,6 @@ subroutine write_design_coordinates (output_prefix, designcounter, foil)
     write(text,*) designcounter
     text = adjustl(text)
 
-    write(*,*) "Writing "//trim(foil%name)//" coordinates for design number "//trim(text)//        &
-               " to file "//trim(foilfile)//" ..."
     open(unit=foilunit, file=foilfile, status='old', position='append', err=900)
     title =  'zone t="Airfoil, maxt='//trim(maxtchar)//&
              ', xmaxt='//trim(xmaxtchar)//', maxc='//&

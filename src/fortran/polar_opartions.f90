@@ -110,21 +110,23 @@ subroutine generate_polar_files (output_prefix, foil, npolars, polars, &
   ! calc and write all polars
 
   if (npolars > 1) then
-    write (*,'(1x,A,I2,A)') 'A total of ',npolars,' polars will be generated '//  &
-    'for airfoil '//trim(foil%name)
+    write (*,'(A,I2,A)') 'A total of ',npolars,' polars will be generated '//  &
+                            'for airfoil '//trim(foil%name)
+  else
+    write (*,'(A,I2,A)') 'One polar will be generated '//  &
+                            'for airfoil '//trim(foil%name)
   end if
 
   do i = 1, npolars
 
-    write (*,'(1x,A,I1,A, I7,A)') 'Calculating polar Type ',polars(i)%re%type,' Re=',  &
-          int(polars(i)%re%number), ' for '// trim(polars(i)%airfoil_name)
     write (*,*) 
+    write (*,'(" - ",A,I1,A, I7,A)') 'Calculating polar Type ',polars(i)%re%type,', Re=',  &
+          int(polars(i)%re%number)
     call init_polar (polars(i))
 
     call calculate_polar (foil, polars(i), xfoil_geom_options, xfoil_options)
 
-    write (*,*) 
-    write (*,'(1x,A, F7.0)')    'Writing polar to '//trim(polars_subdirectory)//'/'//trim(polars(i)%file_name)
+    write (*,'(" - ",A, F7.0)') 'Writing polar to '//trim(polars_subdirectory)//'/'//trim(polars(i)%file_name)
 
     open(unit=13, file= trim(polars_subdirectory)//'/'//trim(polars(i)%file_name), status='replace')
     call write_polar_header (13, polars(i))
@@ -189,7 +191,7 @@ subroutine read_polar_inputs  (input_file, foil_name, npolars, polars, xfoil_opt
   xtripb          = 1.d0
   viscous_mode    = .true.
   silent_mode     = .true.
-  bl_maxit        = 50
+  bl_maxit        = 40
   vaccel          = 0.005d0
   fix_unconverged = .true.
   reinitialize    = .false.
@@ -207,7 +209,7 @@ subroutine read_polar_inputs  (input_file, foil_name, npolars, polars, xfoil_opt
 
       rewind(iunit)
       read (iunit, iostat=istat, nml=xfoil_run_options)
-      call namelist_check('xfoil_run_options', istat, 'warn')
+      ! call namelist_check('xfoil_run_options', istat, 'warn')
     end if
     close (iunit)
   else
@@ -248,7 +250,8 @@ subroutine read_polar_inputs  (input_file, foil_name, npolars, polars, xfoil_opt
   xfoil_options%silent_mode  = silent_mode
   xfoil_options%maxit        = bl_maxit
   xfoil_options%vaccel       = vaccel
-  xfoil_options%fix_unconverged = fix_unconverged
+  xfoil_options%fix_unconverged     = fix_unconverged
+  xfoil_options%exit_if_unconverged = .false.
   xfoil_options%reinitialize = reinitialize
   ! suppress a re-paneling of the airfoil as we want the original properties.
   xfoil_options%repanel = .false.  
@@ -462,6 +465,7 @@ subroutine calculate_polar (foil, polar, xfoil_geom_options, xfoil_options)
   use vardef,             only : flap_spec_type
   use xfoil_driver,       only : run_op_points, xfoil_driver_reset
   use xfoil_driver,       only : xfoil_geom_options_type, xfoil_options_type
+  use airfoil_evaluation, only : show_op_bubbles
 
   type (polar_type), intent (inout) :: polar
   type (airfoil_type), intent (in)  :: foil
@@ -484,6 +488,9 @@ subroutine calculate_polar (foil, polar, xfoil_geom_options, xfoil_options)
                     use_flap, flap_spec, flap_degrees, &
                     polar%op_points_spec, polar%op_points)
 
+  ! #exp-bubble 
+  call show_op_bubbles (polar%op_points_spec, polar%op_points) 
+
 end subroutine calculate_polar
 
 
@@ -493,7 +500,7 @@ end subroutine calculate_polar
 !------------------------------------------------------------------------------
 subroutine write_polar_data (out_unit, polar)
 
-  use xfoil_driver,       only : op_point_result_type
+  use xfoil_driver,       only : op_point_result_type, op_point_specification_type
 
   type (polar_type), intent (in) :: polar
   integer,           intent (in) :: out_unit

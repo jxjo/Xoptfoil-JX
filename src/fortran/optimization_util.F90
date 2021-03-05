@@ -141,10 +141,9 @@ subroutine initial_designs(dv, objval, fevals, objfunc, xmin, xmax, use_x0,    &
 
 ! Initial population of designs set between xmin and xmax
 
-  write(*,*)
   write(text3,*) pop
   text3 = adjustl(text3)
-  write(*,*) 'Generating and evaluating '//trim(text3)//' initial designs'
+  write(*,'(" - ",A)') 'Generating and evaluating '//trim(text3)//' initial designs'
 
 !$omp end master
 !$omp barrier
@@ -174,9 +173,8 @@ subroutine initial_designs(dv, objval, fevals, objfunc, xmin, xmax, use_x0,    &
     write(text1,*) attempts
     text1 = adjustl(text1)
 !$omp master
-    write(*,*) 'Checking initial designs for feasibility using max '//trim(text1)//' init attempts...'
-    write(*,*)
-    write(*,'(13x)', advance ='no') 
+    write(*,'(" - ",A)') 'Checking initial designs for feasibility using max '//trim(text1)//' init attempts...'
+    write(*,'(3x)', advance ='no') 
 
 !$omp end master
 
@@ -218,19 +216,11 @@ subroutine initial_designs(dv, objval, fevals, objfunc, xmin, xmax, use_x0,    &
 
       if ((initcount > attempts) .and. (objval(i) >= feasible_limit)) then
         call print_colored (COLOR_NOTE,'.')         ! no valid design 
-!        write(*,*) ' Design '//trim(text2)//' is infeasible and was not'//     &
-!                   ' fixed within '//trim(text1)//' reinitialization attempts.'
       elseif ((initcount <= attempts) .and. (initcount > 0) .and.              &
               (objval(i) < feasible_limit)) then
-        call print_colored (COLOR_NORMAL, 'o')      ! made it after retries
-!        write(text3,*) initcount
-!        text3 = adjustl(text3)
-!        write(*,*) ' Design '//trim(text2)//' was initially infeasible but'//  &
-!                   ' was fixed after '//trim(text3)//                          &
-!                   ' reinitialization attempts.'
+        call print_colored (COLOR_NOTE, 'o')      ! made it after retries
       else
-        call print_colored (COLOR_GOOD, 'o')        ! first shot
-!        write(*,*) ' Design '//trim(text2)//' is feasible.' 
+        call print_colored (COLOR_NORMAL, 'o')        ! first shot
       end if
 
     end do
@@ -238,7 +228,6 @@ subroutine initial_designs(dv, objval, fevals, objfunc, xmin, xmax, use_x0,    &
 !$omp end do
 
 !$omp master
-    write(*,*)
     write(*,*)
 !$omp end master
 

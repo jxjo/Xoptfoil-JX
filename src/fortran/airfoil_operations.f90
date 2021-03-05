@@ -49,6 +49,10 @@ subroutine get_seed_airfoil (seed_airfoil, airfoil_file, naca_options, foil )
 
 !   Read seed airfoil from file
 
+    write (*,'(" - ", A)', advance = 'no') 'Reading airfoil from file '
+    call print_colored (COLOR_HIGH,trim(airfoil_file))
+    write (*,*)
+
     call load_airfoil(airfoil_file, foil)
 
   elseif (trim(seed_airfoil) == 'naca') then
@@ -91,11 +95,6 @@ subroutine load_airfoil(filename, foil)
     write(*,*)
     stop
   end if 
-
-  write(*,*)
-  write (*,'(1x, A)', advance = 'no') 'Reading airfoil from file: '
-  call print_colored (COLOR_HIGH,trim(filename))
-  write (*,*)
 
 ! Read number of points and allocate coordinates
 
@@ -386,7 +385,7 @@ end subroutine le_find
 !-----------------------------------------------------------------------------
 subroutine repanel_and_normalize_airfoil (in_foil, npoint_paneling, symmetrical, foil)
 
-  use vardef,       only : airfoil_type         ! jx-deprecated:  oil_transform
+  use vardef,       only : airfoil_type         
   use math_deps,    only : norm_2
   use xfoil_driver, only : smooth_paneling
 
@@ -412,8 +411,6 @@ subroutine repanel_and_normalize_airfoil (in_foil, npoint_paneling, symmetrical,
   foil%name = in_foil%name
 
   ! initial paneling to npoint_paneling
-  write (*,*)
-  write (*,'(1x,A,I3,A)') 'Repaneling and normalizing with ',npoint_paneling,' Points'
   call smooth_paneling(in_foil, npoint_paneling, foil)
   call le_find(foil%x, foil%z, foil%leclose, foil%xle, foil%zle, foil%addpoint_loc)
 
@@ -460,10 +457,12 @@ subroutine repanel_and_normalize_airfoil (in_foil, npoint_paneling, symmetrical,
     call print_warning ("Leading edge couln't be moved close to 0,0. Continuing ...")
   end if 
 
+  write (*,'(" - ",A)', advance = 'no') 'Repaneling and normalizing.'
+
   if (foil%addpoint_loc /= 0) then 
-    write (*,'(1x, A,I3,A)') 'Leading edge (0,0) added. Airfoil will have ',(npoint_paneling + 1),' Points'
+    write (*,'(1x, A,I3,A)') 'Leading edge added. Airfoil will have ',(npoint_paneling + 1),' Points'
   else
-    write (*,'(1x, A)')      'Set closest point to LE to become new leading edge at (0,0)'
+    write (*,'(1x, A,I3,A)') 'Airfoil will have ', npoint_paneling,' Points'
   end if
 
   ! now split airfoil to get upper and lower polyline 
@@ -722,8 +721,7 @@ subroutine airfoil_write(filename, title, foil)
   type(airfoil_type), intent(in) :: foil
   integer :: iunit
 
-  write(*,*)
-  write (*,'(1x, A)', advance = 'no') 'Writing airfoil to file: '
+  write (*,'(" - ", A)', advance = 'no') 'Writing airfoil to '
   call print_colored (COLOR_HIGH,trim(filename))
   write (*,*)
 
@@ -906,16 +904,15 @@ subroutine assess_surface (show_details, info, &
 
   if(show_details) then
 
-    write (*,*)
     if (len(result_info) > len(result_out)) then
       result_out = '... ' // result_info ((len(result_info) - len(result_out) + 1 + 4):)
     else
       result_out = result_info
     end if 
 
-    Write (*,'(A21,A)') adjustl(info) // ' ', result_out
+    write (*,'("   ",A19,A)') adjustl(info) // ' ', result_out
 
-    write (*,'(20x)', advance ='no')   
+    write (*,'(26x)', advance ='no')   
     call print_colored (COLOR_NOTE, 'Spikes')
     call print_colored_i (4, quality_spikes, nspikes)
     call print_colored (COLOR_NOTE, '     HighLows')
@@ -924,7 +921,7 @@ subroutine assess_surface (show_details, info, &
     call print_colored_i (4, quality_reversals, nreversals)
     write (*,*)
 
-    write (*,'(20x)', advance = 'no')
+    write (*,'(26x)', advance = 'no')
     label = 'max curvature at TE'
     call print_colored (COLOR_NOTE, label//'=')
     call print_colored_r (6,'(F6.2)', quality_te, cur_te_curvature) 
@@ -1254,33 +1251,29 @@ subroutine smooth_it (show_details, spike_threshold, x, y)
 
     sum_y_after = abs(sum(y)) 
     delta_y = 100d0 * (sum_y_after - sum_y_before)/sum_y_before
-    write (text_change,'(A,F8.5,A)') ' Overall change of y values ',delta_y,'%' 
+    write (text_change,'(A,F8.5,A)') 'Overall change of y values ',delta_y,'%' 
 
     if ( nspikes_initial == 0) then 
-      write (*,'(17x, A,F4.1,A)') "No spikes found based on spike_threshold =", &
+      write (*,'(1x, A,F4.1,A)') "No spikes found based on spike_threshold =", &
                                    spike_threshold," - Nothing done"
 
     elseif (nspikes == 0) then 
-      write (*,'(17x)', advance = 'no')
-      call print_colored (COLOR_GOOD, "Successfully smoothed." )
-      write (*,'(A)') " All spikes removed. "//trim(text_change)
+      write (*,'(1x, A)') " All spikes removed. "//trim(text_change)
 
     elseif (nspikes <= nspikes_target) then 
-      write (*,'(17x)', advance = 'no')
-      call print_colored (COLOR_GOOD, "Successfully smoothed." )
-      write (*,'(A,I2,A)') " Number of spikes reduced by factor", nspikes_initial/nspikes, &
+      write (*,'(1x,A,I2,A)') "Number of spikes reduced by factor", nspikes_initial/nspikes, &
             ". "//trim(text_change)
 
     elseif (i > max_iterations) then 
-      write (*,'(17x,A,I2,A)') "Smoothing ended. Reached maximum iterations = ", max_iterations, &
+      write (*,'(1x,A,I2,A)') "Reached maximum iterations = ", max_iterations, &
             ". "//trim(text_change)
 
     elseif (n_no_improve >= n_no_imp_max) then 
-      write (*,'(17x,A,I2,A)') "Smoothing ended. No further improvement with ",n_no_imp_max, &
+      write (*,'(1x,A,I2,A)') "No further improvement with ",n_no_imp_max, &
              " iteration. " // trim(text_change)
 
     else 
-      write (*,'(17x,A)') "Smoothing ended."          ! this shouldn't happen
+      write (*,'(1x,A)') "Smoothing ended."          ! this shouldn't happen
     end if 
 
   end if

@@ -20,6 +20,7 @@ program main
 ! Main program for airfoil optimization
 
   use omp_lib             ! to switch off multi threading
+  use os_util
   use vardef
   use input_output,        only : read_inputs, read_clo
   use naca,                only : naca_options_type
@@ -35,7 +36,6 @@ program main
   use optimization_driver, only : matchfoils_preprocessing, optimize,          &
                                   write_final_design
   use polar_operations,    only : check_and_do_polar_generation
-  use os_util,             only : print_note, print_warning
  
 
   implicit none
@@ -62,16 +62,16 @@ program main
 !-------------------------------------------------------------------------------
   
   write(*,'(A)')
-  write(*,'(A)') 'Xoptfoil-JX  The Airfoil Optimizer                  Version '//trim(PACKAGE_VERSION)
-  write(*,'(A)') 
-  write(*,'(A)') '         (c) 2017-2019 Daniel Prosser (original Xoptfoil)'
-  write(*,'(A)') '         (c) 2019-2021 Jochen Guenzel, Matthias Boese'
+  call print_colored (COLOR_HIGH,   ' Xoptfoil')
+  call print_colored (COLOR_PROGRAM,'-JX')
+  write(*,'(A)') '             The Airfoil Optimizer            v'//trim(PACKAGE_VERSION)
   write(*,'(A)') 
   write(*,'(A)') '         Actual experimental features: '
   write(*,'(A)') 
   write(*,'(A)') '           - Particle retry when geometry is violated (jo)' ! see #exp-retry
   write(*,'(A)') '           - Shaping function hicks-henne-plus (mb)' ! see #exp-HH-plus
-  write(*,'(A)') '           - Dynamic weighing (mb)'                  ! see #exp-dynamic
+  write(*,'(A)') '           - Dynamic weighting (mb)'                 ! see #exp-dynamic
+  write(*,'(A)') '           - Bubble detection (jo)'                  ! see #exp-bubble
   write(*,'(A)') 
 
 ! Handle multithreading - be careful with screen output in multi-threaded code parts
@@ -110,6 +110,7 @@ program main
 ! Load original airfoil into memory, repanel, normalize 
 !   to get seed airfoil ready for optimization 
 
+  write (*,*) 
   call get_seed_airfoil(seed_airfoil_type, airfoil_file, naca_options, original_foil)
 
   call repanel_and_normalize_airfoil (original_foil, npan_fixed, symmetrical, seed_foil)  
@@ -154,9 +155,6 @@ program main
 
   if (match_foils) then
     call matchfoils_preprocessing(matchfoil_file)
-  else
-    write(*,*)
-    write(*,*) "Optimizing for requested operating points."
   end if
  
 ! Make sure seed airfoil passes constraints, and get scaling factors for
@@ -166,6 +164,7 @@ program main
 
 ! Optimize
   
+  write (*,*)
   call optimize(search_type, global_search, local_search, constrained_dvs,     &
                 pso_options, ga_options, ds_options, restart,                  &
                 restart_write_freq, optdesign, f0, fmin, steps, fevals)
@@ -193,5 +192,6 @@ program main
   deallocate(optdesign)
   if (allocated(constrained_dvs)) deallocate(constrained_dvs)
 
+  write(*,*)
 
 end program main

@@ -66,7 +66,8 @@ subroutine check_seed()
   penaltyval = 0.d0
   pi = acos(-1.d0)
 
-  write(*,*) 'Checking to make sure seed airfoil passes all constraints ...'
+  write (*,*)
+  write(*,'(" - ",A)') 'Checking to make sure seed airfoil passes all constraints ...'
 
 ! Smooth surfaces of airfoil *before* other checks are made
 !     save original seed surface before smoothing
@@ -82,8 +83,6 @@ subroutine check_seed()
   zb = seed_foil%zb
   nptt = size(xt,1)
   nptb = size(xb,1)
-
-  write(*,*)
 
 ! Get best values fur surface constraints 
 
@@ -351,11 +350,13 @@ subroutine check_seed()
 
 ! Analyze airfoil at requested operating conditions with Xfoil
 
+  write (*,'("   ",A)') 'Analyze seed airfoil at requested operating points'
+
   call run_op_points (seed_foil, xfoil_geom_options, xfoil_options,        &
                       use_flap, flap_spec, flap_degrees, &
                       op_points_spec, op_points_result)
 
-  xfoil_options%show_details = show_details
+  ! xfoil_options%show_details = show_details
   xfoil_options%reinitialize = xfoil_reinitialize 
 
 ! get airfoil geometry info from xfoil    
@@ -626,14 +627,13 @@ subroutine check_and_smooth_surface (show_details, do_smoothing, foil)
 
 
   if (show_details) then
-    write (*,*) 
-    call print_colored (COLOR_NOTE, ' Summary: ')
+    call print_colored (COLOR_NOTE, '   Summary: ')
   else
     if (done_smoothing) then
-      call print_colored (COLOR_NORMAL, ' Smoothing airfoil due to bad surface quality')
+      call print_colored (COLOR_NORMAL, '   Smoothing airfoil due to bad surface quality')
       write (*,*)
     end if
-    call print_colored (COLOR_NOTE, ' Airfoil surface assessment: ')
+    call print_colored (COLOR_NOTE, '   Airfoil surface assessment: ')
   end if
 
   if (done_smoothing) then
@@ -688,7 +688,7 @@ subroutine auto_curvature_constraints (show_details, foil, &
   double precision    :: old_max_te_curvature, old_highlow_threshold, old_curv_threshold
   character (80)      :: str
 
-  write (*,'(1x, A)') 'Evaluating and auto setting of geometric thresholds and constraints '
+  write (*,'(" - ", A)') 'Evaluating and auto setting of geometric thresholds and constraints '
   write (*,*)
 
   xt = foil%xt
@@ -794,8 +794,6 @@ subroutine auto_curvature_constraints (show_details, foil, &
       call print_colored (COLOR_NOTE, 'due to much too high value of seed airfoil')
       max_te_curvature = 1d6
     end if
-    write(*,*)
-
     write(*,*)
   end if
 

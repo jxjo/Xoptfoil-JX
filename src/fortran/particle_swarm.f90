@@ -74,6 +74,7 @@ subroutine particleswarm(xopt, fmin, step, fevals, objfunc, x0, xmin, xmax,    &
                          designcounter,           &
                          stop_reason, converterfunc)
 
+  use os_util
   use math_deps,         only : norm_2
   use optimization_util, only : init_random_seed, initial_designs,             &
                                 design_radius, write_design, read_run_control
@@ -272,7 +273,9 @@ subroutine particleswarm(xopt, fmin, step, fevals, objfunc, x0, xmin, xmax,    &
   converged = .false.
 
   write(*,*)
-  write(*,*) 'Particle swarm optimization progress:'
+  write(*,*)
+  call  print_colored (COLOR_HIGH, ' - Particle swarm is let loose ...')
+  write(*,*)
   write(*,*)
   call show_optimization_header  (pso_options%pop, pso_options%max_retries, &
                                   pso_options%relative_fmin_report)
@@ -350,7 +353,7 @@ subroutine particleswarm(xopt, fmin, step, fevals, objfunc, x0, xmin, xmax,    &
 
 ! $OMP ORDERED
 !     Display some info about success of single particle 
-      call show_particle_info (fmin, objval(i), i_retry)        !#exp-retry
+      call show_particle_info (fmin, objval(i))        
 ! $OMP END ORDERED
 
 !     Update local best design if appropriate
@@ -583,17 +586,21 @@ subroutine  show_optimization_header  (pso_pop, max_retries, show_improvement)
   character(:), allocatable     :: var_string
   character(200)                :: blanks = ' '
 
-  write(*,'(13x,A)') "'+' improved   '~' quite good   '-' bad   'x' xfoil no conv   '.' geometry failed"
+  write(*,'(3x)', advance = 'no')
+  call  print_colored (COLOR_NOTE, "'+' improved   '~' quite good   '-' bad   'x' xfoil no conv   '.' geometry failed")
+  write (*,*)
+
   if (max_retries > 0 ) then                                      ! #exp-retry
-    write(*,'(13x,A)', advance = 'no') "Experimental: Particle retry - affected particles are "
-    call  print_colored (COLOR_WARNING, "colored")
+    write(*,'(3x)', advance = 'no')
+    call  print_colored (COLOR_NOTE, "Experimental: Particle max_retries =")
+    write(*,'(I3)', advance = 'no') max_retries
     write (*,*)
   end if
   write(*,*)
 
   var_string = 'Particles...' // blanks (len('Particles...') : pso_pop)
-  write(*,'(1x,A9,3x,  A,          1x,A6,   5x,A9     )', advance ='no') &
-          'Iteration',var_string,'Radius','Objective'
+  write(*,'(3x,A6,3x,  A,          1x,A6,   5x,A9     )', advance ='no') &
+          'Iterat',var_string,'Radius','Objective'
   
   if (show_improvement) then
     write(*,'(3x,A11)') 'Improvement'
@@ -612,7 +619,7 @@ subroutine  show_iteration_header (step)
 
   integer, intent(in)          :: step
 
-  write(*,'(4x,I5,A1,3x)', advance ='no') step, ':'
+  write(*,'(3x,I5,A1,3x)', advance ='no') step, ':'
 
 end subroutine  show_iteration_header
 
@@ -647,13 +654,6 @@ subroutine  show_iteration_result (radius, fmin, f0, improved, show_improvement)
     end if
   end if 
 
-  if (improved) then 
-    if (show_details) then 
-      write (*,*)
-      write (*,*)
-    end if
-  end if
-
 end subroutine  show_iteration_result
 
 
@@ -661,29 +661,24 @@ end subroutine  show_iteration_result
 ! Shows user info about sucess of a single particle
 !------------------------------------------------------------------------------
 
-subroutine  show_particle_info (fmin, objval, i_retry)
+subroutine  show_particle_info (fmin, objval)
 
   use os_util
   use airfoil_evaluation, only : OBJ_XFOIL_FAIL, OBJ_GEO_FAIL
 
   double precision, intent(in)  :: fmin, objval
-  integer, intent(in)           :: i_retry
   integer         :: color 
 
-  if (i_retry /= 0) then                           ! #exp-retry
-    color = COLOR_WARNING 
-  else
-    if (objval < fmin) then 
-      color = COLOR_GOOD
-    else if (objval == OBJ_XFOIL_FAIL) then     
-      color = COLOR_ERROR                          ! no xfoil convergence
-    else if (objval < (fmin * 1.005d0)) then 
-      color = COLOR_NORMAL                         ! not too bad (-0,5%)
-    else if (objval >= OBJ_GEO_FAIL) then 
-      color = COLOR_NOTE                           ! no valid design 
-    else  
-      color = COLOR_NORMAL                         ! bad (-10%)
-    end if 
+  if (objval < fmin) then 
+    color = COLOR_GOOD
+  else if (objval == OBJ_XFOIL_FAIL) then     
+    color = COLOR_ERROR                          ! no xfoil convergence
+  else if (objval < (fmin * 1.005d0)) then 
+    color = COLOR_NORMAL                         ! not too bad (-0,5%)
+  else if (objval >= OBJ_GEO_FAIL) then 
+    color = COLOR_NOTE                           ! no valid design 
+  else  
+    color = COLOR_NORMAL                         ! bad (-10%)
   end if 
   
   if (objval < fmin) then 

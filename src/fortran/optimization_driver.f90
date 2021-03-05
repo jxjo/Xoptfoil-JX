@@ -218,8 +218,8 @@ subroutine optimize(search_type, global_search, local_search, constrained_dvs, &
   write_designs = .false.
   if ( (trim(search_type) == 'global_and_local') .or.                          &
        (trim(search_type) == 'global') ) then
-    if ( (pso_options%write_designs) .or. (ga_options%write_designs) )         &
-      write_designs = .true.
+    if (trim(global_search) == 'particle_swarm')    write_designs = pso_options%write_designs
+    if (trim(global_search) == 'genetic_algorithm') write_designs = ga_options%write_designs
   else
     if (ds_options%write_designs) write_designs = .true.
   end if
@@ -229,6 +229,7 @@ subroutine optimize(search_type, global_search, local_search, constrained_dvs, &
   if (write_designs) then
 
 !   Analyze and write seed airfoil
+    write (*,'(" - ",A)') 'Writing design #0 being seed airfoil'
     stat = write_function(x0, 0) 
 
   end if
