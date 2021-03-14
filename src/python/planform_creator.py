@@ -233,7 +233,7 @@ class wing:
     def set_AirfoilNames(self):
         if (len(self.airfoilNames) == 0):
             # list is empty and has to be created
-            set_AirfoilNamesFromRe()
+            self.set_AirfoilNamesFromRe()
 
         # check if the .dat ending was appended to all airfoils.
         # if not, append the ending
@@ -241,14 +241,33 @@ class wing:
             if (self.airfoilNames[idx].find('.dat')<0):
                 self.airfoilNames[idx] = self.airfoilNames[idx] +'.dat'
 
-        # append airfoilName for the tip section which is the same a sfor the
-        # last regular section
-        self.airfoilNames.append(self.airfoilNames[-1])
 
-        # if there is a fuselage, insert an airfoilname for the fuselage section
-        # at the beginning of the list.
-        if self.fuselageIsPresent():
-            self.airfoilNames.insert(0, self.airfoilNames[0])
+    def insert_fuselageData(self):
+        self.airfoilNames.insert(0, self.airfoilNames[0])
+
+        # root airfoil must be of type "user", so always insert user-airfoil
+        self.userAirfoils.insert(0, self.userAirfoils[0])
+        self.airfoilTypes.insert(0, self.airfoilTypes[0])
+
+        # section has same chord, same reynolds
+        self.chords.insert(0, self.chords[0])
+        self.airfoilPositions.insert(0, 0.0)
+        self.airfoilReynolds.insert(0, self.airfoilReynolds[0])
+
+
+    def insert_tipData(self):
+        self.airfoilNames.append(self.airfoilNames[-1])
+        self.airfoilTypes.append(self.airfoilTypes[-1])
+        self.airfoilPositions.append(self.wingspan/2)
+
+        # is last airfoil of type "user" ?
+        if self.airfoilTypes[-1] == "user":
+            # yes, so append user-airfoil
+            self.userAirfoils.append(self.userAirfoils[-1])
+
+        reynolds = (self.tipchord / self.chords[-1]) * self.airfoilReynolds[-1]
+        self.airfoilReynolds.append(int(round(reynolds,0)))
+        self.chords.append(self.tipchord)
 
 
     # get the number of user defined airfoils
@@ -628,38 +647,30 @@ class wing:
 
     # add an own section for the fuselage and use rootchord
     def add_fuselageSection(self):
-        # check if fuselageWidth is > 0
-        if self.fuselageIsPresent():
-            # get the root grid-values
-            grid = deepcopy(self.grid[0])
+        # get the root grid-values
+        grid = deepcopy(self.grid[0])
 
-            # set offset to zero so the section will start exactly in the center
-            grid.y = 0
+        # set offset to zero so the section will start exactly in the center
+        grid.y = 0
 
-            # add section now
-            self.add_sectionFromGrid(grid)
-
-
-    def add_tipSection(self):
-        # get the tip grid-values
-        grid = self.grid[len(self.grid)-1]
-
-        # add section
+        # add section now
         self.add_sectionFromGrid(grid)
 
 
     # calculate all sections of the wing, oriented at the grid
     def calculate_sections(self):
-        # first add section for fuselage
-        self.add_fuselageSection()
+        # check if fuselageWidth is > 0
+        if self.fuselageIsPresent():
+            # first add section for fuselage
+            self.add_fuselageSection()
+            startIdx = 1
+        else:
+            startIdx = 0
 
         # create all sections, according to the precalculated chords
-        for chord in self.chords:
+        for chord in self.chords[startIdx:]:
             # add section according to chord
             self.add_sectionFromChord(chord)
-
-        # create last section
-        self.add_tipSection()
 
 
     # get color for plotting
@@ -692,7 +703,7 @@ class wing:
         self.set_AxesAndLabels(ax, "Half-wing planform")
 
         # plot sections in reverse order
-        idx = len(self.airfoilTypes)
+        idx = len(self.airfoilTypes) - 1
 
         # check if there is a fuselage section
         if self.fuselageIsPresent():
@@ -1133,7 +1144,15 @@ def get_strakDataFileName(args):
 def copy_userAirfoils(wingData):
     userAirfoil_idx = 0
 
-    for airfoil in wingData.userAirfoils:
+    if wingData.fuselageIsPresent():
+        userAirfoils = wingData.userAirfoils[1:]
+        userAirfoil_idx = 1
+    else:
+        userAirfoils = wingData.userAirfoils
+        userAirfoil_idx = 0
+
+
+    for airfoil in userAirfoils:
         splitnames = airfoil.split("\\")
         airfoilName = splitnames[-1]
         airfoilName = remove_suffix(airfoilName, ".dat")
@@ -1235,22 +1254,8 @@ def create_blendedArifoils(wingData):
                  "skipping blending for airfoil %s" % blendFoilName)
 
 
-def determine_SeedFoilIdx(wingData):
-##    num = len(wingData.airfoilTypes)
-##
-##    # loop backwards
-##    for idx in range(num-1,-1,-1):
-##        # first user-airfoil that is found (loop-backwards) will be the seedfoil
-##        if (wingData.airfoilTypes[idx] == "user"):
-##            return idx
-
-    # at least the airfoil at idx 0 must be the seedfoil
-    return 0
-
-
 def update_seedfoilName(wingData, strakdata):
-    idx = determine_SeedFoilIdx(wingData)
-    seedFoilName = wingData.airfoilNames[idx]
+    seedFoilName = wingData.airfoilNames[0]
 
     # set the new seedfoilname
     strakdata["seedFoilName"] = remove_suffix(seedFoilName, ".dat")
@@ -1260,11 +1265,8 @@ def update_airfoilNames(wingData, strakdata):
     num = len(wingData.airfoilTypes)
     airfoilNames = []
 
-    # get index of the seedfoil
-    seedIdx = determine_SeedFoilIdx(wingData)
-
     # first append name of the seedfoil
-    foilName = remove_suffix(wingData.airfoilNames[seedIdx], ".dat")
+    foilName = remove_suffix(wingData.airfoilNames[0], ".dat")
     airfoilNames.append(foilName)
 
     # create list of airfoilnames that shall be created by the strak-machine
@@ -1281,11 +1283,8 @@ def update_reynolds(wingData, strakdata):
     num = len(wingData.airfoilTypes)
     reynolds = []
 
-    # get index of the seedfoil
-    seedIdx = determine_SeedFoilIdx(wingData)
-
     # first append reynolds-number of the seedfoil
-    reynolds.append(wingData.airfoilReynolds[seedIdx])
+    reynolds.append(wingData.airfoilReynolds[0])
 
     # create list of reynolds-numbers for the airfoils that shall be created by
     # the strak-machine
@@ -1467,6 +1466,16 @@ if __name__ == "__main__":
     newWing.calculate_ReNumbers()
     newWing.calculate_chordlengths()
     newWing.set_AirfoilNames()
+
+    # if there is a fuselage, insert data for the fuselage section
+    # at the beginning of the list.
+    if newWing.fuselageIsPresent():
+        newWing.insert_fuselageData()
+
+    # always insert data for the wing tip
+    newWing.insert_tipData()
+
+    # calculate the sections now
     newWing.calculate_sections()
 
     # create outputfolder, if it does not exist
