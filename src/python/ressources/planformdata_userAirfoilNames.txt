@@ -16,6 +16,7 @@
  "airfoilPositions": [    null,                 0.4,             0.7,            0.95,       null,            1.27,       null,       null],
  "airfoilReynolds":  [  150000,                null,            null,            null,     100000,            null,      60000,      40000],
  "airfoilTypes":     [  "user",             "blend",         "blend",         "blend",     "user",         "blend",     "user",     "user"],
+ "airfoilNames":     [  "JX-GS-15", "JX-GS-blend-1", "JX-GS-blend-2", "JX-GS-blend-3", "JX-GS-10", "JX-GS-blend-4", "JX-GS-06", "JX-GS-04"],
  "smoothUserAirfoils" : "False",
  "userAirfoils":     [".\\airfoil_library\\F3F\\JX\\JX-GS\\JX-GS-15.dat",
                       ".\\airfoil_library\\F3F\\JX\\JX-GS\\JX-GS-10.dat",
