@@ -629,7 +629,6 @@ end subroutine  show_iteration_header
 
 subroutine  show_iteration_result (radius, fmin, f0, improved, show_improvement)
 
-  use vardef,   only: show_details
   use os_util,  only: COLOR_GOOD, COLOR_NORMAL, COLOR_NOTE, COLOR_ERROR, print_colored
 
   double precision, intent(in)  :: radius ,fmin, f0 

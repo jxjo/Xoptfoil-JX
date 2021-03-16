@@ -23,6 +23,82 @@ module input_sanity
 
   contains
 
+!=============================================================================
+!
+! Checks various inputs to be consistent and valid 
+!
+!=============================================================================
+
+subroutine check_inputs()
+
+  use vardef
+  use airfoil_evaluation 
+  use xfoil_driver,       only : op_point_specification_type
+  use xfoil_driver,       only : xfoil_options_type
+  use airfoil_operations, only : my_stop
+
+
+  integer             :: i, nxtr_opt
+  character           :: choice
+  type(op_point_specification_type) :: op_spec
+
+  noppoint = size (op_points_spec) 
+
+! Ask about removing turbulent trips for max-xtr optimization
+
+  nxtr_opt = 0
+  if ( (xfoil_options%xtript < 1.d0) .or. (xfoil_options%xtripb < 1.d0) ) then
+    do i = 1, noppoint
+      if (trim(op_points_spec(i)%optimization_type) == "max-xtr") nxtr_opt = nxtr_opt + 1
+    end do
+  
+    if (nxtr_opt > 0) choice = ask_forced_transition()
+    if (choice == 'y') then
+      xfoil_options%xtript = 1.d0
+      xfoil_options%xtripb = 1.d0
+    end if
+  end if
+  
+! May the king of xfoil polars be lenient ...
+!        ... when patching to support negative cl for Type 2 based op_points
+!  do i = 1, noppoint
+!    if ((op_points_spec(i)%re%type == 2) .and. (op_points_spec(i)%spec_cl) .and. (op_points_spec(i)%value < 0d0)) then
+!      op_points_spec(i)%re%type    = 1
+!      op_points_spec(i)%re%number  = op_points_spec(i)%re%number / & 
+!                                    (abs(op_points_spec(i)%value) ** 0.5d0)
+!    end if
+!  end do 
+
+! Aero targets - Check for an existing target value 
+!              if optimization_type is target-moment or Target-drag
+  do i = 1, noppoint
+
+    op_spec  = op_points_spec(i) 
+
+    if ((trim(op_spec%optimization_type) == 'target-moment') .and.                &
+        (op_spec%target_value == -1.d3) )                                          &
+      call my_stop("No 'target-value' defined for "//  &
+                 "for optimization_type 'target-moment'")
+    if ((trim(op_spec%optimization_type) == 'target-drag') .and.                  &
+        (op_spec%target_value == -1.d3) )                                         &
+      call my_stop("No 'target-value' defined for "//  &
+                     "for optimization_type 'target-drag'")
+    if ((trim(op_spec%optimization_type) == 'target-lift') .and.                  &
+        (op_spec%target_value == -1.d3) )                                          &
+      call my_stop("No 'target-value' defined for "//  &
+                     "for optimization_type 'target-lift'")
+  end do
+
+  if ((trim(shape_functions) == 'camb-thick') .or. &
+      (trim(shape_functions) == 'camb-thick-plus')) then
+    ! in case of camb_thick a re-paneling is not needed and
+    ! not good for high cl
+        xfoil_geom_options%repanel = .false. 
+  end if 
+
+
+  end subroutine check_inputs
+
 !=============================================================================80
 !
 ! Checks that the seed airfoil passes all constraints, sets scale factors for
@@ -46,6 +122,7 @@ subroutine check_seed()
   type(op_point_specification_type) :: op_spec
   type(op_point_result_type)        :: op
   type(op_point_result_type), dimension(:), allocatable :: op_points_result
+  type(xfoil_options_type)          :: local_xfoil_options
 
   double precision, dimension(:), allocatable :: x_interp, thickness
   double precision, dimension(:), allocatable :: zt_interp, zb_interp
@@ -59,7 +136,7 @@ subroutine check_seed()
   integer :: i, nptt, nptb, nptint
   character(100) :: text, text2
   character(15) :: opt_type
-  logical :: addthick_violation, xfoil_reinitialize
+  logical :: addthick_violation
   double precision :: ref_value, seed_value, tar_value, match_delta, cur_te_curvature
   double precision :: dist = 0d0
 
@@ -75,78 +152,84 @@ subroutine check_seed()
 
   seed_foil_not_smoothed = seed_foil
 
-  call check_and_smooth_surface (show_details, do_smoothing, seed_foil)
+! Check geo constraints like thickness if needed
 
-  xt = seed_foil%xt
-  xb = seed_foil%xb
-  zt = seed_foil%zt
-  zb = seed_foil%zb
-  nptt = size(xt,1)
-  nptb = size(xb,1)
+  if(check_geometry) then
 
-! Get best values fur surface constraints 
+    call check_and_smooth_surface (show_details, do_smoothing, seed_foil)
 
-  if (auto_curvature) &
-    call auto_curvature_constraints (show_details, seed_foil, &
-                                    curv_threshold, highlow_threshold, max_te_curvature, &
-                                    max_curv_highlow_top, max_curv_highlow_bot, &
-                                    max_curv_reverse_top, max_curv_reverse_bot)
+    xt = seed_foil%xt
+    xb = seed_foil%xb
+    zt = seed_foil%zt
+    zb = seed_foil%zb
+    nptt = size(xt,1)
+    nptb = size(xb,1)
 
-! Get allowable panel growth rate
+  ! Get best values fur surface constraints 
 
-  growth_allowed = 0.d0
-
-! Top surface growth rates
-
-  len1 = sqrt((xt(2)-xt(1))**2.d0 + (zt(2)-zt(1))**2.d0)
-  do i = 2, nptt - 1
-    len2 = sqrt((xt(i+1)-xt(i))**2.d0 + (zt(i+1)-zt(i))**2.d0)
-    growth1 = len2/len1
-    growth2 = len1/len2
-    if (max(growth1,growth2) > growth_allowed)                                 &
-        growth_allowed = 1.5d0*max(growth1,growth2)
-    len1 = len2
-  end do
-
-! Bottom surface growth rates
-
-  len1 = sqrt((xb(2)-xb(1))**2.d0 + (zb(2)-zb(1))**2.d0)
-  do i = 2, nptb - 1
-    len2 = sqrt((xb(i+1)-xb(i))**2.d0 + (zb(i+1)-zb(i))**2.d0)
-    growth1 = len2/len1
-    growth2 = len1/len2
-    if (max(growth1,growth2) > growth_allowed)                               &
-        growth_allowed = 1.5d0*max(growth1,growth2)
-    len1 = len2
-  end do
+    if (auto_curvature) &
+      call auto_curvature_constraints (show_details, seed_foil, &
+                                      curv_threshold, highlow_threshold, max_te_curvature, &
+                                      max_curv_highlow_top, max_curv_highlow_bot, &
+                                      max_curv_reverse_top, max_curv_reverse_bot)
 
   
-! Too blunt or sharp leading edge
+                                  
+  ! Top surface growth rates
 
-  panang1 = atan((zt(2)-zt(1))/(xt(2)-xt(1))) *                &
-            180.d0/acos(-1.d0)
-  panang2 = atan((zb(1)-zb(2))/(xb(2)-xb(1))) *                &
-            180.d0/acos(-1.d0)
-  maxpanang = max(panang2,panang1)
+    growth_allowed = 0.d0
 
-  if (maxpanang > 89.99d0) then
-    write(text,'(F8.4)') maxpanang
-    text = adjustl(text)
-    write(*,*) "LE panel angle: "//trim(text)//" degrees"
-    call ask_stop("Seed airfoil's leading edge is too blunt.")
+    len1 = sqrt((xt(2)-xt(1))**2.d0 + (zt(2)-zt(1))**2.d0)
+    do i = 2, nptt - 1
+      len2 = sqrt((xt(i+1)-xt(i))**2.d0 + (zt(i+1)-zt(i))**2.d0)
+      growth1 = len2/len1
+      growth2 = len1/len2
+      if (max(growth1,growth2) > growth_allowed)                                 &
+          growth_allowed = 1.5d0*max(growth1,growth2)
+      len1 = len2
+    end do
+
+  ! Bottom surface growth rates
+
+    len1 = sqrt((xb(2)-xb(1))**2.d0 + (zb(2)-zb(1))**2.d0)
+    do i = 2, nptb - 1
+      len2 = sqrt((xb(i+1)-xb(i))**2.d0 + (zb(i+1)-zb(i))**2.d0)
+      growth1 = len2/len1
+      growth2 = len1/len2
+      if (max(growth1,growth2) > growth_allowed)                               &
+          growth_allowed = 1.5d0*max(growth1,growth2)
+      len1 = len2
+    end do
+
+    
+  ! Too blunt or sharp leading edge
+
+    panang1 = atan((zt(2)-zt(1))/(xt(2)-xt(1))) *                &
+              180.d0/acos(-1.d0)
+    panang2 = atan((zb(1)-zb(2))/(xb(2)-xb(1))) *                &
+              180.d0/acos(-1.d0)
+    maxpanang = max(panang2,panang1)
+
+    if (maxpanang > 89.99d0) then
+      write(text,'(F8.4)') maxpanang
+      text = adjustl(text)
+      write(*,*) "LE panel angle: "//trim(text)//" degrees"
+      call ask_stop("Seed airfoil's leading edge is too blunt.")
+    end if
+    if (abs(panang1 - panang2) > 20.d0) then
+      write(text,'(F8.4)') abs(panang1 - panang2)
+      text = adjustl(text)
+      write(*,*) "LE panel angle: "//trim(text)//" degrees"
+      call ask_stop("Seed airfoil's leading edge is too sharp.")
+    end if
   end if
-  if (abs(panang1 - panang2) > 20.d0) then
-    write(text,'(F8.4)') abs(panang1 - panang2)
-    text = adjustl(text)
-    write(*,*) "LE panel angle: "//trim(text)//" degrees"
-    call ask_stop("Seed airfoil's leading edge is too sharp.")
-  end if
 
-! Too high curvature at TE - TE panel problem 
-!    In the current Hicks Henne shape functions implementation, the last panel is
-!    forced to become TE which can lead to a thick TE area with steep last panel(s)
-!       (see create_shape ... do j = 2, npt-1 ...)
-!    so the curvature (2nd derivative) at the last 10 panels is checked
+
+  ! Too high curvature at TE - TE panel problem 
+  !    In the current Hicks Henne shape functions implementation, the last panel is
+  !    forced to become TE which can lead to a thick TE area with steep last panel(s)
+  !       (see create_shape ... do j = 2, npt-1 ...)
+  !    so the curvature (2nd derivative) at the last 10 panels is checked
 
   if (check_curvature) then
     call get_max_te_curvature (nptt, xt, zt, cur_te_curvature)
@@ -166,107 +249,114 @@ subroutine check_seed()
     end if 
   end if 
 
-! Interpolate either bottom surface to top surface x locations or vice versa
-! to determine thickness
 
-  if (xt(nptt) <= xb(nptb)) then
-    allocate(x_interp(nptt))
-    allocate(zt_interp(nptt))
-    allocate(zb_interp(nptt))
-    allocate(thickness(nptt))
-    nptint = nptt
-    call interp_vector(xb, zb, xt, zb_interp)
-    x_interp = xt
-    zt_interp = zt
-  else
-    allocate(x_interp(nptb))
-    allocate(zt_interp(nptb))
-    allocate(zb_interp(nptb))
-    allocate(thickness(nptb))
-    nptint = nptb
-    call interp_vector(xt, zt, xb, zt_interp)
-    x_interp = xb
-    zb_interp = zb
-  end if
+! Check geo constraints like thickness if needed
 
-! Compute thickness parameters
+  if(check_geometry) then
 
-  tegap = zt(nptt) - zb(nptb)
-  maxthick = 0.d0
-  heightfactor = tan(min_te_angle*acos(-1.d0)/180.d0/2.d0)
+  ! Interpolate either bottom surface to top surface x locations or vice versa
+  ! to determine thickness
 
-  do i = 2, nptint - 1
-
-!   Thickness array and max thickness
-    
-    thickness(i) = zt_interp(i) - zb_interp(i)
-    if (thickness(i) > maxthick) maxthick = thickness(i)
-
-!   Check if thinner than specified wedge angle on back half of airfoil
-    
-    if (x_interp(i) > 0.5d0) then
-      gapallow = tegap + 2.d0 * heightfactor * (x_interp(nptint) -             &
-                                                x_interp(i))
-      if (thickness(i) < gapallow) then
-        ! jx-mod removed scale and xoffset
-        ! xtrans = x_interp(i)/foilscale - xoffset
-        xtrans = x_interp(i)
-        write(text,'(F8.4)') xtrans
-        text = adjustl(text)
-        write(*,*) "Detected too thin at x = "//trim(text)
-        penaltyval = penaltyval + (gapallow - thickness(i))/0.1d0
-      end if
+    if (xt(nptt) <= xb(nptb)) then
+      allocate(x_interp(nptt))
+      allocate(zt_interp(nptt))
+      allocate(zb_interp(nptt))
+      allocate(thickness(nptt))
+      nptint = nptt
+      call interp_vector(xb, zb, xt, zb_interp)
+      x_interp = xt
+      zt_interp = zt
+    else
+      allocate(x_interp(nptb))
+      allocate(zt_interp(nptb))
+      allocate(zb_interp(nptb))
+      allocate(thickness(nptb))
+      nptint = nptb
+      call interp_vector(xt, zt, xb, zt_interp)
+      x_interp = xb
+      zb_interp = zb
     end if
 
-  end do
+  ! Compute thickness parameters
 
-! Too thin on back half
+    tegap = zt(nptt) - zb(nptb)
+    maxthick = 0.d0
+    heightfactor = tan(min_te_angle*acos(-1.d0)/180.d0/2.d0)
 
-  if (penaltyval > 0.d0)                                                       &
-     call ask_stop("Seed airfoil is thinner than min_te_angle near the "//&
-                   "trailing edge.")
-  penaltyval = 0.d0
+    do i = 2, nptint - 1
 
-! Check additional thickness constraints
+  !   Thickness array and max thickness
+      
+      thickness(i) = zt_interp(i) - zb_interp(i)
+      if (thickness(i) > maxthick) maxthick = thickness(i)
 
-  if (naddthickconst > 0) then
-    call interp_vector(x_interp, thickness,                                    &
-                       addthick_x(1:naddthickconst), add_thickvec)
-
-    addthick_violation = .false.
-    do i = 1, naddthickconst
-      if ( (add_thickvec(i) < addthick_min(i)) .or.                            &
-           (add_thickvec(i) > addthick_max(i)) ) then
-        addthick_violation = .true.
-        write(text,'(F8.4)') addthick_x(i)
-        text = adjustl(text)
-        write(text2,'(F8.4)') add_thickvec(i)
-        text2 = adjustl(text2)
-        write(*,*) "Thickness at x = "//trim(text)//": "//trim(text2)
+  !   Check if thinner than specified wedge angle on back half of airfoil
+      
+      if (x_interp(i) > 0.5d0) then
+        gapallow = tegap + 2.d0 * heightfactor * (x_interp(nptint) -             &
+                                                  x_interp(i))
+        if (thickness(i) < gapallow) then
+          ! jx-mod removed scale and xoffset
+          ! xtrans = x_interp(i)/foilscale - xoffset
+          xtrans = x_interp(i)
+          write(text,'(F8.4)') xtrans
+          text = adjustl(text)
+          write(*,*) "Detected too thin at x = "//trim(text)
+          penaltyval = penaltyval + (gapallow - thickness(i))/0.1d0
+        end if
       end if
+
     end do
 
-    if (addthick_violation)                                                    &
-      call ask_stop("Seed airfoil violates one or more thickness constraints.")
+  ! Too thin on back half
 
-  end if
+    if (penaltyval > 0.d0)                                                       &
+      call ask_stop("Seed airfoil is thinner than min_te_angle near the "//&
+                    "trailing edge.")
+    penaltyval = 0.d0
 
-! Max thickness too low
+  ! Check additional thickness constraints
 
-  if (maxthick < min_thickness) then
-    write(text,'(F8.4)') maxthick
-    text = adjustl(text)
-    write(*,*) "Thickness: "//trim(text)
-    call ask_stop("Seed airfoil violates min_thickness constraint.")
-  end if
+    if (naddthickconst > 0) then
+      call interp_vector(x_interp, thickness,                                    &
+                        addthick_x(1:naddthickconst), add_thickvec)
 
-! Max thickness too high
+      addthick_violation = .false.
+      do i = 1, naddthickconst
+        if ( (add_thickvec(i) < addthick_min(i)) .or.                            &
+            (add_thickvec(i) > addthick_max(i)) ) then
+          addthick_violation = .true.
+          write(text,'(F8.4)') addthick_x(i)
+          text = adjustl(text)
+          write(text2,'(F8.4)') add_thickvec(i)
+          text2 = adjustl(text2)
+          write(*,*) "Thickness at x = "//trim(text)//": "//trim(text2)
+        end if
+      end do
 
-  if (maxthick > max_thickness) then
-    write(text,'(F8.4)') maxthick
-    text = adjustl(text)
-    write(*,*) "Thickness: "//trim(text)
-    call ask_stop("Seed airfoil violates max_thickness constraint.")
+      if (addthick_violation)                                                    &
+        call ask_stop("Seed airfoil violates one or more thickness constraints.")
+
+    end if
+
+  ! Max thickness too low
+
+    if (maxthick < min_thickness) then
+      write(text,'(F8.4)') maxthick
+      text = adjustl(text)
+      write(*,*) "Thickness: "//trim(text)
+      call ask_stop("Seed airfoil violates min_thickness constraint.")
+    end if
+
+  ! Max thickness too high
+
+    if (maxthick > max_thickness) then
+      write(text,'(F8.4)') maxthick
+      text = adjustl(text)
+      write(*,*) "Thickness: "//trim(text)
+      call ask_stop("Seed airfoil violates max_thickness constraint.")
+    end if
+
   end if
 
 
@@ -342,103 +432,103 @@ subroutine check_seed()
                      " should be less then 0.01 to avoid convergence problems.")
   end if
 
-! Re-Init boundary layer at each op point to ensure convergence (slower)
 
-  xfoil_reinitialize = xfoil_options%reinitialize
-  xfoil_options%reinitialize = .true. 
-
-
-! Analyze airfoil at requested operating conditions with Xfoil
+  ! Analyze airfoil at requested operating conditions with Xfoil
 
   write (*,'("   ",A)') 'Analyze seed airfoil at requested operating points'
 
+! Re-Init boundary layer at each op point to ensure convergence (slower)
+  local_xfoil_options = xfoil_options
+  local_xfoil_options%reinitialize        = .true.  
+
   call run_op_points (seed_foil, xfoil_geom_options, xfoil_options,        &
-                      use_flap, flap_spec, flap_degrees, &
+                      flap_spec, flap_degrees, &
                       op_points_spec, op_points_result)
 
-  ! xfoil_options%show_details = show_details
-  xfoil_options%reinitialize = xfoil_reinitialize 
 
-! get airfoil geometry info from xfoil    
 
-  call xfoil_set_airfoil (seed_foil)        
-  call xfoil_get_geometry_info (maxt, xmaxt, maxc, xmaxc)
-  maxpanang = xfoil_geometry_amax() 
+! Check geo constraints like camber if needed
 
-! Too large panel angles
-  if (maxpanang > 30.d0) then
-    write(text,'(F8.4)') maxpanang
-    text = adjustl(text)
-    write(*,*) "Max panel angle: "//trim(text)
-    call ask_stop("Seed airfoil panel angles are too large. Try adjusting "//&
-                  "xfoil_paneling_options.")
-  end if
+  if(check_geometry) then
+                      
+  ! get airfoil geometry info from xfoil    
+    call xfoil_set_airfoil (seed_foil)        
+    call xfoil_get_geometry_info (maxt, xmaxt, maxc, xmaxc)
+    maxpanang = xfoil_geometry_amax() 
 
-! Camber too high
+  ! Too large panel angles
+    if (maxpanang > 30.d0) then
+      write(text,'(F8.4)') maxpanang
+      text = adjustl(text)
+      write(*,*) "Max panel angle: "//trim(text)
+      call ask_stop("Seed airfoil panel angles are too large. Try adjusting "//&
+                    "xfoil_paneling_options.")
+    end if
 
-  if (maxc > max_camber) then
-    write(text,'(F8.4)') maxc
-    text = adjustl(text)
-    write(*,*) "Camber: "//trim(text)
-    call ask_stop("Seed airfoil violates max_camber constraint.")
-  end if
+  ! Camber too high
+    if (maxc > max_camber) then
+      write(text,'(F8.4)') maxc
+      text = adjustl(text)
+      write(*,*) "Camber: "//trim(text)
+      call ask_stop("Seed airfoil violates max_camber constraint.")
+    end if
 
-! Camber too low
+  ! Camber too low
+    if (maxc < min_camber) then
+      write(text,'(F8.4)') maxc
+      text = adjustl(text)
+      write(*,*) "Camber: "//trim(text)
+      call ask_stop("Seed airfoil violates min_camber constraint.")
+    end if
 
-  if (maxc < min_camber) then
-    write(text,'(F8.4)') maxc
-    text = adjustl(text)
-    write(*,*) "Camber: "//trim(text)
-    call ask_stop("Seed airfoil violates min_camber constraint.")
-  end if
 
-! jx-mod Geo targets start -------------------------------------------------
 
-! Evaluate seed value of geomtry targets and scale factor 
-  
-  do i = 1, ngeo_targets
-
-    select case (trim(geo_targets(i)%type))
-
-      case ('zTop')                       ! get z_value top side 
-        seed_value = interp_point(x_interp, zt_interp, geo_targets(i)%x)
-        ref_value  = interp_point(x_interp, thickness, geo_targets(i)%x)
-      case ('zBot')                       ! get z_value bot side
-        seed_value = interp_point(x_interp, zb_interp, geo_targets(i)%x)
-        ref_value  = interp_point(x_interp, thickness, geo_targets(i)%x)
-      case ('Thickness')                  ! take foil thickness calculated above
-        seed_value = maxt
-        ref_value  = maxt
-      case ('Camber')                     ! take xfoil camber from  above
-        seed_value = maxc
-        ref_value  = maxc
-      case default
-        call my_stop("Unknown target_type '"//trim(geo_targets(i)%type))
-    end select
-
-    geo_targets(i)%seed_value      = seed_value
-    geo_targets(i)%reference_value = ref_value
-
-    ! target value negative?  --> take current seed value * |target_value| 
-    if ((geo_targets(i)%target_value <= 0.d0) .and. (trim(geo_targets(i)%type) /= 'zBot'))                                 &
-        geo_targets(i)%target_value = seed_value * abs(geo_targets(i)%target_value)
+  ! Evaluate seed value of geomtry targets and scale factor 
     
-    tar_value = geo_targets(i)%target_value
+    do i = 1, ngeo_targets
 
-    ! will scale objective to 1 ( = no improvement) 
-    geo_targets(i)%scale_factor = 1 / ( ref_value + abs(tar_value - seed_value))
+      select case (trim(geo_targets(i)%type))
 
-  end do 
+        case ('zTop')                       ! get z_value top side 
+          seed_value = interp_point(x_interp, zt_interp, geo_targets(i)%x)
+          ref_value  = interp_point(x_interp, thickness, geo_targets(i)%x)
+        case ('zBot')                       ! get z_value bot side
+          seed_value = interp_point(x_interp, zb_interp, geo_targets(i)%x)
+          ref_value  = interp_point(x_interp, thickness, geo_targets(i)%x)
+        case ('Thickness')                  ! take foil thickness calculated above
+          seed_value = maxt
+          ref_value  = maxt
+        case ('Camber')                     ! take xfoil camber from  above
+          seed_value = maxc
+          ref_value  = maxc
+        case default
+          call my_stop("Unknown target_type '"//trim(geo_targets(i)%type))
+      end select
 
-! Free memory
+      geo_targets(i)%seed_value      = seed_value
+      geo_targets(i)%reference_value = ref_value
 
-  deallocate(x_interp)
-  deallocate(zt_interp)
-  deallocate(zb_interp)
-  deallocate(thickness)
+      ! target value negative?  --> take current seed value * |target_value| 
+      if ((geo_targets(i)%target_value <= 0.d0) .and. (trim(geo_targets(i)%type) /= 'zBot'))                                 &
+          geo_targets(i)%target_value = seed_value * abs(geo_targets(i)%target_value)
+      
+      tar_value = geo_targets(i)%target_value
 
-! Geo targets - end --------------------------------------------
+      ! will scale objective to 1 ( = no improvement) 
+      geo_targets(i)%scale_factor = 1 / ( ref_value + abs(tar_value - seed_value))
 
+    end do 
+
+  ! Free memory
+
+    deallocate(x_interp)
+    deallocate(zt_interp)
+    deallocate(zb_interp)
+    deallocate(thickness)
+
+  end if         ! check_geomtery
+! "fortran.includePaths": ["../../build"]
+! "fortran.linterExtraArgs": ["-Wextra"]
 
 ! Evaluate objectives to establish scale factors for each point
 
@@ -840,6 +930,45 @@ subroutine ask_stop(message)
   if (choice == 'n') stop
 
 end subroutine ask_stop
+
+
+!------------------------------------------------------------------------------
+! Asks user to turn off forced transition
+!------------------------------------------------------------------------------
+
+function ask_forced_transition()
+
+  character :: ask_forced_transition
+  logical :: valid_choice
+
+! Get user input
+
+  valid_choice = .false.
+  do while (.not. valid_choice)
+  
+    write(*,*)
+    write(*,'(A)') 'Warning: using max-xtr optimization but xtript or xtripb'
+    write(*,'(A)', advance='no') 'is less than 1. Set them to 1 now? (y/n): '
+    read(*,'(A)') ask_forced_transition
+
+    if ( (ask_forced_transition == 'y') .or.                                  &
+         (ask_forced_transition == 'Y') ) then
+      valid_choice = .true.
+      ask_forced_transition = 'y'
+      write(*,*)
+      write(*,*) "Setting xtript and xtripb to 1."
+    else if ( (ask_forced_transition == 'n') .or.                             &
+         (ask_forced_transition == 'N') ) then
+      valid_choice = .true.
+      ask_forced_transition = 'n'
+    else
+      write(*,'(A)') 'Please enter y or n.'
+      valid_choice = .false.
+    end if
+
+  end do
+
+end function ask_forced_transition
 
 !-----------------------------------------------------------------------------
 ! Checks surface x,y for violations of curvature contraints 

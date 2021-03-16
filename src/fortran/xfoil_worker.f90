@@ -220,9 +220,8 @@ subroutine check_foil_curvature (input_file, output_prefix, seed_foil, visualize
   use airfoil_operations, only: repanel_and_normalize_airfoil
   use math_deps,          only: nreversals_using_threshold
   use input_sanity,       only: check_and_smooth_surface, auto_curvature_constraints
-  use input_output,       only: read_geo_constraints_inputs
+  use input_output,       only: read_xfoil_paneling_inputs, read_geo_constraints_inputs
   use xfoil_driver,       only: xfoil_defaults, xfoil_options_type, xfoil_geom_options_type
-  use polar_operations,   only: read_xfoil_paneling_inputs
   use os_util
 
   character(*), intent(in)     :: input_file
@@ -240,25 +239,14 @@ subroutine check_foil_curvature (input_file, output_prefix, seed_foil, visualize
   call le_find      (seed_foil%x, seed_foil%z, tmp_foil%leclose, tmp_foil%xle, tmp_foil%zle, tmp_foil%addpoint_loc)
   call split_foil   (tmp_foil)
 
-  ! Defaults
+! Defaults
 
-  check_curvature      = .true.
-  auto_curvature       = .true.
-
-  highlow_threshold     = 0.03d0
-  curv_threshold        = 0.02d0
-  max_te_curvature      = 0.2d0
-  max_curv_reverse_top = 0
-  max_curv_reverse_bot = 0
-  max_curv_highlow_top = 0
-  max_curv_highlow_bot = 0
-
-  call  read_geo_constraints_inputs  (input_file, &
-                                      check_curvature, auto_curvature,  &
-                                      max_te_curvature,    &
-                                      max_curv_reverse_top, max_curv_reverse_bot, &
-                                      max_curv_highlow_top, max_curv_highlow_bot, &
-                                      curv_threshold,highlow_threshold)
+  call read_geo_constraints_inputs (input_file, 0, &
+                                    check_curvature, auto_curvature,  &
+                                    max_te_curvature,    &
+                                    max_curv_reverse_top, max_curv_reverse_bot, &
+                                    max_curv_highlow_top, max_curv_highlow_bot, &
+                                    curv_threshold,highlow_threshold)
   spike_threshold = 0.8d0
 
 
@@ -275,8 +263,6 @@ subroutine check_foil_curvature (input_file, output_prefix, seed_foil, visualize
                                 curv_threshold, highlow_threshold, max_te_curvature, &
                                 max_curv_highlow_top, max_curv_highlow_bot, &
                                 max_curv_reverse_top, max_curv_reverse_bot)
-
-  write(*,*)
 
   if (visualizer) then 
     call write_design_coordinates (output_prefix, 0, seed_foil)
@@ -302,8 +288,7 @@ subroutine repanel_smooth (input_file, output_prefix, seed_foil, visualizer, do_
   use airfoil_operations, only : airfoil_write, transform_airfoil
   use airfoil_operations, only : assess_surface, smooth_it, rebuild_airfoil
   use airfoil_operations, only : repanel_and_normalize_airfoil
-  use polar_operations,   only : read_xfoil_paneling_inputs
-  use input_output,       only : read_geo_constraints_inputs
+  use input_output,       only : read_geo_constraints_inputs, read_xfoil_paneling_inputs
 
 
   character(*), intent(in)          :: input_file, output_prefix
@@ -324,28 +309,17 @@ subroutine repanel_smooth (input_file, output_prefix, seed_foil, visualizer, do_
 
 ! Read inputs file to get options needed 
 
-  call read_xfoil_paneling_inputs  (input_file, geom_options)
+  call read_xfoil_paneling_inputs  (input_file, 0, geom_options)
 
-  ! Defaults
+! Defaults
 
-  check_curvature      = .true.
-  auto_curvature       = .true.
-
-  highlow_threshold     = 0.03d0
-  curv_threshold        = 0.02d0
-  max_te_curvature      = 0.2d0
-  max_curv_reverse_top = 0
-  max_curv_reverse_bot = 0
-  max_curv_highlow_top = 0
-  max_curv_highlow_bot = 0
-
-  call read_geo_constraints_inputs (input_file, &
-                                      check_curvature, auto_curvature,  &
-                                      max_te_curvature,    &
-                                      max_curv_reverse_top, max_curv_reverse_bot, &
-                                      max_curv_highlow_top, max_curv_highlow_bot, &
-                                      curv_threshold,highlow_threshold)
-    spike_threshold       = 0.8d0
+  call read_geo_constraints_inputs (input_file, 0, &
+                                    check_curvature, auto_curvature,  &
+                                    max_te_curvature,    &
+                                    max_curv_reverse_top, max_curv_reverse_bot, &
+                                    max_curv_highlow_top, max_curv_highlow_bot, &
+                                    curv_threshold,highlow_threshold)
+  spike_threshold       = 0.8d0
 
 ! Prepare airfoil  - Repanel and split 
 
@@ -406,7 +380,7 @@ subroutine blend_foils (input_file, output_prefix, seed_foil_in, blend_foil_in, 
   use airfoil_operations, only : airfoil_write
   use airfoil_operations, only : rebuild_airfoil, my_stop
   use airfoil_operations, only : repanel_and_normalize_airfoil
-  use polar_operations,   only : read_xfoil_paneling_inputs
+  use input_output,       only : read_xfoil_paneling_inputs
 
   character(*), intent(in)          :: input_file, output_prefix, value_argument
   type (airfoil_type), intent (inout)  :: seed_foil_in, blend_foil_in
@@ -436,7 +410,7 @@ subroutine blend_foils (input_file, output_prefix, seed_foil_in, blend_foil_in, 
 
 ! Read inputs file to get xfoil paneling options  
 
-  call read_xfoil_paneling_inputs  (input_file, geom_options)
+  call read_xfoil_paneling_inputs  (input_file, 0, geom_options)
 
 ! Prepare - Repanel both airfoils 
 
@@ -502,9 +476,9 @@ subroutine set_flap (input_file, output_prefix, seed_foil, visualizer)
   use xfoil_driver,       only : xfoil_apply_flap_deflection, xfoil_reload_airfoil
   use xfoil_driver,       only : xfoil_set_airfoil
   use airfoil_operations, only : airfoil_write, transform_airfoil, get_split_points
-  use airfoil_operations, only : assess_surface
+  use airfoil_operations, only : assess_surface, my_stop
   use airfoil_operations, only : repanel_and_normalize_airfoil
-  use polar_operations,   only : read_xfoil_paneling_inputs, read_flap_inputs
+  use input_output,       only : read_flap_inputs, read_xfoil_paneling_inputs
 
 
   character(*), intent(in)          :: input_file, output_prefix
@@ -515,16 +489,30 @@ subroutine set_flap (input_file, output_prefix, seed_foil, visualizer)
   type (flap_spec_type)           :: flap_spec
   type (xfoil_geom_options_type)  :: geom_options
   double precision, dimension(50) :: flap_degrees
+  character(8), dimension(50)     :: flap_selection
+
   character(20) :: text_degrees
   integer       :: ndegrees
 
-
 ! Read inputs file to get xfoil paneling options  
 
-  call read_xfoil_paneling_inputs  (input_file, geom_options)
-  call read_flap_inputs            (input_file, flap_spec, ndegrees, flap_degrees)
+  call read_xfoil_paneling_inputs  (input_file, 0, geom_options)
+  call read_flap_inputs            (input_file, 0, flap_spec, flap_degrees, flap_selection)
 
-  if (ndegrees == 1) then 
+! flap set? 
+
+  ndegrees = 0
+
+  do i = size(flap_degrees), 1, -1
+    if (flap_degrees(i) /= 0d0) then
+      ndegrees = i
+      exit
+    end if
+  end do
+
+  if (ndegrees == 0) then 
+    call my_stop ('No flap angles defined in input file')
+  elseif (ndegrees == 1) then 
     write (*,'(A)', advance = 'no') 'Setting one flap position'
   else
     write (*,'(A,I2,A)', advance = 'no') 'Setting',ndegrees,' flap positions'

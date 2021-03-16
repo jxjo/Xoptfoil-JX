@@ -41,6 +41,7 @@ module xfoil_driver
     logical          :: spec_cl           ! op based on alpha or cl
     double precision :: value             ! base value of cl or alpha
     double precision :: weighting         ! weighting within objective function
+    double precision :: weighting_user    ! original weighting entered by user
     double precision :: scale_factor      ! scale for objective function
     type (re_type)   :: re, ma            ! Reynolds and Mach 
     double precision :: ncrit             ! xfoil ncrit
@@ -69,7 +70,6 @@ module xfoil_driver
     double precision :: xtript, xtripb    ! forced trip locations
     logical :: viscous_mode               ! do viscous calculation           
     logical :: silent_mode                ! Toggle xfoil screen write
-    logical :: repanel                    ! do re-paneling (PANGEN) before xfoil aero calcs 
     logical :: show_details               ! show some user entertainment 
     integer :: maxit                      ! max. iterations for BL calcs
     double precision :: vaccel            ! xfoil BL convergence accelerator
@@ -80,6 +80,7 @@ module xfoil_driver
 
 
   type xfoil_geom_options_type   
+    logical :: repanel                    ! do re-paneling (PANGEN) before xfoil aero calcs 
     integer :: npan                       ! number of panels 
     double precision :: cvpar, cterat, ctrrat, xsref1, xsref2, xpref1, xpref2
   end type xfoil_geom_options_type
@@ -109,7 +110,7 @@ module xfoil_driver
 !=============================================================================
 
 subroutine run_op_points (foil, geom_options, xfoil_options,         &
-                          use_flap, flap_spec, flap_degrees, &
+                          flap_spec, flap_degrees, &
                           op_points_spec, op_points_result)
 
   use xfoil_inc    
@@ -123,9 +124,7 @@ subroutine run_op_points (foil, geom_options, xfoil_options,         &
   type(flap_spec_type),          intent(in) :: flap_spec
   type(op_point_specification_type), dimension(:), intent(in)  :: op_points_spec
   type(op_point_result_type), dimension(:), allocatable, intent(out) :: op_points_result
-
   double precision, dimension(:), intent(in) :: flap_degrees
-  logical, intent(in) :: use_flap
 
 
   integer :: i, noppoint
@@ -177,7 +176,7 @@ subroutine run_op_points (foil, geom_options, xfoil_options,         &
 
   if (show_details) then 
     write (*,'(7x,A)',advance = 'no') 'Xfoil  '
-    if (xfoil_options%repanel)      write (*,'(A)',advance = 'no') 'repanel '
+    if (geom_options%repanel)      write (*,'(A)',advance = 'no') 'repanel '
     if (xfoil_options%reinitialize) write (*,'(A)',advance = 'no') 'init_BL '
   end if
 
@@ -203,7 +202,7 @@ subroutine run_op_points (foil, geom_options, xfoil_options,         &
 
 !   if flpas are activated, check if the angle has changed to reinit foil
 
-    if(use_flap .and. (flap_degrees(i) /= prev_flap_degree)) then
+    if(flap_spec%use_flap .and. (flap_degrees(i) /= prev_flap_degree)) then 
       flap_changed = .true.
       prev_flap_degree = flap_degrees(i)
     else
@@ -222,7 +221,7 @@ subroutine run_op_points (foil, geom_options, xfoil_options,         &
       end if     
 
       ! repanel geometry only if requested...
-      if (xfoil_options%repanel) call PANGEN(.not. SILENT_MODE)
+      if (geom_options%repanel) call PANGEN(.not. SILENT_MODE)
       ! In case of flaps (or first op) always init boundary layer 
       call xfoil_init_BL (show_details)
 
@@ -395,8 +394,9 @@ subroutine run_op_point (op_point_spec,        &
   integer,                           intent(in)  :: maxit
   type(op_point_result_type),        intent(out) :: op_point_result
 
-  integer       :: niter_needed  
-  character(20) :: outstring 
+  integer         :: niter_needed  
+  ! character(20)   :: outstring 
+  doubleprecision :: save_ACRIT
 
   op_point_result%cl    = 0.d0
   op_point_result%cd    = 0.d0
@@ -416,7 +416,8 @@ subroutine run_op_point (op_point_spec,        &
   CALL COMSET
 
 ! Set ncrit per point
-  ACRIT = op_point_spec%ncrit
+  save_ACRIT = ACRIT
+  if (op_point_spec%ncrit /= -1d0) ACRIT = op_point_spec%ncrit
 
 ! Inviscid calculations for specified cl or alpha
   if (op_point_spec%spec_cl) then
@@ -454,7 +455,11 @@ subroutine run_op_point (op_point_spec,        &
     end if
 
   end if
-   
+
+  ! Restore default ncrit 
+
+  ACRIT = save_ACRIT
+ 
   ! Outputs
 
   op_point_result%cl    = CL
@@ -542,7 +547,7 @@ subroutine detect_bubble (bubblet, bubbleb)
 ! Detect range on upper/lower side where shear stress < 0 
 
 ! --- This is the Original stripped down from XFOIL 
-  DO I=1, N
+  do I=1, N
 
     if((X(I) >= detect_xstart) .and. (X(I) <= detect_xend)) then
 
@@ -588,8 +593,8 @@ subroutine detect_bubble (bubblet, bubbleb)
       ! write(*,'(3F14.6)') X(I), Y(I), CF
     end if 
 
-  ENDDO		
-
+  end do
+  
   if ((bubblet%xstart > 0d0) .and. (bubblet%xend == 0d0)) then 
     bubblet%xend = XOCTR(1)
     bubblet%found  = .true.

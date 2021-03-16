@@ -27,7 +27,7 @@ program main
   use particle_swarm,      only : pso_options_type
   use genetic_algorithm,   only : ga_options_type
   use simplex_search,      only : ds_options_type
-  use airfoil_evaluation,  only : xfoil_geom_options, xfoil_options, match_foils
+  use airfoil_evaluation,  only : xfoil_geom_options, match_foils
   use airfoil_operations,  only : get_seed_airfoil
   use airfoil_operations,  only : repanel_and_normalize_airfoil
   use memory_util,         only : deallocate_airfoil, allocate_airfoil_data,   &
@@ -37,8 +37,12 @@ program main
                                   write_final_design
   use polar_operations,    only : check_and_do_polar_generation
  
+! jx-test
+  use xfoil_driver,        only : op_point_specification_type
+  use input_output,        only : read_xfoil_options_inputs
 
   implicit none
+
 
 #ifndef PACKAGE_VERSION
 #define PACKAGE_VERSION ""
@@ -106,7 +110,7 @@ program main
                    pso_options, ga_options, ds_options, matchfoil_file,        &
                    symmetrical) 
 
-
+                   
 ! Load original airfoil into memory, repanel, normalize 
 !   to get seed airfoil ready for optimization 
 

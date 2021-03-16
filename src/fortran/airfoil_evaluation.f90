@@ -49,6 +49,7 @@ module airfoil_evaluation
 ! -------------------------------------------------------
 
 ! Parms for geometry constraints
+  logical             :: check_geometry = .true.
   double precision    :: min_thickness, max_thickness, min_te_angle,              &
                          growth_allowed, min_camber, max_camber
   integer             :: naddthickconst
@@ -56,6 +57,7 @@ module airfoil_evaluation
   double precision, dimension(max_addthickconst) :: addthick_x, addthick_min,  &
                                                     addthick_max
 ! Parms for moment constraints
+  logical             :: check_moment_constraints = .true. 
   character(8), dimension(max_op_points) :: moment_constraint_type
   double precision, dimension(max_op_points) :: min_moment
 
@@ -400,7 +402,7 @@ function geo_penalty_function(foil, actual_flap_degrees)
 
 ! Penalty for flap deflections outside the specified bounds
 
-  if (use_flap) then
+  if (flap_spec%use_flap) then
     do i = 1, noppoint
       penaltyval = penaltyval +                                                  &
                   max(0.d0,actual_flap_degrees(i)-max_flap_degrees)
@@ -571,6 +573,7 @@ function dynamic_weighting_function(op_points_result, fixed_weighting)
 
     curr_deviation_abs(i) = 0.0d0
 
+    op = op_points_result (i)
     op_spec  = op_points_spec(i) 
     opt_type = op_spec%optimization_type
 
@@ -652,6 +655,7 @@ function aero_objective_function(foil, actual_flap_degrees)
   
   pi = acos(-1.d0)
   local_xfoil_options = xfoil_options
+  noppoint = size(op_points_spec,1)  
 
 ! Analyze airfoil at requested operating conditions with Xfoil
 
@@ -661,7 +665,7 @@ function aero_objective_function(foil, actual_flap_degrees)
   local_xfoil_options%exit_if_unconverged = .true.   ! speed up if an op point uncoverges
 
   call run_op_points (foil, xfoil_geom_options, local_xfoil_options,        &
-                      use_flap, flap_spec, actual_flap_degrees(1:noppoint), &
+                      flap_spec, actual_flap_degrees, &
                       op_points_spec, op_points_result)
 
 
@@ -669,7 +673,7 @@ function aero_objective_function(foil, actual_flap_degrees)
 
   do i = 1, noppoint
     if (.not. op_points_result(i)%converged) then 
-      aero_objective_function = 55.55d0
+      aero_objective_function = OBJ_XFOIL_FAIL
       return
     end if
   end do
@@ -996,7 +1000,7 @@ subroutine get_flap_degrees_from_design (designvars, actual_flap_degrees)
 
   use vardef,             only: shape_functions
   use vardef,             only: initial_perturb
-  use vardef,             only: use_flap, nflap_optimize, flap_optimize_points
+  use vardef,             only: flap_spec, nflap_optimize, flap_optimize_points
   use vardef,             only: max_flap_degrees, min_flap_degrees, flap_degrees
   use parametrization,    only: top_shape_function, bot_shape_function
 
@@ -1011,7 +1015,7 @@ subroutine get_flap_degrees_from_design (designvars, actual_flap_degrees)
 
   actual_flap_degrees = 0d0
 
-  if (.not. use_flap) return
+  if (.not. flap_spec%use_flap) return
 
 ! Build airfoil to evaluate out of seed airfoil plus shape functions applied
 
@@ -1089,7 +1093,6 @@ function write_airfoil_optimization_progress(designvars, designcounter)
   type(airfoil_type)       :: foil
   integer :: i
 
-  type(op_point_specification_type) :: op_spec
   type(op_point_result_type)        :: op
   type(op_point_result_type), dimension(:), allocatable :: op_points_result
   type(xfoil_options_type)          :: local_xfoil_options
@@ -1101,7 +1104,6 @@ function write_airfoil_optimization_progress(designvars, designcounter)
   character(100) :: foilfile, polarfile, text, title
   character(8) :: maxtchar, xmaxtchar, maxcchar, xmaxcchar
   integer :: foilunit, polarunit
-  logical :: xfoil_reinitialize
 
   local_xfoil_options = xfoil_options
 
@@ -1136,7 +1138,7 @@ function write_airfoil_optimization_progress(designvars, designcounter)
   if (show_details .and. (designcounter > 0)) write (*,*) 
   
   call run_op_points (foil, xfoil_geom_options, local_xfoil_options,  &
-                      use_flap, flap_spec, actual_flap_degrees, &
+                      flap_spec, actual_flap_degrees, &
                       op_points_spec, op_points_result)
 
 

@@ -386,8 +386,8 @@ subroutine write_final_design(optdesign, f0, fmin, final_airfoil)
 !   Run xfoil for requested operating points
 
     call run_op_points (final_airfoil, xfoil_geom_options, xfoil_options,        &
-                    use_flap, flap_spec, actual_flap_degrees,  &
-                    op_points_spec, op_points_result)
+                        flap_spec, actual_flap_degrees,  &
+                        op_points_spec, op_points_result)
 
 !   Write summary to screen and file
 
@@ -416,7 +416,7 @@ subroutine write_final_design(optdesign, f0, fmin, final_airfoil)
       op_spec  = op_points_spec(i)
       op       = op_points_result(i) 
 
-      if (use_flap) then
+      if (flap_spec%use_flap) then
         write (flapnote, '(F6.2)') actual_flap_degrees(i)
         if (flap_selection(i) == "specify") then
           flapnote = trim(flapnote) //" spec"

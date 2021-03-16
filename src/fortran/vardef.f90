@@ -33,6 +33,7 @@ module vardef
 
 ! Specify flap
   type flap_spec_type
+    logical          :: use_flap
     double precision :: x_flap, y_flap 
     character(3)     :: y_flap_spec
   end type flap_spec_type
@@ -49,7 +50,6 @@ module vardef
   character(8), dimension(max_op_points) :: flap_selection
   double precision, dimension(max_op_points) :: flap_degrees
   double precision :: min_flap_degrees, max_flap_degrees
-  logical :: use_flap
   integer :: nflap_optimize          ! Number of op_poins where flap will be optimized
   integer, dimension(max_op_points) :: flap_optimize_points
 

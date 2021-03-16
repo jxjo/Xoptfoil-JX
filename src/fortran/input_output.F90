@@ -19,6 +19,8 @@ module input_output
 
 ! Module with subroutines for reading and writing of files
 
+  use os_util
+
   implicit none
 
   contains
@@ -40,13 +42,12 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
   use genetic_algorithm,  only : ga_options_type
   use simplex_search,     only : ds_options_type
   use airfoil_operations, only : my_stop
-  use xfoil_driver,       only : xfoil_geom_options_type, xfoil_options_type
+  use xfoil_driver,       only : xfoil_geom_options_type
   use naca,               only : naca_options_type
   use math_deps,          only : sort_vector
   use os_util,            only : print_note
 
- 
- 
+
   character(*), intent(in) :: input_file 
   character(80), intent(out) :: search_type, global_search, local_search,      &
                                 seed_airfoil, airfoil_file, matchfoil_file
@@ -59,41 +60,37 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
   type(ds_options_type), intent(out) :: ds_options
 
 ! Op_point specification 
-  character(7),     dimension(max_op_points)  :: op_mode
-  character(15),    dimension(max_op_points)  :: optimization_type
-  double precision, dimension(max_op_points)  :: op_point, weighting, scale_factor, &
-                                                 ncrit_pt, target_value, reynolds, mach
-  double precision :: re_default
-  logical          :: re_default_as_resqrtcl
-  type(op_point_specification_type) :: op_spec
-
-  double precision :: x_flap, y_flap 
-  character(3)     :: y_flap_spec
+!  character(7),     dimension(max_op_points)  :: op_mode
+!  character(15),    dimension(max_op_points)  :: optimization_type
+!  double precision, dimension(max_op_points)  :: op_point, weighting, scale_factor, &
+!                                                 ncrit_pt, target_value, reynolds, mach
+!  double precision :: re_default
+!  logical          :: re_default_as_resqrtcl
+!  type(op_point_specification_type) :: op_spec
 
 
   integer, dimension(max_addthickconst) :: sort_idxs
   double precision, dimension(max_addthickconst) :: temp_thickmin, temp_thickmax
-  logical :: viscous_mode, silent_mode, fix_unconverged, feasible_init,        &
-             reinitialize, restart, write_designs, reflexed,                   &
+  logical :: feasible_init,        &
+             restart, write_designs, reflexed,                   &
              pso_write_particlefile, repanel
-  integer :: restart_write_freq, pso_pop, pso_maxit, simplex_maxit, bl_maxit,  &
+  integer :: restart_write_freq, pso_pop, pso_maxit, simplex_maxit,  &
              npan, feasible_init_attempts
   integer :: ga_pop, ga_maxit
   double precision :: maxt, xmaxt, maxc, xmaxc, design_cl, a, leidx
-  double precision :: pso_tol, simplex_tol, ncrit, xtript, xtripb, vaccel
+  double precision :: pso_tol, simplex_tol
   double precision :: cvpar, cterat, ctrrat, xsref1, xsref2, xpref1, xpref2
   double precision :: feasible_limit
   double precision :: ga_tol, parent_fraction, roulette_selection_pressure,    &
                       tournament_fraction, crossover_range_factor,             &
                       mutant_probability, chromosome_mutation_rate,            &
                       mutation_range_factor
-  integer :: nbot_actual, nxtr_opt
+  integer :: nbot_actual
   integer :: i, iunit, ioerr, iostat1, counter, idx
   character(30) :: text
   character(3) :: family
   character(20) :: pso_convergence_profile
   character(10) :: parents_selection_method
-  character :: choice
 
   ! Geo targets 
   double precision :: sum_weightings
@@ -109,13 +106,6 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
             nfunctions_bot, initial_perturb, min_bump_width, restart,          &
             restart_write_freq, write_designs,                                 &
             show_details, echo_input_parms
-
-  namelist /operating_conditions/ noppoint, op_mode, op_point, reynolds, mach, &
-            use_flap, x_flap, y_flap, y_flap_spec, flap_selection,             &
-            target_value,                                                      &
-            re_default_as_resqrtcl, re_default,                                &
-            flap_degrees, weighting, optimization_type, ncrit_pt,              &
-            dynamic_weighting, dynamic_weighting_p_factor                                      
 
   namelist /constraints/ min_thickness, max_thickness, moment_constraint_type, &
                          min_moment, min_te_angle,                             &
@@ -140,16 +130,10 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
             crossover_range_factor, mutant_probability,                        &
             chromosome_mutation_rate, mutation_range_factor
   namelist /simplex_options/ simplex_tol, simplex_maxit
-  namelist /xfoil_run_options/ ncrit, xtript, xtripb, viscous_mode,            &
-            silent_mode, bl_maxit, vaccel, fix_unconverged, reinitialize
   namelist /xfoil_paneling_options/ npan, cvpar, cterat, ctrrat, xsref1,       &
             xsref2, xpref1, xpref2, repanel
   namelist /matchfoil_options/ match_foils, matchfoil_file
-
-! jx-mod Smoothing - namelist for smoothing options
   namelist /smoothing_options/ do_smoothing, spike_threshold 
-            
-! jx-mod Geo targets - namelist for geometry targets  (see module vardef)
   namelist /geometry_targets/ ngeo_targets, target_type, x_pos, target_geo,  &
             weighting_geo 
 
@@ -208,74 +192,26 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
 
   airfoil_file = read_cl_airfoil_file (airfoil_file)
 
-! Set defaults for operating conditions and constraints
-
-  noppoint = 1
-  use_flap = .false.
-  x_flap = 0.75d0
-  y_flap = 0.d0
-  y_flap_spec = 'y/c'
-
-  op_mode(:) = 'spec-cl'
-  op_point(:) = 0.d0
-  optimization_type(:) = 'min-drag'
-  mach(:) = 0.d0
-  weighting(:) = 1.d0
-  ncrit_pt(:) = -1.d0
-  target_value(:) = -1.d3 
-
-  flap_selection(:) = 'specify'
-  flap_degrees(:) = 0.d0
-
-  min_thickness = 0.04d0
-  max_thickness = 1000.d0
-  min_camber = -0.1d0
-  max_camber = 0.1d0
-  moment_constraint_type(:) = 'none'
-  min_moment(:) = -1.d0
-  min_te_angle = 2.d0
-
-  check_curvature      = .true.
-  auto_curvature       = .true.
-  max_te_curvature     = 10.d0                    ! more or less inactive by default
-  max_curv_reverse_top = 0
-  max_curv_reverse_bot = 0
-  max_curv_highlow_top = 0
-  max_curv_highlow_bot = 0
-  curv_threshold       = 0.01d0
-  highlow_threshold    = 0.02d0
-
-
-  symmetrical = .false.
-  min_flap_degrees = -5.d0
-  max_flap_degrees = 15.d0
-  naddthickconst = 0
-  addthick_x(:) = 0.01d0
-  addthick_min(:) = -1000.d0
-  addthick_max(:) = 1000.d0
-
-  ! re_default - to ease Type1 and Type2 polar op points
-  re_default_as_resqrtcl = .false.
-  re_default  =  1.0D+05                                              
-  reynolds(:) = -1.d0                         ! value in input file
 
   ! mb-mod dynamic-weighting
   dynamic_weighting  = .false.
   dynamic_weighting_p_factor = 80.d0
 
-! Read operating conditions and constraints
 
-  rewind(iunit)
-  read(iunit, iostat=iostat1, nml=operating_conditions)
-  call namelist_check('operating_conditions', iostat1, 'warn')
-  rewind(iunit)
-  read(iunit, iostat=iostat1, nml=constraints)
-  call namelist_check('constraints', iostat1, 'warn')
 
-! Store operating points where flap setting will be optimized
+! Read operating conditions
+
+  call read_op_points_spec('', iunit, noppoint, op_points_spec)
+
+  !if (echo_input_parms) call echo_op_points_spec  (op_points_spec)
+  call echo_op_points_spec  (op_points_spec) 
+
+! Read flap spec in operating conditions - flaps to optimize
+
+  call read_flap_inputs   ('', iunit, flap_spec, flap_degrees, flap_selection)
 
   nflap_optimize = 0
-  if (use_flap .and. (.not. match_foils)) then
+  if (flap_spec%use_flap .and. (.not. match_foils)) then
     do i = 1, noppoint
       if (flap_selection(i) == 'optimize') then
         nflap_optimize = nflap_optimize + 1
@@ -284,73 +220,10 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
     end do
   end if
 
-! store op_point specification in global array ------------------------
-
-  allocate (op_points_spec(noppoint)) 
-
-  do i = 1, noppoint
-    op_points_spec(i)%spec_cl = (op_mode(i) == 'spec-cl')
-    op_points_spec(i)%value   = op_point(i)
-    op_points_spec(i)%weighting  = weighting(i)
-    op_points_spec(i)%scale_factor = 1d0
-    
-    op_points_spec(i)%ncrit = ncrit_pt(i)    
-    op_points_spec(i)%optimization_type = optimization_type (i)
-    op_points_spec(i)%target_value = target_value (i)
-    
-  end do 
-
-! re_default - overwrite from command line and set Re per-point
-  re_default =  read_cl_re_default (re_default)                                              
-  do i = 1, noppoint
-    if (reynolds(i) /= -1.d0) then
-      op_points_spec(i)%re%number  = reynolds(i)
-      op_points_spec(i)%re%type    = 1
-    else                                    ! take default Re number
-      op_points_spec(i)%re%number  = re_default
-      if (re_default_as_resqrtcl) then
-        op_points_spec(i)%re%type    = 2
-      else
-        op_points_spec(i)%re%type    = 1
-      end if
-    end if
-    op_points_spec(i)%ma%number  = mach(i)   ! mach number only Type 1
-    op_points_spec(i)%ma%type    = 1
-  end do
-
-! May the king of xfoil polars be lenient ...
-!        ... when patching to support negative cl for Type 2 based op_points
-  do i = 1, noppoint
-    if ((op_points_spec(i)%re%type == 2) .and. (op_points_spec(i)%spec_cl) .and. (op_points_spec(i)%value < 0d0)) then
-      op_points_spec(i)%re%type    = 1
-      op_points_spec(i)%re%number  = op_points_spec(i)%re%number / & 
-                                    (abs(op_points_spec(i)%value) ** 0.5d0)
-    end if
-  end do 
-
-! Gneral flap settings 
-
-  flap_spec%x_flap  = x_flap
-  flap_spec%y_flap  = y_flap
-  flap_spec%y_flap_spec = y_flap_spec
-
-! jx-mod Smoothing - start read options-----------------------------------------
-  
-  !Set defaults for smoothing and read namelist 
-
-  spike_threshold = 0.8d0
-  do_smoothing    = .false.         ! now default - smoothing will be forced if 
-                                    !               quality of surface is bad
-
-  rewind(iunit)
-  read(iunit, iostat=iostat1, nml=smoothing_options)
 
 ! Geo targets - start read and weight options---------------------
 
-  !Set defaults for geometry targets and read namelist 
-
   ngeo_targets = 0
-
   target_type (:) = ''
   x_pos(:) = 0.d0 
   target_geo(:) = 0.d0 
@@ -368,26 +241,51 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
     geo_targets(i)%weighting    = weighting_geo(i)
   end do   
 
-! Geo targets - end read options-----------------------------------------
 
+  
 ! Modify normalize weightings for operating points
 !          now includis geo targets and smoothing progress
 
-  sum_weightings = sum(op_points_spec%weighting)               &
+  sum_weightings = sum(op_points_spec%weighting_user)               &
                  + sum(weighting_geo(1:ngeo_targets))
 
-  op_points_spec%weighting = op_points_spec%weighting / sum_weightings
-  weighting_geo            = weighting_geo/sum_weightings
-
-  geo_targets%weighting = weighting_geo
+  op_points_spec%weighting = op_points_spec%weighting_user / sum_weightings
+  geo_targets%weighting    = geo_targets%weighting         / sum_weightings
 
 
-! jx-mod - end extension -----------------------------------------------------
+! Read curvature constraints
+
+  call read_geo_constraints_inputs ('', iunit, &
+                                  check_curvature, auto_curvature,  &
+                                  max_te_curvature,    &
+                                  max_curv_reverse_top, max_curv_reverse_bot, &
+                                  max_curv_highlow_top, max_curv_highlow_bot, &
+                                  curv_threshold,highlow_threshold)
 
 
+! Read constraints
 
-! Sort thickness constraints in ascending x/c order
+  min_thickness = 0.04d0
+  max_thickness = 1000.d0
+  min_camber = -0.1d0
+  max_camber = 0.1d0
+  moment_constraint_type(:) = 'none'
+  min_moment(:) = -1.d0
+  min_te_angle = 2.d0
 
+  symmetrical = .false.
+  min_flap_degrees = -5.d0
+  max_flap_degrees = 15.d0
+  naddthickconst = 0
+  addthick_x(:) = 0.01d0
+  addthick_min(:) = -1000.d0
+  addthick_max(:) = 1000.d0
+
+  rewind(iunit)
+  read(iunit, iostat=iostat1, nml=constraints)
+  call namelist_check('constraints', iostat1, 'warn')
+
+  ! Sort thickness constraints in ascending x/c order
   if (naddthickconst > 0) then
     call sort_vector(addthick_x(1:naddthickconst), sort_idxs(1:naddthickconst))
     temp_thickmin = addthick_min
@@ -397,6 +295,19 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
       addthick_max(i) = temp_thickmax(sort_idxs(i))
     end do
   end if
+
+
+
+! Smoothing - start read options-----------------------------------------
+  
+  spike_threshold = 0.8d0
+  do_smoothing    = .false.         ! now default - smoothing will be forced if 
+                                    !               quality of surface is bad
+  rewind(iunit)
+  read(iunit, iostat=iostat1, nml=smoothing_options)
+
+
+
 
 ! Set defaults for naca airfoil options
  
@@ -608,104 +519,15 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
 
   end if 
 
-! Set default xfoil aerodynamics and paneling options
+! Read and set default xfoil run options
 
-  ncrit = 9.d0
-  xtript = 1.d0
-  xtripb = 1.d0
-  viscous_mode = .true.
-  silent_mode = .true.
-  bl_maxit = 40             ! reduced to 40 as above the potential result is rarely usable..
-  vaccel = 0.005d0          ! the original value of 0.01 leads to too many non convergences at 
-                            !   higher lift --> reduced 
-  fix_unconverged = .true.
-  reinitialize = .false.    ! as run_xfoil is improved, this will speed up the xfoil calcs
-
-  if (npan_fixed > 0) then 
-    npan   = npan_fixed     ! if npan_fixed is set - this is the one
-  else             
-    npan   = 200            ! a real default
-  end if             
-  cvpar = 1.d0
-  cterat = 0.d0             ! if set to normal value 0.15d0, the curvature at TE panel
-                            !   tends to flip away and have tripple value (bug in xfoil) 
-                            !   with a very small value the panel gets wider and the quality better
-  ctrrat = 0.2d0
-  xsref1 = 1.d0
-  xsref2 = 1.d0
-  xpref1 = 1.d0
-  xpref2 = 1.d0
-  repanel = .false.          ! repanel for each design before running xfoil
-
-! Read xfoil options
-
-  rewind(iunit)
-  read(iunit, iostat=iostat1, nml=xfoil_run_options)
-  call namelist_check('xfoil_run_options', iostat1, 'warn')
-  rewind(iunit)
-  read(iunit, iostat=iostat1, nml=xfoil_paneling_options)
-  call namelist_check('xfoil_paneling_options', iostat1, 'warn')
-
-! Ask about removing turbulent trips for max-xtr optimization
-
-  nxtr_opt = 0
-  if ( (xtript < 1.d0) .or. (xtripb < 1.d0) ) then
-    do i = 1, noppoint
-      if (trim(optimization_type(i)) == "max-xtr") nxtr_opt = nxtr_opt + 1
-    end do
- 
-    if (nxtr_opt > 0) choice = ask_forced_transition()
-    if (choice == 'y') then
-      xtript = 1.d0
-      xtripb = 1.d0
-    end if
-  end if
-
-! Put xfoil options into derived types
-
-  xfoil_options%ncrit = ncrit
-  xfoil_options%xtript = xtript
-  xfoil_options%xtripb = xtripb
-  xfoil_options%viscous_mode = viscous_mode
-  xfoil_options%silent_mode = silent_mode
-  xfoil_options%maxit = bl_maxit
-  xfoil_options%vaccel = vaccel
-  xfoil_options%fix_unconverged = fix_unconverged
-  xfoil_options%exit_if_unconverged = .false.
-  xfoil_options%reinitialize = reinitialize
-! jx-mod swtich to avoid PANGEN before each xfoil calculation as 
-!        it could have influence at high cl (TE micro stuff) 
-!        default is "always smooth" before xfoil
-  xfoil_options%repanel  = repanel
-  xfoil_options%show_details = show_details
+  call  read_xfoil_options_inputs  ('', iunit, show_details, xfoil_options)
 
 
-  if ((trim(shape_functions) == 'camb-thick') .or. &
-      (trim(shape_functions) == 'camb-thick-plus')) then
-    ! in case of camb_thick a re-paneling is not needed and
-    ! not good for high cl
-    xfoil_options%repanel = .false. 
-  end if 
- 
-  if (npan_fixed > 0 .and. (npan /= npan_fixed)) then 
-    npan = npan_fixed 
-    call print_note ("Number of panels (npan) is fixed for optimizations and can't be hanged")
-  end if 
+! Set default xfoil  paneling options
 
-  xfoil_geom_options%npan = npan
-  xfoil_geom_options%cvpar = cvpar
-  xfoil_geom_options%cterat = cterat
-  xfoil_geom_options%ctrrat = ctrrat
-  xfoil_geom_options%xsref1 = xsref1
-  xfoil_geom_options%xsref2 = xsref2
-  xfoil_geom_options%xpref1 = xpref1
-  xfoil_geom_options%xpref2 = xpref2
+  call read_xfoil_paneling_inputs  ('', iunit, xfoil_geom_options)
 
-! Set per-point ncrit if not specified in namelist
-
-  do i = 1, noppoint
-    if (op_points_spec(i)%ncrit == -1.d0) op_points_spec(i)%ncrit = ncrit
-  end do
 
 ! Option to match seed airfoil to another instead of aerodynamic optimization
 
@@ -752,44 +574,20 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
   write(*,*)
 
 ! Operating conditions namelist
-
-  write(*,'(A)') " &operating_conditions"
-  write(*,*) " noppoint = ", noppoint
-  write(*,*) " use_flap = ", use_flap
-  write(*,*) " x_flap = ", x_flap
-  write(*,*) " y_flap = ", y_flap
-  write(*,*) " y_flap_spec = "//trim(y_flap_spec)
-! jx-mod re_default- to ease Type1 and Type2 polar op points
-  write(*,*) " re_default = ", re_default
-  write(*,*) " re_default_as_resqrtcl = ", re_default_as_resqrtcl
+! #todo
+!  write(*,'(A)') " &operating_conditions"
+!  write(*,*) " noppoint = ", noppoint
+!  write(*,*) " use_flap = ", use_flap
+!  write(*,*) " x_flap = ", x_flap
+!  write(*,*) " y_flap = ", y_flap
+!  write(*,*) " y_flap_spec = "//trim(y_flap_spec)
+!  write(*,*) " re_default = ", re_default
+!  write(*,*) " re_default_as_resqrtcl = ", re_default_as_resqrtcl
 ! mb-mod dynamic-weighting
-  write(*,*) " dynamic_weighting = ", dynamic_weighting
-  write(*,*) " dynamic_weighting_p_factor = ", dynamic_weighting_p_factor
-  write(*,*)
+!  write(*,*) " dynamic_weighting = ", dynamic_weighting
+!  write(*,*) " dynamic_weighting_p_factor = ", dynamic_weighting_p_factor
+!  write(*,*)
 
-  ! #todo rewrite output as table with new op_point_spec
-  write (*,*) " ! JX: echo of operating points has to be newly implemented"
-!  do i = 1, noppoint
-!    write(text,*) i
-!    text = adjustl(text)
-!    write(*,*) " optimization_type("//trim(text)//") = '"//                    &
-!               trim(optimization_type(i))//"'"
-!    write(*,*) " op_mode("//trim(text)//") = '"//trim(op_mode(i))//"'"
-!    write(*,*) " op_point("//trim(text)//") = ", op_point(i)
-!    write(*,'(A,es17.8,A,I1,A)') "  reynolds("//trim(text)//") = ", re(i)%number,  &
-!                  " (Type ", re(i)%type, ")"
-!    write(*,'(A,es17.8,A,I1,A)') "  mach("//trim(text)//") = ", ma(i)%number,                     &
-!                  " (Type ", ma(i)%type, ")"
-!    write(*,*) " flap_selection("//trim(text)//") = '"//                       &
-!               trim(flap_selection(i))//"'"
-!    write(*,*) " flap_degrees("//trim(text)//") = ", flap_degrees(i)
-!    write(*,*) " target_value("//trim(text)//") = ", target_value(i)
-!    write(*,*) " weighting("//trim(text)//") = ", weighting(i)
-!    if (ncrit_pt(i) /= -1.d0)                                                  &
-!      write(*,*) " ncrit_pt("//trim(text)//") = ", ncrit_pt(i)
-!    if (i < noppoint) write(*,*)
-!  end do
-!  write(*,'(A)') " /"
   write(*,*)
 
 ! Constraints namelist
@@ -931,20 +729,6 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
 
   end if
 
-! Xfoil run options namelist
-
-  write(*,'(A)') " &xfoil_run_options"
-  write(*,*) " ncrit = ", xfoil_options%ncrit
-  write(*,*) " xtript = ", xfoil_options%xtript
-  write(*,*) " xtripb = ", xfoil_options%xtripb
-  write(*,*) " viscous_mode = ", xfoil_options%viscous_mode
-  write(*,*) " silent_mode = ", xfoil_options%silent_mode
-  write(*,*) " bl_maxit = ", xfoil_options%maxit
-  write(*,*) " vaccel = ", xfoil_options%vaccel
-  write(*,*) " fix_unconverged = ", xfoil_options%fix_unconverged
-  write(*,*) " reinitialize = ", xfoil_options%reinitialize
-  write(*,'(A)') " /"
-  write(*,*)
 
 ! Xfoil paneling options namelist
 
@@ -1007,80 +791,7 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
     call my_stop("The restart option is no more supported in Xoptfoil-JX. "//  &
     "Please remove this option from input file.")
 
-! Operating points
 
-  if ((noppoint < 1) .and. .not. match_foils) call my_stop("noppoint must be > 0.")
-  if (noppoint > max_op_points) then
-     write(text,*) max_op_points
-     text = adjustl(text)
-     call my_stop("noppoints must be <= "//trim(text)//".")
-  end if
-  if ((use_flap) .and. (x_flap <= 0.0)) call my_stop("x_flap must be > 0.")
-  if ((use_flap) .and. (x_flap >= 1.0)) call my_stop("x_flap must be < 1.")
-  if ((use_flap) .and. (y_flap_spec /= 'y/c') .and. (y_flap_spec /= 'y/t'))    &
-    call my_stop("y_flap_spec must be 'y/c' or 'y/t'.")
-
-  do i = 1, noppoint
-
-    op_spec  = op_points_spec(i) 
-
-    if (trim(op_mode(i)) /= 'spec-cl' .and. trim(op_mode(i)) /= 'spec-al')     &
-      call my_stop("op_mode must be 'spec-al' or 'spec-cl'.")
-    if (op_spec%re%number <= 0.d0) call my_stop("reynolds must be > 0." //           &
-                             " Default value (re_default) could not be set")
-    if (op_spec%ma%number < 0.d0) call my_stop("mach must be >= 0.")
-    if (trim(flap_selection(i)) /= 'specify' .and.                             &
-        trim(flap_selection(i)) /= 'optimize')                                 &
-      call my_stop("flap_selection must be 'specify' or 'optimize'.")
-    if (flap_degrees(i) < -90.d0) call my_stop("flap_degrees must be > -90.")
-    if (flap_degrees(i) > 90.d0) call my_stop("flap_degrees must be < 90.")
-    if (op_spec%weighting <= 0.d0) call my_stop("weighting must be > 0.")
-    if (trim(op_spec%optimization_type) /= 'min-drag' .and.                         &
-      trim(op_spec%optimization_type) /= 'max-glide' .and.                          &
-      trim(op_spec%optimization_type) /= 'min-sink' .and.                           &
-      trim(op_spec%optimization_type) /= 'max-lift' .and.                           &
-      trim(op_spec%optimization_type) /= 'target-moment' .and.                      &
-      trim(op_spec%optimization_type) /= 'target-drag' .and.                        &
-      trim(op_spec%optimization_type) /= 'target-lift' .and.                        &
-      trim(op_spec%optimization_type) /= 'max-xtr' .and.                            &
-      trim(op_spec%optimization_type) /= 'min-lift-slope' .and.                     &
-      trim(op_spec%optimization_type) /= 'min-glide-slope' .and.                    &
-      trim(op_spec%optimization_type) /= 'max-lift-slope')                          &
-      call my_stop("optimization_type must be 'min-drag', 'max-glide', "//     &
-                   "'min-sink', 'max-lift', 'max-xtr', 'target-moment', "//    &
-                   "'target-drag', 'min-lift-slope', , 'min-glide-slope'"//    &
-                   " or 'max-lift-slope'.")
-    if ((trim(op_spec%optimization_type) == 'max-lift-slope') .and. (noppoint == 1))&
-      call my_stop("at least two operating points are required for to "//      &
-                   "maximize lift curve slope.")
-    if ((trim(op_spec%optimization_type) == 'min-lift-slope') .and. (noppoint == 1))&
-      call my_stop("at least two, better three operating points are required"//&
-                   " for to minimize lift curve slope.")
-    if ((trim(op_spec%optimization_type) == 'min-glide-slope') .and. (noppoint == 1))&
-      call my_stop("at least two, better three operating points are required"//&
-                   " for to minimize lift curve slope.")
-    if (op_spec%ncrit <= 0.d0) call my_stop("ncrit_pt must be > 0 or -1.")
-  end do
-
-! Aero targets - Check for an existing target value 
-!              if optimization_type is target-moment or Target-drag
-  do i = 1, noppoint
-
-    op_spec  = op_points_spec(i) 
-
-    if (((trim(op_spec%optimization_type) == 'target-moment') .and.                &
-        (target_value(i)) == -1.d3) )                                         &
-      call my_stop("No 'target-value' defined for "//  &
-                 "for optimization_type 'target-moment'")
-    if (((trim(op_spec%optimization_type) == 'target-drag') .and.                  &
-        (target_value(i)) == -1.d3) )                                         &
-      call my_stop("No 'target-value' defined for "//  &
-                     "for optimization_type 'target-drag'")
-    if (((trim(op_spec%optimization_type) == 'target-lift') .and.                  &
-        (target_value(i)) == -1.d3) )                                         &
-      call my_stop("No 'target-value' defined for "//  &
-                     "for optimization_type 'target-lift'")
-  end do
 
 
 ! Constraints
@@ -1248,17 +959,451 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
   
   end if
 
-! XFoil run options
-
-  if (ncrit < 0.d0) call my_stop("ncrit must be >= 0.")
-  if (xtript < 0.d0 .or. xtript > 1.d0)                                        &
-    call my_stop("xtript must be >= 0. and <= 1.")
-  if (xtripb < 0.d0 .or. xtripb > 1.d0)                                        &
-    call my_stop("xtripb must be >= 0. and <= 1.")
-  if (bl_maxit < 1) call my_stop("bl_maxit must be > 0.")
-  if (vaccel < 0.d0) call my_stop("vaccel must be >= 0.")
   
-! XFoil paneling options
+end subroutine read_inputs
+
+
+
+!=============================================================================
+! Read operating points specification from input file 
+!   (separated from read_inputs to be more modular)
+!=============================================================================
+
+subroutine read_op_points_spec  (input_file, or_iunit, noppoint, op_points_spec)
+
+  use xfoil_driver,       only : op_point_specification_type
+  use vardef,             only : max_op_points
+  use airfoil_operations, only : my_stop
+
+
+  character(*), intent(in)  :: input_file 
+  integer, intent(in)       :: or_iunit
+  integer, intent(out)      :: noppoint
+  type(op_point_specification_type), dimension(:), allocatable, intent(out)  :: op_points_spec
+
+! Op_point specification 
+  character(7),     dimension(max_op_points)  :: op_mode
+  character(15),    dimension(max_op_points)  :: optimization_type
+  double precision, dimension(max_op_points)  :: op_point, weighting, &
+                                                 ncrit_pt, target_value, reynolds, mach
+
+  double precision :: re_default
+  logical          :: re_default_as_resqrtcl
+  type(op_point_specification_type) :: op
+
+  integer               :: i, iunit, ioerr, iostat1
+  character(10)         :: text
+
+  namelist /operating_conditions/ noppoint, op_mode, op_point, reynolds, mach,   &
+            target_value, weighting, optimization_type, ncrit_pt,                & 
+            re_default_as_resqrtcl, re_default
+
+
+  ! Set defaults for operating conditions and constraints
+
+  noppoint = 1
+
+  re_default = 100000d0
+  re_default_as_resqrtcl = .false.
+  reynolds(:) = -1.d0                         ! value in input file
+
+  op_mode(:) = 'spec-cl'
+  op_point(:) = 0.d0
+  optimization_type(:) = 'min-drag'
+  mach(:) = 0.d0
+  weighting(:) = 1.d0
+  ncrit_pt(:) = -1.d0
+  target_value(:) = -1.d3 
+
+
+! (Open input file) , read options
+
+  if (trim(input_file) == '') then
+    iunit = or_iunit
+    rewind(iunit)
+    read(iunit, iostat=iostat1, nml=operating_conditions)
+  else
+    iunit = 12
+    open(unit=iunit, file=input_file, status='old', iostat=ioerr)
+    if (ioerr /= 0) call my_stop('Could not find input file '//trim(input_file)//'.')
+    read(iunit, iostat=iostat1, nml=operating_conditions)
+    close(iunit)
+  end if
+  call namelist_check('operating_conditions', iostat1, 'err')
+
+! store op_point specification in data structure ------------------------
+
+  allocate (op_points_spec(noppoint)) 
+
+  do i = 1, noppoint
+    op_points_spec(i)%spec_cl = (op_mode(i) == 'spec-cl')
+    op_points_spec(i)%value   = op_point(i)
+    
+    op_points_spec(i)%ncrit = ncrit_pt(i)    
+    op_points_spec(i)%optimization_type = optimization_type (i)
+    op_points_spec(i)%target_value = target_value (i)
+    
+    if (reynolds(i) /= -1.d0) then
+      op_points_spec(i)%re%number  = reynolds(i)
+      op_points_spec(i)%re%type    = 1
+    else                                    ! take default Re number
+      op_points_spec(i)%re%number  = re_default
+      if (re_default_as_resqrtcl) then
+        op_points_spec(i)%re%type    = 2
+      else
+        op_points_spec(i)%re%type    = 1
+      end if
+    end if
+    op_points_spec(i)%ma%number  = mach(i)   ! mach number only Type 1
+    op_points_spec(i)%ma%type    = 1
+
+    op_points_spec(i)%weighting_user  = weighting (i)
+  end do 
+
+!  Modify normalize weightings for operating points
+!  ... will be re-normalized if there are geo_targets...!
+  op_points_spec%weighting    = op_points_spec%weighting_user / sum(op_points_spec%weighting_user)
+  op_points_spec%scale_factor = 1d0
+
+
+! Check input data  ------------------------
+
+  if (noppoint < 1) call my_stop("noppoint must be > 0")
+  if (noppoint > max_op_points) then
+     write(text,*) max_op_points
+     text = adjustl(text)
+     call my_stop("noppoints must be <= "//trim(text)//".")
+  end if
+
+  do i = 1, noppoint
+
+    op  = op_points_spec(i) 
+
+    if (op%re%number <= 0.d0) &
+      call my_op_stop (i,op_points_spec, "reynolds must be > 0. Default value (re_default) could not be set")
+    if (op%ma%number < 0.d0) &
+      call my_op_stop (i,op_points_spec, "mach must be >= 0.")
+    if (op%weighting_user <= 0.d0) &
+      call my_op_stop (i,op_points_spec, "weighting must be > 0.")
+    if (trim(op%optimization_type) /= 'min-drag' .and.                         &
+      trim(op%optimization_type) /= 'max-glide' .and.                          &
+      trim(op%optimization_type) /= 'min-sink' .and.                           &
+      trim(op%optimization_type) /= 'max-lift' .and.                           &
+      trim(op%optimization_type) /= 'target-moment' .and.                      &
+      trim(op%optimization_type) /= 'target-drag' .and.                        &
+      trim(op%optimization_type) /= 'target-lift' .and.                        &
+      trim(op%optimization_type) /= 'max-xtr' .and.                            &
+      trim(op%optimization_type) /= 'min-lift-slope' .and.                     &
+      trim(op%optimization_type) /= 'min-glide-slope' .and.                    &
+      trim(op%optimization_type) /= 'max-lift-slope')                          &
+      call my_op_stop (i,op_points_spec, "optimization_type must be 'min-drag', 'max-glide', "//     &
+                   "'min-sink', 'max-lift', 'max-xtr', 'target-moment', "//    &
+                   "'target-drag', 'min-lift-slope', 'min-glide-slope'"//      &
+                   " or 'max-lift-slope'.")
+    if ((trim(op%optimization_type) == 'max-lift-slope') .and. (noppoint == 1))&
+      call my_op_stop (i,op_points_spec, "at least two operating points are required for to "//      &
+                   "maximize lift curve slope.")
+    if ((trim(op%optimization_type) == 'min-lift-slope') .and. (noppoint == 1))&
+      call my_op_stop (i,op_points_spec, "at least two, better three operating points are required"//&
+                   " for to minimize lift curve slope.")
+    if ((trim(op%optimization_type) == 'min-glide-slope') .and. (noppoint == 1))&
+      call my_op_stop (i,op_points_spec, "at least two, better three operating points are required"//&
+                   " for to minimize lift curve slope.")
+    if ((op%ncrit <= 0.d0) .and. (op%ncrit /= -1d0)) &
+      call my_op_stop (i,op_points_spec, "ncrit_pt must be > 0 or -1.")
+
+    if (((trim(op%optimization_type) == 'target-moment') .and.                &
+        (target_value(i)) == -1.d3) )                                         &
+      call my_op_stop (i,op_points_spec, "No 'target-value' defined for "//  &
+                 "for optimization_type 'target-moment'")
+    if (((trim(op%optimization_type) == 'target-drag') .and.                  &
+        (target_value(i)) == -1.d3) )                                         &
+      call my_op_stop (i,op_points_spec, "No 'target-value' defined for "//  &
+                     "for optimization_type 'target-drag'")
+    if (((trim(op%optimization_type) == 'target-lift') .and.                  &
+        (target_value(i)) == -1.d3) )                                         &
+      call my_op_stop (i,op_points_spec, "No 'target-value' defined for "//  &
+                     "for optimization_type 'target-lift'")
+  end do
+
+end subroutine read_op_points_spec
+
+
+!=============================================================================
+! Read xoptfoil input file to get flap setting options
+!=============================================================================
+
+subroutine read_flap_inputs  (input_file, or_iunit, flap_spec, flap_degrees, flap_selection) 
+
+  use airfoil_operations, only : my_stop
+  use vardef,             only : flap_spec_type
+
+  character(*), intent(in)      :: input_file
+  integer, intent(in)           :: or_iunit
+  type(flap_spec_type), intent(out) :: flap_spec
+  double precision, dimension(:), intent(inout) :: flap_degrees
+  character(8),     dimension(:), intent(inout) :: flap_selection
+
+  double precision              :: x_flap, y_flap
+  character(3)                  :: y_flap_spec
+  integer                       :: iostat1, iunit, i, ioerr
+  logical                       :: use_flap
+
+  namelist /operating_conditions/ use_flap, x_flap, y_flap, y_flap_spec, &
+                                  flap_degrees, flap_selection
+
+  ! Init default values 
+
+  use_flap     = .false.                !currently dummy
+  x_flap       = 0.75d0
+  y_flap       = 0.d0
+  y_flap_spec  = 'y/c'
+
+  flap_degrees      = 0d0
+  flap_selection    = 'specify'
+
+  ! Open input file and read namelist from file
+
+  if (trim(input_file) == '') then
+    iunit = or_iunit
+    rewind(iunit)
+    read(iunit, iostat=iostat1, nml=operating_conditions)
+  else
+    iunit = 12
+    open(unit=iunit, file=input_file, status='old', iostat=ioerr)
+    if (ioerr /= 0) call my_stop('Could not find input file '//trim(input_file)//'.')
+    read(iunit, iostat=iostat1, nml=operating_conditions)
+    close(iunit)
+  end if
+
+  ! All parms optional - so no warning call namelist_check ...
+
+  ! Check Input 
+
+  if ((use_flap) .and. (x_flap <= 0.0)) call my_stop("x_flap must be > 0.")
+  if ((use_flap) .and. (x_flap >= 1.0)) call my_stop("x_flap must be < 1.")
+  if ((use_flap) .and. (y_flap_spec /= 'y/c') .and. (y_flap_spec /= 'y/t'))    &
+    call my_stop("y_flap_spec must be 'y/c' or 'y/t'.")
+
+  if ((y_flap_spec  /= 'y/c') .and. (y_flap_spec  /= 'y/t')) &
+    call my_stop ("Vertical hinge definition must be 'y/c' or 'y/t'")
+  do i = 1, size(flap_degrees)
+    if (abs(flap_degrees(i)) > 70d0) &
+      call my_stop ('Flap angle must be less than 70 degrees')
+    if ((flap_selection(i) /= 'specify') .and. (flap_selection(i) /= 'optimize')) then
+      call my_stop ("Flap selection must be 'spcify' or 'optimize')")
+    end if 
+  end do
+
+  flap_spec%use_flap    = use_flap
+  flap_spec%x_flap      = x_flap
+  flap_spec%y_flap      = y_flap
+  flap_spec%y_flap_spec = y_flap_spec
+
+end subroutine read_flap_inputs
+
+
+!-----------------------------------------------------------------------------
+! Stops execution when there is an invalid op_point paramter
+!-----------------------------------------------------------------------------
+
+subroutine my_op_stop (iop, op_points_spec, message)
+
+  use airfoil_operations, only : my_stop
+  use xfoil_driver,       only : op_point_specification_type
+
+  type(op_point_specification_type), dimension(:), allocatable, intent(in)  :: op_points_spec
+  integer, intent (in)      :: iop
+  character(*), intent(in)  :: message
+  character(20)             :: op_string
+
+  write (op_string, '(I2)') iop
+  op_string = 'Op_point '// adjustl(trim(op_string)) 
+
+  call echo_op_points_spec  (op_points_spec)
+
+  call my_stop (trim(op_string) //': '// message)
+
+end subroutine my_op_stop
+
+
+!-----------------------------------------------------------------------------
+! Echo input parms of operating points entered by user
+!-----------------------------------------------------------------------------
+
+subroutine echo_op_points_spec  (op_points_spec)
+
+  use xfoil_driver,       only : op_point_specification_type
+
+  type(op_point_specification_type), dimension(:), allocatable, intent(in)  :: op_points_spec
+
+  integer               :: i, re_int
+  character(10)         :: spec_char, target_value_char, ncrit_char
+  type(op_point_specification_type) :: op
+
+
+  !write (*,'(" - ",A)') 'Echo operating point definitions'
+  write (*,*) 
+  write (*,'(" - ",A2,":",A7,A6,A15,A9,A10,A5,A7,A11, A11)') &
+                'No', 'Spec', 'Point', 'Opt. Type', ' Target', & 
+                'Re', 'Type', 'ncrit', 'Weighting','normalized'
+  
+  do i = 1, size (op_points_spec)
+
+    op = op_points_spec(i)
+
+    if (op%spec_cl) then
+      spec_char = 'cl'
+    else
+      spec_char = 'alpha'
+    end if
+
+    if (op%target_value == -1.d3 ) then 
+      target_value_char = '-'
+    else
+      write (target_value_char,'(F9.5)') op%target_value
+    end if
+
+    if (op%ncrit == -1.d0 ) then 
+      ncrit_char = '-'
+    else
+      write (ncrit_char,'(F7.1)') op%ncrit
+    end if
+
+    re_int = int (op%re%number)
+
+    write (*,'(3x,I2,":",A7,F6.2,A15,A9,I10,I5,A7,F11.2, F11.2 )') &
+          i, trim(spec_char), op%value, trim(op%optimization_type), trim(target_value_char), &
+          re_int, op%re%type, trim(ncrit_char), op%weighting_user, op%weighting
+  end do 
+
+
+end subroutine echo_op_points_spec
+
+
+!=============================================================================
+! Read xoptfoil input file to geometric constraints
+!=============================================================================
+
+subroutine read_geo_constraints_inputs  (input_file, or_iunit, &
+                                          check_curvature, auto_curvature,           &
+                                          max_te_curvature,                           &
+                                          max_curv_reverse_top, max_curv_reverse_bot, &
+                                          max_curv_highlow_top, max_curv_highlow_bot, &
+                                          curv_threshold,highlow_threshold)
+
+  use airfoil_operations, only : my_stop
+
+  character(*), intent(in)           :: input_file
+  integer, intent(in)                :: or_iunit
+  logical, intent(inout)             :: check_curvature, auto_curvature 
+  double precision , intent(inout)   :: max_te_curvature,          &
+                                        curv_threshold,highlow_threshold
+  integer, intent(inout)             :: max_curv_reverse_top, max_curv_reverse_bot, &
+                                        max_curv_highlow_top, max_curv_highlow_bot
+  integer :: iostat1, iunit, ioerr
+
+  namelist /constraints/ check_curvature, auto_curvature, &
+                         highlow_threshold, curv_threshold, max_te_curvature, &
+                         max_curv_reverse_top, max_curv_reverse_bot,  &
+                         max_curv_highlow_top, max_curv_highlow_bot
+
+  check_curvature      = .true.
+  auto_curvature       = .true.
+  max_te_curvature     = 10.d0                    ! more or less inactive by default
+  max_curv_reverse_top = 0
+  max_curv_reverse_bot = 0
+  max_curv_highlow_top = 0
+  max_curv_highlow_bot = 0
+  curv_threshold       = 0.01d0
+  highlow_threshold    = 0.02d0
+
+  
+  ! Open input file and read namelist from file
+
+  if (trim(input_file) == '') then
+    iunit = or_iunit
+    rewind(iunit)
+    read(iunit, iostat=iostat1, nml=constraints)
+  else
+    iunit = 12
+    open(unit=iunit, file=input_file, status='old', iostat=ioerr)
+    if (ioerr == 0) then
+      read(iunit, iostat=iostat1, nml=constraints)
+      close(iunit)
+    end if
+  end if
+  ! call namelist_check('constraints', iostat1, 'warn')
+
+
+end subroutine read_geo_constraints_inputs
+
+
+!=============================================================================
+! Read xoptfoil input file to xfoil_paneling_options
+!   (separated from read_inputs to be more modular)
+!=============================================================================
+
+subroutine read_xfoil_paneling_inputs  (input_file, or_iunit, geom_options)
+
+  use vardef,             only : npan_fixed
+  use airfoil_operations, only : my_stop
+  use xfoil_driver,       only : xfoil_geom_options_type
+
+  character(*), intent(in) :: input_file
+  integer, intent(in)      :: or_iunit
+  type(xfoil_geom_options_type), intent(out) :: geom_options
+  double precision :: cvpar, cterat, ctrrat, xsref1, xsref2, xpref1, xpref2
+
+  integer :: npan
+  integer :: iostat1, iunit, ioerr
+  logical :: repanel
+
+  namelist /xfoil_paneling_options/ npan, cvpar, cterat, ctrrat, xsref1,       &
+            xsref2, xpref1, xpref2
+
+  ! Init default values for xfoil options
+
+  if (npan_fixed > 0) then 
+    npan   = npan_fixed     ! if npan_fixed is set - this is the one
+  else             
+    npan   = 200            ! a real default
+  end if             
+
+  cvpar  = 1.d0
+  cterat = 0.d0             ! if set to normal value 0.15d0, the curvature at TE panel
+                            !   tends to flip away and have tripple value (bug in xfoil) 
+                            !   with a very small value the panel gets wider and the quality better
+  ctrrat = 0.2d0
+  xsref1 = 1.d0
+  xsref2 = 1.d0
+  xpref1 = 1.d0
+  xpref2 = 1.d0
+
+  repanel = .false.          ! repanel for each design before running xfoil
+
+  
+! Open input file and read namelist from file
+
+  if (trim(input_file) == '') then
+    iunit = or_iunit
+    rewind(iunit)
+    read(iunit, iostat=iostat1, nml=xfoil_paneling_options)
+  else
+    iunit = 12
+    open(unit=iunit, file=input_file, status='old', iostat=ioerr)
+    if (ioerr == 0) then
+      read(iunit, iostat=iostat1, nml=xfoil_paneling_options)
+      close(iunit)
+    end if
+  end if
+  
+! Put xfoil options into derived types
+
+  if (npan_fixed > 0 .and. (npan /= npan_fixed)) then 
+    npan = npan_fixed 
+    call print_note ("Number of panels (npan) is fixed for optimizations and can't be hanged")
+  end if 
 
   if (npan < 20) call my_stop("npan must be >= 20.")
   if (cvpar <= 0.d0) call my_stop("cvpar must be > 0.")
@@ -1271,51 +1416,120 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
   if (xpref2 < xpref1) call my_stop("xpref2 must be >= xpref1")
   if (xpref2 > 1.d0) call my_stop("xpref2 must be <= 1.")
 
-end subroutine read_inputs
+
+  geom_options%repanel = repanel
+  geom_options%npan   = npan
+  geom_options%cvpar  = cvpar
+  geom_options%cterat = cterat
+  geom_options%ctrrat = ctrrat
+  geom_options%xsref1 = xsref1
+  geom_options%xsref2 = xsref2
+  geom_options%xpref1 = xpref1
+  geom_options%xpref2 = xpref2
+
+end subroutine read_xfoil_paneling_inputs
 
 !=============================================================================
-! Read xoptfoil input file to geometric constraints
-!   (separated from read_inputs to be more modular)
-!
-! ! default values have to be set by caller
+! Read xfoil_run_options input
 !=============================================================================
 
-subroutine read_geo_constraints_inputs  (input_file, &
-                                          check_curvature, auto_curvature,           &
-                                          max_te_curvature,                           &
-                                          max_curv_reverse_top, max_curv_reverse_bot, &
-                                          max_curv_highlow_top, max_curv_highlow_bot, &
-                                          curv_threshold,highlow_threshold)
-  
-  character(*), intent(in)           :: input_file
-  logical, intent(inout)             :: check_curvature, auto_curvature 
-  double precision , intent(inout)   :: max_te_curvature,          &
-                                        curv_threshold,highlow_threshold
-  integer, intent(inout)             :: max_curv_reverse_top, max_curv_reverse_bot, &
-                                        max_curv_highlow_top, max_curv_highlow_bot
-  integer :: istat, iunit
+subroutine read_xfoil_options_inputs  (input_file, or_iunit, show_details, xfoil_options)
 
-  namelist /constraints/ check_curvature, auto_curvature, &
-                         highlow_threshold, curv_threshold, max_te_curvature, &
-                         max_curv_reverse_top, max_curv_reverse_bot,  &
-                         max_curv_highlow_top, max_curv_highlow_bot
+  use xfoil_driver, only : xfoil_options_type
+  use airfoil_operations, only : my_stop
 
-  
-  ! Open input file and read namelist from file
+  character(*), intent(in) :: input_file 
+  integer, intent(in)      :: or_iunit
+  logical,      intent(in) :: show_details
+  type(xfoil_options_type), intent(out)    :: xfoil_options
 
-  iunit = 12
-  open(unit=iunit, file=input_file, status='old', iostat=istat)
+  logical :: viscous_mode, silent_mode, fix_unconverged, reinitialize
+  integer :: bl_maxit
+  double precision :: ncrit, xtript, xtripb, vaccel
+  integer :: iunit, ioerr, iostat1
 
-  if (istat == 0) then
-    read (iunit, iostat=istat, nml=constraints)
-    call namelist_check('constraints', istat, 'warn')
-    close (iunit)
+  namelist /xfoil_run_options/ ncrit, xtript, xtripb, viscous_mode,            &
+  silent_mode, bl_maxit, vaccel, fix_unconverged, reinitialize
+
+
+  ! Set default xfoil aerodynamics
+
+  ncrit = 9.d0
+  xtript = 1.d0
+  xtripb = 1.d0
+  viscous_mode = .true.
+  silent_mode = .true.
+  bl_maxit = 40             ! reduced to 40 as above the potential result is rarely usable..
+  vaccel = 0.005d0          ! the original value of 0.01 leads to too many non convergences at 
+                            !   higher lift --> reduced 
+  fix_unconverged = .true.
+  reinitialize = .false.    ! as run_xfoil is improved, this will speed up the xfoil calcs
+
+! Read xfoil options
+
+  if (trim(input_file) == '') then
+    iunit = or_iunit
+    rewind(iunit)
+    read(iunit, iostat=iostat1, nml=xfoil_run_options)
+  else
+    iunit = 12
+    open(unit=iunit, file=input_file, status='old', iostat=ioerr)
+    if (ioerr == 0) then
+      read(iunit, iostat=iostat1, nml=xfoil_run_options)
+      close(iunit)
+    end if
   end if
 
+! XFoil run options
 
-end subroutine read_geo_constraints_inputs
+  if (ncrit < 0.d0) call my_stop("ncrit must be >= 0.")
+  if (xtript < 0.d0 .or. xtript > 1.d0)                                        &
+    call my_stop("xtript must be >= 0. and <= 1.")
+  if (xtripb < 0.d0 .or. xtripb > 1.d0)                                        &
+    call my_stop("xtripb must be >= 0. and <= 1.")
+  if (bl_maxit < 1) call my_stop("bl_maxit must be > 0.")
+  if (vaccel < 0.d0) call my_stop("vaccel must be >= 0.")
 
 
+  ! Put xfoil options into derived types
+
+  xfoil_options%ncrit = ncrit
+  xfoil_options%xtript = xtript
+  xfoil_options%xtripb = xtripb
+  xfoil_options%viscous_mode = viscous_mode
+  xfoil_options%silent_mode = silent_mode
+  xfoil_options%maxit = bl_maxit
+  xfoil_options%vaccel = vaccel
+  xfoil_options%fix_unconverged = fix_unconverged
+  xfoil_options%exit_if_unconverged = .false.
+  xfoil_options%reinitialize = reinitialize
+  xfoil_options%show_details = show_details
+
+end subroutine read_xfoil_options_inputs
+
+!-----------------------------------------------------------------------------
+! Echo xfoil_run_options input
+!-----------------------------------------------------------------------------
+
+subroutine echo_xfoil_options_inputs  (xfoil_options)
+
+  use xfoil_driver, only : xfoil_options_type
+  type(xfoil_options_type), intent(out)    :: xfoil_options
+
+  write(*,'(A)') " &xfoil_run_options"
+  write(*,*) " ncrit = ", xfoil_options%ncrit
+  write(*,*) " xtript = ", xfoil_options%xtript
+  write(*,*) " xtripb = ", xfoil_options%xtripb
+  write(*,*) " viscous_mode = ", xfoil_options%viscous_mode
+  write(*,*) " silent_mode = ", xfoil_options%silent_mode
+  write(*,*) " bl_maxit = ", xfoil_options%maxit
+  write(*,*) " vaccel = ", xfoil_options%vaccel
+  write(*,*) " fix_unconverged = ", xfoil_options%fix_unconverged
+  write(*,*) " reinitialize = ", xfoil_options%reinitialize
+  write(*,'(A)') " /"
+  write(*,*)
+
+end subroutine 
 
 !=============================================================================80
 !
@@ -1331,6 +1545,8 @@ subroutine namelist_check(nmlname, errcode, action_missing_nml)
   character(*), intent(in) :: nmlname
   integer, intent(in) :: errcode
   character(*), intent(in) :: action_missing_nml
+
+  character (20) :: out_string
 
   if (errcode < 0) then
     if (trim(action_missing_nml) == 'warn') then
@@ -1348,8 +1564,9 @@ subroutine namelist_check(nmlname, errcode, action_missing_nml)
                      ' is required for operation.')
     end if
   else if (errcode > 0) then
-    call my_stop ('Error: unrecognized variable in namelist '//trim(nmlname)//&
-                   '. See User Guide for correct variable names.')
+    write (out_string,'(I5)') errcode
+    out_string = ' (err='//trim(adjustl(out_string))//')'
+    call my_stop ('Error: unrecognized variable in namelist '//trim(nmlname)//trim(out_string))
   else
     continue
   end if
@@ -1467,44 +1684,6 @@ subroutine print_usage(exeprint)
 end subroutine print_usage
 
 
-!=============================================================================80
-!
-! Asks user to turn off forced transition
-!
-!=============================================================================80
-function ask_forced_transition()
-
-  character :: ask_forced_transition
-  logical :: valid_choice
-
-! Get user input
-
-  valid_choice = .false.
-  do while (.not. valid_choice)
-  
-    write(*,*)
-    write(*,'(A)') 'Warning: using max-xtr optimization but xtript or xtripb'
-    write(*,'(A)', advance='no') 'is less than 1. Set them to 1 now? (y/n): '
-    read(*,'(A)') ask_forced_transition
-
-    if ( (ask_forced_transition == 'y') .or.                                  &
-         (ask_forced_transition == 'Y') ) then
-      valid_choice = .true.
-      ask_forced_transition = 'y'
-      write(*,*)
-      write(*,*) "Setting xtript and xtripb to 1."
-    else if ( (ask_forced_transition == 'n') .or.                             &
-         (ask_forced_transition == 'N') ) then
-      valid_choice = .true.
-      ask_forced_transition = 'n'
-    else
-      write(*,'(A)') 'Please enter y or n.'
-      valid_choice = .false.
-    end if
-
-  end do
-
-end function ask_forced_transition
 
 ! jx-mod -----------------------------------------------------------------
 ! Reads command line argument -r for default reynolds number

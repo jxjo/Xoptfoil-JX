@@ -54,7 +54,8 @@ subroutine check_and_do_polar_generation (input_file, output_prefix, foil)
 
   use vardef,             only : airfoil_type
   use xfoil_driver,       only : xfoil_geom_options_type, xfoil_options_type
-
+  use input_output,       only : read_xfoil_options_inputs, read_xfoil_paneling_inputs
+ 
   character(*), intent(in)          :: input_file, output_prefix
   type (airfoil_type), intent (in)  :: foil
 
@@ -63,10 +64,11 @@ subroutine check_and_do_polar_generation (input_file, output_prefix, foil)
   type (xfoil_options_type)      :: xfoil_options
   integer  :: npolars
 
-  call read_polar_inputs          (input_file, foil%name, npolars, polars, xfoil_options)
+  call read_xfoil_options_inputs  (input_file, 0, .true., xfoil_options)
+  call read_polar_inputs          (input_file, xfoil_options, foil%name, npolars, polars)
 
   if (npolars > 0) then
-    call read_xfoil_paneling_inputs (input_file, xfoil_geom_options)
+    call read_xfoil_paneling_inputs (input_file, 0, xfoil_geom_options)
     call generate_polar_files (output_prefix, foil, npolars, polars, &
                                xfoil_geom_options, xfoil_options)
   end if
@@ -103,7 +105,6 @@ subroutine generate_polar_files (output_prefix, foil, npolars, polars, &
   character (255) :: polars_subdirectory
 
 ! Create subdir for polar files if not exist
-! jx-todo wrong name for -0.5 names
   polars_subdirectory = trim(output_prefix)//'_polars'
   call make_directory (trim(polars_subdirectory))
 
@@ -144,18 +145,18 @@ end subroutine generate_polar_files
 !   (separated from read_inputs to be more modular)
 !=============================================================================
 
-subroutine read_polar_inputs  (input_file, foil_name, npolars, polars, xfoil_options)
+subroutine read_polar_inputs  (input_file, xfoil_options, foil_name, npolars, polars)
 
   use airfoil_operations, only : my_stop
-  use xfoil_driver,       only : xfoil_options_type
   use input_output,       only : read_cl_re_default
   use input_output,       only : namelist_check
-
+  use xfoil_driver,       only : xfoil_options_type
 
   type (polar_type), dimension (MAXPOLARS), intent (out) :: polars
+  type(xfoil_options_type), intent(in)    :: xfoil_options
+
   character(*), intent(in) :: input_file, foil_name
   integer , intent(out)    :: npolars
-  type (xfoil_options_type), intent(out) :: xfoil_options
 
   logical         :: generate_polars                         ! .true. .false. 
   integer         :: type_of_polar                           ! 1 or 2 
@@ -163,17 +164,10 @@ subroutine read_polar_inputs  (input_file, foil_name, npolars, polars, xfoil_opt
   double precision, dimension (MAXPOLARS) :: polar_reynolds  ! 40000, 70000, 100000
   double precision, dimension (3)  :: op_point_range         ! -1.0, 10.0, 0.5
 
-  double precision :: ncrit, xtript, xtripb, vaccel
-
-  logical :: viscous_mode, silent_mode, fix_unconverged, reinitialize
-  integer :: bl_maxit
   integer :: istat, iunit, i
 
   namelist /polar_generation/ generate_polars, type_of_polar, polar_reynolds,   &
                               op_mode, op_point_range
-
-  namelist /xfoil_run_options/ ncrit, xtript, xtripb, viscous_mode,            &
-            silent_mode, bl_maxit, vaccel, fix_unconverged, reinitialize
 
 ! Init default values for polars
 
@@ -183,18 +177,6 @@ subroutine read_polar_inputs  (input_file, foil_name, npolars, polars, xfoil_opt
   op_mode         = 'spec-al'
   op_point_range  = 0d0
   polar_reynolds  = 0d0
-
-  ! Init default values for xfoil options
-
-  ncrit           = 9.d0
-  xtript          = 1.d0
-  xtripb          = 1.d0
-  viscous_mode    = .true.
-  silent_mode     = .true.
-  bl_maxit        = 40
-  vaccel          = 0.005d0
-  fix_unconverged = .true.
-  reinitialize    = .false.
 
 ! Open input file and read namelist from file
 
@@ -206,10 +188,6 @@ subroutine read_polar_inputs  (input_file, foil_name, npolars, polars, xfoil_opt
     read (iunit, iostat=istat, nml=polar_generation)
     if (generate_polars) then 
       call namelist_check('polar_generation', istat, 'warn')
-
-      rewind(iunit)
-      read (iunit, iostat=istat, nml=xfoil_run_options)
-      ! call namelist_check('xfoil_run_options', istat, 'warn')
     end if
     close (iunit)
   else
@@ -241,22 +219,6 @@ subroutine read_polar_inputs  (input_file, foil_name, npolars, polars, xfoil_opt
     call my_stop ("No Reynolds number found - either in input file nor as command line parameter.")
   end if
 
-! Put xfoil options into derived types
-
-  xfoil_options%ncrit        = ncrit
-  xfoil_options%xtript       = xtript 
-  xfoil_options%xtripb       = xtripb
-  xfoil_options%viscous_mode = viscous_mode
-  xfoil_options%silent_mode  = silent_mode
-  xfoil_options%maxit        = bl_maxit
-  xfoil_options%vaccel       = vaccel
-  xfoil_options%fix_unconverged     = fix_unconverged
-  xfoil_options%exit_if_unconverged = .false.
-  xfoil_options%reinitialize = reinitialize
-  ! suppress a re-paneling of the airfoil as we want the original properties.
-  xfoil_options%repanel = .false.  
-  xfoil_options%show_details = .true.
-
   
 ! Init polar definitions with input 
 
@@ -276,139 +238,9 @@ subroutine read_polar_inputs  (input_file, foil_name, npolars, polars, xfoil_opt
     end if
   end do
 
-
 end subroutine read_polar_inputs
 
 
-!=============================================================================
-! Read xoptfoil input file to xfoil_paneling_options
-!   (separated from read_inputs to be more modular)
-!=============================================================================
-
-subroutine read_xfoil_paneling_inputs  (input_file, geom_options)
-
-  use vardef,             only : airfoil_type, npan_fixed
-  use airfoil_operations, only : my_stop
-  use xfoil_driver,       only : xfoil_geom_options_type
-  use input_output,       only : namelist_check
-
-  character(*), intent(in) :: input_file
-  type(xfoil_geom_options_type), intent(out) :: geom_options
-  double precision :: cvpar, cterat, ctrrat, xsref1, xsref2, xpref1, xpref2
-
-  integer :: npan
-  integer :: istat, iunit
-
-  namelist /xfoil_paneling_options/ npan, cvpar, cterat, ctrrat, xsref1,       &
-            xsref2, xpref1, xpref2
-
-  ! Init default values for xfoil options
-
-  npan   = 200              ! default adapted to xoptfoils internal 200 panels
-  cvpar  = 1.d0
-  cterat = 0.d0             ! normally 0.15 - reduce curvature peek at TE with PANGEN
-  ctrrat = 0.2d0
-  xsref1 = 1.d0
-  xsref2 = 1.d0
-  xpref1 = 1.d0
-  xpref2 = 1.d0
-  
-! Open input file and read namelist from file
-
-  iunit = 12
-  open(unit=iunit, file=input_file, status='old', iostat=istat)
-  if (istat == 0) then
-    read (iunit, iostat=istat, nml=xfoil_paneling_options)
-    close (iunit)
-  end if
-  
-! Put xfoil options into derived types
-
-  if (npan_fixed > 0 .and. (npan /= npan_fixed)) then 
-    npan = npan_fixed 
-  end if 
-
-  geom_options%npan   = npan
-  geom_options%cvpar  = cvpar
-  geom_options%cterat = cterat
-  geom_options%ctrrat = ctrrat
-  geom_options%xsref1 = xsref1
-  geom_options%xsref2 = xsref2
-  geom_options%xpref1 = xpref1
-  geom_options%xpref2 = xpref2
-
-end subroutine read_xfoil_paneling_inputs
-
-
-!=============================================================================
-! Read xoptfoil input file to get flap setting options
-!   (separated from read_inputs to be more modular)
-!=============================================================================
-
-subroutine read_flap_inputs  (input_file, flap_spec, ndegrees, flap_degrees) 
-
-  use airfoil_operations, only : my_stop
-  use vardef,             only : flap_spec_type
-  use input_output,       only : namelist_check
-
-  character(*), intent(in)          :: input_file
-  type(flap_spec_type), intent(out) :: flap_spec
-
-  double precision              :: x_flap, y_flap
-  character(3)                  :: y_flap_spec
-  integer, intent(out)          :: ndegrees
-  double precision, dimension(:), intent(inout) :: flap_degrees
-
-  integer :: istat, iunit, i
-  logical                       :: use_flap
-
-  namelist /operating_conditions/ use_flap, x_flap, y_flap, y_flap_spec, flap_degrees
-
-  ! Init default values 
-
-  use_flap     = .true.                !currently dummy
-  x_flap       = 0.75d0
-  y_flap       = 0.d0
-  y_flap_spec  = 'y/c'
-  flap_degrees = 0d0
-  ndegrees     = 0
-
-  ! Open input file and read namelist from file
-
-  iunit = 12
-  open(unit=iunit, file=input_file, status='old', iostat=istat)
-
-  if (istat == 0) then
-    read (iunit, iostat=istat, nml=operating_conditions)
-    call namelist_check('operating_conditions', istat, 'warn')
-    close (iunit)
-  end if
-
-  call namelist_check('operating_conditions', istat, 'warn')
-
-  do i = size(flap_degrees), 1, -1
-    if (flap_degrees(i) /= 0d0) then
-      ndegrees = i
-      exit
-    end if
-  end do
-
-  ! Check Input 
-
-  if (ndegrees == 0) &
-    call my_stop ('No flap angles defined in input file')
-  if ((y_flap_spec  /= 'y/c') .and. (y_flap_spec  /= 'y/t')) &
-    call my_stop ("Vertical hinge definition must be 'y/c' or 'y/t'")
-  do i = 1, ndegrees
-    if (abs(flap_degrees(i)) > 70d0) &
-      call my_stop ('Flap angle must be less than 70 degrees')
-  end do
-
-  flap_spec%x_flap  = x_flap
-  flap_spec%y_flap  = y_flap
-  flap_spec%y_flap_spec = y_flap_spec
-
-end subroutine read_flap_inputs
 
 !=============================================================================
 ! Initialize polar data structure based calculated number of op_points
@@ -472,21 +304,18 @@ subroutine calculate_polar (foil, polar, xfoil_geom_options, xfoil_options)
   type (xfoil_geom_options_type), intent(in) :: xfoil_geom_options
   type (xfoil_options_type), intent(in)      :: xfoil_options
 
-  character(7),     dimension(polar%n_op_points) :: op_modes
-  type(re_type)   , dimension(polar%n_op_points) :: ma, re
   double precision, dimension(polar%n_op_points) :: flap_degrees
   type(flap_spec_type) :: flap_spec               ! dummy - no flaps used
-  logical              :: use_flap
 
-  flap_degrees (:) = 0.d0 
-  use_flap         = .false. 
+  flap_degrees (:)    = 0.d0 
+  flap_spec%use_flap  = .false. 
 
   ! reset out lier detection tect. for a new polar 
   call xfoil_driver_reset
 
   call run_op_points (foil, xfoil_geom_options, xfoil_options,        &
-                    use_flap, flap_spec, flap_degrees, &
-                    polar%op_points_spec, polar%op_points)
+                      flap_spec, flap_degrees, &
+                      polar%op_points_spec, polar%op_points)
 
   ! #exp-bubble 
   call show_op_bubbles (polar%op_points_spec, polar%op_points) 
