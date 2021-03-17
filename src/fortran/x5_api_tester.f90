@@ -44,22 +44,25 @@ program x5_api_tester
   call load_airfoil(airfoil_filename, foil)
 
 ! Init API 
-  call x5_init (input_file, foil)
-
+  call x5_init    (input_file, foil)
+  call xfoil_cleanup()
+  call x5_init_xy (input_file, foil%npoint, foil%x, foil%z)
 
 ! Test: Eval objective function of seed ------------------------------------------
 
   obj = x5_eval_objective_function (foil)
-  write (*,'(" - ",A,F9.6)') 'Seed objective function = ', obj
+  write (*,'(" - ",A,F9.6)') 'Seed objective function    = ', obj
+  obj = x5_eval_objective_function_xy (foil%npoint, foil%x, foil%z)
+  write (*,'(" - ",A,F9.6)') 'Seed objective function xy = ', obj
 
 ! Test: Loop single threaded change thickness -------------------------------------
 
   write (*,*)
-  write (*,'(" - ",A)') 'Loop single htreaded  changing thickness ...'
+  write (*,'(" - ",A)') 'Loop single threaded changing thickness ...'
 
   thickness_scale = 1d0
-  do i = 1, 30
-    thickness_scale = 1d0 + i * 0.001d0
+  do i = 1, 5 
+    thickness_scale = 1d0 + i * 0.005d0
     obj = scale_and_eval (thickness_scale, foil)
     write (*,'(5x,I4,3x,A,F5.3,5x,A,F9.6)') i, 'Thickness * ',thickness_scale, &
            '-> Objective function = ', obj
@@ -76,7 +79,7 @@ program x5_api_tester
 !$omp parallel default(shared) private(i, thickness_scale, obj)
   call xfoil_init()
 !$omp do 
-  do i = 1, 100
+  do i = 1, 50
     thickness_scale = 1d0 + i * 0.001d0
     obj = scale_and_eval (thickness_scale, foil)
     write (*,'(5x,I4,3x,A,F5.3,5x,A,F9.6)') i, 'Thickness * ',thickness_scale, &

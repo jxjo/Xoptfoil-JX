@@ -3,8 +3,9 @@
 !  Interface module of Xoptfoil-JX to Xflr5. Provides
 !
 !   - x5_init                           ... init xfoil, eval seed
+!   - x5_init_xy                        ...   based on x,y coordinates
 !   - x5_eval_objective_function        ... of an airfoil
-!
+!   - x5_eval_objective_function_xy     ...   based on x,y coordinates
 !
 !   This file is part of XOPTFOIL-JX.
 !                       Copyright (C) 2017-2019 Daniel Prosser
@@ -18,12 +19,35 @@ module x5_api
   
     implicit none
 
-    public :: x5_init
-    public :: x5_eval_objective_function
+    public :: x5_init                               ! init eval based on seed foil 
+    public :: x5_init_xy                            ! ... with xy coordinates
+    public :: x5_eval_objective_function            ! eval objective function for a foil 
+    public :: x5_eval_objective_function_xy         ! ... with xy coordinates
     
     private
 
 contains
+
+!------------------------------------------------------------------------------------------
+!  Init Xfoil, eval seed_airfoil
+!------------------------------------------------------------------------------------------
+
+subroutine x5_init_xy (input_file, np, x, y)
+
+  use vardef,             only : airfoil_type
+  doubleprecision, dimension (np), intent(in)  :: x, y
+  integer, intent(in)           :: np
+  character (255), intent(in)   :: input_file
+
+  type(airfoil_type) :: foil
+
+  foil%npoint = np
+  foil%x      = x
+  foil%z      = y
+
+  call x5_init (input_file, foil)
+
+end subroutine x5_init_xy
 
 !------------------------------------------------------------------------------------------
 !  Init Xfoil, eval seed_airfoil
@@ -70,7 +94,26 @@ subroutine x5_init (input_file, seed_foil_in)
 end subroutine x5_init
 
 
+!------------------------------------------------------------------------------------------
+!  Evaluate objective function of a foil 
+!------------------------------------------------------------------------------------------
 
+function x5_eval_objective_function_xy  (np, x, y)
+
+  use vardef,             only : airfoil_type
+  doubleprecision, dimension (np), intent(in)  :: x, y
+  integer, intent(in)          :: np
+  doubleprecision              :: x5_eval_objective_function_xy
+ 
+  type(airfoil_type) :: foil
+
+  foil%npoint = np
+  foil%x      = x
+  foil%z      = y
+
+  x5_eval_objective_function_xy = x5_eval_objective_function (foil)
+
+end function x5_eval_objective_function_xy
 
 !------------------------------------------------------------------------------------------
 !  Evaluate objective function of a foil 
