@@ -43,6 +43,7 @@ program xfoil_worker
   output_prefix     = ''
   action            = ''
   airfoil_filename  = ''
+  second_airfoil_filename = ''
   visualizer        = .false.
   call read_worker_clo(input_file, output_prefix, airfoil_filename, action, & 
                        second_airfoil_filename, value_argument, visualizer)
@@ -118,6 +119,8 @@ program xfoil_worker
       if (trim(output_prefix) == '') & 
         output_prefix = airfoil_filename (1:(index (airfoil_filename,'.', back = .true.) - 1)) // &
                         '-blend'//trim(adjustl(value_argument))
+      if (trim(second_airfoil_filename) == "") &
+        call my_stop("Must specify a second airfoil file with the -a2 option.")
 
       call load_airfoil(second_airfoil_filename, blend_foil)
       call blend_foils (input_file, output_prefix, foil, blend_foil, value_argument, visualizer)
@@ -758,7 +761,7 @@ end subroutine read_worker_clo
 subroutine print_worker_usage()
 
   write(*,'(A)') 'Xfoil_Worker      Version '//trim(PACKAGE_VERSION)//  &
-                 '              (c) 2020 Jochen Guenzel'
+                 '              (c) 2021 Jochen Guenzel'
   write(*,'(A)')
   write(*,'(A)') "Usage: Xfoil_worker -w worker_action [Options]"
   write(*,'(A)')
