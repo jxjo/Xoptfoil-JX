@@ -5,7 +5,7 @@ rem use pyinstaller to create exe-files
 pyinstaller --onefile ..\src\python\planform_creator.py
 pyinstaller --onefile ..\src\python\strak_machineV2.py
 pyinstaller --onefile ..\src\python\xoptfoil_visualizer-jx.py
-pyinstaller --onefile ..\src\python\start_visu.py
+pyinstaller --onefile ..\src\python\show_status.py
 pyinstaller --onefile ..\src\python\best_airfoil.py
 
 rem create new directory
