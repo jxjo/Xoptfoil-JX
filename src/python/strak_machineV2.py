@@ -1347,7 +1347,7 @@ class strakData:
             self.strakMachineCall = exeCallString + strakMachineName + '.exe'
             self.xoptfoilVisualizerCall = exeCallString + xoptfoilVisualizerName + '.exe'
             self.airfoilComparisonCall = exeCallString + airfoilComparisonName + '.exe'
-            self.showStatusCall = "start \"\" \"%s\"\n" % (exeCallString + showStatusName + '.exe')
+            self.showStatusCall = "start \"\" \"%s\"\n" % (".."+bs+exePath+bs+showStatusName + '.exe')
         else:
             self.strakMachineCall = pythonCallString + strakMachineName + '.py'
             self.xoptfoilVisualizerCall = pythonCallString + xoptfoilVisualizerName + '.py'

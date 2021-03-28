@@ -1262,7 +1262,9 @@ def update_seedfoilName(wingData, strakdata):
 
 
 def update_airfoilNames(wingData, strakdata):
-    num = len(wingData.airfoilTypes)
+    # all airfoil without tip-airfoil
+    num = len(wingData.airfoilTypes) - 1
+
     airfoilNames = []
 
     # first append name of the seedfoil
@@ -1280,7 +1282,8 @@ def update_airfoilNames(wingData, strakdata):
 
 
 def update_reynolds(wingData, strakdata):
-    num = len(wingData.airfoilTypes)
+    # all airfoil without tip-airfoil
+    num = len(wingData.airfoilTypes) -1
     reynolds = []
 
     # first append reynolds-number of the seedfoil
