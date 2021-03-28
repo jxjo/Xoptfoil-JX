@@ -32,7 +32,7 @@ program main
   use airfoil_operations,  only : repanel_and_normalize_airfoil
   use memory_util,         only : deallocate_airfoil, allocate_airfoil_data,   &
                                   deallocate_airfoil_data
-  use input_sanity,        only : check_seed
+  use input_sanity,        only : check_seed, check_inputs
   use optimization_driver, only : matchfoils_preprocessing, optimize,          &
                                   write_final_design
   use polar_operations,    only : check_and_do_polar_generation
@@ -110,6 +110,7 @@ program main
                    pso_options, ga_options, ds_options, matchfoil_file,        &
                    symmetrical) 
 
+  call check_inputs()
                    
 ! Load original airfoil into memory, repanel, normalize 
 !   to get seed airfoil ready for optimization 

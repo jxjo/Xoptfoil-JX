@@ -135,7 +135,7 @@ subroutine run_op_points (foil, geom_options, xfoil_options,         &
   type(op_point_result_type)        :: op
 
 
-  noppoint = size(op_points_spec,1)  
+  noppoint = size(op_points_spec,1) 
 
 ! Sanity checks
 
@@ -153,6 +153,15 @@ subroutine run_op_points (foil, geom_options, xfoil_options,         &
   
   allocate (op_points_result(noppoint))
 
+  op_points_result%converged = .false.          ! init - watch "early exit" 
+  op_points_result%cl        = 0d0  
+  op_points_result%cd        = 0d0  
+  op_points_result%alpha     = 0d0  
+  op_points_result%cm        = 0d0             
+  op_points_result%xtrt      = 0d0               
+  op_points_result%xtrb      = 0d0              
+
+  
   prev_op_delta   = 0d0
   prev_op_spec_cl = op_points_spec(1)%spec_cl
   flap_changed = .false.
@@ -351,7 +360,9 @@ subroutine run_op_points (foil, geom_options, xfoil_options,         &
 
   do i = 1, noppoint
 
-    op = op_points_result(i)   
+    op_spec = op_points_spec(i)
+    op      = op_points_result(i)   
+
     if (op%converged) then 
       if (.not. is_out_lier (drag_statistics(i), op%cd)) then 
         call update_statistic (drag_statistics(i), op%cd)

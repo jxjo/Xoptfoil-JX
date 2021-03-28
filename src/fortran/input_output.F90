@@ -59,15 +59,6 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
   type(ga_options_type), intent(out) :: ga_options
   type(ds_options_type), intent(out) :: ds_options
 
-! Op_point specification 
-!  character(7),     dimension(max_op_points)  :: op_mode
-!  character(15),    dimension(max_op_points)  :: optimization_type
-!  double precision, dimension(max_op_points)  :: op_point, weighting, scale_factor, &
-!                                                 ncrit_pt, target_value, reynolds, mach
-!  double precision :: re_default
-!  logical          :: re_default_as_resqrtcl
-!  type(op_point_specification_type) :: op_spec
-
 
   integer, dimension(max_addthickconst) :: sort_idxs
   double precision, dimension(max_addthickconst) :: temp_thickmin, temp_thickmax

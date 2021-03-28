@@ -61,13 +61,14 @@ subroutine check_inputs()
   
 ! May the king of xfoil polars be lenient ...
 !        ... when patching to support negative cl for Type 2 based op_points
-!  do i = 1, noppoint
-!    if ((op_points_spec(i)%re%type == 2) .and. (op_points_spec(i)%spec_cl) .and. (op_points_spec(i)%value < 0d0)) then
-!      op_points_spec(i)%re%type    = 1
-!      op_points_spec(i)%re%number  = op_points_spec(i)%re%number / & 
-!                                    (abs(op_points_spec(i)%value) ** 0.5d0)
-!    end if
-!  end do 
+  do i = 1, noppoint
+    if ((op_points_spec(i)%re%type == 2) .and. (op_points_spec(i)%spec_cl) & 
+                                         .and. (op_points_spec(i)%value < 0d0)) then
+      op_points_spec(i)%re%type    = 1
+      op_points_spec(i)%re%number  = op_points_spec(i)%re%number / & 
+                                    (abs(op_points_spec(i)%value) ** 0.5d0)
+    end if
+  end do 
 
 ! Aero targets - Check for an existing target value 
 !              if optimization_type is target-moment or Target-drag
