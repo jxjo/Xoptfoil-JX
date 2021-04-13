@@ -1022,6 +1022,10 @@ subroutine read_op_points_spec  (input_file, or_iunit, noppoint, op_points_spec)
   end if
   call namelist_check('operating_conditions', iostat1, 'err')
 
+! overwrite re_default if specified in command line 
+
+  re_default = read_cl_re_default ((re_default))
+
 ! store op_point specification in data structure ------------------------
 
   allocate (op_points_spec(noppoint)) 
