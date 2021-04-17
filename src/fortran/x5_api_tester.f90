@@ -46,7 +46,7 @@ program x5_api_tester
 ! Init API 
   call x5_init    (input_file, foil)
   call xfoil_cleanup()
-  call x5_init_xy (input_file, foil%npoint, foil%x, foil%z)
+  call x5_init_xy (input_file, LEN(input_file), foil%npoint, foil%x, foil%z)
 
 ! Test: Eval objective function of seed ------------------------------------------
 

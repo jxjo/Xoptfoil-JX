@@ -102,6 +102,9 @@ add_executable("xoptfoil-JX"   $<TARGET_OBJECTS:MYOBJLIB> "src/fortran/main.f90"
 add_executable("xfoil_worker"  $<TARGET_OBJECTS:MYOBJLIB> "src/fortran/xfoil_worker.f90")
 add_executable("x5_api_tester" $<TARGET_OBJECTS:MYOBJLIB> "src/fortran/x5_api_tester.f90")
 
+# Build dll
+add_library(x5_api SHARED $<TARGET_OBJECTS:MYOBJLIB>)
+
 # Installation
 install(TARGETS xoptfoil-JX xfoil_worker x5_api_tester DESTINATION bin)
 install(FILES src/python/xoptfoil_visualizer-jx.py

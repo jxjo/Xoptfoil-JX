@@ -32,19 +32,30 @@ contains
 !  Init Xfoil, eval seed_airfoil
 !------------------------------------------------------------------------------------------
 
-subroutine x5_init_xy (input_file, np, x, y)
-
+subroutine x5_init_xy (input_filename, len_filename, np, x, y) bind(C,name = "x5_init_xy")
+  
   use vardef,             only : airfoil_type
   doubleprecision, dimension (np), intent(in)  :: x, y
-  integer, intent(in)           :: np
-  character (255), intent(in)   :: input_file
+  integer, intent(in)           :: len_filename, np
+  integer :: count
+  character, dimension(255), intent(in)   :: input_filename
+  character (255) :: input_file
+  INTEGER :: i     ! Loop index.
 
   type(airfoil_type) :: foil
+  
+  ! init string
+  input_file = ''
+
+  ! copy filename to string variable
+  DO i = 1, len_filename
+    input_file(i:i) = input_filename(i)
+  END DO
 
   foil%npoint = np
   foil%x      = x
   foil%z      = y
-
+  
   call x5_init (input_file, foil)
 
 end subroutine x5_init_xy
@@ -98,7 +109,8 @@ end subroutine x5_init
 !  Evaluate objective function of a foil 
 !------------------------------------------------------------------------------------------
 
-function x5_eval_objective_function_xy  (np, x, y)
+function x5_eval_objective_function_xy  (np, x, y) bind(C,name = "x5_eval_objective_function_xy")
+
 
   use vardef,             only : airfoil_type
   doubleprecision, dimension (np), intent(in)  :: x, y
