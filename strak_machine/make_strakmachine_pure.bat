@@ -22,7 +22,7 @@ copy ..\src\python\show_status.py .\Strakmachine_pure\scripts\
 copy ..\src\python\FLZ_Vortex_export.py .\Strakmachine_pure\scripts\
 
 rem copy xoptfoil and xfoil-worker to bin-folder
-copy ..\windows\bin\*.exe .\Strakmachine_pure\bin\
+copy ..\build\*.exe .\Strakmachine_pure\bin\
 
 rem copy short instruction
 copy ..\doc\Strak_Machine_Short_instruction.pdf .\Strakmachine_pure\
