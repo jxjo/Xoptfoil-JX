@@ -435,6 +435,17 @@ class inputFile:
         ReFactorList = [(150/220),(80/150)]
         perturbList_ReFactor = [(0.0025), (0.0025*2.2)]
 
+        # limit to list boundaries
+        if ReDiff < ReDiffList[0]:
+            ReDiff = ReDiffList[0]
+        elif ReDiff > ReDiffList[1]:
+            ReDiff = ReDiffList[1]
+
+        if ReFactor < ReFactorList[0]:
+            ReDReFactoriff = ReFactorList[0]
+        elif ReDiff > ReFactorList[1]:
+            ReFactor = ReFactorList[1]
+
         # calculate corresponding perturb according to Re-Diff
         perturb_fromDiff = interpolate(ReDiffList[0],ReDiffList[1],
                            perturbList_ReDiff[0],perturbList_ReDiff[1],ReDiff)
@@ -1221,7 +1232,7 @@ class strakData:
         self.intersection_Hysteresis= 0.001
         self.CL_switchpoint_Type2_Type1_polar = 0.05
         self.maxReFactor = 15.0
-        self.maxLiftDistance = 0.02
+        self.maxLiftDistance = 0.03
         self.alpha_Resolution = 0.001
         self.optimizationPasses = 3
         self.allGraphs = True
