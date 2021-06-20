@@ -69,9 +69,9 @@ fs_legend = 7
 cl_quarterChordLine = 'darkgreen'
 ls_quarterChordLine = 'solid'
 lw_quarterChordLine  = 0.8
-cl_tipLine = 'blue'
-ls_tipLine = 'solid'
-lw_tipLine = 0.8
+cl_areaCenterLine = 'blue'
+ls_areaCenterLine = 'solid'
+lw_areaCenterLine = 0.8
 cl_hingeLine = 'r'
 ls_hingeLine = 'solid'
 lw_hingeLine = 0.6
@@ -162,7 +162,7 @@ class wingSection:
         self.hingeDepth = 0
         self.hingeLine = 0
         self.quarterChordLine = 0
-        self.tipLine = 0
+        self.areaCenterLine = 0
         self.dihedral= 3.00
 
         # name of the airfoil-file that shall be used for the section
@@ -184,7 +184,7 @@ class wingGrid:
         self.hingeDepth = 0
         self.hingeLine = 0
         self.quarterChordLine = 0
-        self.tipLine = 0
+        self.areaCenterLine = 0
 
 ################################################################################
 #
@@ -449,7 +449,7 @@ class wing:
         section.trailingEdge = grid.trailingEdge
         section.leadingEdge = grid.leadingEdge
         section.quarterChordLine = grid.quarterChordLine
-        section.tipLine = grid.tipLine
+        section.areaCenterLine = grid.areaCenterLine
         section.dihedral = self.dihedral
 
         # set Re of the section (only for proper airfoil naming)
@@ -504,6 +504,9 @@ class wing:
         # calculate interval for setting up the grid
         grid_delta_y = (self.halfwingspan / (self.numberOfGridChords-1))
 
+        # init areaCenter
+        area_Center = 0.0
+
         # calculate all Grid-chords
         for i in range(1, (self.numberOfGridChords + 1)):
             # create new grid
@@ -529,26 +532,32 @@ class wing:
                                        self.hingeDepthRoot, self.hingeDepthTip,
                                        grid.y)
 
-            grid.hingeDepth = (hingeDepth_y/100)*grid.chord
-            grid.hingeLine = (self.hingeOuterPoint-self.hingeInnerPoint)/(self.halfwingspan) * (grid.y) + self.hingeInnerPoint
-            grid.leadingEdge = grid.hingeLine -(grid.chord-grid.hingeDepth)
-
             # correction of leading edge for elliptical planform, avoid swept forward part of the wing
             delta = self.leadingEdgeCorrection * sin(interpolate(0.0, self.halfwingspan, 0.0, pi, grid.y))
-            grid.leadingEdge = grid.leadingEdge + delta
+            grid.hingeDepth = (hingeDepth_y/100)*grid.chord + delta
+            grid.hingeLine = (self.hingeOuterPoint-self.hingeInnerPoint)/(self.halfwingspan) * (grid.y) + self.hingeInnerPoint
+            grid.leadingEdge = grid.hingeLine -(grid.chord-grid.hingeDepth)
 
             # calculate trailing edge according to chordlength at this particular
             # point along the wing
             grid.trailingEdge = grid.leadingEdge + grid.chord
 
+            # calculate centerLine, quarterChordLine
+            grid.centerLine = grid.leadingEdge + (grid.chord/2)
             grid.quarterChordLine = grid.leadingEdge + (grid.trailingEdge-grid.leadingEdge)/4
-            grid.tipLine = tippMiddleOuterPoint
 
             # append section to section-list of wing
             self.grid.append(grid)
 
+            # sum up area center
+            area = (grid_delta_y*10 * grid.chord*10)
+            area_Center = area_Center + grid.centerLine*area
+
             # calculate area of the wing
-            self.area = self.area + (grid_delta_y*10 * grid.chord*10)
+            self.area = self.area + area
+
+        # Calculate areaCenter (Flaechenschwerpunkt)
+        self.area_Center = area_Center / self.area
 
         # calculate aspect ratio of the wing
         self.area = self.area * 2.0
@@ -557,6 +566,7 @@ class wing:
         # add offset of half of the fuselage-width to the y-coordinates
         for element in self.grid:
             element.y = element.y + self.fuselageWidth/2
+            element.areaCenterLine = self.area_Center
 
 
     # get chordlength from position, according to the planform-data
@@ -716,7 +726,7 @@ class wing:
         trailingeEge = []
         hingeLine = []
         quarterChordLine = []
-        tipLine = []
+        areaCenterLine = []
 
         # setup empty lists for new tick locations
         x_tick_locations = []
@@ -808,7 +818,7 @@ class wing:
             #build up lists of y-values
             leadingEdge.append(element.leadingEdge)
             quarterChordLine.append(element.quarterChordLine)
-            tipLine.append(element.tipLine)
+            areaCenterLine.append(element.areaCenterLine)
             hingeLine.append(element.hingeLine)
             trailingeEge.append(element.trailingEdge)
 
@@ -830,9 +840,9 @@ class wing:
               label = "quarter-chord line")
 
         if (self.showTipLine == True):
-            ax.plot(xValues, tipLine, color=cl_tipLine,
-              linestyle = ls_tipLine, linewidth = lw_tipLine,
-              label = "tip line")
+            ax.plot(xValues, areaCenterLine, color=cl_areaCenterLine,
+              linestyle = ls_areaCenterLine, linewidth = lw_areaCenterLine,
+              label = "area CoG line")
 
         # plot hinge-line
         if (self.showHingeLine == True):
@@ -883,7 +893,7 @@ class wing:
         trailingeEge = []
         hingeLine = []
         quarterChordLine = []
-        tipLine = []
+        areaCenterLine = []
 
         # set axes and labels
         self.set_AxesAndLabels(ax, "Full-wing planform")
@@ -1129,9 +1139,9 @@ def insert_PlanformDataIntoXFLR5_File(data, inFileName, outFileName):
 
         # add the new section to the tree
         wing.append(newSection)
-
-        NoteMsg("Section %d: position: %.0f mm, chordlength %.0f mm, airfoilName %s was inserted" %
-          (section.number, section.y*1000, section.chord*1000, section.airfoilName))
+        hingeDepthPercent = (section.hingeDepth /section.chord )*100
+        NoteMsg("Section %d: position: %.0f mm, chordlength %.0f mm, hingeDepth %.1f  %%, airfoilName %s was inserted" %
+          (section.number, section.y*1000, section.chord*1000, hingeDepthPercent, section.airfoilName))
 
     # write all data to the new file file
     tree.write(outFileName)
