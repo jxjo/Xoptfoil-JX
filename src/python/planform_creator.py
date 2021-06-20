@@ -31,7 +31,7 @@ from shutil import copyfile
 from matplotlib import pyplot as plt
 from matplotlib import rcParams
 import numpy as np
-from math import log10, floor, tan, atan, pi
+from math import log10, floor, tan, atan, sin, pi
 import json
 import tkinter
 from matplotlib.backends.backend_tkagg import (
@@ -114,8 +114,12 @@ PLanformDict =	{
             "tipchord": 0.002,
             # sweep of the tip of the wing in degrees
             "rootTipSweep": 3.2,
-            # depth of the aileron / flap in percent of the chord-length
-            "hingeDepthPercent": 23.5,
+            # depth of the aileron / flap in percent of the chord-length, root
+            "hingeDepthRoot": 27.0,
+            # depth of the aileron / flap in percent of the chord-length, tip
+            "hingeDepthTip": 19.0,
+            # correction value to avoid a part of the wing being swept forward
+            "leadingEdgeCorrection": 0.0085,
             # dihedral of the of the wing in degree
             "dihedral": 2.5,
             # whether to show the line at 25% of wing depth
@@ -196,12 +200,14 @@ class wing:
         self.planformName= "Main Wing"
         self.rootchord = 0.223
         self.leadingEdgeOrientation = 'up'
+        self.leadingEdgeCorrection = 0.0
         self.wingspan = 2.54
         self.fuselageWidth = 0.035
         self.planformShape = 'elliptical'
         self.halfwingspan = 0.0
         self.numberOfGridChords = 16384
-        self.hingeDepthPercent = 23.0
+        self.hingeDepthRoot = 23.0
+        self.hingeDepthTip = 23.0
         self.tipDepthPercent = 8.0
         self.tipDepth = 0
         self.hingeInnerPoint = 0
@@ -290,9 +296,14 @@ class wing:
         self.wingspan =  get_MandatoryParameterFromDict(dictData, "wingspan")
         self.fuselageWidth =  get_MandatoryParameterFromDict(dictData, "fuselageWidth")
         self.planformShape =  get_MandatoryParameterFromDict(dictData, "planformShape")
+
+        if self.planformShape == 'elliptical':
+            self.leadingEdgeCorrection = get_MandatoryParameterFromDict(dictData, "leadingEdgeCorrection")
+
         self.tipchord =  get_MandatoryParameterFromDict(dictData, "tipchord")
         self.rootTipSweep =  get_MandatoryParameterFromDict(dictData, "rootTipSweep")
-        self.hingeDepthPercent = get_MandatoryParameterFromDict(dictData, "hingeDepthPercent")
+        self.hingeDepthRoot = get_MandatoryParameterFromDict(dictData, "hingeDepthRoot")
+        self.hingeDepthTip = get_MandatoryParameterFromDict(dictData, "hingeDepthTip")
         self.dihedral = get_MandatoryParameterFromDict(dictData, "dihedral")
 
         # get airfoil- / section data
@@ -360,7 +371,6 @@ class wing:
             self.leadingEdgeOrientation = dictData["leadingEdgeOrientation"]
         except:
               NoteMsg("leadingEdgeOrientation not defined")
-
 
         # get user-defined list of airfoil-names
         try:
@@ -456,13 +466,13 @@ class wing:
 
     # calculate planform-shape of the half-wing (high-resolution wing planform)
     def calculate_planform(self):
-        self.hingeInnerPoint = (1-(self.hingeDepthPercent/100))*self.rootchord
+        self.hingeInnerPoint = (1-(self.hingeDepthRoot/100))*self.rootchord
 
         # calculate tip-depth
         self.tipDepth = self.rootchord*(self.tipDepthPercent/100)
 
         # calculate the depth of the hinge at the tip
-        tipHingeDepth = self.tipDepth *(self.hingeDepthPercent/100)
+        tipHingeDepth = self.tipDepth *(self.hingeDepthTip/100)
 
         # calculate quarter-chord-lines
         rootQuarterChord = self.rootchord/4
@@ -514,10 +524,23 @@ class wing:
                 grid.chord = self.rootchord*(self.halfwingspan-grid.y)/self.halfwingspan \
                             + self.tipDepth* (grid.y/self.halfwingspan)
 
-            grid.hingeDepth = (self.hingeDepthPercent/100)*grid.chord
+            # calculate hingeDepth in percent at this particular point along the wing
+            hingeDepth_y = interpolate(0.0, self.halfwingspan,
+                                       self.hingeDepthRoot, self.hingeDepthTip,
+                                       grid.y)
+
+            grid.hingeDepth = (hingeDepth_y/100)*grid.chord
             grid.hingeLine = (self.hingeOuterPoint-self.hingeInnerPoint)/(self.halfwingspan) * (grid.y) + self.hingeInnerPoint
-            grid.trailingEdge = grid.hingeLine + grid.hingeDepth
             grid.leadingEdge = grid.hingeLine -(grid.chord-grid.hingeDepth)
+
+            # correction of leading edge for elliptical planform, avoid swept forward part of the wing
+            delta = self.leadingEdgeCorrection * sin(interpolate(0.0, self.halfwingspan, 0.0, pi, grid.y))
+            grid.leadingEdge = grid.leadingEdge + delta
+
+            # calculate trailing edge according to chordlength at this particular
+            # point along the wing
+            grid.trailingEdge = grid.leadingEdge + grid.chord
+
             grid.quarterChordLine = grid.leadingEdge + (grid.trailingEdge-grid.leadingEdge)/4
             grid.tipLine = tippMiddleOuterPoint
 
@@ -797,7 +820,8 @@ class wing:
         tipJoint_x = (xValues[lastElementIndex], xValues[lastElementIndex])
 
         # compose labels for legend
-        labelHingeLine = ("hinge line (%.1f %%)" % self.hingeDepthPercent)
+        labelHingeLine = ("hinge line (%.1f %% / %.1f %%)" %
+                           (self.hingeDepthRoot, self.hingeDepthTip))
 
         # plot quarter-chord-line
         if (self.showQuarterChordLine == True):

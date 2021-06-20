@@ -30,6 +30,7 @@ class segmentData:
         # geometrical data of the wing planform
         self.widths = self.calculate_widths(wingData)
         self.chords = self.get_chords(wingData)
+        self.hingeDepths = self.calculateHingeDepths(wingData)
         self.airfoilNames = self.get_airfoilNames(wingData)
         self.angles = self.calculate_angles(wingData)
         self.dihedrals = self.get_dihedrals(wingData)
@@ -50,7 +51,30 @@ class segmentData:
 
         # reverse list of left half wing
         widthsLeftHalfWing.reverse()
-        return (widthsLeftHalfWing + widthsRightHalfWing)
+        widthList = widthsLeftHalfWing + widthsRightHalfWing
+        #print("width:")
+        #print(widthList)#Debug
+        return (widthList)
+
+
+    def calculateHingeDepths(self, wingData):
+        hingeDepthsLeftHalfWing = []
+        hingeDepthsRightHalfWing = []
+        numSections = len(wingData.sections)
+
+        for idx in range(1, numSections):
+            # calculate hingeDepth
+            hingeDepth = (wingData.sections[idx].hingeDepth / wingData.sections[idx].chord)*100.0
+            hingeDepthsLeftHalfWing.append(hingeDepth)
+            hingeDepthsRightHalfWing.append(hingeDepth)
+
+        # reverse list of left half wing
+        hingeDepthsLeftHalfWing.reverse()
+        hingeDepthsLeftHalfWing.append(wingData.hingeDepthRoot)
+        hingeDepthList = hingeDepthsLeftHalfWing + hingeDepthsRightHalfWing
+        #print("hingeDepth:")
+        #print(hingeDepthList)# Debug
+        return (hingeDepthList)
 
 
     def get_chords(self, wingData):
@@ -64,8 +88,10 @@ class segmentData:
             chordsRightHalfWing.append(wingData.sections[idx].chord)
 
         chordsLeftHalfWing.reverse()
-
-        return (chordsLeftHalfWing + chordsRightHalfWing)
+        chordList = chordsLeftHalfWing + chordsRightHalfWing
+        #print("chords:")
+        #print(chordList)#Debug
+        return (chordList)
 
 
     def get_airfoilNames(self, wingData):
@@ -79,8 +105,10 @@ class segmentData:
             namesRightHalfWing.append(wingData.sections[idx].airfoilName)
 
         namesLeftHalfWing.reverse()
-
-        return (namesLeftHalfWing + namesRightHalfWing)
+        airFoilNames = namesLeftHalfWing + namesRightHalfWing
+        #print("airfoils:")
+        #print(airFoilNames)#Debug
+        return (airFoilNames)
 
     def get_dihedrals(self, wingData):
         dihedralsLeftHalfWing = []
@@ -93,8 +121,10 @@ class segmentData:
             dihedralsRightHalfWing.append(wingData.sections[idx].dihedral)
 
         dihedralsLeftHalfWing.reverse()
-
-        return (dihedralsLeftHalfWing + dihedralsRightHalfWing)
+        dihedralList = dihedralsLeftHalfWing + dihedralsRightHalfWing
+        #print("dihedral:")
+        #print(dihedralList)#Debug
+        return (dihedralList)
 
 
     def calculate_angles(self, wingData):
@@ -119,22 +149,21 @@ class segmentData:
         # left hand wing
         anglesLeftHandWing = deepcopy(angles)
         anglesLeftHandWing.reverse()
-
-        return (anglesLeftHandWing + angles)
+        angleList = anglesLeftHandWing + angles
+        #print("angles")
+        #print(angleList)#Debug
+        return (angleList)
 
 
 
 
 # function to write the
 def write_airfoilData(airfoilName, file):
-    try:
-        # open airfoil-file
-        fileNameAndPath = buildPath + bs + airfoilPath + bs + airfoilName
-        airfoilFile = open(fileNameAndPath)
-        airfoilData = airfoilFile.readlines()
-        airfoilFile.close()
-    except:
-        ErrorMsg("failed to read arifoil data from file %s" % fileNameAndPath)
+    # open airfoil-file
+    fileNameAndPath = buildPath + bs + airfoilPath + bs + airfoilName
+    airfoilFile = open(fileNameAndPath)
+    airfoilData = airfoilFile.readlines()
+    airfoilFile.close()
 
     file.write("[PROFIL]\n")
     file.write("PROFILDATEINAME=%s\n" % airfoilName)
@@ -149,21 +178,23 @@ def write_airfoilData(airfoilName, file):
 
 
 def write_segmentData(wingData, segments, idx, file):
+    klappentiefeLinks = segments.hingeDepths[idx]
+    klappentiefeRechts = segments.hingeDepths[idx+1]
+    Bezugspunkt = 100.0 - klappentiefeLinks
+
     # insert start of segment
     file.write("[SEGMENT%d]\n" % idx)
     file.write("SEGMENTBREITE=%.5f\n" % segments.widths[idx])
     file.write("PROFILTIEFE=%.5f\n" % segments.chords[idx])
-    file.write("BEZUGSPUNKT_PROFILTIEFE=%.5f\n" % (100.0 - wingData.hingeDepthPercent))
+    file.write("BEZUGSPUNKT_PROFILTIEFE=%.5f\n" % Bezugspunkt)
     file.write("VERWINDUNGSWINKEL=0.00000\n")
     file.write("V-FORM_WINKEL=%.5f\n" % segments.dihedrals[idx])
     file.write("PFEILWINKEL=%.5f\n" % segments.angles[idx])
-    file.write("BEZUGSPUNKT_PFEILWINKEL=%.5f\n" % (100.0 - wingData.hingeDepthPercent))
+    file.write("BEZUGSPUNKT_PFEILWINKEL=%.5f\n" % Bezugspunkt)
     file.write("ANZAHL PANELS Y=1\n")
     file.write("VERTEILUNG=LINEAR\n")
-
     file.write("KLAPPENTIEFE LINKS,RECHTS=%.5f %.5f\n" % \
-              (wingData.hingeDepthPercent, wingData.hingeDepthPercent))
-
+                (klappentiefeLinks, klappentiefeRechts))
     file.write("KLAPPENAUSSCHLAG=0.00000\n")
     file.write("KLAPPENGRUPPE=0\n")
     file.write("KLAPPENINVERSE=FALSE\n")
@@ -172,7 +203,12 @@ def write_segmentData(wingData, segments, idx, file):
     file.write("CM0_MAN=0.00000\n")
 
     # insert data of the airfoil now
-    write_airfoilData(segments.airfoilNames[idx], file)
+    try:
+        write_airfoilData(segments.airfoilNames[idx], file)
+    except:
+        print("airfoil %s not found, writing airfoil data of %s (root airfoil) instead" %\
+        (segments.airfoilNames[idx], wingData.airfoilNames[0]))
+        write_airfoilData(wingData.airfoilNames[0], file)
 
     # insert end of segment
     file.write("[SEGMENT ENDE]\n")
@@ -199,7 +235,7 @@ def write_rootData(wingData, FLZ_fileContent, file):
             elif (line.find("PROFILTIEFE")==0):
                 file.write("PROFILTIEFE=%.5f\n" % wingData.rootchord)
             elif (line.find("BEZUGSPUNKT_PROFILTIEFE")>=0):
-                file.write("BEZUGSPUNKT_PROFILTIEFE=%.5f\n" % (100.0 - wingData.hingeDepthPercent))
+                file.write("BEZUGSPUNKT_PROFILTIEFE=%.5f\n" % (100.0 - wingData.hingeDepthRoot))
             elif (line.find("VERWINDUNGSWINKEL")>=0):
                 file.write("VERWINDUNGSWINKEL=0.00000\n")
 #            elif (line.find("ANZAHL PANELS X")>=0):
