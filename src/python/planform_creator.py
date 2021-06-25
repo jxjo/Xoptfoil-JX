@@ -65,27 +65,31 @@ csfont = {'fontname':'DejaVu Sans'}
 fs_infotext = 7
 fs_legend = 7
 
-# colours, styles and linewidths
+# colours, lineStyles
+cl_background = 'dark_background'
 cl_quarterChordLine = 'darkgreen'
-ls_quarterChordLine = 'solid'
-lw_quarterChordLine  = 0.8
 cl_areaCenterLine = 'blue'
-ls_areaCenterLine = 'solid'
-lw_areaCenterLine = 0.8
 cl_hingeLine = 'r'
-ls_hingeLine = 'solid'
-lw_hingeLine = 0.6
+cl_hingeLineFill ='r'
 cl_planform = 'gray'
-ls_planform = 'solid'
-lw_planform = 1.0
+cl_planformFill = 'gray'
 cl_sections = 'grey'
-ls_sections = 'solid'
-lw_sections = 0.4
 cl_userAirfoil = 'aqua'
 cl_optAirfoil = 'yellow'
-
-fs_tick = 7
 cl_infotext = 'aqua'
+
+ls_quarterChordLine = 'solid'
+lw_quarterChordLine  = 0.8
+ls_areaCenterLine = 'solid'
+lw_areaCenterLine = 0.8
+ls_hingeLine = 'solid'
+lw_hingeLine = 0.6
+ls_planform = 'solid'
+lw_planform = 1.0
+ls_sections = 'solid'
+lw_sections = 0.4
+fs_tick = 7
+
 
 xfoilWorkerCall = "..\\..\\bin\\" + xfoilWorkerName + '.exe'
 inputFilename = "..\\..\\ressources\\" + smoothInputFile
@@ -194,6 +198,7 @@ class wingGrid:
 class wing:
     # class init
     def __init__(self):
+        self.theme = 'default'
         self.airfoilBasicName = ""
         self.airfoilNames = []
         self.numAirfoils= 0
@@ -221,10 +226,53 @@ class wing:
         self.valueList = []
         self.chords = []
         self.isFin = False
-        self.showQuarterChordLine = True
-        self.showTipLine = True
+        self.showQuarterChordLine = False
+        self.showTipLine = False
         self.showHingeLine = True
         self.smoothUserAirfoils = True
+
+
+    def set_colours(self):
+        global cl_background
+        global cl_quarterChordLine
+        global cl_areaCenterLine
+        global cl_hingeLine
+        global cl_planform
+        global cl_hingeLineFill
+        global cl_planformFill
+        global cl_sections
+        global cl_userAirfoil
+        global cl_optAirfoil
+        global cl_infotext
+
+        #self.theme = ' '
+        if self.theme == 'black_white':
+            # black and white theme
+            cl_background = 'default'
+            cl_quarterChordLine = 'black'
+            cl_areaCenterLine = 'black'
+            cl_hingeLine = 'black'
+            cl_planform = 'black'
+            cl_hingeLineFill = 'gray'
+            cl_planformFill = 'lightgray'
+            cl_sections = 'black'
+            cl_userAirfoil = 'black'
+            cl_optAirfoil = 'black'
+            cl_infotext = 'black'
+        else:
+            # dark theme
+            cl_background = 'dark_background'
+            cl_quarterChordLine = 'darkgreen'
+            cl_areaCenterLine = 'blue'
+            cl_hingeLine = 'r'
+            cl_planform = 'gray'
+            cl_hingeLineFill = 'r'
+            cl_planformFill = 'lightgray'
+            cl_sections = 'grey'
+            cl_userAirfoil = 'aqua'
+            cl_optAirfoil = 'yellow'
+            cl_infotext = 'aqua'
+
 
     # compose a name from the airfoil basic name and the Re-number
     def set_AirfoilNamesFromRe(self):
@@ -371,6 +419,11 @@ class wing:
             self.leadingEdgeOrientation = dictData["leadingEdgeOrientation"]
         except:
               NoteMsg("leadingEdgeOrientation not defined")
+
+        try:
+            self.theme = dictData["theme"]
+        except:
+            NoteMsg("theme not defined")
 
         # get user-defined list of airfoil-names
         try:
@@ -672,7 +725,7 @@ class wing:
         grid = self.find_PlanformData(chord)
 
         if (grid == None):
-            ErrorMsg("chord-length %f not found in planform-data\n")
+            ErrorMsg("chord-length %f not found in planform-data\n" % chord)
             exit(-1)
         else:
             self.add_sectionFromGrid(grid)
@@ -977,8 +1030,8 @@ class wing:
               linestyle = ls_hingeLine, linewidth = lw_hingeLine)
 
         # fill the wing
-        ax.fill_between(xValues, leadingEdge, hingeLine, color=cl_planform, alpha=0.4)
-        ax.fill_between(xValues, hingeLine, trailingeEge, color=cl_hingeLine, alpha=0.4)
+        ax.fill_between(xValues, leadingEdge, hingeLine, color=cl_planformFill, alpha=0.4)
+        ax.fill_between(xValues, hingeLine, trailingeEge, color=cl_hingeLineFill, alpha=0.4)
 
         # setup list for new x-tick locations
         new_tick_locations = [0.0, self.halfwingspan, (self.halfwingspan + self.fuselageWidth/2),
@@ -1009,9 +1062,8 @@ class wing:
 
     # draw the graph
     def draw(self):
-
-        # set 'dark' style
-        plt.style.use('dark_background')
+        # set background style
+        plt.style.use(cl_background)
 
         # setup subplots
         fig, (upper,lower) = plt.subplots(2,1)
@@ -1579,6 +1631,9 @@ if __name__ == "__main__":
         NoteMsg("FLZ vortex file \"%s\" was successfully created" % FLZ_outFileName)
     except:
         NoteMsg("creating FLZ vortex file was skipped")
+
+    # set colours according to selected theme
+    newWing.set_colours()
 
     # plot the planform
     newWing.draw()
