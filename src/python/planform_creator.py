@@ -999,6 +999,21 @@ class wing:
         trailingEdge[0] = leadingEdge[0]
         trailingEdge[-1] = leadingEdge[-1]
 
+##        # get flap parting lines
+##        actualFlapGroup = 0
+##        flapPositions_x = []
+##        flapPositions_y =[]
+##
+##        for section in self.sections:
+##            if section.flapGroup > 0:
+##                if actualFlapGroup != section.flapGroup:
+##                    flapPositions_x = (section.y, section.y)
+##                    flapPositions_y = (section.hingeLine, section.trailingEdge)
+##                    actualFlapGroup = section.flapGroup
+##                    # plot the flap parting lines
+##                    ax.plot(flapPositions_x, flapPositions_y, color=cl_hingeLine,
+##                    linewidth = lw_planform, solid_capstyle="round")
+
         # plot the planform last
         ax.plot(xValues, leadingEdge, color=cl_planform,
                 linewidth = lw_planform, solid_capstyle="round")
