@@ -13,6 +13,7 @@ from strak_machineV2 import (ErrorMsg, WarningMsg, NoteMsg, DoneMsg,  bs,
                              buildPath, ressourcesPath, airfoilPath)
 from math import atan, pi
 from copy import deepcopy
+import numpy as np
 
 endOfHeader_Tag = "GESAMTPOLARBERECHNUNG_SCHRITTZAHL"
 startOfWing_Tag = "[FLAECHE0]"
@@ -34,6 +35,7 @@ class segmentData:
         self.airfoilNames = self.get_airfoilNames(wingData)
         self.angles = self.calculate_angles(wingData)
         self.dihedrals = self.get_dihedrals(wingData)
+        self.flapGroups = self.getFlapGroups(wingData)
         self.num = len(self.widths)
 
 
@@ -56,6 +58,26 @@ class segmentData:
         #print(widthList)#Debug
         return (widthList)
 
+    def getFlapGroups(self, wingData):
+        flapGroupsLeftHalfWing = []
+        flapGroupsRightHalfWing = []
+        numSections = len(wingData.sections)
+
+        # determine number of different flap groups. 0 is not counted
+        numDifferentGroups = len(np.unique(wingData.flapGroups)) - 1
+
+        for idx in range(1, numSections):
+            flapGroupsRightHalfWing.append(wingData.sections[idx-1].flapGroup)
+            flapGroupsLeftHalfWing.append(wingData.sections[idx-1].flapGroup)
+
+
+        flapGroupsLeftHalfWing.reverse()
+        for idx in range(len(flapGroupsLeftHalfWing)):
+            if flapGroupsLeftHalfWing[idx] > 0:
+                flapGroupsLeftHalfWing[idx] = flapGroupsLeftHalfWing[idx] + numDifferentGroups
+
+        flapGroupList = flapGroupsLeftHalfWing + flapGroupsRightHalfWing
+        return (flapGroupList)
 
     def calculateHingeDepths(self, wingData):
         hingeDepthsLeftHalfWing = []
@@ -196,7 +218,7 @@ def write_segmentData(wingData, segments, idx, file):
     file.write("KLAPPENTIEFE LINKS,RECHTS=%.5f %.5f\n" % \
                 (klappentiefeLinks, klappentiefeRechts))
     file.write("KLAPPENAUSSCHLAG=0.00000\n")
-    file.write("KLAPPENGRUPPE=0\n")
+    file.write("KLAPPENGRUPPE=%d\n" % segments.flapGroups[idx])
     file.write("KLAPPENINVERSE=FALSE\n")
     file.write("FLAG_MAN_BEIWERTE=FALSE\n")
     file.write("ALFA0_MAN=0.00000\n")

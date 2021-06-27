@@ -168,6 +168,7 @@ class wingSection:
         self.quarterChordLine = 0
         self.areaCenterLine = 0
         self.dihedral= 3.00
+        self.flapGroup = 0
 
         # name of the airfoil-file that shall be used for the section
         self.airfoilName = ""
@@ -358,6 +359,7 @@ class wing:
         self.airfoilTypes = get_MandatoryParameterFromDict(dictData, 'airfoilTypes')
         self.airfoilPositions = get_MandatoryParameterFromDict(dictData, 'airfoilPositions')
         self.airfoilReynolds = get_MandatoryParameterFromDict(dictData, 'airfoilReynolds')
+        self.flapGroups = get_MandatoryParameterFromDict(dictData, 'flapGroup')
 
         # number of airfoils equals number of specified airfoil types
         self.numAirfoils = len(self.airfoilTypes)
@@ -755,9 +757,25 @@ class wing:
 
         # create all sections, according to the precalculated chords
         for chord in self.chords[startIdx:]:
+            startIdx = 0
             # add section according to chord
             self.add_sectionFromChord(chord)
 
+
+    # assigns the user defined flap groups to the different sections
+    def assignFlapGroups(self):
+        if self.fuselageIsPresent():
+            # add flapGroup 0 at the beginning of the list
+            self.flapGroups.insert(0,0)
+
+        # append flapGroup for the tip section, which is the same as for the section before
+        self.flapGroups.append(self.flapGroups[-1])
+
+        # assign flap groups now
+        idx = 0
+        for flapGroup in self.flapGroups:
+            self.sections[idx].flapGroup = flapGroup
+            idx = idx + 1
 
     # get color for plotting
     def get_colorFromAirfoilType(self, airfoilType):
@@ -1566,6 +1584,9 @@ if __name__ == "__main__":
 
     # calculate the sections now
     newWing.calculate_sections()
+
+    # assign the flap groups to the different sections
+    newWing.assignFlapGroups()
 
     # create outputfolder, if it does not exist
     if not os.path.exists(outputFolder):
