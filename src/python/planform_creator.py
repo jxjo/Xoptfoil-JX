@@ -827,7 +827,8 @@ class wing:
             labelColor = self.get_colorFromAirfoilType(airfoilType)
 
             ax.plot([element.y, element.y] ,[element.leadingEdge, element.trailingEdge],
-            color=labelColor, linestyle = ls_sections, linewidth = lw_sections)
+            color=labelColor, linestyle = ls_sections, linewidth = lw_sections,
+            solid_capstyle="round")
 
             # determine x and y Positions of the labels
             xPos = element.y
@@ -894,11 +895,8 @@ class wing:
             trailingeEge.append(element.trailingEdge)
 
         # setup root- and tip-joint
-        rootJoint_y = (leadingEdge[0],trailingeEge[0])
-        rootJoint_x = (xValues[0], xValues[0])
-        lastElementIndex = len(leadingEdge)-1
-        tipJoint_y = (leadingEdge[lastElementIndex],trailingeEge[lastElementIndex])
-        tipJoint_x = (xValues[lastElementIndex], xValues[lastElementIndex])
+        trailingeEge[0] = leadingEdge[0]
+        trailingeEge[-1] = leadingEdge[-1]
 
         # compose labels for legend
         labelHingeLine = ("hinge line (%.1f %% / %.1f %%)" %
@@ -908,35 +906,28 @@ class wing:
         if (self.showQuarterChordLine == True):
             ax.plot(xValues, quarterChordLine, color=cl_quarterChordLine,
               linestyle = ls_quarterChordLine, linewidth = lw_quarterChordLine,
-              label = "quarter-chord line")
+              solid_capstyle="round", label = "quarter-chord line")
 
         if (self.showTipLine == True):
             ax.plot(xValues, areaCenterLine, color=cl_areaCenterLine,
               linestyle = ls_areaCenterLine, linewidth = lw_areaCenterLine,
-              label = "area CoG line")
+              solid_capstyle="round", label = "area CoG line")
 
         # plot hinge-line
         if (self.showHingeLine == True):
             ax.plot(xValues, hingeLine, color=cl_hingeLine,
               linestyle = ls_hingeLine, linewidth = lw_hingeLine,
-              label = labelHingeLine)
+              solid_capstyle="round", label = labelHingeLine)
 
         # plot the planform last
         ax.plot(xValues, leadingEdge, color=cl_planform,
-                linewidth = lw_planform)#, label = "planform")
+                linewidth = lw_planform, solid_capstyle="round")
         ax.plot(xValues, trailingeEge, color=cl_planform,
-                linewidth = lw_planform)
+                linewidth = lw_planform, solid_capstyle="round")
         try:
             airfoilType = self.airfoilTypes[0]
         except:
              airfoilType = 'blend'
-
-        ax.plot(rootJoint_x, rootJoint_y,
-                color = self.get_colorFromAirfoilType(airfoilType),
-                linewidth = lw_planform)
-
-        ax.plot(tipJoint_x, tipJoint_y, color= cl_planform,
-                linewidth = lw_planform)
 
         # plot additional point (invisible) to expand the y-axis and
         # get the labels inside the diagram
@@ -961,14 +952,13 @@ class wing:
         #create empty lists
         xValues = []
         leadingEdge = []
-        trailingeEge = []
+        trailingEdge = []
         hingeLine = []
         quarterChordLine = []
         areaCenterLine = []
 
         # set axes and labels
         self.set_AxesAndLabels(ax, "Full-wing planform")
-
 
         # build up list of x-values,
         # first left half-wing
@@ -994,46 +984,36 @@ class wing:
         for element in reversed(self.grid):
             leadingEdge.append(element.leadingEdge)
             hingeLine.append(element.hingeLine)
-            trailingeEge.append(element.trailingEdge)
+            trailingEdge.append(element.trailingEdge)
 
         # center-section / fuselage (y)
-        wingRoot_y = (leadingEdge[lastElement],trailingeEge[lastElement])
+        wingRoot_y = (leadingEdge[lastElement],trailingEdge[lastElement])
 
         # right half wing
         for element in (self.grid):
             leadingEdge.append(element.leadingEdge)
             hingeLine.append(element.hingeLine)
-            trailingeEge.append(element.trailingEdge)
+            trailingEdge.append(element.trailingEdge)
 
         # setup root- and tip-joint
-        lastElement = len(xValues)-1
-        leftTipJoint_x = (xValues[0], xValues[0])
-        leftTipJoint_y = (leadingEdge[0],trailingeEge[0])
-        rightTipJoint_x = (xValues[lastElement], xValues[lastElement])
-        rightTipJoint_y = (leadingEdge[lastElement],trailingeEge[lastElement])
-
-        # plot left tip-joint
-        ax.plot(leftTipJoint_x, leftTipJoint_y, color=cl_planform,
-                linewidth = lw_planform)
+        trailingEdge[0] = leadingEdge[0]
+        trailingEdge[-1] = leadingEdge[-1]
 
         # plot the planform last
         ax.plot(xValues, leadingEdge, color=cl_planform,
-                linewidth = lw_planform)#, label = "planform")
-        ax.plot(xValues, trailingeEge, color=cl_planform,
-                linewidth = lw_planform)
+                linewidth = lw_planform, solid_capstyle="round")
+
+        ax.plot(xValues, trailingEdge, color=cl_planform,
+                linewidth = lw_planform, solid_capstyle="round")
 
         # center-section
         ax.plot(leftWingRoot_x, wingRoot_y, color=cl_planform,
-                linewidth = lw_planform)
+                linewidth = lw_planform, solid_capstyle="round")
 
         ax.arrow(self.wingspan/2, 0.0, 0.0, -1*(self.rootchord/3),head_width=self.fuselageWidth/4)
 
         ax.plot(rightWingRoot_x, wingRoot_y, color=cl_planform,
-                linewidth = lw_planform)
-
-        # plot right tip-joint
-        ax.plot(rightTipJoint_x, rightTipJoint_y, color=cl_planform,
-                linewidth = lw_planform)
+                linewidth = lw_planform, solid_capstyle="round")
 
         # both axes shall be equal
         ax.axis('equal')
@@ -1045,11 +1025,12 @@ class wing:
         # plot hinge-line
         if (self.showHingeLine == 'true'):
             ax.plot(xValues, hingeLine, color=cl_hingeLine,
-              linestyle = ls_hingeLine, linewidth = lw_hingeLine)
+              linestyle = ls_hingeLine, linewidth = lw_hingeLine,
+              solid_capstyle="round")
 
         # fill the wing
         ax.fill_between(xValues, leadingEdge, hingeLine, color=cl_planformFill, alpha=0.4)
-        ax.fill_between(xValues, hingeLine, trailingeEge, color=cl_hingeLineFill, alpha=0.4)
+        ax.fill_between(xValues, hingeLine, trailingEdge, color=cl_hingeLineFill, alpha=0.4)
 
         # setup list for new x-tick locations
         new_tick_locations = [0.0, self.halfwingspan, (self.halfwingspan + self.fuselageWidth/2),
