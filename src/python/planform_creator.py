@@ -222,7 +222,7 @@ class wing:
         self.dihedral = 0.00
         self.area = 0.0
         self.aspectRatio = 0.0
-        self.interpolationSegments = 0
+        self.interpolationSegments = 0 #TODO make parameter in planformdata.txt
         self.sections = []
         self.grid = []
         self.valueList = []
