@@ -31,7 +31,7 @@ from shutil import copyfile
 from matplotlib import pyplot as plt
 from matplotlib import rcParams
 import numpy as np
-from math import log10, floor, tan, atan, sin, pi
+from math import log10, floor, tan, atan, sin, cos, pi
 import json
 import tkinter
 from matplotlib.backends.backend_tkagg import (
@@ -221,6 +221,7 @@ class wing:
         self.dihedral = 0.00
         self.area = 0.0
         self.aspectRatio = 0.0
+        self.interpolationSegments = 0
         self.sections = []
         self.grid = []
         self.valueList = []
@@ -511,7 +512,10 @@ class wing:
 
     # sets the airfoilname of a section
     def set_AirfoilName(self, section):
-        section.airfoilName = self.airfoilNames[section.number-1]
+        try:
+            section.airfoilName = self.airfoilNames[section.number-1]
+        except:
+            ErrorMsg("No airfoilName found for section %d" % section.number)
 
     def set_lastSectionAirfoilName(self, section):
             section.airfoilName = self.airfoilNames[section.number-2]
@@ -679,6 +683,14 @@ class wing:
             self.chords.append(chord)
 
 
+    def calculate_positions(self):
+        for idx in range(len(self.airfoilPositions)):
+            if self.airfoilPositions[idx] == None:
+                # no position defined yet, calculate now
+                grid = self.find_PlanformData(self.chords[idx])
+                self.airfoilPositions[idx] = grid.y
+
+
     # calculate missing Re-numbers from positions
     def calculate_ReNumbers(self):
         num = len(self.airfoilReynolds)
@@ -757,6 +769,47 @@ class wing:
         for chord in self.chords[startIdx:]:
             # add section according to chord
             self.add_sectionFromChord(chord)
+
+    def interpolate_sections(self):
+        if self.interpolationSegments < 1:
+            # nothing to do
+            return
+
+        new_positions = []
+        new_chords = []
+        new_airfoilNames = []
+        num = len(self.airfoilPositions)
+
+        for idx in range(num-1):
+            # determine interpolation-distance
+            posDelta = self.airfoilPositions[idx+1]-self.airfoilPositions[idx]
+            posDelta = posDelta / float(self.interpolationSegments+1)
+
+            # add existiong position and name
+            new_positions.append(self.airfoilPositions[idx])
+            new_chords.append(self.chords[idx])
+            new_airfoilNames.append(self.airfoilNames[idx])
+
+            # add interpolated position and name
+            for n in range(self.interpolationSegments):
+                position = self.airfoilPositions[idx] + (float(n+1)*posDelta)
+                chord = self.get_chordFromPosition(position)
+                new_positions.append(position)
+                new_chords.append(chord)
+                new_airfoilNames.append(self.airfoilNames[idx])
+
+        # set Tip values
+        new_positions.append(self.airfoilPositions[-1])
+        new_chords.append(self.chords[-1])
+        new_airfoilNames.append(self.airfoilNames[-1])
+
+        # assign interpolated lists
+        self.airfoilPositions = new_positions
+        self.airfoilNames = new_airfoilNames
+        self.chords = new_chords
+
+        # interpolated calculation of sections
+        self.calculate_sections()
 
 
     # get color for plotting
@@ -1071,9 +1124,11 @@ class wing:
         # compose diagram-title
         wingspan_mm = int(round(self.wingspan*1000))
         rootchord_mm = int(round(self.rootchord*1000))
-        text = "\"%s\"\n wingspan: %d mm, rootchord: %d mm, area: %.2f dm², "\
+        proj_area = self.area * cos(self.dihedral*pi/180.0)
+
+        text = "\"%s\"\n wingspan: %d mm, rootchord: %d mm, area: %.2f dm², proj. area: %.2f dm²\n"\
          "aspect ratio: %.2f, root-tip sweep: %.2f°, hinge line angle: %.2f°\n"\
-         % (self.planformName, wingspan_mm, rootchord_mm, self.area,
+         % (self.planformName, wingspan_mm, rootchord_mm, self.area, proj_area,
          self.aspectRatio, self.rootTipSweep, self.hingeLineAngle)
 
         fig.suptitle(text, fontsize = 12, color="darkgrey", **csfont)
@@ -1554,6 +1609,7 @@ if __name__ == "__main__":
     newWing.calculate_planform()
     newWing.calculate_ReNumbers()
     newWing.calculate_chordlengths()
+    newWing.calculate_positions()
     newWing.set_AirfoilNames()
 
     # if there is a fuselage, insert data for the fuselage section
@@ -1598,6 +1654,10 @@ if __name__ == "__main__":
     # update "strakdata.txt" for the strakmachine
     update_strakdata(newWing)
 
+    # interpolation of sections
+    interpolatedWing = deepcopy(newWing)
+    interpolatedWing.interpolate_sections()
+
     # insert the generated-data into the XFLR5 File
     try:
         # get filename of XFLR5-File
@@ -1633,7 +1693,7 @@ if __name__ == "__main__":
         NoteMsg("creating FLZ vortex file was skipped")
 
     # set colours according to selected theme
-    newWing.set_colours()
+    interpolatedWing.set_colours()#newWing.set_colours()
 
     # plot the planform
-    newWing.draw()
+    interpolatedWing.draw()#newWing.draw()
