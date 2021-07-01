@@ -63,13 +63,14 @@ class segmentData:
         flapGroupsRightHalfWing = []
         numSections = len(wingData.sections)
 
-        # determine number of different flap groups. 0 is not counted
-        numDifferentGroups = len(np.unique(wingData.flapGroups)) - 1
+        # determine number of different flap groups. Fuselage is not counted
+        numDifferentGroups = len(np.unique(wingData.flapGroups))
+        if (0 in wingData.flapGroups):
+            numDifferentGroups = numDifferentGroups - 1
 
         for idx in range(1, numSections):
             flapGroupsRightHalfWing.append(wingData.sections[idx-1].flapGroup)
             flapGroupsLeftHalfWing.append(wingData.sections[idx-1].flapGroup)
-
 
         flapGroupsLeftHalfWing.reverse()
         for idx in range(len(flapGroupsLeftHalfWing)):
