@@ -222,7 +222,7 @@ class wing:
         self.dihedral = 0.00
         self.area = 0.0
         self.aspectRatio = 0.0
-        self.interpolationSegments = 0 #TODO make parameter in planformdata.txt
+        self.interpolationSegments = 5
         self.sections = []
         self.grid = []
         self.valueList = []
@@ -422,6 +422,11 @@ class wing:
             self.leadingEdgeOrientation = dictData["leadingEdgeOrientation"]
         except:
               NoteMsg("leadingEdgeOrientation not defined")
+
+        try:
+            self.interpolationSegments= dictData["interpolationSegments"]
+        except:
+              NoteMsg("interpolationSegments not defined")
 
         try:
             self.theme = dictData["theme"]
@@ -759,6 +764,7 @@ class wing:
 
     # calculate all sections of the wing, oriented at the grid
     def calculate_sections(self):
+        self.sections = []
         # check if fuselageWidth is > 0
         if self.fuselageIsPresent():
             # first add section for fuselage
@@ -773,17 +779,41 @@ class wing:
             # add section according to chord
             self.add_sectionFromChord(chord)
 
+
+    # function to interpolate within sections. This is very useful to get a very
+    # accurate calculation of lift-distribution for elliptical wings
+    # e.g in FLZ-Vortex or XFLR5.
+    # Also other calculations, like wing area, aspect ratio etc. get
+    # more accurate
     def interpolate_sections(self):
         if self.interpolationSegments < 1:
             # nothing to do
             return
 
+        NoteMsg("Interpolation of sections was requested, interpolating each section with"\
+                " additional %d steps" % self.interpolationSegments)
+
         new_positions = []
         new_chords = []
         new_airfoilNames = []
+        new_airfoilTypes = []
+        new_flapGroups = []
+
         num = len(self.airfoilPositions)
 
-        for idx in range(num-1):
+        if self.fuselageIsPresent():
+            # do not interpolate fuselage section
+            startIdx = 1
+            new_positions.append(self.airfoilPositions[0])
+            new_chords.append(self.chords[0])
+            new_airfoilNames.append(self.airfoilNames[0])
+            new_airfoilTypes.append(self.airfoilTypes[0])
+            # assinging flapGroup of fuselage not necessary, will be done
+            # in assignFlapGroups!
+        else:
+            startIdx = 0
+
+        for idx in range(startIdx, num-1):
             # determine interpolation-distance
             posDelta = self.airfoilPositions[idx+1]-self.airfoilPositions[idx]
             posDelta = posDelta / float(self.interpolationSegments+1)
@@ -792,6 +822,8 @@ class wing:
             new_positions.append(self.airfoilPositions[idx])
             new_chords.append(self.chords[idx])
             new_airfoilNames.append(self.airfoilNames[idx])
+            new_airfoilTypes.append(self.airfoilTypes[idx])
+            new_flapGroups.append(self.flapGroups[idx])
 
             # add interpolated position and name
             for n in range(self.interpolationSegments):
@@ -800,20 +832,29 @@ class wing:
                 new_positions.append(position)
                 new_chords.append(chord)
                 new_airfoilNames.append(self.airfoilNames[idx])
+                new_flapGroups.append(self.flapGroups[idx])
+                new_airfoilTypes.append("blend")
 
         # set Tip values
         new_positions.append(self.airfoilPositions[-1])
         new_chords.append(self.chords[-1])
         new_airfoilNames.append(self.airfoilNames[-1])
+        new_airfoilTypes.append(self.airfoilTypes[-1])
+        # assigning of flapGroup for tip not  not necessary, will be done in
+        # assignFlapGroups!
 
         # assign interpolated lists
         self.airfoilPositions = new_positions
+        self.airfoilTypes = new_airfoilTypes
         self.airfoilNames = new_airfoilNames
         self.chords = new_chords
+        self.flapGroups = new_flapGroups
 
-        # interpolated calculation of sections
+        # calculate the interpolated sections
         self.calculate_sections()
 
+        # do not forget: assign the flap groups to the different sections
+        self.assignFlapGroups()
 
     # assigns the user defined flap groups to the different sections
     def assignFlapGroups(self):
@@ -1587,7 +1628,7 @@ def GUI():
 if __name__ == "__main__":
     init()
 
-    #get command-line-arguments or user-input
+    # get command-line-arguments or user-input
     (planformDataFileName, strakDataFileName) = get_Arguments()
 
     # create a new planform
@@ -1623,7 +1664,7 @@ if __name__ == "__main__":
     newWing.calculate_planform()
     newWing.calculate_ReNumbers()
     newWing.calculate_chordlengths()
-    newWing.calculate_positions()
+    newWing.calculate_positions() # must be done after chordlenghts ar known
     newWing.set_AirfoilNames()
 
     # if there is a fuselage, insert data for the fuselage section
@@ -1671,11 +1712,12 @@ if __name__ == "__main__":
     # update "strakdata.txt" for the strakmachine
     update_strakdata(newWing)
 
-    # interpolation of sections
+    # interpolation of sections, make complete 1:1 copy first
+    # in the drawing we only want to see the non-interpolated sections
     interpolatedWing = deepcopy(newWing)
     interpolatedWing.interpolate_sections()
 
-    # insert the generated-data into the XFLR5 File
+    # insert the generated-data into the XFLR5 File (interpolated data)
     try:
         # get filename of XFLR5-File
         XFLR5_inFileName =  planformData["XFLR5_inFileName"]
@@ -1689,12 +1731,12 @@ if __name__ == "__main__":
 
 
         if ((XFLR5_inFileName != None) and (XFLR5_outFileName != None)):
-            insert_PlanformDataIntoXFLR5_File(newWing, XFLR5_inFileName, XFLR5_outFileName)
+            insert_PlanformDataIntoXFLR5_File(interpolatedWing, XFLR5_inFileName, XFLR5_outFileName)
             NoteMsg("XFLR5 file \"%s\" was successfully created" % XFLR5_outFileName)
     except:
         NoteMsg("creating XFLR5 file was skipped")
 
-    # insert the generated-data into the FLZ-Vortex File
+    # insert the generated-data into the FLZ-Vortex File (interpolated data)
     try:
         FLZ_inFileName  = planformData["FLZVortex_inFileName"]
         if (FLZ_inFileName.find(bs) < 0):
@@ -1704,13 +1746,13 @@ if __name__ == "__main__":
         if (FLZ_outFileName.find(bs) < 0):
             FLZ_outFileName = outputFolder + bs + FLZ_outFileName
 
-        export_toFLZ(newWing, FLZ_inFileName, FLZ_outFileName)
+        export_toFLZ(interpolatedWing, FLZ_inFileName, FLZ_outFileName)
         NoteMsg("FLZ vortex file \"%s\" was successfully created" % FLZ_outFileName)
     except:
         NoteMsg("creating FLZ vortex file was skipped")
 
     # set colours according to selected theme
-    interpolatedWing.set_colours()#newWing.set_colours()
+    newWing.set_colours()
 
     # plot the planform
-    interpolatedWing.draw()#newWing.draw()
+    newWing.draw()
