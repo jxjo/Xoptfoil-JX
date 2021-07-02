@@ -31,6 +31,7 @@ from shutil import copyfile
 from matplotlib import pyplot as plt
 from matplotlib import rcParams
 import numpy as np
+from scipy.interpolate import make_interp_spline
 from math import log10, floor, tan, atan, sin, cos, pi
 import json
 import tkinter
@@ -182,14 +183,14 @@ class wingGrid:
 
     # class init
      def __init__(self):
-        self.y = 0
-        self.chord = 0
-        self.leadingEdge = 0
-        self.trailingEdge = 0
-        self.hingeDepth = 0
-        self.hingeLine = 0
-        self.quarterChordLine = 0
-        self.areaCenterLine = 0
+        self.y = 0.0
+        self.chord = 0.0
+        self.leadingEdge = 0.0
+        self.trailingEdge = 0.0
+        self.hingeDepth = 0.0
+        self.hingeLine = 0.0
+        self.quarterChordLine = 0.0
+        self.areaCenterLine = 0.0
 
 ################################################################################
 #
@@ -571,6 +572,7 @@ class wing:
         # init areaCenter
         area_Center = 0.0
 
+
         # calculate all Grid-chords
         for i in range(1, (self.numberOfGridChords + 1)):
             # create new grid
@@ -613,9 +615,28 @@ class wing:
             # append section to section-list of wing
             self.grid.append(grid)
 
-            # sum up area center
-            area = (grid_delta_y*10 * grid.chord*10)
-            area_Center = area_Center + grid.centerLine*area
+        # interpolate / smooth tip section
+        self.interpolate_tip()
+        self.calculate_wingArea()
+
+        # calculate aspect ratio of the wing
+        self.aspectRatio = self.wingspan*self.wingspan / (self.area/100)
+
+        # add offset of half of the fuselage-width to the y-coordinates
+        for element in self.grid:
+            element.y = element.y + self.fuselageWidth/2
+            element.areaCenterLine = self.area_Center
+
+
+    def calculate_wingArea(self):
+        grid_delta_y = self.grid[1].y - self.grid[0].y
+        area_Center = 0.0
+        self.area = 0.0
+
+        for element in self.grid:
+            # sum up area
+            area = (grid_delta_y*10 * element.chord*10)
+            area_Center = area_Center + element.centerLine*area
 
             # calculate area of the wing
             self.area = self.area + area
@@ -623,14 +644,49 @@ class wing:
         # Calculate areaCenter (Flaechenschwerpunkt)
         self.area_Center = area_Center / self.area
 
-        # calculate aspect ratio of the wing
+        # calculate area of the whole wing
         self.area = self.area * 2.0
-        self.aspectRatio = self.wingspan*self.wingspan / (self.area/100)
 
-        # add offset of half of the fuselage-width to the y-coordinates
-        for element in self.grid:
-            element.y = element.y + self.fuselageWidth/2
-            element.areaCenterLine = self.area_Center
+
+    # function to interpolate the tip and avoid sharp edges
+    def interpolate_tip(self):
+        x_coordinates = []
+        LE_coordinates = []
+        TE_coordinates = []
+
+        TipInterpolationRangePercent = 5
+        numInterpolationPoints = 11
+
+        # interpolation starts at 3% of tip
+        interpolation_start_idx = len(self.grid) - int((len(self.grid) * TipInterpolationRangePercent) / 100.0)
+        interpolation_end_idx = len(self.grid)
+        delta = int((interpolation_end_idx - interpolation_start_idx) / numInterpolationPoints)
+
+        for idx in range(numInterpolationPoints):
+            n = interpolation_start_idx + idx*delta
+            x_coordinates.append(self.grid[n].y)
+            LE_coordinates.append(self.grid[n].leadingEdge)
+            TE_coordinates.append(self.grid[n].trailingEdge)
+
+        # append tip point
+        x_coordinates.append(self.grid[-1].y)
+        LE_coordinates.append(self.grid[-1].hingeLine)
+        TE_coordinates.append(self.grid[-1].hingeLine)
+
+
+        # interpolate leading edge and trailing edge in the tip region
+        interpolatedTip_LE = make_interp_spline(x_coordinates, LE_coordinates, k=9)
+        interpolatedTip_TE = make_interp_spline(x_coordinates, TE_coordinates, k=9)
+
+        # exchange grid LE-/TE-elements with interpolated values
+        for idx in range (interpolation_start_idx, len(self.grid)):
+            self.grid[idx].leadingEdge = interpolatedTip_LE(self.grid[idx].y)
+            self.grid[idx].trailingEdge = interpolatedTip_TE(self.grid[idx].y)
+            self.grid[idx].chord = self.grid[idx].trailingEdge - self.grid[idx].leadingEdge
+            # calculate centerLine, quarterChordLine
+            self.grid[idx].centerLine = self.grid[idx].leadingEdge + (self.grid[idx].chord/2)
+            self.grid[idx].quarterChordLine = self.grid[idx].leadingEdge + (self.grid[idx].trailingEdge-self.grid[idx].leadingEdge)/4
+
 
 
     # get chordlength from position, according to the planform-data
