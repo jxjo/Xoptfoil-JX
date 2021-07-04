@@ -259,40 +259,6 @@ def write_segmentData(wingData, segments, idx, file):
     # insert end of segment
     file.write("[SEGMENT ENDE]\n")
 
-## FIXME remove, not needed anymore
-def write_rootData(wingData, FLZ_fileContent, file):
-    startWriting = False
-    if wingData.isFin:
-        start_Tag = startOfFin_Tag
-    else:
-        start_Tag = startOfWing_Tag
-
-    for line in FLZ_fileContent:
-        # find the line where wing data starts
-        if (line.find(start_Tag) >= 0):
-            startWriting = True
-        # find the line where root data ends
-        elif(line.find(endOfRoot_Tag) >= 0):
-            file.write(line)
-            # insert data of the root-airfoil now
-            write_airfoilData(wingData.airfoilNames[0], file)
-            # job is done
-            return
-
-        if startWriting:
-            if (line.find("BEZEICHNUNG")>=0):
-                file.write("BEZEICHNUNG=%s\n" % wingData.planformName)
-            elif (line.find("PROFILTIEFE")==0):
-                file.write("PROFILTIEFE=%.5f\n" % wingData.rootchord)
-            elif (line.find("BEZUGSPUNKT_PROFILTIEFE")>=0):
-                file.write("BEZUGSPUNKT_PROFILTIEFE=%.5f\n" % (100.0 - wingData.hingeDepthRoot))
-            elif (line.find("VERWINDUNGSWINKEL")>=0):
-                file.write("VERWINDUNGSWINKEL=0.00000\n")
-#            elif (line.find("ANZAHL PANELS X")>=0):
-#                file.write("ANZAHL PANELS X=20\n") #FIXME correct value?
-            else:
-                file.write(line)
-
 
 
 def write_header(FLZ_fileContent, file):
@@ -424,8 +390,6 @@ def export_toFLZ(wingData, inFileName, outFileName):
     else:
         write_wingHeader(wingData, FLZ_outfile)
 
-    # write the data of the root-rib FIXME remoe, not needed anymore
-    #write_rootData(wingData, FLZ_fileContent, FLZ_outfile)
 
     # loop over all sections of the wing
     for idx in range(segments.num):
