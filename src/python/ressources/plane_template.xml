@@ -44,7 +44,7 @@
                     <Twist>  0.000</Twist>
                     <x_number_of_panels>13</x_number_of_panels>
                     <x_panel_distribution>COSINE</x_panel_distribution>
-                    <y_number_of_panels>5</y_number_of_panels>
+                    <y_number_of_panels>2</y_number_of_panels>
                     <y_panel_distribution>UNIFORM</y_panel_distribution>
                     <Left_Side_FoilName>MainWing_1</Left_Side_FoilName>
                     <Right_Side_FoilName>MainWing_1</Right_Side_FoilName>
@@ -79,7 +79,7 @@
                     <Twist>  0.000</Twist>
                     <x_number_of_panels>13</x_number_of_panels>
                     <x_panel_distribution>COSINE</x_panel_distribution>
-                    <y_number_of_panels>5</y_number_of_panels>
+                    <y_number_of_panels>2</y_number_of_panels>
                     <y_panel_distribution>UNIFORM</y_panel_distribution>
                     <Left_Side_FoilName>Fin_1</Left_Side_FoilName>
                     <Right_Side_FoilName>Fin_1</Right_Side_FoilName>
