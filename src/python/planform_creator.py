@@ -1355,11 +1355,11 @@ def insert_PlanformDataIntoXFLR5_File(data, inFileName, outFileName):
 
         for foilName in newSection.iter('Left_Side_FoilName'):
             # convert float to text
-            foilName.text = str(section.airfoilName)
+            foilName.text = remove_suffix(str(section.airfoilName), '.dat')
 
         for foilName in newSection.iter('Right_Side_FoilName'):
             # convert float to text
-            foilName.text = str(section.airfoilName)
+            foilName.text = remove_suffix(str(section.airfoilName), '.dat')
 
         # add the new section to the tree
         wing.append(newSection)
