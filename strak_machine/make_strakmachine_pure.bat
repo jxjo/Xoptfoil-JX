@@ -37,15 +37,28 @@ rem copy airfoil-library
 xcopy .\airfoil_library\*.* .\Strakmachine_pure\airfoil_library\ /Y /E /H /C /I
 
 rem create program calls
-del .\Strakmachine_pure\start_strakmachine.bat
+del .\Strakmachine_pure\*.bat
 echo python .\scripts\strak_machineV2.py >>.\Strakmachine_pure\start_strakmachine.bat
 echo pause >>.\Strakmachine_pure\start_strakmachine.bat
 
-del .\Strakmachine_pure\create_wingplanform.bat
-echo python .\scripts\planform_creator.py >>.\Strakmachine_pure\create_wingplanform.bat
-echo pause >>.\Strakmachine_pure\\create_wingplanform.bat
+echo python scripts\planform_creator.py -p ressources/planformdata_wing >>.\Strakmachine_pure\create_all_planforms.bat
+echo copy build\planforms\XFLR5_wing.xml ressources\XFLR5_wing.xml >>.\Strakmachine_pure\create_all_planforms.bat
+echo copy build\planforms\FLZ_wing.flz ressources\FLZ_wing.flz >>.\Strakmachine_pure\create_all_planforms.bat
+echo python scripts\planform_creator.py -p ressources/planformdata_tail >>.\Strakmachine_pure\create_all_planforms.bat
+echo pause >>.\Strakmachine_pure\create_all_planforms.bat
 
-del .\Strakmachine_pure\show_status.bat
+echo python scripts/planform_creator.py -p ressources/planformdata_root >>.\Strakmachine_pure\create_root_airfoil.bat
+echo copy build\airfoils\JX-GS-139k.dat airfoil_library\F3F\JX\JX-GS\JX-GS-14.dat >>.\Strakmachine_pure\create_root_airfoil.bat
+echo pause >>.\Strakmachine_pure\create_root_airfoil.bat
+
+echo python scripts\planform_creator.py -p ressources/planformdata_tail>>.\Strakmachine_pure\create_tail_planform.bat
+echo pause >>.\Strakmachine_pure\create_tail_planform.bat
+
+echo python scripts\planform_creator.py -p ressources/planformdata_wing >>.\Strakmachine_pure\create_wing_planform.bat
+echo copy build\planforms\XFLR5_wing.xml ressources\XFLR5_wing.xml >>.\Strakmachine_pure\create_wing_planform.bat
+echo copy build\planforms\FLZ_wing.flz ressources\FLZ_wing.flz >>.\Strakmachine_pure\create_wing_planform.bat
+echo pause >>.\Strakmachine_pure\create_wing_planform.bat
+
 echo pythonw  .\scripts\show_status.py >>.\Strakmachine_pure\show_status.bat
 
 rem create zip-archive
