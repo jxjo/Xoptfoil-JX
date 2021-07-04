@@ -17,9 +17,32 @@ import numpy as np
 
 endOfHeader_Tag = "GESAMTPOLARBERECHNUNG_SCHRITTZAHL"
 startOfWing_Tag = "[FLAECHE0]"
+startOfFin_Tag = "[FLAECHE1]"
+endOfWingOrTail_Tag = "[FLAECHE ENDE]"
 endOfRoot_Tag = "ZIRKULATIONSVORGABE"
-startOfFooter_Tag = "[FLAECHE ENDE]"
+startOfFooter_Tag = "[FLUGZEUG ENDE]"
 
+
+
+# structure of the FLZ-file:
+#
+#    [FLUGZEUG]
+#      data
+#      [FLAECHE0]
+#        data
+#        [SEGMENT0]
+#          data
+#        [SEGMENT ENDE]
+#        [SEGMENT1]
+#          data
+#        [SEGMENT ENDE]
+#        further segments
+#      [FLAECHE ENDE]
+#      [FLAECHE1]
+#        data, segments etc. like above
+#      [FLAECHE ENDE]
+#  [FLUGZEUG ENDE]
+#
 ################################################################################
 #
 # segmentData class
@@ -236,13 +259,17 @@ def write_segmentData(wingData, segments, idx, file):
     # insert end of segment
     file.write("[SEGMENT ENDE]\n")
 
-
+## FIXME remove, not needed anymore
 def write_rootData(wingData, FLZ_fileContent, file):
     startWriting = False
+    if wingData.isFin:
+        start_Tag = startOfFin_Tag
+    else:
+        start_Tag = startOfWing_Tag
 
     for line in FLZ_fileContent:
         # find the line where wing data starts
-        if (line.find(startOfWing_Tag) >= 0):
+        if (line.find(start_Tag) >= 0):
             startWriting = True
         # find the line where root data ends
         elif(line.find(endOfRoot_Tag) >= 0):
@@ -276,6 +303,81 @@ def write_header(FLZ_fileContent, file):
             # found end of header, job is finished here
             return
 
+
+def write_wingHeader(wingData, file):
+    file.write("[FLAECHE0]\n")
+    file.write("ART=FLUEGEL\n")
+    file.write("BEZEICHNUNG=%s\n" % wingData.planformName)
+    file.write("POSITION X,Y,Z=0.00000 0.00000 0.00000\n") #FIXME position
+    file.write("ALFA0_CM0_OPTIMIERUNG=TRUE\n")
+    file.write("EINSTELLWINKEL=0.00000\n")
+    file.write("PROFILTIEFE=%.5f\n" % wingData.rootchord)
+    file.write("BEZUGSPUNKT_PROFILTIEFE=%.5f\n" % (100.0 - wingData.hingeDepthRoot))
+    file.write("VERWINDUNGSWINKEL=0.00000\n")
+    file.write("ANZAHL PANELS X=7\n")
+    file.write("VERTEILUNG=SIN_L\n")
+    file.write("ANZAHL PANELS VOLUMENDARSTELLUNG=30\n")
+    file.write("MASSE=2.50000\n")
+    file.write("FLAG_MAN_BEIWERTE=FALSE\n")
+    file.write("ALFA0_MAN=0.00000\n")
+    file.write("CM0_MAN=0.00000\n")
+    file.write("ZIRKULATIONSVORGABE=1.00000\n")
+    # insert data of the root-airfoil now
+    write_airfoilData(wingData.airfoilNames[0], file)
+    # job is done
+
+
+def write_finHeader(wingData, file):
+    file.write("[FLAECHE1]\n")
+    file.write("ART=FLUEGEL\n")
+    #file.write("ART=LEITWERK\n")
+    file.write("BEZEICHNUNG=%s\n" % wingData.planformName)
+    file.write("POSITION X,Y,Z=0.88500 0.00000 0.00000\n") #FIXME position
+    file.write("ALFA0_CM0_OPTIMIERUNG=TRUE\n")
+    file.write("EINSTELLWINKEL=0.00000\n")
+    file.write("PROFILTIEFE=%.5f\n" % wingData.rootchord)
+    file.write("BEZUGSPUNKT_PROFILTIEFE=%.5f\n" % (100.0 - wingData.hingeDepthRoot))
+    file.write("VERWINDUNGSWINKEL=0.00000\n")
+    file.write("ANZAHL PANELS X=7\n")
+    file.write("VERTEILUNG=SIN_L\n")
+    file.write("ANZAHL PANELS VOLUMENDARSTELLUNG=30\n")
+    file.write("MASSE=0.0650000\n")
+    file.write("FLAG_MAN_BEIWERTE=FALSE\n")
+    file.write("ALFA0_MAN=0.00000\n")
+    file.write("CM0_MAN=0.00000\n")
+    file.write("ZIRKULATIONSVORGABE=1.00000\n")
+    # insert data of the root-airfoil now
+    write_airfoilData(wingData.airfoilNames[0], file)
+    # job is done
+
+
+
+def copy_wingData(FLZ_fileContent, file):
+    startWriting = False
+    # write all lines up to end of the first wingData
+    for line in FLZ_fileContent:
+        if (line.find(startOfWing_Tag) >= 0):
+            startWriting = True
+
+        if startWriting:
+            file.write(line)
+            if (line.find(endOfWingOrTail_Tag) >= 0):
+                # found end of wing, job is finished here
+                return
+
+
+def copy_tailData(FLZ_fileContent, file):
+    startWriting = False
+    # write all lines up to end of the first wingData
+    for line in FLZ_fileContent:
+        if (line.find(startOfTail_Tag) >= 0):
+            startWriting = True
+
+        if startWriting:
+            file.write(line)
+            if (line.find(startOfFooter_Tag) >= 0):
+                # found end of tail, job is finished here
+                return
 
 def write_footer(FLZ_fileContent, file):
     startWriting = False
@@ -314,13 +416,24 @@ def export_toFLZ(wingData, inFileName, outFileName):
     # transfer the header from the in file to the out file
     write_header(FLZ_fileContent, FLZ_outfile)
 
-    # write the data of the root-rib
-    write_rootData(wingData, FLZ_fileContent, FLZ_outfile)
+    # if the new data to be written is the fin, the data of the wing must be
+    # kept -->copy from FLZ_fileContent
+    if wingData.isFin:
+        copy_wingData(FLZ_fileContent, FLZ_outfile)
+        write_finHeader(wingData, FLZ_outfile)
+    else:
+        write_wingHeader(wingData, FLZ_outfile)
+
+    # write the data of the root-rib FIXME remoe, not needed anymore
+    #write_rootData(wingData, FLZ_fileContent, FLZ_outfile)
 
     # loop over all sections of the wing
     for idx in range(segments.num):
         write_segmentData(wingData, segments, idx, FLZ_outfile)
         idx = idx + 1
+
+    # End of Wing / Fin
+    FLZ_outfile.write("[FLAECHE ENDE]\n")
 
     # transfer the footer from the in file to the out file
     write_footer(FLZ_fileContent, FLZ_outfile)

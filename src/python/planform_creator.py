@@ -1106,6 +1106,10 @@ class wing:
         hingeLine = []
         quarterChordLine = []
         areaCenterLine = []
+        # determine factor for projection of the wing according the dihedral
+        proj_fact = cos(self.dihedral*pi/180.0)
+        proj_wingspan = self.wingspan * proj_fact
+        proj_halfwingSpan = self.halfwingspan * proj_fact
 
         # set axes and labels
         self.set_AxesAndLabels(ax, "Full-wing planform")
@@ -1113,10 +1117,11 @@ class wing:
         # build up list of x-values,
         # first left half-wing
         for element in self.grid:
-            xValues.append(element.y-(self.fuselageWidth/2))
+            proj_y = element.y * proj_fact
+            xValues.append(proj_y-(self.fuselageWidth/2))
 
         # offset for beginning of right half-wing
-        xOffset = self.halfwingspan + self.fuselageWidth/2
+        xOffset = proj_halfwingSpan + self.fuselageWidth/2
 
         # center-section / fuselage (x)
         lastElement = len(xValues)-1
@@ -1127,7 +1132,8 @@ class wing:
 
         # right half-wing (=reversed right-half-wing)
         for element in self.grid:
-            xValues.append(element.y + xOffset)
+            proj_y = element.y * proj_fact
+            xValues.append(proj_y + xOffset)
 
         # build up lists of y-values
         # left half wing
@@ -1175,7 +1181,7 @@ class wing:
         ax.plot(leftWingRoot_x, wingRoot_y, color=cl_planform,
                 linewidth = lw_planform, solid_capstyle="round")
 
-        ax.arrow(self.wingspan/2, 0.0, 0.0, -1*(self.rootchord/3),head_width=self.fuselageWidth/4)
+        ax.arrow(proj_wingspan/2, 0.0, 0.0, -1*(self.rootchord/3),head_width=self.fuselageWidth/4)
 
         ax.plot(rightWingRoot_x, wingRoot_y, color=cl_planform,
                 linewidth = lw_planform, solid_capstyle="round")
@@ -1198,8 +1204,8 @@ class wing:
         ax.fill_between(xValues, hingeLine, trailingEdge, color=cl_hingeLineFill, alpha=0.4)
 
         # setup list for new x-tick locations
-        new_tick_locations = [0.0, self.halfwingspan, (self.halfwingspan + self.fuselageWidth/2),
-                             (self.halfwingspan + self.fuselageWidth),self.wingspan]
+        new_tick_locations = [0.0, proj_halfwingSpan, (proj_halfwingSpan + self.fuselageWidth/2),
+                             (proj_halfwingSpan + self.fuselageWidth), proj_wingspan]
 
         # set new ticks for the x-axis according to the positions of the sections
         ax.set_xticks(new_tick_locations)
@@ -1793,19 +1799,19 @@ if __name__ == "__main__":
         NoteMsg("creating XFLR5 file was skipped")
 
     # insert the generated-data into the FLZ-Vortex File (interpolated data)
-    try:
-        FLZ_inFileName  = planformData["FLZVortex_inFileName"]
-        if (FLZ_inFileName.find(bs) < 0):
-            FLZ_inFileName = ressourcesPath + bs + FLZ_inFileName
+    #try:
+    FLZ_inFileName  = planformData["FLZVortex_inFileName"]
+    if (FLZ_inFileName.find(bs) < 0):
+        FLZ_inFileName = ressourcesPath + bs + FLZ_inFileName
 
-        FLZ_outFileName = planformData["FLZVortex_outFileName"]
-        if (FLZ_outFileName.find(bs) < 0):
-            FLZ_outFileName = outputFolder + bs + FLZ_outFileName
+    FLZ_outFileName = planformData["FLZVortex_outFileName"]
+    if (FLZ_outFileName.find(bs) < 0):
+        FLZ_outFileName = outputFolder + bs + FLZ_outFileName
 
-        export_toFLZ(interpolatedWing, FLZ_inFileName, FLZ_outFileName)
-        NoteMsg("FLZ vortex file \"%s\" was successfully created" % FLZ_outFileName)
-    except:
-        NoteMsg("creating FLZ vortex file was skipped")
+    export_toFLZ(interpolatedWing, FLZ_inFileName, FLZ_outFileName)
+    NoteMsg("FLZ vortex file \"%s\" was successfully created" % FLZ_outFileName)
+##    except:
+##        NoteMsg("creating FLZ vortex file was skipped")
 
     # set colours according to selected theme
     newWing.set_colours()
