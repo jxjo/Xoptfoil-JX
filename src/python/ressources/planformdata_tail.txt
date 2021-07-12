@@ -25,5 +25,7 @@
  "flapGroup":        [       1,       1,        1,      1,       1,       1 ],
  "smoothUserAirfoils" : "True",
  "userAirfoils":     [".\\airfoil_library\\Tail\\NACA\\NACA63A_007.dat",
-                      ".\\airfoil_library\\Tail\\NACA\\NACA63A_007.dat"]
+                      ".\\airfoil_library\\Tail\\NACA\\NACA63A_007.dat"],
+ "polar_Reynolds":   [20000, 40000, 70000, 100000, 150000, 200000, 250000, 300000, 350000, 400000],
+ "polar_Ncrit": 7.0
 }

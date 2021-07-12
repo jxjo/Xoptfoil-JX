@@ -27,5 +27,7 @@
  "userAirfoils":     [".\\airfoil_library\\F3F\\JX\\JX-GS\\JX-GS-14.dat",
                       ".\\airfoil_library\\F3F\\JX\\JX-GS\\JX-GS-10.dat",
                       ".\\airfoil_library\\F3F\\JX\\JX-GS\\JX-GS-06.dat",
-                      ".\\airfoil_library\\F3F\\JX\\JX-GS\\JX-GS-04.dat"]
+                      ".\\airfoil_library\\F3F\\JX\\JX-GS\\JX-GS-04.dat"],
+ "polar_Reynolds":   [40000, 80000, 140000, 200000, 300000, 400000, 500000, 600000, 700000, 800000],
+ "polar_Ncrit": 7.0
 }

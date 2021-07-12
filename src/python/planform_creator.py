@@ -27,12 +27,13 @@ from copy import deepcopy
 import argparse
 from sys import version_info
 import os
+import f90nml
 from shutil import copyfile
 from matplotlib import pyplot as plt
 from matplotlib import rcParams
 import numpy as np
 from scipy.interpolate import make_interp_spline
-from math import log10, floor, tan, atan, sin, cos, pi
+from math import log10, floor, tan, atan, sin, cos, pi, sqrt
 import json
 import tkinter
 from matplotlib.backends.backend_tkagg import (
@@ -47,7 +48,8 @@ from strak_machineV2 import (copyAndSmooth_Airfoil, get_ReString,
                              remove_suffix, interpolate, round_Re,
                              bs, buildPath, ressourcesPath, airfoilPath,
                              scriptPath, exePath, smoothInputFile,
-                             strakMachineInputFileName, xfoilWorkerName)
+                             strakMachineInputFileName, xfoilWorkerName,
+                             T1_polarInputFile)
 from colorama import init
 from termcolor import colored
 from FLZ_Vortex_export import export_toFLZ
@@ -224,6 +226,8 @@ class wing:
         self.area = 0.0
         self.aspectRatio = 0.0
         self.interpolationSegments = 5
+        self.NCrit = 9.0           # for polar creation
+        self.polarReynolds = []    # for polar creation
         self.sections = []
         self.grid = []
         self.valueList = []
@@ -458,6 +462,17 @@ class wing:
         if ((len(self.airfoilNames) == 0) and (self.airfoilBasicName == None)):
             ErrorMsg("\"airfoilBasicName\" not defined and also \"airfoilNames\" not defined")
             exit(-1)
+
+        # polar-generation feature
+        try:
+            self.polarReynolds = dictData["polar_Reynolds"]
+            try:
+                self.NCrit = dictData["polar_Ncrit"]
+            except:
+                NoteMsg("polar_Ncrit not defined, using default-value %f" %\
+                  self.NCrit)
+        except:
+            NoteMsg("polar_Reynolds not defined, no Information for polar creation available")
 
         # evaluate additional boolean data
         self.isFin = get_booleanParameterFromDict(dictData, "isFin", self.isFin)
@@ -1563,6 +1578,98 @@ def create_strakdataFile(strakDataFileName):
     NoteMsg("strakdata was successfully created")
 
 
+# generates batchfile for polar-creation
+def generate_polarCreationFile(wingData):
+    # check, if polar- Re-numbers defined, determine number of polars for
+    # each airfoil
+    numPolars = len(wingData.polarReynolds)
+    if numPolars == 0:
+        NoteMsg("no reynolds numbers for polar creation defined, skipping"\
+        " generation of polar creation file")
+        return
+
+    # set NCrit in T1-polar creation input-file
+    set_NCrit(wingData.NCrit, T1_polarInputFile)
+
+    # set name of polar creation file
+    if (wingData.isFin):
+        polarCreationFileName = "create_tail_polars.bat"
+    else:
+        polarCreationFileName = "create_wing_polars.bat"
+
+    File = open(polarCreationFileName, 'w+')
+    File.write("cd .\\build\n")
+
+    # set list of re-numbers and airfoil names
+    if wingData.fuselageIsPresent():
+        airfoilNames = wingData.airfoilNames[1:-1]
+        airfoilReynolds = wingData.airfoilReynolds[1:-1]
+    else:
+        airfoilNames = wingData.airfoilNames[:-1]
+        airfoilReynolds = wingData.airfoilReynolds[:-1]
+
+    # determine number of airfoils
+    numAirfoils = len(airfoilNames)
+
+    # determine Re-number or Resqrt(Cl) of root airfoil
+    rootAirfoilRe = airfoilReynolds[0]
+
+    # loop over all airfoils
+    for idx in range(numAirfoils):
+        airfoilName = remove_suffix(airfoilNames[idx], '.dat')
+        airfoilRe = airfoilReynolds[idx]
+
+        # determine factor, ratio of current airfoil-Re to rootAirfoil-Re
+        ReFactor = airfoilRe / rootAirfoilRe
+        ReList = []
+
+        # build up List of Re-numbers for the airfoil
+        for element in wingData.polarReynolds:
+            ReList.append(element * ReFactor)
+
+        # open File for polar creation for this airfoil
+        AirfoilPolarCreationFileName = "create_%s_polars.bat" % airfoilName
+        AirfoilPolarCreationFile = open((".\\build\\%s" %AirfoilPolarCreationFileName), 'w+')
+
+        # generate lines of the batchfile for this airfoil, write to file
+        for Re in ReList:
+            workerCall = "echo y | ..\\bin\\xfoil_worker.exe -i \"..\\ressources\\i"\
+            "Polars_T1.txt\" -a \".\\airfoils\%s.dat\" -w polar -o \"%s\" -r %d\n" \
+            %(airfoilName, airfoilName, Re)
+
+            # write worker call to batchfile
+            AirfoilPolarCreationFile.write(workerCall)
+
+        # finished polar cration for this airfoil
+        AirfoilPolarCreationFile.close()
+
+        # append entry to main polar cration file
+        File.write("Start %s\n" % AirfoilPolarCreationFileName)
+
+    # change back directory
+    File.write("cd ..\n")
+    File.write("pause")
+    File.close()
+    NoteMsg("polar creation file \"%s\" was successfully generated"\
+             % polarCreationFileName)
+
+
+
+def set_NCrit(NCrit, filename):
+        fileNameAndPath = ressourcesPath + bs + filename
+
+        # read namelist form file
+        dictData = f90nml.read(fileNameAndPath)
+
+        # change ncrit in namelist / dictionary
+        xfoil_run_options = dictData["xfoil_run_options"]
+        xfoil_run_options['ncrit'] = NCrit
+
+        # delete file and writeback namelist
+        os.remove(fileNameAndPath)
+        f90nml.write(dictData, fileNameAndPath)
+
+
 # write Re-numbers and seedfoil to strakdata.txt
 def update_strakdata(wingData):
     # try to open .json-file
@@ -1799,19 +1906,22 @@ if __name__ == "__main__":
         NoteMsg("creating XFLR5 file was skipped")
 
     # insert the generated-data into the FLZ-Vortex File (interpolated data)
-    #try:
-    FLZ_inFileName  = planformData["FLZVortex_inFileName"]
-    if (FLZ_inFileName.find(bs) < 0):
-        FLZ_inFileName = ressourcesPath + bs + FLZ_inFileName
+    try:
+        FLZ_inFileName  = planformData["FLZVortex_inFileName"]
+        if (FLZ_inFileName.find(bs) < 0):
+            FLZ_inFileName = ressourcesPath + bs + FLZ_inFileName
 
-    FLZ_outFileName = planformData["FLZVortex_outFileName"]
-    if (FLZ_outFileName.find(bs) < 0):
-        FLZ_outFileName = outputFolder + bs + FLZ_outFileName
+        FLZ_outFileName = planformData["FLZVortex_outFileName"]
+        if (FLZ_outFileName.find(bs) < 0):
+            FLZ_outFileName = outputFolder + bs + FLZ_outFileName
 
-    export_toFLZ(interpolatedWing, FLZ_inFileName, FLZ_outFileName)
-    NoteMsg("FLZ vortex file \"%s\" was successfully created" % FLZ_outFileName)
-##    except:
-##        NoteMsg("creating FLZ vortex file was skipped")
+        export_toFLZ(interpolatedWing, FLZ_inFileName, FLZ_outFileName)
+        NoteMsg("FLZ vortex file \"%s\" was successfully created" % FLZ_outFileName)
+    except:
+        NoteMsg("creating FLZ vortex file was skipped")
+
+    # generate batchfile for polar creation (non interpolated data)
+    generate_polarCreationFile(newWing)
 
     # set colours according to selected theme
     newWing.set_colours()
