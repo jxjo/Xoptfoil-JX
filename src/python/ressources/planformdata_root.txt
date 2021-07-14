@@ -19,7 +19,7 @@
  "dihedral": 3.0,
  "airfoilBasicName": "JX-GS",
  "airfoilPositions": [    null,    null,   null ],
- "airfoilReynolds":  [  150000,  139000, 100000 ],
+ "airfoilReynolds":  [  150000,  138000, 100000 ],
  "airfoilTypes":     [  "user", "blend",  "user"],
  "flapGroup":        [       0,       0,      0 ],
  "smoothUserAirfoils" : "False",
