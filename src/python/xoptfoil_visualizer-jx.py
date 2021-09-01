@@ -561,7 +561,7 @@ def plot_airfoil_coordinates(seedfoil, matchfoil, designfoils, plotnum, firsttim
 
   # Plot matchfoil an delta to match foil from Xoptfoil match_foils mode
   if plot_matchfoil:
-    # ax.plot(matchfoil.x, matchfoil.y, color='green', linewidth=0.8)
+    ax.plot(matchfoil.x, matchfoil.y, color='green', linewidth=0.8)
     ax.plot(foil.x, (foil.y - matchfoil.y) * 10, color='green', linewidth=0.8, linestyle='-.')
     ax.axhline(0, color='grey', linewidth=0.5)
 

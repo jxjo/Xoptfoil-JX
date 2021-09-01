@@ -189,15 +189,27 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
   dynamic_weighting_p_factor = 80.d0
 
 
+  ! Option to match seed airfoil to another instead of aerodynamic optimization
+
+  match_foils = .false.
+  matchfoil_file = 'none'
+  rewind(iunit)
+  read(iunit, iostat=iostat1, nml=matchfoil_options)
+
 
 ! Read operating conditions
 
-  call read_op_points_spec('', iunit, noppoint, op_points_spec)
+  if (.not. match_foils) then
 
-  !if (echo_input_parms) call echo_op_points_spec  (op_points_spec)
-  call echo_op_points_spec  (op_points_spec) 
+    call read_op_points_spec('', iunit, noppoint, op_points_spec)
 
-! Read flap spec in operating conditions - flaps to optimize
+    !if (echo_input_parms) call echo_op_points_spec  (op_points_spec)
+    call echo_op_points_spec  (op_points_spec) 
+
+  end if
+
+
+  ! Read flap spec in operating conditions - flaps to optimize
 
   call read_flap_inputs   ('', iunit, flap_spec, flap_degrees, flap_selection)
 
@@ -520,12 +532,6 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
   call read_xfoil_paneling_inputs  ('', iunit, xfoil_geom_options)
 
 
-! Option to match seed airfoil to another instead of aerodynamic optimization
-
-  match_foils = .false.
-  matchfoil_file = 'none'
-  rewind(iunit)
-  read(iunit, iostat=iostat1, nml=matchfoil_options)
 
 ! Close the input file
 
