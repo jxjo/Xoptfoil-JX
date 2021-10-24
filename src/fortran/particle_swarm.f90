@@ -118,11 +118,10 @@ subroutine particleswarm(xopt, fmin, step, fevals, objfunc, x0, xmin, xmax,    &
                                                                bestdesigns
   logical :: use_x0, converged, signal_progress, new_history_file
   character(11) :: stepchar
-  character(20) :: fminchar, radchar
+  character(20) :: fminchar, radchar, text
   character(25) :: relfminchar
   character(80), dimension(20) :: commands
   integer       :: i_retry                              ! #exp-retry
-  integer       :: total_geo_fail = 0 
   
   nconstrained = size(constrained_dvs,1)
 
@@ -274,7 +273,9 @@ subroutine particleswarm(xopt, fmin, step, fevals, objfunc, x0, xmin, xmax,    &
 
   write(*,*)
   write(*,*)
-  call  print_colored (COLOR_HIGH, ' - Particle swarm is let loose ...')
+  call  print_colored (COLOR_FEATURE, ' - Particle swarm ')
+  write (text,'(I3)') pso_options%pop
+  call  print_colored (COLOR_NOTE, 'with '//trim(adjustl(text))// ' members will try its best ...')
   write(*,*)
   write(*,*)
   call show_optimization_header  (pso_options%pop, pso_options%max_retries, &
@@ -296,8 +297,10 @@ subroutine particleswarm(xopt, fmin, step, fevals, objfunc, x0, xmin, xmax,    &
 !$omp end master
 !$omp barrier
 
-!$omp do REDUCTION (+:total_geo_fail)
-! $omp do ORDERED SCHEDULE(DYNAMIC)       
+!   Use OMP DYNAMIC (and not STATIC which is default) so every thread will take a new "i" 
+!   when it finished its task. In summary this is much faster as calculation time differs
+!   very much depending if a xfoil calculation will be made or not (geo constraints!)      
+!$omp do SCHEDULE(DYNAMIC)
 
 !   Update each particle's position, evaluate objective function, etc.
 
@@ -336,8 +339,6 @@ subroutine particleswarm(xopt, fmin, step, fevals, objfunc, x0, xmin, xmax,    &
 
   !     Valid result --> proceed
         if (objval(i) < OBJ_GEO_FAIL) exit
-
-        total_geo_fail = total_geo_fail + 1   ! see omp do
 
         if (i_retry >= pso_options%max_retries) exit
 
@@ -587,7 +588,8 @@ subroutine  show_optimization_header  (pso_pop, max_retries, show_improvement)
   character(200)                :: blanks = ' '
 
   write(*,'(3x)', advance = 'no')
-  call  print_colored (COLOR_NOTE, "'+' improved   '~' quite good   '-' bad   'x' xfoil no conv   '.' geometry failed")
+  call  print_colored (COLOR_NOTE, "Particle result:  '+' improved   '~' quite good"//&
+                                   "   '-' bad   'x' xfoil no conv   '.' geometry failed")
   write (*,*)
 
   if (max_retries > 0 ) then                                      ! #exp-retry
