@@ -67,7 +67,7 @@ endif (CMAKE_BUILD_TYPE MATCHES "Release")
 
 # Default compiler flags
 if (Fortran_COMPILER_NAME MATCHES "gfortran")
-  set (CMAKE_Fortran_FLAGS_RELEASE "-O3 ${OPENMP_FLAG} -cpp ${OS_FLAG} ${STATIC_FLAG}")
+  set (CMAKE_Fortran_FLAGS_RELEASE "-fpic -O3 ${OPENMP_FLAG} -cpp ${OS_FLAG} ${STATIC_FLAG}")
   set (CMAKE_Fortran_FLAGS_DEBUG "-g -fdump-core -fcheck=all -fbacktrace -ffpe-trap=invalid,zero,overflow -Wall ${OPENMP_FLAG} -cpp ${OS_FLAG} ${STATIC_FLAG}")
   set (Fortran_REAL8_FLAG "-fdefault-real-8")
 elseif (Fortran_COMPILER_NAME MATCHES "ifort")
