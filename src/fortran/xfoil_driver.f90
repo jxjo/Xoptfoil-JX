@@ -19,15 +19,16 @@ module xfoil_driver
 
 ! Contains subroutines to use XFoil to analyze an airfoil
 
-  implicit none
+  use os_util 
 
+  implicit none
 
   type re_type 
     double precision :: number            ! Reynolds Number
     integer          :: type              ! Type 1 or 2 (fixed lift)
   end type re_type
 
-  ! Hold result of xfoil boundary layer (BL) infos of an op_pooint #exp-bubble
+  ! Hold result of xfoil boundary layer (BL) infos of an op_pooint
 
   type bubble_type      
     logical          :: found             ! a bubble was detected           
@@ -38,15 +39,20 @@ module xfoil_driver
   ! defines an op_point for xfoil calculation
 
   type op_point_specification_type                              
-    logical          :: spec_cl           ! op based on alpha or cl
-    double precision :: value             ! base value of cl or alpha
-    double precision :: weighting         ! weighting within objective function
-    double precision :: weighting_user    ! original weighting entered by user
-    double precision :: scale_factor      ! scale for objective function
-    type (re_type)   :: re, ma            ! Reynolds and Mach 
-    double precision :: ncrit             ! xfoil ncrit
-    character(15)    :: optimization_type ! eg 'min-drag'
-    double precision :: target_value      ! target value to achieve
+    logical          :: spec_cl                 ! op based on alpha or cl
+    double precision :: value                   ! base value of cl or alpha
+    double precision :: scale_factor            ! scale for objective function
+    type (re_type)   :: re, ma                  ! Reynolds and Mach 
+    double precision :: ncrit                   ! xfoil ncrit
+    character(15)    :: optimization_type       ! eg 'min-drag'
+    double precision :: target_value            ! target value to achieve
+
+    double precision :: weighting               ! weighting within objective function
+    double precision :: weighting_user          ! original weighting entered by user
+    logical          :: dynamic_weighting       ! dynamic weighting for this point 
+    logical          :: extra_punch             !  - this op got an extra weighting punch
+    double precision :: weighting_user_cur      !  - info: cuurent scaled user weighting
+    double precision :: weighting_user_prv      !  - info: previous scaled user weighting
   end type op_point_specification_type
 
 ! Hold result of xfoil aero calculation of an op_pooint
@@ -59,7 +65,7 @@ module xfoil_driver
     double precision :: cm                ! moment coef. 
     double precision :: xtrt              ! point of transition - top side 
     double precision :: xtrb              ! point of transition - bottom side 
-    type (bubble_type) :: bubblet, bubbleb! bubble info - top and bottom #exp-bubble
+    type (bubble_type) :: bubblet, bubbleb! bubble info - top and bottom 
   end type op_point_result_type                              
 
 
@@ -116,7 +122,6 @@ subroutine run_op_points (foil, geom_options, xfoil_options,         &
   use xfoil_inc    
   use vardef,    only : airfoil_type
   use vardef,    only : flap_spec_type
-  use os_util
 
   type(airfoil_type), intent(in)            :: foil
   type(xfoil_geom_options_type), intent(in) :: geom_options
@@ -133,7 +138,6 @@ subroutine run_op_points (foil, geom_options, xfoil_options,         &
   logical:: point_fixed, show_details, flap_changed, prev_op_spec_cl
   type(op_point_specification_type) :: op_spec, tmp_op_spec
   type(op_point_result_type)        :: op
-
 
   noppoint = size(op_points_spec,1) 
 
@@ -161,6 +165,7 @@ subroutine run_op_points (foil, geom_options, xfoil_options,         &
   op_points_result%xtrt      = 0d0               
   op_points_result%xtrb      = 0d0              
 
+  ! write (*,'(A)',advance ='no') "1"
   
   prev_op_delta   = 0d0
   prev_op_spec_cl = op_points_spec(1)%spec_cl
@@ -171,9 +176,9 @@ subroutine run_op_points (foil, geom_options, xfoil_options,         &
 
 ! init statistics for out lier detection the first time and when polar changes
   if (.not. allocated(drag_statistics)) then
-    call init_statistics (noppoint, drag_statistics)
+    call init_statistics (noppoint)
   else if (size(drag_statistics) /= noppoint) then 
-    call init_statistics (noppoint, drag_statistics)
+    call init_statistics (noppoint)
   end if
 
 
@@ -184,9 +189,9 @@ subroutine run_op_points (foil, geom_options, xfoil_options,         &
   call xfoil_set_paneling(geom_options)
 
   if (show_details) then 
-    write (*,'(7x,A)',advance = 'no') 'Xfoil  '
-    if (geom_options%repanel)      write (*,'(A)',advance = 'no') 'repanel '
-    if (xfoil_options%reinitialize) write (*,'(A)',advance = 'no') 'init_BL '
+    call print_colored (COLOR_NOTE, 'Xfoil  ')
+    if (geom_options%repanel)       call print_colored (COLOR_NOTE, 'repanel ')
+    if (xfoil_options%reinitialize) call print_colored (COLOR_NOTE, 'init_BL ')
   end if
 
 
@@ -201,6 +206,7 @@ subroutine run_op_points (foil, geom_options, xfoil_options,         &
 !             - when the flap angle is changed (new foil is set)
 !             - when a point didn't converge
 !             - when the direction of alpha or cl changes along op points
+  !call print_colored (COLOR_WARNING, '2')
 
   do i = 1, noppoint
 
@@ -265,7 +271,7 @@ subroutine run_op_points (foil, geom_options, xfoil_options,         &
 
 !   Handling of unconverged points
     if (op%converged) then
-      if (is_out_lier (drag_statistics(i), op%cd)) then
+      if (is_out_lier (i, op%cd)) then
         op%converged = .false.
         if (show_details) call print_colored (COLOR_WARNING, 'flip')
       else if (cl_changed (op_spec%spec_cl, op_spec%value, op%cl)) then
@@ -312,7 +318,7 @@ subroutine run_op_points (foil, geom_options, xfoil_options,         &
                           op)
                               
         if (.not. op%converged    & 
-            .or. (is_out_lier (drag_statistics(i), op%cd))  &
+            .or. (is_out_lier (i, op%cd))  &
             .or. (cl_changed (op_spec%spec_cl, op_spec%value, op%cl))) then 
 
         ! Re-init the second try
@@ -351,6 +357,7 @@ subroutine run_op_points (foil, geom_options, xfoil_options,         &
 
 
   end do 
+  !call print_colored (COLOR_WARNING, '3')
 
 
 ! Print warnings about unconverged points
@@ -364,8 +371,8 @@ subroutine run_op_points (foil, geom_options, xfoil_options,         &
     op      = op_points_result(i)   
 
     if (op%converged) then 
-      if (.not. is_out_lier (drag_statistics(i), op%cd)) then 
-        call update_statistic (drag_statistics(i), op%cd)
+      if (.not. is_out_lier (i, op%cd)) then 
+        call update_statistic (i, op%cd)
       end if 
 
       ! jx-mod Support Type 1 and 2 re numbers - cl may not be negative  
@@ -398,16 +405,16 @@ subroutine run_op_point (op_point_spec,        &
                          op_point_result)
 
   use xfoil_inc
-  use os_util
 
   type(op_point_specification_type), intent(in)  :: op_point_spec
   logical,                           intent(in)  :: viscous_mode, show_details
   integer,                           intent(in)  :: maxit
   type(op_point_result_type),        intent(out) :: op_point_result
 
-  integer         :: niter_needed  
+  integer         :: niter_needed
   ! character(20)   :: outstring 
   doubleprecision :: save_ACRIT
+
 
   op_point_result%cl    = 0.d0
   op_point_result%cd    = 0.d0
@@ -481,8 +488,11 @@ subroutine run_op_point (op_point_spec,        &
     op_point_result%cd   = CD
     op_point_result%xtrt = XOCTR(1)
     op_point_result%xtrb = XOCTR(2)
-    if (op_point_result%converged) &
+    if (op_point_result%converged) then 
       call detect_bubble (op_point_result%bubblet, op_point_result%bubbleb)
+    ! op_point_result%bubblet%found = .false.
+    ! op_point_result%bubbleb%found = .false.
+    end if
   else
     op_point_result%cd   = CDP
     op_point_result%xtrt = 0.d0
@@ -521,12 +531,21 @@ end subroutine run_op_point
 
 
 !-------------------------------------------------------------------------------
-! #exp-bubble
 ! Detect a bubble on top or bottom side using xfoil TAU (shear stress) info
 !    
 !       If TAU < 0 and end of laminar separation is before transition point 
 !       it should be a bubble
-! 
+!
+! with re-attachment If TAU < 0 and end of laminar separation is after transition point
+!              xstart ooooooooooooooooo xend
+!    -----------------------~~~~~~~~~~~~~~~~~~~~~~~~~~
+!                          xtr
+!
+! without re-attachment - If TAU < 0 and end of laminar separation is before transition point 
+!              xstart ooooooooooo xend
+!    -------------------------------------~~~~~~~~~~~~
+!                                        xtr
+!
 ! Code is inspired from Enno Eyb / xoper.f from xfoil source code
 !-------------------------------------------------------------------------------
 
@@ -578,52 +597,60 @@ subroutine detect_bubble (bubblet, bubbleb)
   ! --- End Original stripped down from XFOIL 
 
       if (IS == 1) then                 ! top side - going from TE to LE 
-        if ((X(I) <= XOCTR(1)) .and. (.not.bubblet%found) )  then  ! no bubbles after transition point
+        ! if ((X(I) <= XOCTR(1)) .and. (.not.bubblet%found) )  then  ! no bubbles after transition point
+        if (.not.bubblet%found)  then   
           if     ((CF < 0d0) .and. (bubblet%xend == 0d0)) then
             bubblet%xend = X(I) 
           elseif ((CF < 0d0) .and. (bubblet%xend > 0d0)) then 
             bubblet%xstart   = X(I) 
           elseif ((CF >= 0d0) .and. (bubblet%xstart > 0d0)) then 
+            bubblet%xstart   = X(I-1) 
             bubblet%found = .true.
-          else
           end if 
         end if 
-      else                              ! bottom side - going from LE to TE 
-        if((X(I) <= XOCTR(2)) .and. (.not.bubblet%found) )  then      ! no bubbles after transition point
+        !if ((bubblet%xstart > 0d0) .and. (bubblet%xend > 0d0)) then 
+        ! print *, ' --- top ------', i, x(i), CF, XOCTR(1), bubblet%found
+        !end if 
+
+      else                                    ! bottom side - going from LE to TE 
+        if( .not.bubbleb%found )  then       
           if     ((CF < 0d0) .and. (bubbleb%xstart == 0d0)) then
             bubbleb%xstart = X(I) 
           elseif ((CF < 0d0) .and. (bubbleb%xstart > 0d0)) then 
             bubbleb%xend   = X(I) 
           elseif ((CF >= 0d0) .and. (bubbleb%xend > 0d0)) then 
+            bubbleb%xend   = X(I-1) 
             bubbleb%found = .true.
-          else
+            !print *, ' --- bot ------', i, x(i), CF, XOCTR(2), bubbleb%found
           end if 
         end if  
       end if  
     
-      ! write(*,'(3F14.6)') X(I), Y(I), CF
     end if 
 
   end do
-  
-  if ((bubblet%xstart > 0d0) .and. (bubblet%xend == 0d0)) then 
-    bubblet%xend = XOCTR(1)
-    bubblet%found  = .true.
-  end if
-  if ((bubbleb%xstart > 0d0) .and. (bubbleb%xend == 0d0)) then 
-    bubbleb%xend = XOCTR(2)
+
+  ! bubble end was not detected - take beginning of transition for end
+  if ((bubbleb%xstart > 0d0)  .and. (bubbleb%xend == 0d0)) then 
+    bubbleb%xend = X(N)
     bubbleb%found  = .true.
+    ! print '(" ---- bubble bot no end! start end ", 3F6.3)', bubbleb%xstart, bubbleb%xend, XOCTR(2)
   end if
  
-  ! write (*,*) 
-  ! if (bubblet%found)  &
-  ! write (*,'(A,L,3(3x,F6.4))') '   -- Top ', & 
-  !                          bubblet%found, bubblet%xstart, bubblet%xend, XOCTR(1)
-  !if (bubbleb%found)  &
-  !  write (*,'(A,L,3(3x,F6.4))') '   -- Bot ', &
-  !                          bubbleb%found, bubbleb%xstart, bubbleb%xend, XOCTR(2)
-   !close (iunit)
+  ! a real, good bubble should be longer than 0.01
+
+  if (bubblet%found .and. ((bubblet%xend - bubblet%xstart) < 0.01d0) ) bubblet%found  = .false.
+  if (bubbleb%found .and. ((bubbleb%xend - bubbleb%xstart) < 0.01d0) ) bubbleb%found  = .false.
   
+  if (.not. bubblet%found) then
+    bubblet%xstart = 0d0
+    bubblet%xend = 0d0
+  end if 
+  if (.not. bubbleb%found) then
+    bubbleb%xstart = 0d0
+    bubbleb%xend = 0d0
+  end if 
+
   return
 
 end subroutine detect_bubble
@@ -999,7 +1026,6 @@ end subroutine xfoil_driver_reset
 subroutine xfoil_init_BL (show_details)
 
   use xfoil_inc, only : LIPAN, LBLINI
-  use os_util, only: print_colored, COLOR_NOTE
 
   logical, intent(in) :: show_details
 
@@ -1099,7 +1125,6 @@ subroutine xfoil_set_thickness_camber (infoil, maxt, xmaxt, maxc, xmaxc, outfoil
 ! Set xfoil airfoil and prepare globals, get current thickness
   call xfoil_set_airfoil (infoil)
   call xfoil_get_geometry_info  (thick, xthick, camb, xcamb) 
-
 ! Run xfoil to change thickness and camber 
   CFAC = 1.0
   TFAC = 1.0
@@ -1196,6 +1221,9 @@ subroutine xfoil_get_geometry_info (maxt, xmaxt, maxc, xmaxc)
 
   maxt = 2.0 * TYMAX
 
+!---- correct max camber position for camber = 0 as it would be xfoil "random"
+  if (maxc < 0.0001) xmaxc = 0d0
+
 end subroutine xfoil_get_geometry_info
 
 
@@ -1227,52 +1255,51 @@ end subroutine xfoil_reload_airfoil
 !
 !------------------------------------------------------------------------------
 
-subroutine init_statistics (npoints, value_statistics)
+subroutine init_statistics (npoints)
 
-  type ( value_statistics_type), dimension (:), allocatable, intent (inout) :: value_statistics
   integer, intent (in) :: npoints 
   integer :: i
   
-  if (allocated(value_statistics))  deallocate (value_statistics)
+  if (allocated(drag_statistics))  deallocate (drag_statistics)
 
-  allocate (value_statistics(npoints))
+  allocate (drag_statistics(npoints))
   do i = 1, npoints
-    value_statistics(i)%nvalue   = 0
-    value_statistics(i)%no_check = .false.
-    value_statistics(i)%minval   = 0.d0
-    value_statistics(i)%maxval   = 0.d0
-    value_statistics(i)%meanval  = 0.d0
+    drag_statistics(i)%nvalue   = 0
+    drag_statistics(i)%no_check = .false.
+    drag_statistics(i)%minval   = 0.d0
+    drag_statistics(i)%maxval   = 0.d0
+    drag_statistics(i)%meanval  = 0.d0
   end do 
 
 end subroutine init_statistics
 !------------------------------------------------------------------------------
-subroutine update_statistic (value_statistic, new_value)
+subroutine update_statistic (iop, new_value)
 
-  type ( value_statistics_type), intent (inout) :: value_statistic
   doubleprecision, intent (in) :: new_value 
+  integer, intent (in)         :: iop
   
-  value_statistic%minval  = min (value_statistic%minval, new_value) 
-  value_statistic%maxval  = max (value_statistic%maxval, new_value)
-  value_statistic%meanval = (value_statistic%meanval * value_statistic%nvalue + new_value) / &
-                            (value_statistic%nvalue + 1)
-  value_statistic%nvalue  = value_statistic%nvalue + 1
+  drag_statistics(iop)%minval  = min (drag_statistics(iop)%minval, new_value) 
+  drag_statistics(iop)%maxval  = max (drag_statistics(iop)%maxval, new_value)
+  drag_statistics(iop)%meanval = (drag_statistics(iop)%meanval * drag_statistics(iop)%nvalue + new_value) / &
+                                 (drag_statistics(iop)%nvalue + 1)
+  drag_statistics(iop)%nvalue  = drag_statistics(iop)%nvalue + 1
 
 end subroutine update_statistic
 
 !------------------------------------------------------------------------------
-function is_out_lier (value_statistic, check_value)
+function is_out_lier (iop, check_value)
 
-  type ( value_statistics_type), intent (in) :: value_statistic
   doubleprecision, intent (in) :: check_value
+  integer, intent (in)         :: iop
   logical :: is_out_lier 
   doubleprecision :: out_lier_tolerance, value_tolerance
 
   is_out_lier = .false. 
   out_lier_tolerance = 0.4
 
-  if(value_statistic%nvalue > 0 .and. (.not. value_statistic%no_check)) then           !do we have enough values to check? 
+  if(drag_statistics(iop)%nvalue > 0 .and. (.not. drag_statistics(iop)%no_check)) then           !do we have enough values to check? 
 
-    value_tolerance    = abs(check_value - value_statistic%meanval)/max(0.0001d0, value_statistic%meanval) 
+    value_tolerance    = abs(check_value - drag_statistics(iop)%meanval)/max(0.0001d0, drag_statistics(iop)%meanval) 
     is_out_lier = (value_tolerance > out_lier_tolerance )  
 
   end if 
@@ -1280,14 +1307,13 @@ function is_out_lier (value_statistic, check_value)
 end function is_out_lier
 
 !------------------------------------------------------------------------------
-subroutine show_out_lier (ipoint, value_statistic, check_value)
+subroutine show_out_lier (iop, check_value)
 
-  type ( value_statistics_type), intent (in) :: value_statistic
   doubleprecision, intent (in) :: check_value
-  integer, intent (in) :: ipoint
+  integer, intent (in) :: iop
 
-  write (*,'( 30x, A,A,I2,A,F8.6, A,F8.6)') 'Out lier - ', 'op', ipoint, ": ", check_value, & 
-              '    meanvalue: ', value_statistic%meanval
+  write (*,'( 30x, A,A,I2,A,F8.6, A,F8.6)') 'Out lier - ', 'op', iop, ": ", check_value, & 
+              '    meanvalue: ', drag_statistics(iop)%meanval
 
 end subroutine show_out_lier
 

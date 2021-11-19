@@ -29,20 +29,42 @@ module input_sanity
 !
 !=============================================================================
 
-subroutine check_inputs()
+subroutine check_inputs(global_search, pso_options)
 
   use vardef
   use airfoil_evaluation 
+  use particle_swarm
   use xfoil_driver,       only : op_point_specification_type
   use xfoil_driver,       only : xfoil_options_type
-  use airfoil_operations, only : my_stop
+  use particle_swarm,     only : pso_options_type
+
+  type (pso_options_type), intent(inout) :: pso_options
+  character(80), intent(in)              :: global_search
 
 
-  integer             :: i, nxtr_opt
+  integer             :: i, nxtr_opt, ndyn, nscaled
   character           :: choice
   type(op_point_specification_type) :: op_spec
 
-  noppoint = size (op_points_spec) 
+
+! Shape functions and geomtry / curvature checks
+
+  if ((trim(shape_functions) == 'camb-thick') .or. &
+  (trim(shape_functions) == 'camb-thick-plus')) then
+    ! in case of camb_thick checking of curvature makes no sense
+    if (curv_spec%check_curvature) then 
+      call print_note ("Because of shape function 'camb-thick' curvature ckecking "// &
+                       "will be switched off during optimization")
+      curv_spec%check_curvature = .false. 
+      curv_spec%auto_curvature  = .false. 
+    end if 
+  elseif (trim(shape_functions) == 'hicks-henne' .or. trim(shape_functions) == 'hicks-henne+') then
+    if (.not. curv_spec%check_curvature) then 
+      call print_warning ("When using shape function 'hicks-henne' curvature ckecking "// &
+                       "should be switched on during optimization to avoid bumps.")
+    end if 
+  end if 
+
 
 ! Ask about removing turbulent trips for max-xtr optimization
 
@@ -98,6 +120,50 @@ subroutine check_inputs()
   end if 
 
 
+! Dynamic Weighting --------------------------------------------------
+
+  if (dynamic_weighting_spec%active) then 
+
+  ! - We need enough targets to be dynamic    
+  ! - Not too much dynamic weightings should be scaled by user     
+
+    ndyn = 0
+    nscaled = 0 
+
+    do i= 1, size(geo_targets)
+      if (geo_targets(i)%dynamic_weighting)     ndyn = ndyn + 1
+      if (geo_targets(i)%weighting_user /= 1d0) nscaled = nscaled + 1
+    end do
+    do i = 1, size(op_points_spec)
+      if (op_points_spec(i)%dynamic_weighting)     ndyn = ndyn + 1
+      if (op_points_spec(i)%weighting_user /= 1d0) nscaled = nscaled + 1
+    end do
+
+    if (ndyn < 3) &
+      call my_stop("Dynamic weighting needs at least 3 op points with a target based"//  &
+                   " optimization_type")
+    if (nscaled > (ndyn/4)) &
+      call my_stop("For Dynamic weighting only a few targets should have a scaled weightung <> 1.0."//&
+                   " Set weighting to 1.0")
+  end if
+
+
+! PSO auto_retry  --------------------------------------------------
+
+  if ((trim(shape_functions) /= 'hicks-henne' .and. trim(shape_functions) /= 'hicks-henne+') .and. & 
+      (trim(global_search) == 'particle_swarm')) then 
+    if (pso_options%max_retries >= 0) then 
+      call print_note ('Particle retry swiched off (only for Hicks-Henne shape_type)')
+      pso_options%max_retries = 0
+      pso_options%auto_retry = .false.
+    end if 
+  end if 
+
+! Match foil  --------------------------------------------------
+
+  ! Switch off geometric checks 
+  if (match_foils) check_geometry = .false.
+
   end subroutine check_inputs
 
 !=============================================================================80
@@ -116,8 +182,8 @@ subroutine check_seed()
   use xfoil_driver,       only : xfoil_geometry_amax, xfoil_set_airfoil, &
                                  xfoil_get_geometry_info
   use airfoil_evaluation, only : xfoil_options, xfoil_geom_options
-  use airfoil_operations, only : assess_surface, smooth_it, my_stop, rebuild_airfoil
-  use airfoil_operations, only : get_curv_violations, show_reversals_highlows
+  use airfoil_operations, only : assess_surface, smooth_it, rebuild_airfoil
+  use airfoil_operations, only : show_reversals_highlows
   use airfoil_operations, only : get_max_te_curvature
 
   type(op_point_specification_type) :: op_spec
@@ -130,22 +196,31 @@ subroutine check_seed()
   double precision, dimension(:), allocatable :: xt,xb,zt,zb
   double precision, dimension(naddthickconst) :: add_thickvec 
   double precision :: penaltyval, tegap, gapallow, maxthick, heightfactor
-  double precision :: maxt, xmaxt, maxc, xmaxc
+  double precision :: maxt, xmaxt, maxc, xmaxc, correction
   double precision :: panang1, panang2, maxpanang, slope
   double precision :: checkval, len1, len2, growth1, growth2, xtrans
   double precision :: pi
-  integer :: i, nptt, nptb, nptint
+  integer :: i, nptt, nptb, nptint, overall_quality
   character(100) :: text, text2
   character(15) :: opt_type
   logical :: addthick_violation
-  double precision :: ref_value, seed_value, tar_value, match_delta, cur_te_curvature
+  double precision :: ref_value, seed_value, tar_value, match_delta
   double precision :: dist = 0d0
 
   penaltyval = 0.d0
   pi = acos(-1.d0)
 
-  write (*,*)
-  write(*,'(" - ",A)') 'Checking to make sure seed airfoil passes all constraints ...'
+
+! Preset seed airfoil geometry to geo targets and/or thickness-camber constraints ----------
+
+  write(*,'(" - ",A)') 'Scaling thickness and camber to geo targets or constraints'
+
+  call preset_airfoil_to_targets (show_details, seed_foil, geo_targets, &
+                                  min_thickness, max_thickness, min_camber, max_camber) 
+
+! Afterwards sanity check of thickness and camber 
+
+  call check_thickness_camber (seed_foil, min_thickness, max_thickness, min_camber, max_camber)
 
 ! Smooth surfaces of airfoil *before* other checks are made
 !     save original seed surface before smoothing
@@ -153,28 +228,45 @@ subroutine check_seed()
 
   seed_foil_not_smoothed = seed_foil
 
-! Check geo constraints like thickness if needed
+! Check curvature constraints like reversals -------------------------
 
-  if(check_geometry) then
+  if(curv_spec%check_curvature) then
 
-    call check_and_smooth_surface (show_details, do_smoothing, seed_foil)
+    write(*,'(" - ",A)') 'Check_curvature of seed airfoil if it is suitable for Hicks-Henne shape type'
 
-    xt = seed_foil%xt
-    xb = seed_foil%xb
-    zt = seed_foil%zt
-    zb = seed_foil%zb
-    nptt = size(xt,1)
-    nptb = size(xb,1)
+    call check_and_smooth_surface (show_details, curv_spec%do_smoothing, seed_foil, overall_quality)
 
   ! Get best values fur surface constraints 
 
-    if (auto_curvature) &
-      call auto_curvature_constraints (show_details, seed_foil, &
-                                      curv_threshold, highlow_threshold, max_te_curvature, &
-                                      max_curv_highlow_top, max_curv_highlow_bot, &
-                                      max_curv_reverse_top, max_curv_reverse_bot)
+    if (curv_spec%auto_curvature) &
+      call auto_curvature_constraints (show_details, seed_foil)
+
+  ! Final check for curvature reversals
+
+    call check_handle_curve_violations ('Top surface', seed_foil%xt, seed_foil%zt, curv_top_spec)
+    call check_handle_curve_violations ('Bot surface', seed_foil%xb, seed_foil%zb, curv_bot_spec)
+    
+  ! Final check trailing edge 
+
+    call check_te_curvature_violations ('Top surface', seed_foil%xt, seed_foil%zt, curv_top_spec)
+    call check_te_curvature_violations ('Bot surface', seed_foil%xb, seed_foil%zb, curv_bot_spec)
+
+  end if
 
   
+
+! Check geometry ---------------------------
+
+  write(*,'(" - ",A)') 'Checking to make sure seed airfoil passes all constraints ...'
+
+  xt = seed_foil%xt               ! set it after smoothing
+  xb = seed_foil%xb
+  zt = seed_foil%zt
+  zb = seed_foil%zb
+  nptt = size(xt,1)
+  nptb = size(xb,1)
+
+  if(check_geometry) then
                                   
   ! Top surface growth rates
 
@@ -223,37 +315,7 @@ subroutine check_seed()
       write(*,*) "LE panel angle: "//trim(text)//" degrees"
       call ask_stop("Seed airfoil's leading edge is too sharp.")
     end if
-  end if
 
-
-  ! Too high curvature at TE - TE panel problem 
-  !    In the current Hicks Henne shape functions implementation, the last panel is
-  !    forced to become TE which can lead to a thick TE area with steep last panel(s)
-  !       (see create_shape ... do j = 2, npt-1 ...)
-  !    so the curvature (2nd derivative) at the last 10 panels is checked
-
-  if (check_curvature) then
-    call get_max_te_curvature (nptt, xt, zt, cur_te_curvature)
-    if (cur_te_curvature  > max_te_curvature) then 
-      write(text,'(F8.4)') cur_te_curvature
-      text = adjustl(text)
-      call ask_stop("Curvature of "//trim(text)// &
-                    " on top surface at trailing edge violates max_te_curvature constraint.")
-    end if 
-
-    call get_max_te_curvature (nptb, xb, zb, cur_te_curvature)
-    if (cur_te_curvature  > max_te_curvature) then 
-      write(text,'(F8.4)') cur_te_curvature
-      text = adjustl(text)
-      call ask_stop("Curvature of "//trim(text)// &
-                    " on bottom surface at trailing edge violates max_te_curvature constraint.")
-    end if 
-  end if 
-
-
-! Check geo constraints like thickness if needed
-
-  if(check_geometry) then
 
   ! Interpolate either bottom surface to top surface x locations or vice versa
   ! to determine thickness
@@ -340,36 +402,7 @@ subroutine check_seed()
 
     end if
 
-  ! Max thickness too low
-
-    if (maxthick < min_thickness) then
-      write(text,'(F8.4)') maxthick
-      text = adjustl(text)
-      write(*,*) "Thickness: "//trim(text)
-      call ask_stop("Seed airfoil violates min_thickness constraint.")
-    end if
-
-  ! Max thickness too high
-
-    if (maxthick > max_thickness) then
-      write(text,'(F8.4)') maxthick
-      text = adjustl(text)
-      write(*,*) "Thickness: "//trim(text)
-      call ask_stop("Seed airfoil violates max_thickness constraint.")
-    end if
-
-  end if
-
-
-! Check for curvature reversals
-
-  if (check_curvature) then
-
-    call check_handle_curve_violations ('Top surface', xt, zt, &
-                                        max_curv_reverse_top, max_curv_highlow_top)
-    call check_handle_curve_violations ('Bot surface', xb, zb, &
-                                        max_curv_reverse_bot, max_curv_highlow_bot)
-  end if 
+  end if        ! check_geometry
 
 
 ! If mode match_foils end here with checks as it becomes aero specific, calc scale
@@ -377,6 +410,7 @@ subroutine check_seed()
   if (match_foils) then
     match_delta = norm_2(zt(2:nptt-1) - foil_to_match%zt(2:nptt-1)) + &
                   norm_2(zb(2:nptb-1) - foil_to_match%zb(2:nptb-1))
+    write (*,*) '---- match delta  ', match_delta
     ! Playground: Match foil equals seed foil. Take a dummy objective value to start
     if (match_delta < 1d-10) then 
       call ask_stop('Match foil and seed foil are equal. A dummy initial value '// &
@@ -436,7 +470,7 @@ subroutine check_seed()
 
   ! Analyze airfoil at requested operating conditions with Xfoil
 
-  write (*,'("   ",A)') 'Analyze seed airfoil at requested operating points'
+  write (*,'(" - ",A)') 'Analyze seed airfoil at requested operating points'
 
 ! Re-Init boundary layer at each op point to ensure convergence (slower)
   local_xfoil_options = xfoil_options
@@ -448,16 +482,17 @@ subroutine check_seed()
 
 
 
-! Check geo constraints like camber if needed
+  ! Further geo constraints check with xfoil values
 
-  if(check_geometry) then
-                      
+  if(check_geometry .or. (size(geo_targets) > 0)) then
   ! get airfoil geometry info from xfoil    
     call xfoil_set_airfoil (seed_foil)        
     call xfoil_get_geometry_info (maxt, xmaxt, maxc, xmaxc)
-    maxpanang = xfoil_geometry_amax() 
+  end if 
 
+  if(check_geometry ) then
   ! Too large panel angles
+    maxpanang = xfoil_geometry_amax() 
     if (maxpanang > 30.d0) then
       write(text,'(F8.4)') maxpanang
       text = adjustl(text)
@@ -465,71 +500,46 @@ subroutine check_seed()
       call ask_stop("Seed airfoil panel angles are too large. Try adjusting "//&
                     "xfoil_paneling_options.")
     end if
-
-  ! Camber too high
-    if (maxc > max_camber) then
-      write(text,'(F8.4)') maxc
-      text = adjustl(text)
-      write(*,*) "Camber: "//trim(text)
-      call ask_stop("Seed airfoil violates max_camber constraint.")
-    end if
-
-  ! Camber too low
-    if (maxc < min_camber) then
-      write(text,'(F8.4)') maxc
-      text = adjustl(text)
-      write(*,*) "Camber: "//trim(text)
-      call ask_stop("Seed airfoil violates min_camber constraint.")
-    end if
-
-
-
-  ! Evaluate seed value of geomtry targets and scale factor 
-    
-    do i = 1, ngeo_targets
-
-      select case (trim(geo_targets(i)%type))
-
-        case ('zTop')                       ! get z_value top side 
-          seed_value = interp_point(x_interp, zt_interp, geo_targets(i)%x)
-          ref_value  = interp_point(x_interp, thickness, geo_targets(i)%x)
-        case ('zBot')                       ! get z_value bot side
-          seed_value = interp_point(x_interp, zb_interp, geo_targets(i)%x)
-          ref_value  = interp_point(x_interp, thickness, geo_targets(i)%x)
-        case ('Thickness')                  ! take foil thickness calculated above
-          seed_value = maxt
-          ref_value  = maxt
-        case ('Camber')                     ! take xfoil camber from  above
-          seed_value = maxc
-          ref_value  = maxc
-        case default
-          call my_stop("Unknown target_type '"//trim(geo_targets(i)%type))
-      end select
-
-      geo_targets(i)%seed_value      = seed_value
-      geo_targets(i)%reference_value = ref_value
-
-      ! target value negative?  --> take current seed value * |target_value| 
-      if ((geo_targets(i)%target_value <= 0.d0) .and. (trim(geo_targets(i)%type) /= 'zBot'))                                 &
-          geo_targets(i)%target_value = seed_value * abs(geo_targets(i)%target_value)
-      
-      tar_value = geo_targets(i)%target_value
-
-      ! will scale objective to 1 ( = no improvement) 
-      geo_targets(i)%scale_factor = 1 / ( ref_value + abs(tar_value - seed_value))
-
-    end do 
-
   ! Free memory
-
     deallocate(x_interp)
     deallocate(zt_interp)
     deallocate(zb_interp)
     deallocate(thickness)
+  end if
 
-  end if         ! check_geomtery
-! "fortran.includePaths": ["../../build"]
-! "fortran.linterExtraArgs": ["-Wextra"]
+
+! Evaluate seed value of geomtry targets and scale factor 
+    
+  do i = 1, size(geo_targets)
+
+    select case (trim(geo_targets(i)%type))
+      case ('Thickness')                 ! take foil thickness calculated above
+        seed_value = maxt
+        ref_value  = maxt
+        correction = 1.5d0                 ! thickness is less sensible to changes
+      case ('Camber')                    ! take xfoil camber from  above
+        seed_value = maxc
+        ref_value  = maxc
+        correction = 0.70               ! camber is quite sensible to changes
+      case default
+        call my_stop("Unknown target_type '"//trim(geo_targets(i)%type))
+    end select
+
+    geo_targets(i)%seed_value      = seed_value
+    geo_targets(i)%reference_value = ref_value
+
+    ! target value negative?  --> take current seed value * |target_value| 
+    if (geo_targets(i)%target_value <= 0.d0)      &
+        geo_targets(i)%target_value = seed_value * abs(geo_targets(i)%target_value)
+    
+    tar_value = geo_targets(i)%target_value
+
+    ! will scale objective to 1 ( = no improvement) 
+    geo_targets(i)%scale_factor = 1 / ( ref_value + abs(tar_value - seed_value) & 
+                                                    * correction)
+
+  end do 
+
 
 ! Evaluate objectives to establish scale factors for each point
 
@@ -553,11 +563,9 @@ subroutine check_seed()
 
     if (op%cl <= 0.d0 .and. (trim(opt_type) == 'min-sink' .or.   &
         trim(opt_type) == 'max-glide') ) then
-      write(*,*) "Error: operating point "//trim(text)//" has Cl <= 0. "//     &
+      call my_stop( "Error: operating point "//trim(text)//" has Cl <= 0. "//     &
                  "Cannot use "//trim(opt_type)//" optimization "// &
-                 "in this case."
-      write(*,*)
-      stop
+                 "in this case.")
     end if
 
     if (trim(opt_type) == 'min-sink') then
@@ -588,7 +596,8 @@ subroutine check_seed()
     elseif (trim(opt_type) == 'target-lift') then
       if (op_spec%target_value < 0.d0) op_spec%target_value = op%cl * abs(op_spec%target_value)
       ! add a constant base value to the lift difference so the relative change won't be to high
-      checkval   = 1.d0 + ABS (op_spec%target_value - op%cl)
+      correction = 0.8d0               ! lift is quite sensible to changes
+      checkval   = 1.d0 + ABS (op_spec%target_value - op%cl) * correction
       seed_value = op%cl
 
     elseif (trim(opt_type) == 'target-moment') then
@@ -653,33 +662,48 @@ end subroutine check_seed
 !   prints summary of the quality 
 !-------------------------------------------------------------------------
 
-subroutine check_and_smooth_surface (show_details, do_smoothing, foil)
+subroutine check_and_smooth_surface (show_details, do_smoothing, foil, overall_quality)
 
   use vardef,             only: airfoil_type
-  use airfoil_evaluation, only: curv_threshold, spike_threshold, highlow_threshold, &
-                                max_te_curvature
+  use airfoil_evaluation, only: curv_top_spec, curv_bot_spec
   use airfoil_operations, only: assess_surface, smooth_it
   use airfoil_operations, only: get_max_te_curvature, rebuild_airfoil
-  use math_deps,          only: nreversals_using_threshold
 
   logical, intent(in)       :: show_details, do_smoothing
   type (airfoil_type), intent (inout)  :: foil
+  integer, intent(out)       :: overall_quality
 
-  integer             :: overall_quality, top_quality, bot_quality
+  integer             :: top_quality, bot_quality, istart, iend, iend_spikes
   character (80)      :: text1, text2
   logical             :: done_smoothing
+  doubleprecision     :: curv_threshold, spike_threshold
 
   done_smoothing        = .false.
 
-
 !  ------------ analyze & smooth  top -----
+
+  curv_threshold  = curv_top_spec%curv_threshold
+  spike_threshold = curv_top_spec%spike_threshold
+  istart          = curv_top_spec%nskip_LE
+  iend            = size(foil%xt) - curv_top_spec%nskip_TE_revers
+  iend_spikes     = size(foil%xt) - curv_top_spec%nskip_TE_spikes
+
+  if (show_details) then 
+    write (*,'(3x)', advance = 'no') 
+    call print_colored (COLOR_NOTE, 'Using curv_threshold =')
+    call print_colored_r (5,'(F5.2)', Q_BAD, curv_threshold) 
+    call print_colored (COLOR_NOTE, ', spike_threshold =')
+    call print_colored_r (5,'(F5.2)', Q_BAD, spike_threshold) 
+    call print_colored (COLOR_NOTE, ' for detection')
+    write (*,*)
+  end if
 
   top_quality = 0
   bot_quality = 0
  
-  call assess_surface (show_details, 'Analyzing top side', &
-                       curv_threshold, spike_threshold, highlow_threshold, max_te_curvature, &
-                       foil%xt, foil%zt, top_quality)
+  call assess_surface (show_details, '- Top side', &
+                       istart, iend, iend_spikes, &
+                       curv_threshold, spike_threshold, foil%xt, foil%zt, top_quality)
 
   if (top_quality >= Q_BAD .or. do_smoothing) then 
 
@@ -687,15 +711,21 @@ subroutine check_and_smooth_surface (show_details, do_smoothing, foil)
     top_quality     = 0 
     done_smoothing  = .true.
     call assess_surface (show_details, 'smoothed', &
-                         curv_threshold, spike_threshold, highlow_threshold, max_te_curvature, &
-                         foil%xt, foil%zt, top_quality)
+                         istart, iend, iend_spikes, &
+                         curv_threshold, spike_threshold, foil%xt, foil%zt, top_quality)
   end if
- 
+
 !  ------------ analyze & smooth  bot -----
 
-  call assess_surface (show_details, 'Analyzing bot side', &
-                       curv_threshold, spike_threshold, highlow_threshold, max_te_curvature, &
-                       foil%xb, foil%zb, bot_quality)
+  curv_threshold  = curv_bot_spec%curv_threshold
+  spike_threshold = curv_bot_spec%spike_threshold
+  istart          = curv_bot_spec%nskip_LE
+  iend            = size(foil%xb) - curv_bot_spec%nskip_TE_revers
+  iend_spikes     = size(foil%xb) - curv_bot_spec%nskip_TE_spikes
+
+  call assess_surface (show_details, '- Bot side', &
+                       istart, iend, iend_spikes, &
+                       curv_threshold, spike_threshold, foil%xb, foil%zb, bot_quality)
   
   if (bot_quality >= Q_BAD .or. do_smoothing) then 
 
@@ -703,8 +733,8 @@ subroutine check_and_smooth_surface (show_details, do_smoothing, foil)
     bot_quality     = 0 
     done_smoothing  = .true.
     call assess_surface (show_details, 'smoothed', &
-                        curv_threshold, spike_threshold, highlow_threshold, max_te_curvature, &
-                        foil%xb, foil%zb, bot_quality)
+                         istart, iend, iend_spikes, &
+                         curv_threshold, spike_threshold, foil%xb, foil%zb, bot_quality)
   end if
 
   overall_quality = int((top_quality + bot_quality)/2)
@@ -716,9 +746,8 @@ subroutine check_and_smooth_surface (show_details, do_smoothing, foil)
 
 ! ... printing stuff 
 
-
   if (show_details) then
-    call print_colored (COLOR_NOTE, '   Summary: ')
+    call print_colored (COLOR_NOTE, '   ')
   else
     if (done_smoothing) then
       call print_colored (COLOR_NORMAL, '   Smoothing airfoil due to bad surface quality')
@@ -740,8 +769,12 @@ subroutine check_and_smooth_surface (show_details, do_smoothing, foil)
   elseif (overall_quality < Q_BAD) then
     call print_colored (COLOR_NORMAL,'The surface quality of the'//trim(text1)//' airfoil is ok')
   elseif (overall_quality < Q_PROBLEM) then
-    call print_colored (COLOR_WARNING,'The surface quality of the'//trim(text1)//' airfoil'//trim(text2)//' is not good. '// &
-                         'Better choose another one ...' ) 
+    if (done_smoothing) then
+      call print_colored (COLOR_NOTE,'Even the surface quality of the smoothed airfoil is not good. ')
+    else
+      call print_colored (COLOR_NOTE,'The surface quality of the airfoil is not good. ')
+    end if
+    call print_colored (COLOR_WARNING,'Better choose another seed foil ...')
   else
     call print_colored (COLOR_ERROR,' The'//trim(text1)//' surface is'//trim(text2)//' not really suitable for optimization')
   end if  
@@ -749,146 +782,265 @@ subroutine check_and_smooth_surface (show_details, do_smoothing, foil)
 
 end subroutine
 
+
 !-------------------------------------------------------------------------
 ! Evaluates and sets the best values for surface thresholds and constraints
 !-------------------------------------------------------------------------
 
-subroutine auto_curvature_constraints (show_details, foil, &
-                    curv_threshold, highlow_threshold, max_te_curvature, &
-                    max_curv_highlow_top, max_curv_highlow_bot, &
-                    max_curv_reverse_top, max_curv_reverse_bot)
+subroutine auto_curvature_constraints (show_details, foil)
 
   use vardef,             only: airfoil_type
-  use airfoil_operations, only: le_find, assess_surface, smooth_it
-  use airfoil_operations, only: get_max_te_curvature, get_best_reversal_threshold
-  use airfoil_operations, only: get_best_highlow_threshold
-  use math_deps,          only: nreversals_using_threshold
-  use math_deps,          only: nhighlows_using_threshold
-  
+  use airfoil_evaluation, only: curv_top_spec, curv_bot_spec
 
   type (airfoil_type), intent (inout)  :: foil
   logical, intent (in)            :: show_details
-  double precision, intent(inout) :: curv_threshold, highlow_threshold, max_te_curvature
-  integer, intent(inout)          :: max_curv_reverse_top, max_curv_reverse_bot
-  integer, intent(inout)          :: max_curv_highlow_top, max_curv_highlow_bot
   
   double precision, dimension(:), allocatable :: xt, xb, yt, yb
 
-  double precision    :: threshold_top, threshold_bot, min_curv_thresh, min_highlow_thresh
-  double precision    :: max_te_curvature_top, max_te_curvature_bot
-  double precision    :: old_max_te_curvature, old_highlow_threshold, old_curv_threshold
-  character (80)      :: str
-
-  write (*,'(" - ", A)') 'Evaluating and auto setting of geometric thresholds and constraints '
-  write (*,*)
+  write (*,'(" - ", A)') 'Auto_curvature: Best values for curvature constraints'
 
   xt = foil%xt
   xb = foil%xb
   yt = foil%zt
   yb = foil%zb
 
-!  ------------ curve reversal constraints -----
+! -------------- Top Side -----
 
-  min_curv_thresh = 0.01d0
+  if (show_details) call print_note_only ('- Top side',3)
 
-  call get_best_reversal_threshold (size(xt), xt,yt, min_curv_thresh, max_curv_reverse_top,&
-                                    threshold_top)
-  call get_best_reversal_threshold (size(xb), xb,yb, min_curv_thresh, max_curv_reverse_bot, &
-                                    threshold_bot)
-
-  old_curv_threshold = curv_threshold
-  curv_threshold = max(threshold_top, threshold_bot)
-  ! no retest - how many reversals will we get with the new threshold
-  max_curv_reverse_top = nreversals_using_threshold (xt, yt, curv_threshold)
-  max_curv_reverse_bot = nreversals_using_threshold (xb, yb, curv_threshold)
- 
-!  ------------ te curvature -----
-
-  if (max_te_curvature == 10.d0) then        ! te_curvature was not set in inputs --> auto
-
-    old_max_te_curvature = 0.2d0            ! dummy old value
-    
-    call get_max_te_curvature (size(xt), xt,yt, max_te_curvature_top )
-    call get_max_te_curvature (size(xb), xb,yb, max_te_curvature_bot )
-
-    max_te_curvature = max (max_te_curvature_top, max_te_curvature_bot) * 1.1d0 ! little more to breath...
-  else 
-    old_max_te_curvature = max_te_curvature
-  end if 
-
-!  ------------ highlow curvature amplitude -----
-
-  old_highlow_threshold = highlow_threshold
-  min_highlow_thresh    = highlow_threshold
-
-  call get_best_highlow_threshold (size(xt), xt,yt, min_highlow_thresh, &
-                                   max_curv_highlow_top, threshold_top)
-  call get_best_highlow_threshold (size(xb), xb,yb, min_highlow_thresh, &
-                                   max_curv_highlow_bot, threshold_bot)
-
-  highlow_threshold = max(threshold_top, threshold_bot) * 1.1d0 ! little more to breath...
-
-  max_curv_highlow_top = nhighlows_using_threshold (xt, yt, highlow_threshold)
-  max_curv_highlow_bot = nhighlows_using_threshold (xb, yb, highlow_threshold)
-
-
-! ... pleasure to print that all ...
-
-  if (show_details) then 
-
-    !  ------------ reversals -----
-
-    str = 'curv_threshold'
-    write (*,'(10x,A18,A1)', advance = 'no') str,'='
-    write (str,'(F6.3)') old_curv_threshold
-    call print_colored (COLOR_NOTE,trim(str))
-    write (*,'(A3,F6.3,4x)', advance = 'no') ' ->', curv_threshold 
-
-    write (str,'(A)') 'to get'
-    call print_colored (COLOR_NOTE,trim(str))
-    write (*,'(A,I2)', advance = 'no') ' max_curv_reverse_top =', max_curv_reverse_top
-    write(*,*)
-
-    write (*,'(10x,38x)', advance = 'no')
-    write (str,'(A)') 'to get'
-    call print_colored (COLOR_NOTE, trim(str))
-    write (*,'(A,I2)', advance = 'no') ' max_curv_reverse_bot =', max_curv_reverse_bot
-    write(*,*)
+  call auto_curvature_threshold_polyline ('top', show_details, xt, yt, curv_top_spec)
+  call auto_spike_threshold_polyline     (       show_details, xt, yt, curv_top_spec)
+  call auto_te_curvature_polyline        (       show_details, xt, yt, curv_top_spec)
   
-    !  ------------ highlow curvature amplitude -----
+! -------------- Top Side -----
+                            
+  if (show_details) call print_note_only ('- Bop side',3)
 
-    str = 'highlow_threshold'
-    write (*,'(10x,A18,A1)', advance = 'no') str,'='
-    write (str,'(F6.3)') old_highlow_threshold
-    call print_colored (COLOR_NOTE,trim(str))
-    write (*,'(A3,F6.3,4x)', advance = 'no') ' ->', highlow_threshold 
+  call auto_curvature_threshold_polyline ('bot', show_details, xb, yb, curv_bot_spec)
+  call auto_spike_threshold_polyline     (       show_details, xb, yb, curv_bot_spec)
+  call auto_te_curvature_polyline        (       show_details, xb, yb, curv_bot_spec)
+ 
+end subroutine auto_curvature_constraints
 
-    write (str,'(A)') 'to get'
-    call print_colored (COLOR_NOTE,trim(str))
-    write (*,'(A,I2)', advance = 'no') ' max_curv_highlow_top =', max_curv_highlow_top
-    write(*,*)
 
-    write (*,'(10x,38x)', advance = 'no')
-    write (str,'(A)') 'to get'
-    call print_colored (COLOR_NOTE, trim(str))
-    write (*,'(A,I2)', advance = 'no') ' max_curv_highlow_bot =', max_curv_highlow_bot
-    write(*,*)
+!-------------------------------------------------------------------------
+! Evaluates the best value for curvature thresholds of polyline
+!    depending on max_curv_reverse defined by user 
+!-------------------------------------------------------------------------
 
-    !  ------------ te curvature -----
+subroutine auto_curvature_threshold_polyline (info, show_details, x,y , c_spec)
 
-    str = 'max_te_curvature'
-    write (*,'(10x,A18,A1)', advance = 'no') str,'='
-    write (str,'(F6.3)') old_max_te_curvature
-    call print_colored (COLOR_NOTE,trim(str))
-    write (*,'(A3,F6.2,4x)', advance = 'no') ' ->', max_te_curvature 
-    if ( max_te_curvature > 100d0) then
-      call print_colored (COLOR_NOTE, 'due to much too high value of seed airfoil')
-      max_te_curvature = 1d6
-    end if
-    write(*,*)
+  use math_deps,          only: min_threshold_for_reversals, count_reversals
+  use math_deps,          only: count_spikes
+  use airfoil_evaluation, only: curvature_polyline_specification_type, NSKIP_TE
+
+  character(*),     intent(in) :: info
+  logical, intent (in)         :: show_details
+  double precision, dimension (:), intent(in) :: x,y 
+  type (curvature_polyline_specification_type), intent (inout)  :: c_spec
+
+  double precision    :: curv_threshold
+  integer             :: max_curv_reverse
+  double precision    :: min_threshold, max_threshold 
+  integer             :: istart, iend, nreversals, quality_threshold
+  character (2)       :: s2a, s2b
+  character (16)      :: label
+
+  min_threshold = 0.01d0
+  max_threshold = 4.0d0
+
+  max_curv_reverse = c_spec%max_curv_reverse
+  curv_threshold   = c_spec%curv_threshold
+
+! Is there a reversal close to TE? - which is quite often ...If yes, skip TE for ever
+  
+  istart = size(x) - NSKIP_TE
+  iend   = size(x)  
+  if (count_reversals (istart, iend, x, y, curv_threshold)  > 0) then 
+    c_spec%nskip_TE_Revers = NSKIP_TE
+    if (show_details) &
+      call print_note ('Found reversal close to trailing edge. ' //&
+                       'TE will be ignored for reversal detection.', 9)
   end if
 
-end subroutine auto_curvature_constraints
+! How many reversals do we have now? more than user specified as a constraint?
+
+  istart = c_spec%nskip_LE
+  iend   = size(x) - c_spec%nskip_TE_revers
+  nreversals = count_reversals (istart, iend, x, y, curv_threshold)
+
+  if (nreversals > max_curv_reverse) then
+    write(s2a,'(I2)') nreversals
+    write(s2b,'(I2)') max_curv_reverse
+    call print_warning ( &
+        'The current seed airfoil has '// trim(adjustl(s2a)) // ' reversals on '//trim(info)//&
+        ' - but max_curv_reverse_'//trim(info)//' ist set to '//trim(adjustl(s2b)), 9)
+    call print_note_only ( &
+        'This will lead to a high curvature threshold value to fulfil this constraint.', 9)
+    call print_note_only (& 
+        'Better choose another seed airfoil which fits to the reversal constraints.', 9)
+    write (*,*)  
+    ! Call ask_stop ('')
+  end if 
+
+! now get smallest threshold for max_reversals defined by user 
+
+  curv_threshold = min_threshold_for_reversals (istart, iend, x, y, &
+                             min_threshold, max_threshold, max_curv_reverse)
+  
+! ... and give a little more threshold to breeze
+  curv_threshold = curv_threshold * 1.2d0     
+
+  c_spec%curv_threshold = curv_threshold
+
+! Print it all 
+
+  if (show_details) then 
+    quality_threshold  = r_quality (curv_threshold, 0.015d0, 0.03d0, 0.2d0)
+    label = 'curv_threshold'
+    call print_colored (COLOR_PALE, '         '//label//' =') 
+    call print_colored_r (5,'(F5.2)', quality_threshold, curv_threshold) 
+    if (quality_threshold > Q_BAD) then
+      call print_note_only ('The contour will have some reversals within this high treshold', 3)
+    else
+      write(s2a,'(I2)') max_curv_reverse
+      call print_note_only ('Optimal value for '//trim(adjustl(s2a))//&
+                            ' reversals based on seed airfoil',3)
+    end if 
+  end if 
+
+end subroutine auto_curvature_threshold_polyline
+
+!-------------------------------------------------------------------------
+! Evaluates the best value for curvature thresholds of polyline
+!    depending on spike_threshold defined by user 
+!-------------------------------------------------------------------------
+
+subroutine auto_spike_threshold_polyline (show_details, x,y , c_spec)
+
+  use math_deps,          only: min_threshold_for_spikes, count_spikes
+  use airfoil_evaluation, only: curvature_polyline_specification_type, NSKIP_TE
+
+  logical, intent (in)         :: show_details
+  double precision, dimension (:), intent(in) :: x,y 
+  type (curvature_polyline_specification_type), intent (inout)  :: c_spec
+
+  double precision    :: spike_threshold
+  double precision    :: min_threshold, max_threshold, ok_threshold
+  integer             :: istart, iend, nspikes, quality_threshold, ok_nspikes
+  character (3)       :: s3
+  character (16)      :: label
+
+  min_threshold = 0.1d0
+  max_threshold = 1.0d0
+  ok_threshold  = 0.3d0
+  ok_nspikes    = 5
+  spike_threshold = c_spec%spike_threshold
+
+! Is there a spike close to TE? - which is quite often ...If yes, skip TE for ever
+
+  istart = size(x) - NSKIP_TE
+  iend   = size(x)  
+  if (count_spikes (istart, iend, x, y, spike_threshold)  > 0) then 
+    c_spec%nskip_TE_spikes = NSKIP_TE
+    if (show_details) & 
+      call print_note ('Found spike close to trailing edge. ' //&
+     'TE will be ignored for bump detection.', 9)
+  end if
+
+
+! How many Spikes do we have with current threshold defined by user / default?
+  istart = c_spec%nskip_LE
+  iend   = size(x) - c_spec%nskip_TE_spikes
+  nspikes = count_spikes (istart, iend, x, y, spike_threshold)
+  ! write (*,*) '------ ', istart, iend , spike_threshold, nspikes
+
+! now get smallest threshold to achieve this number of spikes
+  spike_threshold = min_threshold_for_spikes (istart, iend, x, y, &
+                    min_threshold, max_threshold, nspikes)
+
+! allow a minimum number of spike if there are reversals 
+!  nspikes = max (nspikes, c_spec%max_curv_reverse)
+
+! ... and give a little more threshold to breeze
+  spike_threshold = spike_threshold * 1.2d0     
+
+  c_spec%spike_threshold = spike_threshold
+
+! Allow at least max_curv_reverse or seed spikes as max number of spikes 
+  c_spec%max_spikes = max (nspikes, c_spec%max_curv_reverse)
+  ! print *, '   ---max spikes --- ',  c_spec%max_spikes
+
+
+! activate bump detection (reversal of 3rd derivative) if values are ok
+
+  if (spike_threshold <= ok_threshold .and. nspikes <= ok_nspikes) then 
+    c_spec%check_curvature_bumps = .true.
+  else
+    c_spec%check_curvature_bumps = .false.
+  end if
+
+! Print it all 
+
+  if (show_details) then 
+    quality_threshold  = r_quality (spike_threshold, (min_threshold * 1.2d0), ok_threshold, 0.8d0)
+    label = 'spike_threshold'
+    call print_colored (COLOR_PALE, '         '//label//' =') 
+    call print_colored_r (5,'(F5.2)', quality_threshold, spike_threshold) 
+
+    write (s3,'(I3)') nspikes
+    call print_colored (COLOR_NOTE, '   There will be '//trim(adjustl(s3)) //' spike(s).')
+
+    if (c_spec%check_curvature_bumps) then 
+      call print_colored (COLOR_NOTE, " Good value - activating ")
+      call print_colored (COLOR_FEATURE, "bump detetction ...")
+      write (*,*)
+    else
+      call print_note_only ("Values not good enough for auto bump detetction", 1)
+    end if 
+  end if 
+
+end subroutine auto_spike_threshold_polyline
+
+
+
+!-------------------------------------------------------------------------
+! Evaluates the best value for curvature at TE of polyline
+!-------------------------------------------------------------------------
+
+subroutine auto_te_curvature_polyline (show_details, x,y , c_spec)
+
+  use airfoil_operations, only: get_max_te_curvature
+  use airfoil_evaluation, only: curvature_polyline_specification_type
+
+  logical, intent (in)         :: show_details
+  double precision, dimension (:), intent(in) :: x,y 
+  type (curvature_polyline_specification_type), intent (inout)  :: c_spec
+
+  double precision            :: max_te_curvature 
+  integer                     :: quality_te
+  character (16)              :: label
+
+  max_te_curvature = get_max_te_curvature (x, y) * 1.2d0       ! little more to breath during opt.
+
+  c_spec%max_te_curvature = max_te_curvature
+
+! Print it all 
+
+  if (show_details) then 
+    quality_te      = r_quality (max_te_curvature, 0.2d0, 1d0, 10d0)
+    label = 'max_te_curvature'
+    call print_colored (COLOR_PALE, '         '//label//' =') 
+    call print_colored_r (5,'(F5.2)', quality_te, max_te_curvature) 
+    if (quality_te > Q_BAD) then
+      call print_note_only ('Like seed airfoil the airfoil will have a geometric spoiler at TE', 3)
+    else
+      call print_note_only ('Smallest value based on seed airfoil trailing edge curvature',3)
+    end if 
+  end if 
+
+end subroutine auto_te_curvature_polyline
+
 
 !=============================================================================80
 !
@@ -907,6 +1059,7 @@ subroutine ask_stop(message)
   valid_choice = .false.
   do while (.not. valid_choice)
   
+    write (*,*) 
     if (len(trim(message)) > 0) call print_warning (message)
 
     write(*,'(/,1x,A)', advance='no') 'Continue anyway? (y/n): '
@@ -974,56 +1127,272 @@ end function ask_forced_transition
 !-----------------------------------------------------------------------------
 ! Checks surface x,y for violations of curvature contraints 
 !     reversals > max_curv_reverse
-!     highlows  > max_curv_highlow
-! 
 ! and handles user response  
 !-----------------------------------------------------------------------------
 
-subroutine  check_handle_curve_violations (info, x, y, max_curv_reverse, max_curv_highlow)
+subroutine  check_handle_curve_violations (info, x, y, c)
 
-  use airfoil_evaluation, only : curv_threshold, highlow_threshold
-  use airfoil_operations, only : show_reversals_highlows, get_curv_violations
+  use airfoil_evaluation, only : curvature_polyline_specification_type
+  use airfoil_operations, only : show_reversals_highlows
+  use math_deps, only : count_reversals
 
 
   character(*),                   intent(in) :: info
   double precision, dimension(:), intent(in) :: x, y
-  integer,                        intent(in) :: max_curv_reverse, max_curv_highlow
+  type(curvature_polyline_specification_type), intent(in) :: c
 
-  integer :: n, max, nreverse_violations, nhighlow_violations
+  integer :: n, max_rev, nreverse_violations, istart, iend, nreverse
 
-  call get_curv_violations (x, y, & 
-                            curv_threshold, highlow_threshold, & 
-                            max_curv_reverse, max_curv_highlow,   &
-                            nreverse_violations, nhighlow_violations)
+  istart = c%nskip_LE
+  iend   = size(x) - c%nskip_TE_revers
+
+! How many reversals?  ... 
+  nreverse = count_reversals (istart, iend, x, y, c%curv_threshold)  
+  nreverse_violations  = max(0,(nreverse - c%max_curv_reverse))
 
   ! Exit if everything is ok 
-  if ((nreverse_violations + nhighlow_violations) == 0) return 
-
-  call print_warning ("Curvature violations on " // trim(info))
-  write (*,*)
-
   if (nreverse_violations > 0) then 
-    n   = nreverse_violations + max_curv_reverse
-    max = max_curv_reverse
-    write (*,'(10x,A,I2,A,I2)')"Found ",n, " Reversal(s) where max_curv_reverse is set to ", max
-  end if 
 
-  if (nhighlow_violations > 0) then 
-    n   = nhighlow_violations + max_curv_highlow
-    max = max_curv_highlow
-    write (*,'(10x,A,I2,A,I2)')"Found ",n, " HighLow(s) where max_curv_highlow is set to ", max
-  end if 
+    write (*,*)
+    call print_warning ("Curvature violations on " // trim(info))
+    write (*,*)
 
-  write (*,*)
-  call show_reversals_highlows ('', x, y, curv_threshold, highlow_threshold )
-  write (*,*)
-  write (*,'(10x,A)') 'The Optimizer may not found a solution with this inital violation.'
-  write (*,'(10x,A)') 'Either increase max_curv_reverse or curv_threshold (not recommended) or'
-  write (*,'(10x,A)') 'choose another seed airfoil. Find details in geometry plot of the viszualizer.'
-  call ask_stop('')
+    if (nreverse_violations > 0) then 
+      n       = nreverse_violations + c%max_curv_reverse
+      max_rev = c%max_curv_reverse
+      write (*,'(10x,A,I2,A,I2)')"Found ",n, " Reversal(s) where max_curv_reverse is set to ", max_rev
+    end if 
+
+    write (*,*)
+    write (*,'(10x,A)') 'The Optimizer may not found a solution with this inital violation.'
+    write (*,'(10x,A)') 'Either increase max_... or ..._threshold (not recommended) or'
+    write (*,'(10x,A)') 'choose another seed airfoil. Find details in geometry plot of the viszualizer.'
+    call ask_stop('')
+  end if
 
 end subroutine check_handle_curve_violations
 
+!-----------------------------------------------------------------------------
+! Checks trailing edga curvature x,y for violations max_te_crvature
+! and handles user response  
+!-----------------------------------------------------------------------------
+
+subroutine  check_te_curvature_violations (info, x, y, c)
+
+  use airfoil_evaluation, only : curvature_polyline_specification_type
+  use airfoil_operations, only : get_max_te_curvature
+  use math_deps, only : count_reversals
+
+
+  character(*),                   intent(in) :: info
+  double precision, dimension(:), intent(in) :: x, y
+  type(curvature_polyline_specification_type), intent(in) :: c
+
+  double precision  :: cur_te_curvature
+  character (8)     :: text
+
+  cur_te_curvature = get_max_te_curvature (x, y)
+  if (cur_te_curvature  > c%max_te_curvature) then 
+    write(text,'(F8.4)') cur_te_curvature
+    call ask_stop("Curvature of "//trim(adjustl(text))// &
+                  " on "//trim(info)//" at trailing edge violates max_te_curvature constraint.")
+  end if 
+
+end subroutine check_te_curvature_violations
+
+!-----------------------------------------------------------------------------
+! Set airfoil thickness and camber according to defined geo targets 
+!   and/or thickness/camber constraints
+!-----------------------------------------------------------------------------
+
+subroutine preset_airfoil_to_targets (show_details, foil, geo_targets, &
+                                min_thickness, max_thickness, min_camber, max_camber) 
+
+  use vardef,             only: airfoil_type
+  use airfoil_evaluation, only: geo_target_type
+  use xfoil_driver,       only: xfoil_set_thickness_camber, xfoil_set_airfoil
+  use xfoil_driver,       only: xfoil_get_geometry_info
+
+  logical, intent (in)           :: show_details 
+  type (airfoil_type), intent (inout)  :: foil
+  type (geo_target_type), dimension(:), intent (in)  :: geo_targets
+  doubleprecision, intent(inout) :: min_thickness, max_thickness, min_camber, max_camber
+
+  type (airfoil_type) :: new_foil
+  doubleprecision     :: maxt, xmaxt, maxc, xmaxc, new_camber, new_thick
+  character (10)      :: cvalue
+  integer             :: i, nptt, nptb, ngeo_targets
+  logical             :: foil_changed 
+
+  foil_changed = .false.
+  ngeo_targets = size(geo_targets)
+
+  new_thick  = 0d0
+  new_camber = 0d0
+
+  if (ngeo_targets > 0) then 
+
+  ! Set thickness / Camber of seed airfoil according geo targets, adjust constraints
+
+    do i= 1, ngeo_targets
+
+      select case (trim(geo_targets(i)%type))
+
+        case ('Thickness')                   
+
+          new_thick = geo_targets(i)%target_value
+          foil_changed = .true.
+
+          if (show_details) then
+            write (cvalue,'(F6.2)')  (new_thick * 100)
+            call print_note_only ('- Scaling thickness to target value '// trim(adjustl(cvalue))//'%', 3)
+          end if
+
+        case ('Camber')                      
+
+          new_camber = geo_targets(i)%target_value
+          foil_changed = .true.
+
+          if (show_details) then
+            write (cvalue,'(F6.2)')  (new_camber * 100)
+            call print_note_only ('- Scaling camber to target value '// trim(adjustl(cvalue))//'%', 3)
+          end if
+
+      end select
+
+    end do
+    call xfoil_set_thickness_camber (foil, new_thick, 0d0, new_camber, 0d0, new_foil)
+
+  else
+
+  ! Set thickness / Camber of seed airfoil according constraints
+
+    call xfoil_set_airfoil (foil)        
+    call xfoil_get_geometry_info (maxt, xmaxt, maxc, xmaxc)
+
+    if (maxt > max_thickness) then
+
+      new_thick = max_thickness *0.95d0
+      call xfoil_set_thickness_camber (foil, new_thick, 0d0, 0d0, 0d0, new_foil)
+      foil_changed = .true.
+
+      if (show_details) then
+        write (cvalue,'(F6.2)')  (new_thick * 100)
+        call print_note_only ('- Scaling thickness according constraint to '// trim(adjustl(cvalue))//'%', 3)
+      end if 
+
+    elseif (maxt < min_thickness) then 
+
+      new_thick = min_thickness *1.05d0
+      call xfoil_set_thickness_camber (foil, new_thick, 0d0, 0d0, 0d0, new_foil)
+      foil_changed = .true.
+
+      if (show_details) then
+        write (cvalue,'(F6.2)')  (new_thick * 100)
+        call print_note_only ('- Scaling thickness according constraint to '// trim(adjustl(cvalue))//'%', 3)
+      end if 
+
+    end if 
+
+    if (maxc > max_camber) then
+
+      new_camber = max_camber *0.95d0
+      call xfoil_set_thickness_camber (foil, 0d0, new_camber, 0d0, 0d0, new_foil)
+      foil_changed = .true.
+
+      if (show_details) then
+        write (cvalue,'(F6.2)')  (new_camber * 100)
+        call print_note_only ('- Scaling camber according constraint to '// trim(adjustl(cvalue))//'%', 3)
+      end if
+      
+    elseif (maxc < min_camber) then 
+
+      new_camber = min_camber *1.05d0
+      call xfoil_set_thickness_camber (foil, 0d0, new_camber, 0d0, 0d0, new_foil)
+      foil_changed = .true.
+
+      if (show_details) then
+        write (cvalue,'(F6.2)')  (new_camber * 100)
+        call print_note_only ('- Scaling camber according constraint to '// trim(adjustl(cvalue))//'%', 3)
+      end if
+
+    end if 
+
+  end if
+
+  if (foil_changed) then
+
+! Now rebuild foil out of new coordinates  ----------------------
+  ! Sanity check - new_foil may not have different number of points
+    if (foil%npoint /= new_foil%npoint) then
+      call my_stop ('Number of points changed during thickness/camber modification')
+    end if
+
+    foil%z = new_foil%z
+    nptt = size(foil%zt,1)
+    nptb = size(foil%zb,1)
+
+  ! get new upper and lower z-coordinates from modified airfoil 
+    do i = 1, nptt
+      foil%zt(i) = new_foil%z(nptt-i+1)      ! start from LE - top reverse - to LE
+    end do
+    do i = 1, nptb 
+      foil%zb(i) = new_foil%z(nptt+i-1)      ! start from LE - bottom - to TE
+    end do
+  else
+    if (show_details) &
+      call print_note_only ('- No geo targets, no constraints - nothing changed', 3)
+  end if
+  
+end subroutine preset_airfoil_to_targets
+
+
+!-----------------------------------------------------------------------------
+! Check airfoil thickness and camber according constraints
+!-----------------------------------------------------------------------------
+
+subroutine check_thickness_camber (foil,  &
+                                min_thickness, max_thickness, min_camber, max_camber) 
+
+  use vardef,             only: airfoil_type
+  use xfoil_driver,       only: xfoil_set_thickness_camber, xfoil_set_airfoil
+  use xfoil_driver,       only: xfoil_get_geometry_info
+
+
+  type (airfoil_type), intent (inout)  :: foil
+  doubleprecision, intent(inout) :: min_thickness, max_thickness, min_camber, max_camber
+
+  doubleprecision     :: maxt, xmaxt, maxc, xmaxc
+  character (10)      :: text
+
+  call xfoil_set_airfoil (foil)        
+  call xfoil_get_geometry_info (maxt, xmaxt, maxc, xmaxc)
+
+  if (maxt < min_thickness) then
+    write(text,'(F8.4)') maxt
+    text = adjustl(text)
+    call ask_stop("Seed airfoil violates min_thickness constraint with thickness: "//trim(text))
+  end if
+
+  if (maxt > max_thickness) then
+    write(text,'(F8.4)') maxt
+    text = adjustl(text)
+    call ask_stop("Seed airfoil violates max_thickness constraint with thickness: "//trim(text))
+  end if
+
+  if (maxc > max_camber) then
+    write(text,'(F8.4)') maxc
+    text = adjustl(text)
+    call ask_stop("Seed airfoil violates max_camber constraint with camber: "//trim(text))
+  end if
+
+  if (maxc < min_camber) then
+    write(text,'(F8.4)') maxc
+    text = adjustl(text)
+    call ask_stop("Seed airfoil violates min_camber constraint with camber: "//trim(text))
+  end if
+
+end subroutine check_thickness_camber
 
 
 end module input_sanity

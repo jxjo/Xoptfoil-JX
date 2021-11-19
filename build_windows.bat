@@ -1,6 +1,6 @@
 ECHO OFF
 SET INSTALLDIR=%CD%\windows
-SET XOPTFOIL_VERSION=1.61beta
+SET XOPTFOIL_VERSION=1.70beta
 SET TARGET_OS=WIN
 
 IF NOT EXIST build        MKDIR build
@@ -15,3 +15,4 @@ cmake -G "MinGW Makefiles" ^
 mingw32-make VERBOSE=1
 mingw32-make install
 CD ..
+pause

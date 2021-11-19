@@ -37,7 +37,7 @@ subroutine x5_init_xy (input_filename, len_filename, np, x, y) bind(C,name = "x5
   use vardef,             only : airfoil_type
   doubleprecision, dimension (np), intent(in)  :: x, y
   integer, intent(in)           :: len_filename, np
-  integer :: count
+  integer :: count 
   character, dimension(255), intent(in)   :: input_filename
   character (255) :: input_file
   INTEGER :: i     ! Loop index.
@@ -66,12 +66,14 @@ end subroutine x5_init_xy
 
 subroutine x5_init (input_file, seed_foil_in)
 
+  use os_util
   use vardef,             only : airfoil_type, seed_foil
   use vardef,             only : flap_spec, flap_degrees
-  use xfoil_driver,       only : xfoil_init, xfoil_defaults
+  use xfoil_driver,       only : xfoil_init, xfoil_defaults, re_type
   use airfoil_evaluation, only : xfoil_options, xfoil_geom_options
-  use airfoil_evaluation, only : do_smoothing, auto_curvature, check_curvature, check_geometry
-  use airfoil_evaluation, only : op_points_spec, noppoint
+  use airfoil_evaluation, only : check_geometry
+  use airfoil_evaluation, only : curv_spec
+  use airfoil_evaluation, only : op_points_spec, noppoint, dynamic_weighting_spec
   use input_sanity,       only : check_seed
   use input_output,       only : read_xfoil_options_inputs, read_op_points_spec
   use input_output,       only : read_xfoil_paneling_inputs
@@ -80,22 +82,25 @@ subroutine x5_init (input_file, seed_foil_in)
   type(airfoil_type), intent(in)  :: seed_foil_in
   character (255), intent(in)     :: input_file
   logical                         :: show_details
+  type(re_type)                   :: re_default
+
 
   flap_degrees (:)    = 0.d0                      ! no flaps used, needed for check_seed
   flap_spec%use_flap  = .false. 
 
   show_details = .true.
 
-  call read_op_points_spec        (input_file, 0, noppoint, op_points_spec) 
-  call read_xfoil_options_inputs  (input_file, 0, show_details, xfoil_options)
-  call read_xfoil_paneling_inputs (input_file, 0,               xfoil_geom_options)
+  call read_op_points_spec        (input_file, 0, noppoint, re_default, op_points_spec, dynamic_weighting_spec) 
+  call read_xfoil_options_inputs  (input_file, 0, xfoil_options)
+  xfoil_options%show_details = .true.
+  call read_xfoil_paneling_inputs (input_file, 0, xfoil_geom_options)
 
   call xfoil_init()
   call xfoil_defaults(xfoil_options)
 
-  do_smoothing          = .false.
-  auto_curvature        = .false.
-  check_curvature       = .false.
+  curv_spec%do_smoothing     = .false.
+  curv_spec%auto_curvature   = .false.
+  curv_spec%check_curvature  = .false.
   check_geometry        = .false.
 
   seed_foil = seed_foil_in

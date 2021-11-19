@@ -62,20 +62,14 @@ module vardef
 
 ! Airfoils
   type(airfoil_type) :: seed_foil, seed_foil_not_smoothed
-  character(80) :: output_prefix
 
 ! Show more infos during optimization
   logical :: show_details
 
-! --------------------------------------------------------------------------------
+! Subdirectory for all the mep design files
 
-! #exp-dynamic mb-mod dynamic weighting
-  type dynamic_weighting_type
-    double precision, dimension(max_op_points) :: weighting  
-    double precision :: medium_deviation_abs
-  end type dynamic_weighting_type
-
-  logical :: dynamic_weighting
-  double precision :: dynamic_weighting_p_factor
+  character (*), parameter :: DESIGN_SUBDIR_POSTFIX = '_temp'
+  character (255)          :: design_subdir
+  character (80)           :: output_prefix
 
 end module vardef

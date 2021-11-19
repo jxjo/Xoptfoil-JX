@@ -17,6 +17,8 @@
 
 module optimization_util
 
+  use os_util
+
 ! Module containing optimization routines
 
   implicit none
@@ -102,8 +104,6 @@ end subroutine init_random_seed
 subroutine initial_designs(dv, objval, fevals, objfunc, xmin, xmax, use_x0,    &
                            x0, feasible_init, feasible_limit, attempts)
 
-  use os_util, only: COLOR_GOOD, COLOR_NORMAL, COLOR_NOTE, COLOR_BAD, print_colored
-
   double precision, dimension(:,:), intent(inout) :: dv
   double precision, dimension(:), intent(inout) :: objval
   integer, intent(out) :: fevals
@@ -150,18 +150,18 @@ subroutine initial_designs(dv, objval, fevals, objfunc, xmin, xmax, use_x0,    &
 
   if (use_x0) then
     dv(:,1) = x0
-    objval(1) = objfunc(x0, .true.)         ! evaluate only geomtry
+    objval(1) = objfunc(x0, .true.)         ! evaluate only geometry
 !$omp do
     do i = 2, pop
       dv(:,i) = maxval(xmax - xmin)*dv(:,i) + xmin
-      objval(i) = objfunc(dv(:,i), .true.)  ! evaluate only geomtry
+      objval(i) = objfunc(dv(:,i), .true.)  ! evaluate only geometry
     end do
 !$omp end do
   else
 !$omp do
     do i = 1, pop
       dv(:,i) = maxval(xmax - xmin)*dv(:,i) + xmin
-      objval(i) = objfunc(dv(:,i), .true.)  ! evaluate only geomtry
+      objval(i) = objfunc(dv(:,i), .true.)  ! evaluate only geometry
     end do
 !$omp end do
   end if
@@ -174,7 +174,7 @@ subroutine initial_designs(dv, objval, fevals, objfunc, xmin, xmax, use_x0,    &
     text1 = adjustl(text1)
 !$omp master
     write(*,'(" - ",A)') 'Checking initial designs for feasibility using max '//trim(text1)//' init attempts...'
-    write(*,'(3x)', advance ='no') 
+    write(*,'(12x)', advance ='no') 
 
 !$omp end master
 
@@ -215,12 +215,9 @@ subroutine initial_designs(dv, objval, fevals, objfunc, xmin, xmax, use_x0,    &
 !     Write a message about the feasibility of initial designs
 
       if ((initcount > attempts) .and. (objval(i) >= feasible_limit)) then
-        call print_colored (COLOR_NOTE,'.')         ! no valid design 
-      elseif ((initcount <= attempts) .and. (initcount > 0) .and.              &
-              (objval(i) < feasible_limit)) then
-        call print_colored (COLOR_NOTE, 'o')      ! made it after retries
+        call print_colored (COLOR_PALE,'.')         ! no valid design 
       else
-        call print_colored (COLOR_NORMAL, 'o')        ! first shot
+        call print_colored (COLOR_PALE, '~')      ! valid design found
       end if
 
     end do

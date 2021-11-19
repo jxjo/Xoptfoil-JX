@@ -17,7 +17,17 @@
 
 program main
 
-! Main program for airfoil optimization
+!         Main program for airfoil optimization
+!
+!                  main   / worker
+!  input_sanity    input_output   optimization_driver
+! particle_swarm  genectic_algorithm   simplex_search
+!                 airfoil_evaluation
+!      airfoil_operations   polar_operations
+!                    memory_util
+!                  parametrization
+!                   xfoil_driver
+!        xfoil   math_deps  os_util  vardef
 
   use omp_lib             ! to switch off multi threading
   use os_util
@@ -35,14 +45,8 @@ program main
   use input_sanity,        only : check_seed, check_inputs
   use optimization_driver, only : matchfoils_preprocessing, optimize,          &
                                   write_final_design
-  use polar_operations,    only : check_and_do_polar_generation
- 
-! jx-test
-  use xfoil_driver,        only : op_point_specification_type
-  use input_output,        only : read_xfoil_options_inputs
 
   implicit none
-
 
 #ifndef PACKAGE_VERSION
 #define PACKAGE_VERSION ""
@@ -66,16 +70,9 @@ program main
 !-------------------------------------------------------------------------------
   
   write(*,'(A)')
-  call print_colored (COLOR_HIGH,   ' Xoptfoil')
-  call print_colored (COLOR_PROGRAM,'-JX')
+  call print_colored (COLOR_FEATURE,' Xoptfoil')
+  call print_colored (COLOR_FEATURE,'-JX')
   write(*,'(A)') '             The Airfoil Optimizer            v'//trim(PACKAGE_VERSION)
-  write(*,'(A)') 
-  write(*,'(A)') '         Actual experimental features: '
-  write(*,'(A)') 
-  write(*,'(A)') '           - Particle retry when geometry is violated (jo)' ! see #exp-retry
-  write(*,'(A)') '           - Shaping function hicks-henne-plus (mb)' ! see #exp-HH-plus
-  write(*,'(A)') '           - Dynamic weighting (mb)'                 ! see #exp-dynamic
-  write(*,'(A)') '           - Bubble detection (jo)'                  ! see #exp-bubble
   write(*,'(A)') 
 
 ! Handle multithreading - be careful with screen output in multi-threaded code parts
@@ -103,19 +100,19 @@ program main
 ! Read inputs from namelist file
 
   npan_fixed = 200                      ! for optimizing npan is fixed ...
-
   call read_inputs(input_file, search_type, global_search, local_search,       &
                    seed_airfoil_type, airfoil_file, nparams_top, nparams_bot,  &
                    restart, restart_write_freq, constrained_dvs, naca_options, &
                    pso_options, ga_options, ds_options, matchfoil_file,        &
                    symmetrical) 
 
-  call check_inputs()
+  write (*,*) 
+  
+  call check_inputs(global_search, pso_options)
                    
 ! Load original airfoil into memory, repanel, normalize 
 !   to get seed airfoil ready for optimization 
 
-  write (*,*) 
   call get_seed_airfoil(seed_airfoil_type, airfoil_file, naca_options, original_foil)
 
   call repanel_and_normalize_airfoil (original_foil, npan_fixed, symmetrical, seed_foil)  
@@ -138,10 +135,6 @@ program main
     !Top and Bottom are treated seperately
     nshapedvtop = 12
     nshapedvbot = 0
-  else if (trim(shape_functions) == 'hicks-henne-plus') then !#exp-HH-plus
-    ! use 6 additional params for camb-thick-preshaping of the airfoil
-    nshapedvtop = (nparams_top + 2) *3
-    nshapedvbot = nparams_bot*3
   else
     nshapedvtop = nparams_top*3
     nshapedvbot = nparams_bot*3
@@ -161,15 +154,20 @@ program main
   if (match_foils) then
     call matchfoils_preprocessing(matchfoil_file)
   end if
- 
+
+! Create subdirectory for all the design files 
+
+  design_subdir = trim(output_prefix) // DESIGN_SUBDIR_POSTFIX
+  call make_directory (trim(design_subdir))
+  design_subdir = trim(design_subdir) // '/'
+
 ! Make sure seed airfoil passes constraints, and get scaling factors for
 ! operating points, smooth foil if requested
 
   call check_seed()
 
-! Optimize
+  ! Optimize
   
-  write (*,*)
   call optimize(search_type, global_search, local_search, constrained_dvs,     &
                 pso_options, ga_options, ds_options, restart,                  &
                 restart_write_freq, optdesign, f0, fmin, steps, fevals)
@@ -184,9 +182,6 @@ program main
 
   call write_final_design(optdesign, f0, fmin, final_foil)
 
-! Generate polars for final airfoil if defind in input file - 
-
-  call check_and_do_polar_generation (input_file, output_prefix, final_foil)
 
 ! Deallocate memory
   call deallocate_airfoil(original_foil)

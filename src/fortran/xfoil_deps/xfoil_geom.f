@@ -3135,14 +3135,18 @@ C---- do a Newton loop to refine estimate
           XMAX = XMAX + DX
           IF(ABS(DX) .LT. XTOL) GO TO 20
    10 CONTINUE
-      WRITE(*,*)
-     &  'GETMAX: Newton iteration for max camber/thickness failed.'
-      YMAX = YMAX0
-      XMAX = XMAX0
+
+C     JX-mod suppress error message in case of invalid geometry
+C      WRITE(*,*)
+C     &  'GETMAX: Newton iteration for max camber/thickness failed.'
+C      YMAX = YMAX0
+C      XMAX = XMAX0
 C     JX-mod
-      WRITE (*,'(A,F7.4,A,F7.4)') 'YMAX= ',YMAX, 'XMAX= ',XMAX
+      YMAX = 0.0E0
+      XMAX = XLEN / 2
+C     WRITE (*,'(A,F7.4,A,F7.4)') 'YMAX= ',YMAX, 'XMAX= ',XMAX
 C
- 20   RETURN
+ 20   RETURN 
       END ! GETMAX
 
 

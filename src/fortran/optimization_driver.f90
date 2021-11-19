@@ -20,6 +20,8 @@ module optimization_driver
 ! Contains subroutines to set options and conditions for optimization and to
 ! issue optimizer calls
 
+  use os_util
+
   implicit none
 
   contains
@@ -33,12 +35,10 @@ subroutine matchfoils_preprocessing(matchfoil_file)
 
   use vardef,             only : airfoil_type,  npan_fixed, seed_foil
   use airfoil_evaluation, only : foil_to_match
-  use airfoil_operations, only : get_seed_airfoil,  rebuild_airfoil, my_stop
+  use airfoil_operations, only : get_seed_airfoil,  rebuild_airfoil
   use airfoil_operations, only : repanel_and_normalize_airfoil
-  use math_deps,          only : interp_vector
+  use math_deps,          only : interp_vector, transformed_arccos
   use naca,               only : naca_options_type
-  use os_util,            only : print_note
-
   
   character(*), intent(in) :: matchfoil_file
 
@@ -78,7 +78,7 @@ subroutine matchfoils_preprocessing(matchfoil_file)
                      zbtmp(1:pointsb-1))
 
 ! Re-set coordinates of foil to match from interpolated points
-    
+                     
   call rebuild_airfoil(seed_foil%xt, seed_foil%xb, zttmp, zbtmp, foil_to_match)
 
 end subroutine matchfoils_preprocessing
@@ -98,7 +98,7 @@ subroutine optimize(search_type, global_search, local_search, constrained_dvs, &
                                  initial_perturb, min_flap_degrees,            &
                                  max_flap_degrees, flap_degrees,               &
                                  flap_optimize_points, min_bump_width,         &
-                                 output_prefix 
+                                 output_prefix, design_subdir 
   use particle_swarm,     only : pso_options_type, particleswarm
   use genetic_algorithm,  only : ga_options_type, geneticalgorithm
   use simplex_search,     only : ds_options_type, simplexsearch
@@ -122,7 +122,7 @@ subroutine optimize(search_type, global_search, local_search, constrained_dvs, &
   logical :: restart_temp, write_designs
   integer :: stepsg, fevalsg, stepsl, fevalsl, i, oppoint, stat,               &
              iunit, ioerr, designcounter
-  character(100) :: restart_status_file
+  character(100) :: restart_status_file, histfile
   character(19) :: restart_status
   character(14) :: stop_reason
 
@@ -133,10 +133,12 @@ subroutine optimize(search_type, global_search, local_search, constrained_dvs, &
   close(iunit)
 
 ! Delete existing optimization history for visualizer to start new
+
+  histfile  = trim(design_subdir)//'Optimization_History.dat'
   
   if (.not. restart) then 
     iunit = 17
-    open(unit=iunit, file='optimization_history.dat', status='replace')
+    open(unit=iunit, file=trim(histfile), status='replace')
     close(iunit)
   end if 
     
@@ -156,8 +158,8 @@ subroutine optimize(search_type, global_search, local_search, constrained_dvs, &
   ndv = size(optdesign,1)
 
 ! Scale all variables to have a range of initial_perturb
-  t1fact = initial_perturb/(1.d0 - 0.001d0)
-  t2fact = initial_perturb/(10.d0 - min_bump_width)
+  t1fact = initial_perturb/(1.d0 - 0.001d0)             ! HH location
+  t2fact = initial_perturb/(10.d0 - min_bump_width)     ! HH width
   ffact = initial_perturb/(max_flap_degrees - min_flap_degrees)
 
 ! Set initial design
@@ -367,6 +369,7 @@ subroutine write_final_design(optdesign, f0, fmin, final_airfoil)
   integer :: i, iunit
   character(80) :: output_file, aero_file
   character(20) :: flapnote
+  double precision :: ncrit
 
   
 ! Rebuild foil out final design and seed airfoil
@@ -391,7 +394,8 @@ subroutine write_final_design(optdesign, f0, fmin, final_airfoil)
 
 !   Write summary to screen and file
 
-    aero_file = trim(output_prefix)//'_performance_summary.dat'
+    aero_file  = trim(design_subdir)//'Performance_Summary.dat'
+
     iunit = 13
     open(unit=iunit, file=aero_file, status='replace')
 
@@ -427,18 +431,25 @@ subroutine write_final_design(optdesign, f0, fmin, final_airfoil)
         flapnote = "   -"
       end if 
 
+      if (op_spec%ncrit == -1d0) then 
+        ncrit = xfoil_options%ncrit
+      else
+        ncrit = op_spec%ncrit
+      end if 
+
       write (iunit,  "(I2,   F8.3,   F9.4,    F10.5, F9.4,   F8.4,   F8.4, ES9.2     F8.3     F7.1, 3X, A)") &
         i, op%alpha, op%cl, op%cd, op%cm, op%xtrt, op%xtrb, &
-        op_spec%re%number, op_spec%ma%number, op_spec%ncrit, trim(flapnote)
+        op_spec%re%number, op_spec%ma%number, ncrit, trim(flapnote)
       write (*    ,  "(I2,   F8.3,   F9.4,    F10.5, F9.4,   F8.4,   F8.4, ES9.2     F8.3     F7.1, 3X, A)") &
         i, op%alpha, op%cl, op%cd, op%cm, op%xtrt, op%xtrb, &
-        op_spec%re%number, op_spec%ma%number, op_spec%ncrit, trim(flapnote)
+        op_spec%re%number, op_spec%ma%number, ncrit, trim(flapnote)
 
     end do
 
     write(*,*)
-    write(*,'(A43F8.4A1)') " Objective function improvement over seed: ",      &
-                           (f0 - fmin)/f0*100.d0, "%" 
+    write(*,'(A,F8.4,A1)', advance='no') " Objective function improvement over seed: "
+    call  print_colored_r (9, '(F8.4,"%")', Q_GOOD, ((f0 - fmin)/f0*100.d0))
+
     write(iunit,*)
     write(iunit,'(A43F8.4A1)') " Objective function improvement over seed: ",  &
                            (f0 - fmin)/f0*100.d0, "%" 
@@ -446,8 +457,7 @@ subroutine write_final_design(optdesign, f0, fmin, final_airfoil)
     close(iunit)
 
     write(*,*)
-    write(*,*) "Optimal airfoil performance summary written to "               &
-               //trim(aero_file)//"."
+    call print_note_only ("- Writing summary to "//trim(aero_file))
 
 
   else

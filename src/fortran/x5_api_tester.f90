@@ -37,7 +37,7 @@ program x5_api_tester
 
 ! Let's start
   write (*,'(1x)', advance = 'no') 
-  call print_colored (COLOR_PROGRAM,'Tester on '//trim(airfoil_filename))
+  call print_colored (COLOR_FEATURE,'Tester on '//trim(airfoil_filename))
   write (*,'(3x,A,A,3x)', advance = 'no') '- using ',trim(input_file)  
 
 ! Load airfoil defined in command line 
@@ -116,7 +116,6 @@ end function
 
 subroutine read_tester_clo(input_file, airfoil_name, action)
 
-  use airfoil_operations, only : my_stop
   use os_util
 
   character(*), intent(inout) :: input_file,airfoil_name, action

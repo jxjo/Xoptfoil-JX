@@ -49,7 +49,7 @@ subroutine simplexsearch(xopt, fmin, step, fevals, objfunc, x0, given_f0_ref,  &
   use optimization_util, only : bubble_sort, design_radius, write_design,      &
                                 read_run_control
 
-  use vardef, only : output_prefix
+  use vardef, only : design_subdir
 
   double precision, dimension(:), intent(inout) :: xopt
   double precision, intent(out) :: fmin
@@ -166,7 +166,7 @@ subroutine simplexsearch(xopt, fmin, step, fevals, objfunc, x0, given_f0_ref,  &
   mincurr = fmin
 
 ! Open file for writing iteration history
-  histfile = trim(output_prefix)//'_optimization_history.dat'
+  histfile  = trim(design_subdir)//'Optimization_History.dat'
   iunit = 17
   new_history_file = .false.
   if ( (prevsteps == 0) .and. (step == 0) ) then
@@ -176,7 +176,7 @@ subroutine simplexsearch(xopt, fmin, step, fevals, objfunc, x0, given_f0_ref,  &
          position='append', iostat=ioerr)
     if (ioerr /= 0) then
       write(*,*) 
-      write(*,*) "Warning: did not find existing optimization_history.dat file."
+      write(*,*) "Warning: did not find existing "//trim(histfile)//" file."
       write(*,*) "A new one will be written, but old data will be lost."
       write(*,*)
       new_history_file = .true.

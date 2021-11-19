@@ -41,11 +41,10 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
   use particle_swarm,     only : pso_options_type
   use genetic_algorithm,  only : ga_options_type
   use simplex_search,     only : ds_options_type
-  use airfoil_operations, only : my_stop
   use xfoil_driver,       only : xfoil_geom_options_type
   use naca,               only : naca_options_type
   use math_deps,          only : sort_vector
-  use os_util,            only : print_note
+  use polar_operations,   only : read_init_polar_inputs
 
 
   character(*), intent(in) :: input_file 
@@ -76,10 +75,11 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
                       tournament_fraction, crossover_range_factor,             &
                       mutant_probability, chromosome_mutation_rate,            &
                       mutation_range_factor
-  integer :: nbot_actual
-  integer :: i, iunit, ioerr, iostat1, counter, idx
+  integer       :: nbot_actual
+  integer       :: i, iunit, ioerr, iostat1, counter, idx
+  type(re_type) :: re_default
   character(30) :: text
-  character(3) :: family
+  character(3)  :: family
   character(20) :: pso_convergence_profile
   character(10) :: parents_selection_method
 
@@ -88,6 +88,11 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
   double precision, dimension(max_geo_targets) :: x_pos, target_geo
   double precision, dimension(max_geo_targets) :: weighting_geo
   character(30), dimension(max_geo_targets) :: target_type
+  integer :: ngeo_targets
+
+  ! #depricated compatibility to Xoptfoil
+  integer :: max_curv_reverse_top, max_curv_reverse_bot
+  double precision :: curv_threshold
 
   ! jx-mod show/suppress extensive echo of input parms
   logical :: echo_input_parms
@@ -100,13 +105,11 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
 
   namelist /constraints/ min_thickness, max_thickness, moment_constraint_type, &
                          min_moment, min_te_angle,                             &
-                         check_curvature, auto_curvature,                      &
+                         check_geometry,                                       &
                          max_curv_reverse_top, max_curv_reverse_bot,           &
-                         max_curv_highlow_top, max_curv_highlow_bot,           &
                          curv_threshold, symmetrical, min_flap_degrees,        &
                          max_flap_degrees, min_camber, max_camber,             &
-                         naddthickconst, addthick_x, addthick_min, addthick_max, &
-                         max_te_curvature, highlow_threshold
+                         naddthickconst, addthick_x, addthick_min, addthick_max
   namelist /naca_airfoil/ family, maxt, xmaxt, maxc, xmaxc, design_cl, a,      &
                           leidx, reflexed
   namelist /initialization/ feasible_init, feasible_limit,                     &
@@ -124,7 +127,6 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
   namelist /xfoil_paneling_options/ npan, cvpar, cterat, ctrrat, xsref1,       &
             xsref2, xpref1, xpref2, repanel
   namelist /matchfoil_options/ match_foils, matchfoil_file
-  namelist /smoothing_options/ do_smoothing, spike_threshold 
   namelist /geometry_targets/ ngeo_targets, target_type, x_pos, target_geo,  &
             weighting_geo 
 
@@ -138,16 +140,16 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
 
 ! Set defaults for main namelist options
 
-  search_type = 'global_and_local'
+  search_type = 'global'
   global_search = 'particle_swarm'
   local_search = 'simplex'
-  seed_airfoil = 'naca'
+  seed_airfoil = 'from_file'
   airfoil_file = ''
   shape_functions = 'hicks-henne'
   min_bump_width = 0.1d0
   nfunctions_top = 4
   nfunctions_bot = 4
-  initial_perturb = 0.025d0
+  initial_perturb = 0.003d0
   restart = .false.
   restart_write_freq = 0              ! default: switch off write restart files
   write_designs = .true.
@@ -184,12 +186,7 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
   airfoil_file = read_cl_airfoil_file (airfoil_file)
 
 
-  ! mb-mod dynamic-weighting
-  dynamic_weighting  = .false.
-  dynamic_weighting_p_factor = 80.d0
-
-
-  ! Option to match seed airfoil to another instead of aerodynamic optimization
+! Option to match seed airfoil to another instead of aerodynamic optimization
 
   match_foils = .false.
   matchfoil_file = 'none'
@@ -201,11 +198,10 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
 
   if (.not. match_foils) then
 
-    call read_op_points_spec('', iunit, noppoint, op_points_spec)
+    call read_op_points_spec('', iunit, noppoint, re_default, op_points_spec, dynamic_weighting_spec)
 
-    !if (echo_input_parms) call echo_op_points_spec  (op_points_spec)
-    call echo_op_points_spec  (op_points_spec) 
-
+  else 
+     noppoint = 0
   end if
 
 
@@ -228,47 +224,70 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
 
   ngeo_targets = 0
   target_type (:) = ''
-  x_pos(:) = 0.d0 
+  x_pos(:) = 0.d0                                     ! #depricated
   target_geo(:) = 0.d0 
-  weighting_geo(:) = 0.0 
+  weighting_geo(:) = 1d0 
 
   rewind(iunit)
   read(iunit, iostat=iostat1, nml=geometry_targets)
-  call namelist_check('geometry_targets', iostat1, 'warn')
+  call namelist_check('geometry_targets', iostat1, 'no-warn')
+
+  allocate (geo_targets(ngeo_targets)) 
+
+  geo_targets%reference_value   = 0.d0
+  geo_targets%dynamic_weighting = .false.
 
   do i = 1, ngeo_targets
-    geo_targets(i)%type         = target_type(i)
-    geo_targets(i)%target_value = target_geo(i)
-    geo_targets(i)%x            = x_pos(i)
-    geo_targets(i)%reference_value   = 0.d0
-    geo_targets(i)%weighting    = weighting_geo(i)
+    geo_targets(i)%type           = target_type(i)
+    geo_targets(i)%target_value   = target_geo(i)
+    geo_targets(i)%weighting      = weighting_geo(i)
+    geo_targets(i)%weighting_user = weighting_geo(i)
+    if (dynamic_weighting_spec%active) then     ! #todo op_specs must be before geo in input file
+    ! Set geo targets to dynamic if weighting is positive
+      if (geo_targets(i)%weighting_user < 0d0) then
+      ! no dynamic if user defined explizit weighting
+        geo_targets(i)%weighting_user = - geo_targets(i)%weighting_user
+      else
+        geo_targets(i)%dynamic_weighting = .true.
+      end if 
+    end if 
+    if (x_pos(i) /= 0d0) & 
+      call my_stop ("Target_type 'zBot', 'zTop' and the parameter x_pos are depricated ",'warn')
   end do   
-
 
   
 ! Modify normalize weightings for operating points
-!          now includis geo targets and smoothing progress
+!          now includis geo targets  
+  if (noppoint > 0) then
 
-  sum_weightings = sum(op_points_spec%weighting_user)               &
-                 + sum(weighting_geo(1:ngeo_targets))
+      sum_weightings = sum(op_points_spec%weighting_user)               &
+                     + sum(geo_targets%weighting_user)
 
-  op_points_spec%weighting = op_points_spec%weighting_user / sum_weightings
-  geo_targets%weighting    = geo_targets%weighting         / sum_weightings
-
+    if (sum_weightings > 0d0) then 
+      op_points_spec%weighting = op_points_spec%weighting_user / sum_weightings
+      geo_targets%weighting    = geo_targets%weighting         / sum_weightings
+    else
+      op_points_spec%weighting = 0d0
+      geo_targets%weighting    = 0d0
+    end if
+  end if 
+  
 
 ! Read curvature constraints
 
-  call read_geo_constraints_inputs ('', iunit, &
-                                  check_curvature, auto_curvature,  &
-                                  max_te_curvature,    &
-                                  max_curv_reverse_top, max_curv_reverse_bot, &
-                                  max_curv_highlow_top, max_curv_highlow_bot, &
-                                  curv_threshold,highlow_threshold)
+  call read_curvature_constraints_inputs ('', iunit, curv_spec, curv_top_spec, curv_bot_spec)
 
+
+! Curvature compatibility to Xoptfoil
+
+  curv_threshold       = curv_top_spec%curv_threshold
+  max_curv_reverse_top = curv_top_spec%max_curv_reverse
+  max_curv_reverse_bot = curv_bot_spec%max_curv_reverse
 
 ! Read constraints
 
-  min_thickness = 0.04d0
+  check_geometry = .true.
+  min_thickness = 0.01d0
   max_thickness = 1000.d0
   min_camber = -0.1d0
   max_camber = 0.1d0
@@ -286,7 +305,8 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
 
   rewind(iunit)
   read(iunit, iostat=iostat1, nml=constraints)
-  call namelist_check('constraints', iostat1, 'warn')
+
+  call namelist_check('constraints', iostat1, 'no-warn')    ! No warning if no constraints
 
   ! Sort thickness constraints in ascending x/c order
   if (naddthickconst > 0) then
@@ -299,17 +319,11 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
     end do
   end if
 
+! Curvature compatibility to Xoptfoil
 
-
-! Smoothing - start read options-----------------------------------------
-  
-  spike_threshold = 0.8d0
-  do_smoothing    = .false.         ! now default - smoothing will be forced if 
-                                    !               quality of surface is bad
-  rewind(iunit)
-  read(iunit, iostat=iostat1, nml=smoothing_options)
-
-
+  curv_top_spec%curv_threshold   = curv_threshold
+  curv_top_spec%max_curv_reverse = max_curv_reverse_top
+  curv_bot_spec%max_curv_reverse = max_curv_reverse_bot  
 
 
 ! Set defaults for naca airfoil options
@@ -353,13 +367,13 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
 
   rewind(iunit)
   read(iunit, iostat=iostat1, nml=initialization)
-  call namelist_check('initialization', iostat1, 'warn')
+  call namelist_check('initialization', iostat1, 'no-warn')
 
 ! Set default particle swarm options
 
   pso_pop = 40
   pso_tol = 1.D-04
-  pso_maxit = 700
+  pso_maxit = 600
   pso_write_particlefile = .false.
 
   if ((trim(shape_functions) == 'camb-thick' ) .or. &
@@ -444,7 +458,7 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
 
       rewind(iunit)
       read(iunit, iostat=iostat1, nml=particle_swarm_options)
-      call namelist_check('particle_swarm_options', iostat1, 'warn')
+      call namelist_check('particle_swarm_options', iostat1, 'no-warn')
       pso_options%pop = pso_pop
       pso_options%tol = pso_tol
       pso_options%maxspeed = initial_perturb
@@ -459,7 +473,7 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
       if (.not. match_foils) then
         pso_options%relative_fmin_report = .true.
       else
-        pso_options%relative_fmin_report = .false.
+        pso_options%relative_fmin_report = .true.
       end if
  
     else if (trim(global_search) == 'genetic_algorithm') then
@@ -524,7 +538,7 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
 
 ! Read and set default xfoil run options
 
-  call  read_xfoil_options_inputs  ('', iunit, show_details, xfoil_options)
+  call  read_xfoil_options_inputs  ('', iunit, xfoil_options)
 
 
 ! Set default xfoil  paneling options
@@ -532,12 +546,21 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
   call read_xfoil_paneling_inputs  ('', iunit, xfoil_geom_options)
 
 
+! Read and set options for polar generation for each new design (generate_polar = .true.) 
+
+  call read_init_polar_inputs ('', iunit, re_default, xfoil_options%ncrit, &
+                               '', generate_polar)
 
 ! Close the input file
 
   close(iunit)
 
 ! Echo namelist options for checking purposes
+
+  ! Test - always echo op points 
+  if (.not. match_foils) call echo_op_points_spec  (op_points_spec, xfoil_options) 
+
+
 
 ! jx-mod  (I did it ... ;-) )
   if (.not. echo_input_parms) goto 10000
@@ -571,37 +594,34 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
   write(*,*)
 
 ! Operating conditions namelist
-! #todo
-!  write(*,'(A)') " &operating_conditions"
-!  write(*,*) " noppoint = ", noppoint
-!  write(*,*) " use_flap = ", use_flap
-!  write(*,*) " x_flap = ", x_flap
-!  write(*,*) " y_flap = ", y_flap
-!  write(*,*) " y_flap_spec = "//trim(y_flap_spec)
-!  write(*,*) " re_default = ", re_default
-!  write(*,*) " re_default_as_resqrtcl = ", re_default_as_resqrtcl
-! mb-mod dynamic-weighting
-!  write(*,*) " dynamic_weighting = ", dynamic_weighting
-!  write(*,*) " dynamic_weighting_p_factor = ", dynamic_weighting_p_factor
-!  write(*,*)
+
+  write(*,'(A)') " &operating_conditions"
+  write(*,*)
+  write(*,*) " use_flap = ", flap_spec%use_flap
+  write(*,*) " x_flap = ", flap_spec%x_flap
+  write(*,*) " y_flap = ", flap_spec%y_flap
+  write(*,*) " y_flap_spec = "//trim(flap_spec%y_flap_spec)
+  write(*,*)
 
   write(*,*)
 
-! Constraints namelist
+! Curvature namelist
+
+  write(*,*) " do_smoothing = ", curv_spec%do_smoothing
+  write(*,*) " check_curvature = ", curv_spec%check_curvature
+  write(*,*) " auto_curvature = ", curv_spec%auto_curvature
+  write(*,*) " max_curv_reverse_top = ", curv_top_spec%max_curv_reverse
+  write(*,*) " max_curv_reverse_bot = ", curv_bot_spec%max_curv_reverse
+  write(*,*) " curv_threshold = ",  curv_top_spec%curv_threshold
+  write(*,*) " spike_threshold = ", curv_top_spec%spike_threshold
+  write(*,*) " max_te_curvature = ", curv_top_spec%max_te_curvature
+
+  ! Constraints namelist
 
   write(*,'(A)') " &constraints"
   write(*,*) " min_thickness = ", min_thickness
   write(*,*) " max_thickness = ", max_thickness
   write(*,*) " min_te_angle = ", min_te_angle
-  write(*,*) " max_te_curvature = ", max_te_curvature
-  write(*,*) " check_curvature = ", check_curvature
-  write(*,*) " auto_curvature = ", auto_curvature
-  write(*,*) " max_curv_reverse_top = ", max_curv_reverse_top
-  write(*,*) " max_curv_reverse_bot = ", max_curv_reverse_bot
-  write(*,*) " max_curv_highlow_top = ", max_curv_highlow_top
-  write(*,*) " max_curv_highlow_bot = ", max_curv_highlow_bot
-  write(*,*) " highlow_threshold = ", highlow_threshold
-  write(*,*) " curv_threshold = ", curv_threshold
   write(*,*) " symmetrical = ", symmetrical
   write(*,*) " min_flap_degrees = ", min_flap_degrees
   write(*,*) " max_flap_degrees = ", max_flap_degrees
@@ -618,15 +638,7 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
   write(*,'(A)') " /"
   write(*,*)
 
-! jx-mod Smoothing - echo namelist
-
-  write(*,'(A)') " &smoothing_options"
-  write(*,*) " do_smoothing = ", do_smoothing
-  write(*,*) " spike_threshold = ", spike_threshold
-  write(*,'(A)') " /"
-  write(*,*)
-
-! jx-mod Geo targets - echo namelist
+! Geo targets - echo namelist
 
   write(*,'(A)') " &geometry_targets"
 
@@ -635,7 +647,6 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
     text = adjustl(text)
     write(*,*) " target_type("//trim(text)//") = ",   geo_targets(i)%type
     write(*,*) " target_value("//trim(text)//") = ",  geo_targets(i)%target_value
-    write(*,*) " x_pos("//trim(text)//") = ",         geo_targets(i)%x
     write(*,*) " weighting_geo("//trim(text)//") = ", geo_targets(i)%weighting
     if (i < noppoint) write(*,*)
   end do   
@@ -762,11 +773,12 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
       trim(seed_airfoil) /= 'naca')                                            &
     call my_stop("seed_airfoil must be 'from_file' or 'naca'.")
   if (trim(shape_functions) /= 'hicks-henne' .and.                             &
-      trim(shape_functions) /= 'hicks-henne-plus' .and.                        &  !#exp-HH-plus 
+      trim(shape_functions) /= 'hicks-henne+' .and.                            &
       trim(shape_functions) /= 'camb-thick' .and.                              &
       trim(shape_functions) /= 'camb-thick-plus' .and.                         &
       trim(shape_functions) /= 'naca')                                         &
-    call my_stop("shape_functions must be 'hicks-henne', hicks-henne-plus', 'camb-thick', 'camb-thick-plus' or 'naca'.") !#exp-HH-plus
+    call my_stop("shape_functions must be 'hicks-henne(+)', 'camb-thick',"//   &
+                 " 'camb-thick-plus' or 'naca'.")
   if ((nfunctions_top < 0) .and.   & 
       trim(shape_functions) /= 'camb-thick' .and.                              &
       trim(shape_functions) /= 'camb-thick-plus')                              &
@@ -793,27 +805,15 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
 
 ! Constraints
 
-  if ((trim(shape_functions) == 'camb-thick') .or. &
-  (trim(shape_functions) == 'camb-thick-plus')) then
-    ! in case of camb_thick checking of curvature makes no sense
-    if (check_curvature) then 
-      call print_note ("Because of shape function 'camb-thick' curvature ckecking "// &
-                       "will be switched off during optimization")
-      check_curvature = .false. 
-      auto_curvature  = .false. 
-    end if 
+  if (curv_spec%check_curvature ) then 
+    if (curv_top_spec%curv_threshold   < 0.01d0)  call my_stop("curv_threshold must be >= 0.01")
+    if (curv_top_spec%spike_threshold  < 0.01d0 ) call my_stop ("spike_threshold must be >= 0.01")
+    if (curv_top_spec%max_curv_reverse < 0)  call my_stop("max_curv_reverse_top must be >= 0")
+    if (curv_bot_spec%max_curv_reverse < 0)  call my_stop("max_curv_reverse_bot must be >= 0")
+    if (curv_top_spec%max_te_curvature < 0.d0) call my_stop("max_te_curvature must be >= 0")
   end if 
 
 
-  if (check_curvature ) then 
-    if (curv_threshold <= 0.d0)    call my_stop("curv_threshold must be > 0.")
-    if (highlow_threshold < 0.01d0) call my_stop("highlow_threshold must be >= 0.01")
-    if (max_curv_reverse_top < 0)  call my_stop("max_curv_reverse_top must be >= 0.")
-    if (max_curv_reverse_bot < 0)  call my_stop("max_curv_reverse_bot must be >= 0.")
-    if (max_curv_highlow_top < 0)  call my_stop("max_curv_highlow_top must be >= 0.")
-    if (max_curv_highlow_bot < 0)  call my_stop("max_curv_highlow_bot must be >= 0.")
-    if (max_te_curvature < 0.d0)   call my_stop("max_te_curvature must be >= 0.")
-  end if 
 
   if (min_thickness <= 0.d0) call my_stop("min_thickness must be > 0.")
   if (max_thickness <= 0.d0) call my_stop("max_thickness must be > 0.")
@@ -848,29 +848,14 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
       call my_stop("addthick_min must be < addthick_max.")
   end do
 
-! jx-mod Smoothing - check options 
 
-  if (do_smoothing) then
-    if ( spike_threshold < 0.1d0 )                                             &
-      call my_stop ("spike_threshold must be >= 0.1")
-  end if
-
-! jx-mod Geo targets - check options
+! Geo targets - check options
 
   do i = 1, ngeo_targets
-
-    if (((trim(geo_targets(i)%type) /= 'zBot' .and.                            &
-      trim(geo_targets(i)%type) /= 'zTop') .and.                               &
-      trim(geo_targets(i)%type) /= 'Camber') .and.                             &
+    if ((trim(geo_targets(i)%type) /= 'Camber') .and.                          &
       trim(geo_targets(i)%type) /= 'Thickness')                                &
-      call my_stop("target type must be 'zBot', 'zTop', 'Camber',"//           &
-                   " or 'Thickness'.")
-    if ((geo_targets(i)%x <= 0.d0 .or.                                         &
-        geo_targets(i)%x >= 1.d0) .and.                                        &
-        trim(geo_targets(i)%type) /= 'Camber' .and.                            &
-        trim(geo_targets(i)%type) /= 'Thickness')                              &
-      call my_stop("x of geometry target position must be > 0 and < 1.")
- end do   
+      call my_stop("Target_type must be 'Camber' or 'Thickness'.")
+  end do   
 
 
 ! Naca airfoil options
@@ -966,17 +951,21 @@ end subroutine read_inputs
 !   (separated from read_inputs to be more modular)
 !=============================================================================
 
-subroutine read_op_points_spec  (input_file, or_iunit, noppoint, op_points_spec)
+subroutine read_op_points_spec  (input_file, or_iunit, noppoint, re_def, &
+                                 op_points_spec, dynamic_weighting_spec)
 
-  use xfoil_driver,       only : op_point_specification_type
+  use xfoil_driver,       only : op_point_specification_type, re_type
+  use airfoil_evaluation, only : dynamic_weighting_specification_type
   use vardef,             only : max_op_points
-  use airfoil_operations, only : my_stop
 
+  character(*), intent(in)    :: input_file 
+  integer, intent(in)         :: or_iunit
+  integer, intent(out)        :: noppoint
+  type (re_type), intent(out) :: re_def
 
-  character(*), intent(in)  :: input_file 
-  integer, intent(in)       :: or_iunit
-  integer, intent(out)      :: noppoint
   type(op_point_specification_type), dimension(:), allocatable, intent(out)  :: op_points_spec
+  type(dynamic_weighting_specification_type), intent(out) :: dynamic_weighting_spec
+
 
 ! Op_point specification 
   character(7),     dimension(max_op_points)  :: op_mode
@@ -985,16 +974,24 @@ subroutine read_op_points_spec  (input_file, or_iunit, noppoint, op_points_spec)
                                                  ncrit_pt, target_value, reynolds, mach
 
   double precision :: re_default
-  logical          :: re_default_as_resqrtcl
+  logical          :: re_default_as_resqrtcl, dynamic_weighting
   type(op_point_specification_type) :: op
 
   integer               :: i, iunit, ioerr, iostat1
   character(10)         :: text
 
+  ! dummy flap variables
+  double precision, dimension(max_op_points) :: flap_degrees
+  character(8),     dimension(max_op_points) :: flap_selection
+  double precision               :: x_flap, y_flap
+  character(3)                   :: y_flap_spec
+  logical                        :: use_flap
+
+
   namelist /operating_conditions/ noppoint, op_mode, op_point, reynolds, mach,   &
             target_value, weighting, optimization_type, ncrit_pt,                & 
-            re_default_as_resqrtcl, re_default
-
+            re_default_as_resqrtcl, re_default, dynamic_weighting, dynamic_weighting_spec, &
+            use_flap, x_flap, y_flap, y_flap_spec, flap_degrees, flap_selection
 
   ! Set defaults for operating conditions and constraints
 
@@ -1012,6 +1009,14 @@ subroutine read_op_points_spec  (input_file, or_iunit, noppoint, op_points_spec)
   ncrit_pt(:) = -1.d0
   target_value(:) = -1.d3 
 
+  ! Default values controlling dynamic weighting 
+  dynamic_weighting = .false. 
+  dynamic_weighting_spec%min_weighting = 0.7d0 
+  dynamic_weighting_spec%max_weighting = 1.4d0 
+  dynamic_weighting_spec%extra_punch   = 1.4d0 
+  dynamic_weighting_spec%start_with_design = 10
+  dynamic_weighting_spec%frequency = 20
+
 
 ! (Open input file) , read options
 
@@ -1026,11 +1031,17 @@ subroutine read_op_points_spec  (input_file, or_iunit, noppoint, op_points_spec)
     read(iunit, iostat=iostat1, nml=operating_conditions)
     close(iunit)
   end if
-  call namelist_check('operating_conditions', iostat1, 'err')
 
 ! overwrite re_default if specified in command line 
 
   re_default = read_cl_re_default ((re_default))
+  re_def%number = read_cl_re_default ((re_default))
+  if (re_default_as_resqrtcl) then
+    re_def%type = 2
+  else
+    re_def%type = 1
+  end if
+
 
 ! store op_point specification in data structure ------------------------
 
@@ -1048,18 +1059,34 @@ subroutine read_op_points_spec  (input_file, or_iunit, noppoint, op_points_spec)
       op_points_spec(i)%re%number  = reynolds(i)
       op_points_spec(i)%re%type    = 1
     else                                    ! take default Re number
-      op_points_spec(i)%re%number  = re_default
-      if (re_default_as_resqrtcl) then
-        op_points_spec(i)%re%type    = 2
-      else
-        op_points_spec(i)%re%type    = 1
-      end if
+      op_points_spec(i)%re = re_def 
     end if
     op_points_spec(i)%ma%number  = mach(i)   ! mach number only Type 1
     op_points_spec(i)%ma%type    = 1
 
     op_points_spec(i)%weighting_user  = weighting (i)
   end do 
+
+! Dynamic weighting - if activated all op_points with 'target' will be dynamic 
+
+  dynamic_weighting_spec%active = dynamic_weighting
+  op_points_spec%extra_punch       = .false. 
+  op_points_spec%dynamic_weighting = .false.      
+
+  ! Set op points to dynamic if weighting is positive
+  do i= 1, noppoint
+    if (trim(op_points_spec(i)%optimization_type (1:6)) == 'target') then
+      if (op_points_spec(i)%weighting_user < 0d0) then
+        ! switch off dynamic if user defined explizit weighting
+        op_points_spec(i)%dynamic_weighting = .false.
+        op_points_spec(i)%weighting_user = - op_points_spec(i)%weighting_user
+      else
+        op_points_spec(i)%dynamic_weighting = .true.
+      end if 
+    end if
+  end do
+
+  if (.not. any(op_points_spec%dynamic_weighting)) dynamic_weighting_spec%active = .false.
 
 !  Modify normalize weightings for operating points
 !  ... will be re-normalized if there are geo_targets...!
@@ -1136,7 +1163,6 @@ end subroutine read_op_points_spec
 
 subroutine read_flap_inputs  (input_file, or_iunit, flap_spec, flap_degrees, flap_selection) 
 
-  use airfoil_operations, only : my_stop
   use vardef,             only : flap_spec_type
 
   character(*), intent(in)      :: input_file
@@ -1210,7 +1236,6 @@ end subroutine read_flap_inputs
 
 subroutine my_op_stop (iop, op_points_spec, message)
 
-  use airfoil_operations, only : my_stop
   use xfoil_driver,       only : op_point_specification_type
 
   type(op_point_specification_type), dimension(:), allocatable, intent(in)  :: op_points_spec
@@ -1232,22 +1257,24 @@ end subroutine my_op_stop
 ! Echo input parms of operating points entered by user
 !-----------------------------------------------------------------------------
 
-subroutine echo_op_points_spec  (op_points_spec)
+subroutine echo_op_points_spec  (op_points_spec, xfoil_options)
 
   use xfoil_driver,       only : op_point_specification_type
+  use xfoil_driver,       only : xfoil_options_type
 
-  type(op_point_specification_type), dimension(:), allocatable, intent(in)  :: op_points_spec
+  type(op_point_specification_type), dimension(:), intent(in)  :: op_points_spec
+  type(xfoil_options_type), intent(in), optional  :: xfoil_options
 
   integer               :: i, re_int
-  character(10)         :: spec_char, target_value_char, ncrit_char
+  character(10)         :: spec_char, target_value_char, ncrit_char, dynamic_char
   type(op_point_specification_type) :: op
 
 
   !write (*,'(" - ",A)') 'Echo operating point definitions'
   write (*,*) 
-  write (*,'(" - ",A2,":",A7,A6,A15,A9,A10,A5,A7,A11, A11)') &
+  write (*,'(" - ",A2,":",A7,A6,A15,A9,A10,A5,A7,A15)') &
                 'No', 'Spec', 'Point', 'Opt. Type', ' Target', & 
-                'Re', 'Type', 'ncrit', 'Weighting','normalized'
+                'Re', 'Type', 'ncrit', 'Weighting'
   
   do i = 1, size (op_points_spec)
 
@@ -1266,18 +1293,29 @@ subroutine echo_op_points_spec  (op_points_spec)
     end if
 
     if (op%ncrit == -1.d0 ) then 
-      ncrit_char = '-'
+      if ( present(xfoil_options)) then
+        write (ncrit_char,'(F7.1)') xfoil_options%ncrit
+      else
+        ncrit_char = '-'
+      end if 
     else
       write (ncrit_char,'(F7.1)') op%ncrit
     end if
 
+    if (op%dynamic_weighting) then 
+      dynamic_char = 'dynamic'
+    else
+      dynamic_char = ''
+    end if
+
     re_int = int (op%re%number)
 
-    write (*,'(3x,I2,":",A7,F6.2,A15,A9,I10,I5,A7,F11.2, F11.2 )') &
+    write (*,'(3x,I2,":",A7,F6.2,A15,A9,I10,I5,A7,F11.2, 1x,A7)') &
           i, trim(spec_char), op%value, trim(op%optimization_type), trim(target_value_char), &
-          re_int, op%re%type, trim(ncrit_char), op%weighting_user, op%weighting
+          re_int, op%re%type, trim(ncrit_char), op%weighting_user, trim(dynamic_char)
   end do 
 
+  write (*,*)
 
 end subroutine echo_op_points_spec
 
@@ -1286,58 +1324,99 @@ end subroutine echo_op_points_spec
 ! Read xoptfoil input file to geometric constraints
 !=============================================================================
 
-subroutine read_geo_constraints_inputs  (input_file, or_iunit, &
-                                          check_curvature, auto_curvature,           &
-                                          max_te_curvature,                           &
-                                          max_curv_reverse_top, max_curv_reverse_bot, &
-                                          max_curv_highlow_top, max_curv_highlow_bot, &
-                                          curv_threshold,highlow_threshold)
+subroutine read_curvature_constraints_inputs  (input_file, or_iunit, &
+                                          curv_spec, curv_top_spec, curv_bot_spec)
 
-  use airfoil_operations, only : my_stop
-
+  use airfoil_evaluation, only : curvature_specification_type, curvature_polyline_specification_type
   character(*), intent(in)           :: input_file
   integer, intent(in)                :: or_iunit
-  logical, intent(inout)             :: check_curvature, auto_curvature 
-  double precision , intent(inout)   :: max_te_curvature,          &
-                                        curv_threshold,highlow_threshold
-  integer, intent(inout)             :: max_curv_reverse_top, max_curv_reverse_bot, &
-                                        max_curv_highlow_top, max_curv_highlow_bot
+  type (curvature_specification_type),  intent(inout) :: curv_spec
+  type (curvature_polyline_specification_type), intent(inout) :: curv_top_spec
+  type (curvature_polyline_specification_type), intent(inout) :: curv_bot_spec
+
   integer :: iostat1, iunit, ioerr
+  integer :: max_curv_reverse_top, max_curv_reverse_bot
+  double precision  :: max_te_curvature
+  double precision  :: curv_threshold, spike_threshold
+  logical :: check_curvature, auto_curvature, do_smoothing
 
-  namelist /constraints/ check_curvature, auto_curvature, &
-                         highlow_threshold, curv_threshold, max_te_curvature, &
+! #depricated
+  integer :: max_curv_highlow_top, max_curv_highlow_bot
+  integer :: max_spikes_top, max_spikes_bot
+  doubleprecision :: highlow_threshold
+
+  namelist /curvature  / check_curvature, auto_curvature, &
+                         highlow_threshold, spike_threshold, curv_threshold, &
+                         max_te_curvature, &
                          max_curv_reverse_top, max_curv_reverse_bot,  &
-                         max_curv_highlow_top, max_curv_highlow_bot
+                         max_curv_highlow_top, max_curv_highlow_bot, &
+                         max_spikes_top, max_spikes_bot
 
+  do_smoothing         = .false.         ! now default - smoothing will be forced if 
+                                         !               quality of surface is bad
   check_curvature      = .true.
   auto_curvature       = .true.
   max_te_curvature     = 10.d0                    ! more or less inactive by default
   max_curv_reverse_top = 0
   max_curv_reverse_bot = 0
-  max_curv_highlow_top = 0
-  max_curv_highlow_bot = 0
-  curv_threshold       = 0.01d0
-  highlow_threshold    = 0.02d0
+  max_curv_highlow_top = -99999                   ! #depricated
+  max_curv_highlow_bot = -99999                   ! #depricated
+  max_spikes_top       = 0
+  max_spikes_bot       = 0
+  curv_threshold       = 0.1d0
+  spike_threshold      = 0.4d0
+  highlow_threshold    = -99999d0                 ! #depricated
 
   
   ! Open input file and read namelist from file
 
-  if (trim(input_file) == '') then
+  if (trim(input_file) == '' .and. or_iunit > 0 ) then
     iunit = or_iunit
     rewind(iunit)
-    read(iunit, iostat=iostat1, nml=constraints)
-  else
+    read(iunit, iostat=iostat1, nml=curvature)
+    call namelist_check('curvature', iostat1, 'warn')
+  elseif (trim(input_file) /= '') then
     iunit = 12
     open(unit=iunit, file=input_file, status='old', iostat=ioerr)
     if (ioerr == 0) then
-      read(iunit, iostat=iostat1, nml=constraints)
+      read(iunit, iostat=iostat1, nml=curvature)
       close(iunit)
+    else
+      iostat1 = ioerr 
     end if
+  else
+    iostat1 = 0 
   end if
-  ! call namelist_check('constraints', iostat1, 'warn')
+  call namelist_check('constraints', iostat1, 'no-warn')
+
+  if (max_curv_highlow_top /= -99999) & 
+    call print_note ("'max_curv_highlow_top' is depricated and won't be considered") 
+  if (max_curv_highlow_bot /= -99999) & 
+    call print_note ("'max_curv_highlow_bot' is depricated and won't be considered") 
+  if (highlow_threshold /= -99999d0) & 
+    call print_note ("'highlow_threshold' is depricated and won't be considered") 
+
+  curv_spec%check_curvature      = check_curvature
+  curv_spec%auto_curvature       = auto_curvature
+  curv_spec%do_smoothing         = do_smoothing
 
 
-end subroutine read_geo_constraints_inputs
+  curv_top_spec%check_curvature_bumps = .false.
+  curv_top_spec%max_te_curvature = max_te_curvature
+  curv_top_spec%max_curv_reverse = max_curv_reverse_top
+  curv_top_spec%max_spikes       = max_spikes_top
+  curv_top_spec%curv_threshold   = curv_threshold
+  curv_top_spec%spike_threshold  = spike_threshold
+
+  curv_bot_spec%check_curvature_bumps = .false.
+  curv_bot_spec%max_te_curvature = max_te_curvature
+  curv_bot_spec%max_curv_reverse = max_curv_reverse_bot
+  curv_bot_spec%max_spikes       = max_spikes_bot
+  curv_bot_spec%curv_threshold   = curv_threshold
+  curv_bot_spec%spike_threshold  = spike_threshold
+
+
+end subroutine read_curvature_constraints_inputs
 
 
 !=============================================================================
@@ -1348,7 +1427,6 @@ end subroutine read_geo_constraints_inputs
 subroutine read_xfoil_paneling_inputs  (input_file, or_iunit, geom_options)
 
   use vardef,             only : npan_fixed
-  use airfoil_operations, only : my_stop
   use xfoil_driver,       only : xfoil_geom_options_type
 
   character(*), intent(in) :: input_file
@@ -1434,23 +1512,21 @@ end subroutine read_xfoil_paneling_inputs
 ! Read xfoil_run_options input
 !=============================================================================
 
-subroutine read_xfoil_options_inputs  (input_file, or_iunit, show_details, xfoil_options)
+subroutine read_xfoil_options_inputs  (input_file, or_iunit, xfoil_options)
 
   use xfoil_driver, only : xfoil_options_type
-  use airfoil_operations, only : my_stop
 
   character(*), intent(in) :: input_file 
   integer, intent(in)      :: or_iunit
-  logical,      intent(in) :: show_details
   type(xfoil_options_type), intent(out)    :: xfoil_options
 
-  logical :: viscous_mode, silent_mode, fix_unconverged, reinitialize
+  logical :: viscous_mode, silent_mode, fix_unconverged, reinitialize, show_details
   integer :: bl_maxit
   double precision :: ncrit, xtript, xtripb, vaccel
   integer :: iunit, ioerr, iostat1
 
   namelist /xfoil_run_options/ ncrit, xtript, xtripb, viscous_mode,            &
-  silent_mode, bl_maxit, vaccel, fix_unconverged, reinitialize
+  silent_mode, bl_maxit, vaccel, fix_unconverged, reinitialize, show_details
 
 
   ! Set default xfoil aerodynamics
@@ -1465,6 +1541,7 @@ subroutine read_xfoil_options_inputs  (input_file, or_iunit, show_details, xfoil
                             !   higher lift --> reduced 
   fix_unconverged = .true.
   reinitialize = .false.    ! as run_xfoil is improved, this will speed up the xfoil calcs
+  show_details = .false.    ! show success info during op point calculation
 
 ! Read xfoil options
 
@@ -1539,10 +1616,6 @@ end subroutine
 !=============================================================================80
 subroutine namelist_check(nmlname, errcode, action_missing_nml)
 
-  use os_util,            only : print_note
-  use airfoil_operations, only : my_stop
- 
-
   character(*), intent(in) :: nmlname
   integer, intent(in) :: errcode
   character(*), intent(in) :: action_missing_nml
@@ -1551,8 +1624,10 @@ subroutine namelist_check(nmlname, errcode, action_missing_nml)
 
   if (errcode < 0) then
     if (trim(action_missing_nml) == 'warn') then
-      call print_note ('Namelist '//trim(nmlname)//& 
-                      ' not found in input file. Using default values.')
+      call print_note ("Namelist '"//trim(nmlname)//& 
+                      "' not found in input file. Using default values.")
+    elseif (trim(action_missing_nml) == 'no-warn') then
+      ! do nothing
     else
       call my_stop ('Error: namelist '//trim(nmlname)//&
                      ' is required and was not found in input file.')
@@ -1560,6 +1635,8 @@ subroutine namelist_check(nmlname, errcode, action_missing_nml)
   else if (errcode == 2) then
     if (trim(action_missing_nml) == 'warn') then
       call print_note ('No input file. Using default values for namelist '// trim(nmlname))
+    elseif (trim(action_missing_nml) == 'no-warn') then
+      ! do nothing
     else
       call my_stop ('Error: No input file. Namelist '//trim(nmlname)//&
                      ' is required for operation.')
@@ -1580,9 +1657,6 @@ end subroutine namelist_check
 !
 !=============================================================================80
 subroutine read_clo(input_file, output_prefix, exename)
-
-  use airfoil_operations, only : my_stop
-  use os_util, only: print_error
 
   character(*), intent(inout) :: input_file, output_prefix
   character(*), intent(in), optional :: exename
@@ -1692,8 +1766,6 @@ end subroutine print_usage
 
 function read_cl_re_default (re_default)
 
-  use airfoil_operations, only : my_stop
-
   double precision, intent(in) :: re_default
   double precision :: read_cl_re_default
 
@@ -1736,8 +1808,6 @@ end function read_cl_re_default
 ! ------------------------------------------------------------------------
 
 function read_cl_airfoil_file (file_name)
-
-  use airfoil_operations, only : my_stop
 
   character(80), intent(in) :: file_name
   character(80) :: read_cl_airfoil_file

@@ -86,7 +86,7 @@ subroutine geneticalgorithm(xopt, fmin, step, fevals, objfunc, x0, xmin, xmax, &
   use optimization_util, only : init_random_seed, initial_designs,             &
                                 design_radius, write_design, bubble_sort,      &
                                 read_run_control
-  use vardef, only : output_prefix
+  use vardef, only :  design_subdir
 
   double precision, dimension(:), intent(inout) :: xopt
   double precision, intent(out) :: fmin
@@ -200,7 +200,8 @@ subroutine geneticalgorithm(xopt, fmin, step, fevals, objfunc, x0, xmin, xmax, &
   end if
 
 ! Open file for writing iteration history
-  histfile = trim(output_prefix)//'_optimization_history.dat'
+  histfile  = trim(design_subdir)//'Optimization_History.dat'
+
   iunit = 17
   new_history_file = .false.
   if (step == 0) then

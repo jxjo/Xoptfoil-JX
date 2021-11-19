@@ -15,12 +15,15 @@ module polar_operations
 
   use xfoil_driver,       only : re_type, op_point_specification_type
   use xfoil_driver,       only : op_point_result_type
+  use os_util
+
 
   implicit none
 
   type polar_type
     character(250)   :: airfoil_name    ! Name of airfoil
     character(250)   :: file_name       ! Name of polar file name 
+    character(250)   :: add_info        ! additional info string in polar file 
     type(re_type)    :: re              ! Re number of this polar (re*sqrt(cl) if Type2)
     type(re_type)    :: ma              ! Ma number of this polar (mach*sqrt(cl) if Type2)
     double precision :: ncrit           ! ncrit of polar
@@ -33,48 +36,17 @@ module polar_operations
                         op_points_spec  !array with specified op_points
     type(op_point_result_type), dimension (:), allocatable :: & 
                         op_points       !array with all calculated op_points
-   end type polar_type
+  end type polar_type
 
-   integer :: MAXPOLARS = 30            ! max number of polars
-   integer :: MAXOPS    = 100           ! max number of operating points of a polar 
+  integer, parameter :: MAXPOLARS = 30            ! max number of polars
+  integer, parameter :: MAXOPS    = 100           ! max number of operating points of a polar 
+
+   ! Parms for operating point specification
+  integer, private :: npolars
+  type (polar_type), dimension (MAXPOLARS), private :: polars
+
 
 contains
-
-
-!=============================================================================
-! High level entry for polar generation to kepp all the polar suff local to module
-!
-! - read input file for namelist &polar_generation
-! - get polar definitions
-! - calculate polars for foil with foilname
-! - write each polar to a file 
-!=============================================================================
-
-subroutine check_and_do_polar_generation (input_file, output_prefix, foil)
-
-  use vardef,             only : airfoil_type
-  use xfoil_driver,       only : xfoil_geom_options_type, xfoil_options_type
-  use input_output,       only : read_xfoil_options_inputs, read_xfoil_paneling_inputs
- 
-  character(*), intent(in)          :: input_file, output_prefix
-  type (airfoil_type), intent (in)  :: foil
-
-  type (polar_type), dimension (MAXPOLARS) :: polars
-  type (xfoil_geom_options_type) :: xfoil_geom_options
-  type (xfoil_options_type)      :: xfoil_options
-  integer  :: npolars
-
-  call read_xfoil_options_inputs  (input_file, 0, .true., xfoil_options)
-  call read_polar_inputs          (input_file, xfoil_options, foil%name, npolars, polars)
-
-  if (npolars > 0) then
-    call read_xfoil_paneling_inputs (input_file, 0, xfoil_geom_options)
-    call generate_polar_files (output_prefix, foil, npolars, polars, &
-                               xfoil_geom_options, xfoil_options)
-  end if
-
-end subroutine check_and_do_polar_generation
-
 
  
 !=============================================================================
@@ -86,256 +58,283 @@ end subroutine check_and_do_polar_generation
 ! The name of the file is aligned to xflr5 polar file naming
 !=============================================================================
 
-subroutine generate_polar_files (output_prefix, foil, npolars, polars, &
-                                xfoil_geom_options, xfoil_options)
+subroutine generate_polar_files (show_details, subdirectory, foil, xfoil_geom_options, xfoil_options)
 
-  use vardef,             only : airfoil_type
+  use vardef,             only : airfoil_type, flap_spec_type
   use os_util,            only : make_directory
   use xfoil_driver,       only : xfoil_geom_options_type, xfoil_options_type
+  use xfoil_driver,       only : op_point_result_type, run_op_points, xfoil_driver_reset
 
-  type (polar_type), dimension (MAXPOLARS), intent (inout) :: polars
   type (airfoil_type), intent (in)  :: foil
-  integer, intent (in)              :: npolars
-  character (*), intent(in)         :: output_prefix
+  logical, intent(in)               :: show_details
+  character (*), intent(in)         :: subdirectory
   type (xfoil_geom_options_type), intent(in) :: xfoil_geom_options
   type (xfoil_options_type), intent(in)      :: xfoil_options
 
-  
+  double precision, dimension(:), allocatable :: flap_degrees
+  type(flap_spec_type) :: flap_spec               ! dummy - no flaps used
+  type(op_point_result_type), dimension(:), allocatable :: op_points_result
   integer :: i
-  character (255) :: polars_subdirectory
+  character (255) :: polars_subdirectory, out_string
 
-! Create subdir for polar files if not exist
-  polars_subdirectory = trim(output_prefix)//'_polars'
-  call make_directory (trim(polars_subdirectory))
+  flap_spec%use_flap  = .false. 
+
+  if (trim(subdirectory) == '' ) then 
+    polars_subdirectory = ''
+  else
+    polars_subdirectory = trim(subdirectory) // '\'
+  end if
 
   ! calc and write all polars
 
-  if (npolars > 1) then
-    write (*,'(A,I2,A)') 'A total of ',npolars,' polars will be generated '//  &
-                            'for airfoil '//trim(foil%name)
-  else
-    write (*,'(A,I2,A)') 'One polar will be generated '//  &
-                            'for airfoil '//trim(foil%name)
-  end if
-
   do i = 1, npolars
 
-    write (*,*) 
-    write (*,'(" - ",A,I1,A, I7,A)') 'Calculating polar Type ',polars(i)%re%type,', Re=',  &
-          int(polars(i)%re%number)
-    call init_polar (polars(i))
 
-    call calculate_polar (foil, polars(i), xfoil_geom_options, xfoil_options)
+    if (allocated(op_points_result))  deallocate (op_points_result)
+    if (allocated(flap_degrees))      deallocate (flap_degrees)
+    allocate (flap_degrees(polars(i)%n_op_points))
+    flap_degrees (:)    = 0.d0 
+  
+    ! reset out lier detection tect. for a new polar 
+    call xfoil_driver_reset
+ 
+    if (show_details) then 
+      write (out_string,'(A,I1,A, I7)') 'Generating polar Type ',polars(i)%re%type,', Re=',  &
+                                        int(polars(i)%re%number)
+      call print_note_only ('- ' //trim(out_string))
+      call print_colored (COLOR_NOTE, '   ')
+    end if 
 
-    write (*,'(" - ",A, F7.0)') 'Writing polar to '//trim(polars_subdirectory)//'/'//trim(polars(i)%file_name)
+    call run_op_points (foil, xfoil_geom_options, xfoil_options,        &
+                        flap_spec, flap_degrees, &
+                        polars(i)%op_points_spec, op_points_result)
+  
+    call xfoil_driver_reset
 
-    open(unit=13, file= trim(polars_subdirectory)//'/'//trim(polars(i)%file_name), status='replace')
+    if (show_details) then 
+      write (out_string,'(A,I1,A, I7,A)') 'Writing polar Type ',polars(i)%re%type,', Re=',  &
+            int(polars(i)%re%number), ' to '//trim(polars_subdirectory)//'/...'
+      call print_colored (COLOR_NORMAL, ' - ' //trim(out_string))
+      write (*,*) 
+      write (*,*) 
+    end if 
+
+    open(unit=13, file= trim(polars_subdirectory)//trim(polars(i)%file_name), status='replace')
     call write_polar_header (13, polars(i))
-    call write_polar_data   (13, polars(i))
+    call write_polar_data   (13, op_points_result)
     close (13)
-
-    deallocate (polars(i)%op_points)
 
   end do 
 
 end subroutine generate_polar_files
 
 !=============================================================================
-! Read xoptfoil input file to get polars (definition) and xfoil run options
+! Read xoptfoil input file to get polars (definition)
 !   (separated from read_inputs to be more modular)
+! Init polar data structure in this odule
+!
+!   - re_default for polar definitions with no Reynolds
+!   - nrit for the polar xfoil calculation
+!   - name of foil
+! Returns:  - Polar has to be generated 
 !=============================================================================
 
-subroutine read_polar_inputs  (input_file, xfoil_options, foil_name, npolars, polars)
+subroutine read_init_polar_inputs  (input_file, or_iunit, re_default, ncrit, foil_name, &
+                                    generate_polar)
 
-  use airfoil_operations, only : my_stop
-  use input_output,       only : read_cl_re_default
-  use input_output,       only : namelist_check
+!  use input_output,       only : namelist_check
   use xfoil_driver,       only : xfoil_options_type
 
-  type (polar_type), dimension (MAXPOLARS), intent (out) :: polars
-  type(xfoil_options_type), intent(in)    :: xfoil_options
+  integer, intent(in)           :: or_iunit
+  type (re_type), intent(in)    :: re_default
+  double precision, intent(in)  :: ncrit 
+  character(*), intent(in)      :: input_file, foil_name
+  logical, intent(out)          :: generate_polar            ! .true. .false. 
 
-  character(*), intent(in) :: input_file, foil_name
-  integer , intent(out)    :: npolars
-
-  logical         :: generate_polars                         ! .true. .false. 
   integer         :: type_of_polar                           ! 1 or 2 
   character (7)   :: op_mode                                 ! 'spec-al' 'spec_cl'
   double precision, dimension (MAXPOLARS) :: polar_reynolds  ! 40000, 70000, 100000
   double precision, dimension (3)  :: op_point_range         ! -1.0, 10.0, 0.5
+  logical                          :: generate_polars        ! compatibility to older version 
 
   integer :: istat, iunit, i
 
-  namelist /polar_generation/ generate_polars, type_of_polar, polar_reynolds,   &
+  namelist /polar_generation/ generate_polar, generate_polars, type_of_polar, polar_reynolds,   &
                               op_mode, op_point_range
 
 ! Init default values for polars
 
   npolars         = 0
+  generate_polar  = .false.
   generate_polars = .false.
-  type_of_polar   = 1
+  type_of_polar   = -1
   op_mode         = 'spec-al'
-  op_point_range  = 0d0
+  op_point_range  = (/ -2d0, 10d0 , 1.0d0 /)
   polar_reynolds  = 0d0
+
+  istat           = 0
 
 ! Open input file and read namelist from file
 
-  iunit = 12
-  open(unit=iunit, file=input_file, status='old', iostat=istat)
+  if (trim(input_file) == '') then
+    iunit = or_iunit
+    rewind(iunit)
+  else
+    iunit = 12
+    open(unit=iunit, file=input_file, status='old', iostat=istat)
+  end if
 
   if (istat == 0) then
 
     read (iunit, iostat=istat, nml=polar_generation)
-    if (generate_polars) then 
-      call namelist_check('polar_generation', istat, 'warn')
+    if (generate_polar) then 
+      !call namelist_check('polar_generation', istat, 'warn')
     end if
-    close (iunit)
+
+    if (trim(input_file) /= '') close (iunit)
   else
     call my_stop('Could not find input file '//trim(input_file)//'.')
   end if
   
-  if (.not. generate_polars) return 
+  generate_polar = generate_polar .or. generate_polars    ! compatibility to older version
 
-! if there are no re numbers in input file take from command line
-  if (polar_reynolds(1) == 0d0) then
-    polar_reynolds(1) =  read_cl_re_default (0d0) 
+  if (.not. generate_polar) return 
+
+! if there are no re numbers in input file take default
+  if (polar_reynolds(1) == 0d0) then 
+    polar_reynolds(1) = re_default%number 
   end if
+  if (type_of_polar == -1) then 
+    type_of_polar     = re_default%type
+  end if 
+
 
 ! Input sanity
 
   if ((op_mode /= 'spec-al') .and. (op_mode /= 'spec-cl')) then
-    call my_stop ("op_mode must be 'spec-cl' or 'spec-al'")
+    call my_stop ("&polar_generation: op_mode must be 'spec-cl' or 'spec-al'")
   end if
   if ((type_of_polar /= 1) .and. (type_of_polar /= 2)) then 
-    call my_stop ("Type of polars must be either 'Type1' or 'Type2'")
+    call my_stop ("&polar_generation: Type of polars must be either '1' or '2'")
   end if 
   if ((op_point_range(2) - op_point_range(1)) <= 0d0 ) then 
-    call my_stop ("End of polar op_point_range must be higher than the start.")
+    call my_stop ("&polar_generation: End of polar op_point_range must be higher than the start.")
   end if
   if (( op_point_range(1) + op_point_range(3)) >= op_point_range(2) ) then 
-    call my_stop ("Start of polar op_point_range + increment should be end of op_point_range.")
-  end if
-  if (polar_reynolds(1) == 0d0) then 
-    call my_stop ("No Reynolds number found - either in input file nor as command line parameter.")
+    call my_stop ("&polar_generation: Start of polar op_point_range + increment should be end of op_point_range.")
   end if
 
-  
+
 ! Init polar definitions with input 
 
+  npolars = 0
   do i = 1, size(polar_reynolds)
     if (polar_reynolds(i) > 1000d0) then 
-      polars(i)%airfoil_name    = trim(foil_name)
-      polars(i)%spec_cl         = (op_mode == 'spec_cl')
-      polars(i)%start_value     = op_point_range (1)
-      polars(i)%end_value       = op_point_range (2)
-      polars(i)%increment       = op_point_range (3)
-      polars(i)%ma%number       = 0.0d0                   ! currently not supported
-      polars(i)%ma%type         = 1                       ! currently not supported
-      polars(i)%re%number       = polar_reynolds(i)
-      polars(i)%re%type         = type_of_polar
-      polars(i)%ncrit           = xfoil_options%ncrit
-      npolars                   = i
+      npolars = npolars + 1
+      polars(npolars)%airfoil_name    = trim(foil_name)
+      polars(npolars)%spec_cl         = (op_mode == 'spec_cl')
+      polars(npolars)%start_value     = op_point_range (1)
+      polars(npolars)%end_value       = op_point_range (2)
+      polars(npolars)%increment       = op_point_range (3)
+      polars(npolars)%ma%number       = 0.0d0                   ! currently not supported
+      polars(npolars)%ma%type         = 1                       ! currently not supported
+      polars(npolars)%re%number       = polar_reynolds(i)
+      polars(npolars)%re%type         = type_of_polar
+      polars(npolars)%ncrit           = ncrit
     end if
   end do
 
-end subroutine read_polar_inputs
-
-
-
-!=============================================================================
-! Initialize polar data structure based calculated number of op_points
-!=============================================================================
-
-subroutine init_polar (polar)
-
-  type (polar_type), intent (inout) :: polar
-  double precision :: cur_value
-  integer :: i 
-
-! calc number of op_points 
-
-  polar%n_op_points = get_n_op_points (polar) 
-  if (polar%n_op_points >= 0) then
-    allocate (polar%op_points(polar%n_op_points))
-    allocate (polar%op_points_spec(polar%n_op_points))
+  if (npolars > 0) then 
+    call init_polars
   else
-    write (*,*) "Error: No valid value boundaries for polar"
-    stop
-  endif
+    call my_stop ("&polar_generation: No Reynolds number found - either in input file nor as command line parameter.")
+  end if 
 
-! build this special xflr5 filename  T1_Re0.400_M0.00_N9.0.txt 
-
-  polar%file_name = build_filename (polar)
-
-! init op data points of polar
-
-  cur_value = polar%start_value
-
-  do i = 1, polar%n_op_points
-
-    polar%op_points_spec(i)%value    = cur_value
-    polar%op_points_spec(i)%spec_cl  = polar%spec_cl
-    polar%op_points_spec(i)%re       = polar%re
-    polar%op_points_spec(i)%ma       = polar%ma
-    polar%op_points_spec(i)%ncrit    = polar%ncrit
-
-    cur_value = cur_value + polar%increment
-
-end do
-
-end subroutine init_polar
-
+end subroutine read_init_polar_inputs
 
 
 !=============================================================================
-! Calculate polar for airfoil
+! Initialize the global polar data structure 
 !=============================================================================
 
-subroutine calculate_polar (foil, polar, xfoil_geom_options, xfoil_options)
+subroutine init_polars ()
 
-  use vardef,             only : airfoil_type
-  use vardef,             only : flap_spec_type
-  use xfoil_driver,       only : run_op_points, xfoil_driver_reset
-  use xfoil_driver,       only : xfoil_geom_options_type, xfoil_options_type
-  use airfoil_evaluation, only : show_op_bubbles
+  integer :: ipol, i
+  double precision :: cur_value
 
-  type (polar_type), intent (inout) :: polar
-  type (airfoil_type), intent (in)  :: foil
-  type (xfoil_geom_options_type), intent(in) :: xfoil_geom_options
-  type (xfoil_options_type), intent(in)      :: xfoil_options
+  do ipol = 1, npolars
 
-  double precision, dimension(polar%n_op_points) :: flap_degrees
-  type(flap_spec_type) :: flap_spec               ! dummy - no flaps used
+  ! calc number of op_points 
 
-  flap_degrees (:)    = 0.d0 
-  flap_spec%use_flap  = .false. 
+    polars(ipol)%n_op_points = get_n_op_points (polars(ipol)) 
+    if (polars(ipol)%n_op_points >= 0) then
+      if (allocated(polars(ipol)%op_points))      deallocate (polars(ipol)%op_points)
+      if (allocated(polars(ipol)%op_points_spec)) deallocate (polars(ipol)%op_points_spec)
+      ! only spec - op_points will be allocated in xfoil driver ...
+      allocate (polars(ipol)%op_points_spec(polars(ipol)%n_op_points))
+    else
+      write (*,*) "Error: No valid value boundaries for polar"
+      stop
+    endif
 
-  ! reset out lier detection tect. for a new polar 
-  call xfoil_driver_reset
+  ! build this special xflr5 filename  T1_Re0.400_M0.00_N9.0.txt 
 
-  call run_op_points (foil, xfoil_geom_options, xfoil_options,        &
-                      flap_spec, flap_degrees, &
-                      polar%op_points_spec, polar%op_points)
+    polars(ipol)%file_name = build_filename (polars(ipol))
 
-  ! #exp-bubble 
-  call show_op_bubbles (polar%op_points_spec, polar%op_points) 
+  ! init op data points of polar
 
-end subroutine calculate_polar
+    cur_value = polars(ipol)%start_value
 
+    do i = 1, polars(ipol)%n_op_points
+
+      polars(ipol)%op_points_spec(i)%value    = cur_value
+      polars(ipol)%op_points_spec(i)%spec_cl  = polars(ipol)%spec_cl
+      polars(ipol)%op_points_spec(i)%re       = polars(ipol)%re
+      polars(ipol)%op_points_spec(i)%ma       = polars(ipol)%ma
+      polars(ipol)%op_points_spec(i)%ncrit    = polars(ipol)%ncrit
+
+      cur_value = cur_value + polars(ipol)%increment
+
+    end do
+  end do
+
+end subroutine init_polars
+
+!------------------------------------------------------------------------------
+! Set info for polar filename and additional info like "Design 123"
+!------------------------------------------------------------------------------
+subroutine set_polar_info (foil_name, file_name, add_info)
+
+  character (*), intent(in) :: foil_name, file_name, add_info
+
+  integer     :: i
+
+  if (size(polars) > 0) then 
+    do i = 1, size(polars)
+      polars(i)%airfoil_name = trim(foil_name)
+      polars(i)%file_name = trim(file_name)
+      polars(i)%add_info  = trim(add_info)
+    end do 
+  else
+    call my_stop("Internal error: No polar initilaized for generate_polar.")
+  end if 
+
+end subroutine set_polar_info
 
 
 !------------------------------------------------------------------------------
 ! Write polar data in xfoil format to out_unit
 !------------------------------------------------------------------------------
-subroutine write_polar_data (out_unit, polar)
+subroutine write_polar_data (out_unit, op_points_result)
 
   use xfoil_driver,       only : op_point_result_type, op_point_specification_type
 
-  type (polar_type), intent (in) :: polar
+  type (op_point_result_type), dimension (:), intent (in) :: op_points_result
   integer,           intent (in) :: out_unit
 
   type (op_point_result_type) :: op
   integer              :: i 
+  character (100)      :: text_out
 
 ! xflr5 example
 ! -
@@ -347,15 +346,15 @@ subroutine write_polar_data (out_unit, polar)
   write (out_unit,'(A)') "  alpha     CL        CD       CDp       Cm    Top Xtr Bot Xtr "
   write (out_unit,'(A)') " ------- -------- --------- --------- -------- ------- ------- "
 
-  do i = 1, polar%n_op_points
+  do i = 1, size(op_points_result)
 
-    op = polar%op_points(i)
+    op = op_points_result(i)
     if (op%converged) then
       write (out_unit,  "(   F8.3,   F9.4,    F10.5,    F10.5,    F9.4,   F8.4,   F8.4)") &
                           op%alpha, op%cl, op%cd,    0d0,  op%cm,op%xtrt,op%xtrb
     else
-      write(*,'(15x,A,I2,A, F6.2)') "Warning: No convergence - Skipped writing of" // &
-      " op",i," - ",polar%op_points_spec(i)%value
+      write(text_out,'(A,F4.2)') "No convergence of xfoil - Skipped cl=",op%cl
+      call print_warning (trim(text_out),3)
     end if
 
   end do 
@@ -375,7 +374,7 @@ subroutine write_polar_header (out_unit, polar)
 
 ! Example xflr5
 !-
-!xflr5 v6.47
+!Xoptfoil-JX Design_Polar 77
 !
 ! Calculated polar for: JX FXrcn 15
 !
@@ -385,7 +384,11 @@ subroutine write_polar_header (out_unit, polar)
 ! Mach =   0.000     Re =     0.400 e 6     Ncrit =   9.000
 !
 !-
-  write (out_unit,'(A)') "Xoptfoil-JX"
+
+  if (trim(polar%airfoil_name) == '') &
+    call my_stop ('Internal error: Xfoil polar to write has no name.')
+
+  write (out_unit,'(A)') "Xoptfoil-JX" // " " // trim(polar%add_info)
   write (out_unit,*)
   write (out_unit,'(A)') " Calculated polar for: "//trim(polar%airfoil_name)
   write (out_unit,*)

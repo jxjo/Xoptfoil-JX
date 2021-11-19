@@ -21,20 +21,25 @@ module os_util
   integer, parameter, public  :: COLOR_ERROR   = 5
   integer, parameter, public  :: COLOR_WARNING = 6
   integer, parameter, public  :: COLOR_NOTE    = 7
-  integer, parameter, public  :: COLOR_PROGRAM = 8
+  integer, parameter, public  :: COLOR_FEATURE = 8
+  integer, parameter, public  :: COLOR_PALE    = 9
+  integer, parameter, public  :: COLOR_FIXED   = 10
 
   integer, parameter, public  :: Q_GOOD     = 0         ! must be ordered
   integer, parameter, public  :: Q_OK       = 1
   integer, parameter, public  :: Q_BAD      = 2
   integer, parameter, public  :: Q_PROBLEM  = 4
+  integer, parameter, public  :: Q_NEW      = 8
 
   private
 
   public :: print_colored
   public :: make_directory
+  public :: my_stop
   public :: print_error
   public :: print_warning
   public :: print_note
+  public :: print_note_only
   public :: print_colored_i
   public :: print_colored_r
   public :: print_colored_s
@@ -64,7 +69,9 @@ module os_util
 #ifdef UNIX
 
   character (4)  :: FOREGROUND_YELLOW      = '[33m'
+  character (4)  :: FOREGROUND_MAGENTA     = '[35m'
   character (4)  :: FOREGROUND_CYAN        = '[36m'
+  character (4)  :: FOREGROUND_GRAY        = '[37m'
   character (4)  :: FOREGROUND_LIGHT_GREEN = '[92m'
   character (4)  :: FOREGROUND_LIGHT_RED   = '[91m'
   character (4)  :: FOREGROUND_LIGHT_BLUE  = '[94m'
@@ -85,6 +92,7 @@ module os_util
   integer(WORD), parameter, public :: FOREGROUND_BLUE = int(Z"1",WORD)
   integer(WORD), parameter, public :: FOREGROUND_GREEN = int(Z"2",WORD)
   integer(WORD), parameter, public :: FOREGROUND_RED = int(Z"4",WORD)
+  integer(WORD), parameter, public :: FOREGROUND_MAGENTA= int(Z"5",WORD)
   integer(WORD), parameter, public :: FOREGROUND_INTENSITY = int(Z"8",WORD)
   integer(WORD), parameter, public :: BACKGROUND_BLUE = int(Z"10",WORD)
   integer(WORD), parameter, public :: BACKGROUND_GREEN = int(Z"20",WORD)
@@ -193,6 +201,10 @@ subroutine print_colored (color_typ, text)
       color_string = FOREGROUND_YELLOW
     case (COLOR_NOTE)
       color_string = FOREGROUND_CYAN
+    case (COLOR_PALE)
+      color_string = FOREGROUND_GRAY
+    case (COLOR_FIXED)
+      color_string = FOREGROUND_MAGENTA
     case default
       color_string = ''
   end select
@@ -240,7 +252,11 @@ subroutine print_colored_windows (color_typ, text)
       color_attribute = iany([FOREGROUND_INTENSITY])
 !     grey is better then thi light blue
 !      color_attribute = iany([FOREGROUND_BLUE, FOREGROUND_GREEN])
-    case (COLOR_PROGRAM)
+    case (COLOR_PALE)
+      color_attribute = iany([FOREGROUND_INTENSITY])
+    case (COLOR_FIXED)
+      color_attribute = iany([FOREGROUND_MAGENTA])
+    case (COLOR_FEATURE)
       color_attribute = iany([FOREGROUND_BLUE, FOREGROUND_INTENSITY])
     case default
       color_attribute = iany([FOREGROUND_RED, FOREGROUND_GREEN, FOREGROUND_BLUE])
@@ -298,26 +314,78 @@ end subroutine make_directory_unix
 !  Print colored error, warning, note strings to console
 !------------------------------------------------------------------------------------------
 
-subroutine print_error (text)
+subroutine print_error (text, intent)
   character(*),  intent (in) :: text
-  write(*,'(1x)', advance = 'no')
+  integer,  intent (in), optional :: intent
+  integer :: i
+  i = 1
+  if (present (intent)) then 
+    if (intent >0 .and. intent <80) i = intent
+  end if
+  write(*,'(A)', advance = 'no') repeat(' ',i)
   call print_colored (COLOR_ERROR, trim(text))
   write (*,'(A)')
 end subroutine print_error
 
-subroutine print_warning (text)
+subroutine print_warning (text, intent)
   character(*),  intent (in) :: text
-  write(*,'(1x)', advance = 'no')
+  integer,  intent (in), optional :: intent
+  integer :: i
+  i = 1
+  if (present (intent)) then 
+    if (intent >0 .and. intent <80) i = intent
+  end if
+  write(*,'(A)', advance = 'no') repeat(' ',i)
   call print_colored (COLOR_WARNING, 'Warning: ')
   write (*,'(A)') trim(text)
 end subroutine print_warning
 
-subroutine print_note (text)
+subroutine print_note (text, intent)
   character(*),  intent (in) :: text
-  write(*,'(1x)', advance = 'no')
+  integer,  intent (in), optional :: intent
+  integer :: i
+  i = 1
+  if (present (intent)) then 
+    if (intent >0 .and. intent <80) i = intent
+  end if
+  write(*,'(A)', advance = 'no') repeat(' ',i)
   call print_colored (COLOR_NOTE, 'Note: ')
   write (*,'(A)') trim(text)
 end subroutine print_note
+
+subroutine print_note_only (text, intent)
+  character(*),  intent (in) :: text
+  integer,  intent (in), optional :: intent
+  integer :: i
+  i = 1
+  if (present (intent)) then 
+    if (intent >0 .and. intent <80) i = intent
+  end if
+  call print_colored (COLOR_NOTE, repeat(' ',i) // trim(text))
+  write (*,*)
+end subroutine print_note_only
+
+!------------------------------------------------------------------------------------------
+! Stops and prints an error message, or just warns
+!------------------------------------------------------------------------------------------
+
+subroutine my_stop(message, stoptype) 
+
+  character(*), intent(in) :: message
+  character(4), intent(in), optional :: stoptype
+
+  if ((.not. present(stoptype)) .or. (stoptype == 'stop')) then
+    write(*,*)
+    call print_error (message)
+    write(*,*)
+    stop 1
+  else
+    write(*,*)
+    call print_warning (message)
+    write(*,*)
+  end if
+
+end subroutine my_stop
 
 !-------------------------------------------------------------------------
 ! prints the integer ivalue colored depending
@@ -338,6 +406,8 @@ subroutine print_colored_i (strlen, quality, ivalue)
       color = COLOR_NORMAL
     case (Q_BAD)
       color = COLOR_WARNING
+    case (Q_NEW)
+      color = COLOR_FEATURE
     case default 
       color = COLOR_BAD
   end select
@@ -376,6 +446,8 @@ subroutine print_colored_r (strlen, format_string, quality, rvalue)
       color = COLOR_NORMAL
     case (Q_BAD)
       color = COLOR_NOTE
+    case (Q_NEW)
+      color = COLOR_FEATURE
     case default 
       color = COLOR_BAD
   end select
@@ -446,7 +518,9 @@ subroutine print_colored_s (quality, str)
     case (Q_OK)
       color = COLOR_NORMAL
     case (Q_BAD)
-      color = COLOR_WARNING
+      color = COLOR_NOTE
+    case (Q_NEW)
+      color = COLOR_FEATURE
     case default 
       color = COLOR_BAD
   end select
@@ -476,6 +550,9 @@ subroutine print_colored_rating (strlen, quality)
     case (Q_BAD)
       color = COLOR_WARNING
       comment ='bad'
+    case (Q_NEW)
+      color = COLOR_FEATURE
+      comment ='new'
     case default 
       color = COLOR_BAD
       comment ='critical'
@@ -485,5 +562,21 @@ subroutine print_colored_rating (strlen, quality)
   call print_colored (color, str)
   
 end subroutine print_colored_rating
+
+
+!-------------------------------------------------------------------------
+! measure time to run 
+!-------------------------------------------------------------------------
+  
+! integer         :: itime_start, itime_finish, rate
+! doubleprecision :: time_diff
+
+! call system_clock(count_rate=rate)
+! call system_clock(itime_start)
+! ............
+! call system_clock(itime_finish)
+! time_diff = real (itime_finish-itime_start)/real(rate)
+! print '("Time = ",f6.3," seconds"',time_diff
+
 
 end module os_util

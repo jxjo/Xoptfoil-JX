@@ -17,6 +17,8 @@
 
 module particle_swarm
 
+  use os_util 
+
 ! Module containing particle swarm optimization routine
 
   implicit none
@@ -49,10 +51,13 @@ module particle_swarm
                                   ! solutions 
     logical :: write_particlefile ! Whether to write particle-values for each
                                   ! iteration to file
-    integer :: max_retries = 0    ! #exp-retry max. number of retries a single 
-                                  ! particle tries to get a valid geometry
 
-                                         ! experimental: for direct maipulation in inputs 
+    integer :: max_retries = 1           ! max. number of retries a single 
+                                         ! particle tries to get a valid geometry
+    logical :: auto_retry = .true.       ! do auto retry of a single 
+                                         ! particle tries to get a valid geometry
+    integer :: auto_frequency = 100      ! #how often should auto_retry be tested 
+
     double precision :: c1 = 0d0         ! particle-best trust factor
     double precision :: c2 = 0d0         ! swarm-best trust factor
     double precision :: whigh = 0d0      ! starting inertial parameter
@@ -74,11 +79,11 @@ subroutine particleswarm(xopt, fmin, step, fevals, objfunc, x0, xmin, xmax,    &
                          designcounter,           &
                          stop_reason, converterfunc)
 
-  use os_util
   use math_deps,         only : norm_2
   use optimization_util, only : init_random_seed, initial_designs,             &
                                 design_radius, write_design, read_run_control
   use airfoil_evaluation, only : OBJ_XFOIL_FAIL, OBJ_GEO_FAIL
+  use vardef,            only : design_subdir
 
 
   double precision, dimension(:), intent(inout) :: xopt
@@ -120,8 +125,9 @@ subroutine particleswarm(xopt, fmin, step, fevals, objfunc, x0, xmin, xmax,    &
   character(11) :: stepchar
   character(20) :: fminchar, radchar, text
   character(25) :: relfminchar
+  character(80) :: histfile
   character(80), dimension(20) :: commands
-  integer       :: i_retry                              ! #exp-retry
+  integer       :: i_retry, max_retries                           
   
   nconstrained = size(constrained_dvs,1)
 
@@ -241,26 +247,27 @@ subroutine particleswarm(xopt, fmin, step, fevals, objfunc, x0, xmin, xmax,    &
   
 ! Open file for writing iteration history
 
+  histfile  = trim(design_subdir)//'Optimization_History.dat'
+
   iunit = 17
   new_history_file = .false.
   if (step == 0) then
     new_history_file = .true.
   else
-    open(unit=iunit, file='optimization_history.dat', status='old',            &
+    open(unit=iunit, file=trim(histfile), status='old',            &
          position='append', iostat=ioerr)
     if (ioerr /= 0) then
       write(*,*) 
-      write(*,*) "Warning: did not find existing optimization_history.dat file."
+      write(*,*) "Warning: did not find "//trim(histfile)//" file."
       write(*,*) "A new one will be written, but old data will be lost."
       write(*,*)
       new_history_file = .true.
     end if
   end if
   if (new_history_file) then
-    open(unit=iunit, file='optimization_history.dat', status='replace')
+    open(unit=iunit, file=trim(histfile), status='replace')
     if (pso_options%relative_fmin_report) then
-      write(iunit,'(A)') "Iteration  Objective function  "//&
-                         "% Improvement over seed  Design radius"
+      write(iunit,'(A)') "Iteration  % Improvement over seed  Design radius"
     else
       write(iunit,'(A)') "Iteration  Objective function  Design radius"
     end if
@@ -271,15 +278,15 @@ subroutine particleswarm(xopt, fmin, step, fevals, objfunc, x0, xmin, xmax,    &
 
   converged = .false.
 
-  write(*,*)
+  max_retries = initial_max_retries (pso_options) 
+
   write(*,*)
   call  print_colored (COLOR_FEATURE, ' - Particle swarm ')
   write (text,'(I3)') pso_options%pop
-  call  print_colored (COLOR_NOTE, 'with '//trim(adjustl(text))// ' members will try its best ...')
+  call  print_colored (COLOR_NOTE, 'with '//trim(adjustl(text))// ' members will now try its best ...')
   write(*,*)
   write(*,*)
-  call show_optimization_header  (pso_options%pop, pso_options%max_retries, &
-                                  pso_options%relative_fmin_report)
+  call show_optimization_header  (pso_options, max_retries)
 
 !$omp end master
 !$omp barrier
@@ -292,7 +299,11 @@ subroutine particleswarm(xopt, fmin, step, fevals, objfunc, x0, xmin, xmax,    &
 
     step = step + 1
 
-    call show_iteration_header (step)
+    if (pso_options%auto_retry) &
+      max_retries = auto_max_retries (pso_options, step, max_retries, objval) 
+
+    call show_iteration_header (step, max_retries)
+
 
 !$omp end master
 !$omp barrier
@@ -316,7 +327,7 @@ subroutine particleswarm(xopt, fmin, step, fevals, objfunc, x0, xmin, xmax,    &
 !     Evaluate objecte function - if this returns a geometry violation retry to get a valid
 !                                 evaluation 
 
-      do                            ! ... max_retries   #exp-retry
+      do                            ! ... max_retries  
 
         ! Update position and bring back to side constraints if necessary
         dv(:,i) = dv(:,i) + vel(:,i)
@@ -340,7 +351,8 @@ subroutine particleswarm(xopt, fmin, step, fevals, objfunc, x0, xmin, xmax,    &
   !     Valid result --> proceed
         if (objval(i) < OBJ_GEO_FAIL) exit
 
-        if (i_retry >= pso_options%max_retries) exit
+!        if (i_retry >= pso_options%max_retries) exit
+        if (i_retry >= max_retries) exit
 
         i_retry = i_retry + 1
 
@@ -352,10 +364,8 @@ subroutine particleswarm(xopt, fmin, step, fevals, objfunc, x0, xmin, xmax,    &
   
       end do 
 
-! $OMP ORDERED
 !     Display some info about success of single particle 
-      call show_particle_info (fmin, objval(i))        
-! $OMP END ORDERED
+      call show_particle_info (fmin,  minvals(i), objval(i))        
 
 !     Update local best design if appropriate
       if (objval(i) < minvals(i)) then
@@ -535,7 +545,6 @@ subroutine pso_write_particlefile(particleunit, dv, vel)
   integer:: nvars, pop, count1, count2
 
 if (particleunit == 20) then
-!TODO MB particle
   nvars = size(dv,1)
   pop = size(dv,2)
   do count1 = 1, pop
@@ -574,39 +583,112 @@ subroutine pso_close_particlefile(particleunit)
     
   end subroutine pso_close_particlefile
 
+
+!------------------------------------------------------------------------------
+! Gets the inital value for particle max:retries depending on input parms
+!------------------------------------------------------------------------------
+
+  function initial_max_retries  (pso_options)
+
+    type (pso_options_type), intent(in) :: pso_options
+    integer            :: initial_max_retries          
+  
+    if (pso_options%auto_retry) then 
+      initial_max_retries = pso_options%max_retries
+    else
+      initial_max_retries = pso_options%max_retries
+    end if
+  
+  end function initial_max_retries
+  
+!------------------------------------------------------------------------------
+! Adopt max_retries of particles according to iteration steps and 
+!   percentage of geometry failed particles 
+!------------------------------------------------------------------------------
+
+function auto_max_retries (pso_options, step, cur_max_retries, objval) 
+
+  use airfoil_evaluation, only : OBJ_GEO_FAIL
+
+  type (pso_options_type), intent(in) :: pso_options
+  integer             :: auto_max_retries
+  integer, intent(in) :: step, cur_max_retries
+  double precision, dimension(:), intent(in) :: objval
+
+  integer          :: ngeo_fails 
+  integer          :: nparticles, i
+  double precision :: fail_percentage
+
+  auto_max_retries = cur_max_retries
+
+  if (mod(step, pso_options%auto_frequency) /= 0) then      ! new value only when frequency
+    return        
+  end if 
+
+  ! Count no of geometry fails of particles 
+  ngeo_fails = 0
+  nparticles = size(objval) 
+  do i = 1, nparticles
+    if (objval(i) >= OBJ_GEO_FAIL) ngeo_fails = ngeo_fails + 1    ! no valid design  
+  end do 
+
+  fail_percentage = 100d0 * ngeo_fails / nparticles 
+
+  !write (*,'(/,A,F4.0,A,/)') '---- New Auto_retry at ', fail_percentage,'%'
+  if (fail_percentage > 75d0) then 
+    auto_max_retries = pso_options%max_retries
+  elseif (fail_percentage < 50d0) then 
+    auto_max_retries = 0
+  end if
+  
+end function auto_max_retries
+
+
 !------------------------------------------------------------------------------
 ! Shows user info - header of optimization out 
 !------------------------------------------------------------------------------
 
-subroutine  show_optimization_header  (pso_pop, max_retries, show_improvement)
+subroutine  show_optimization_header  (pso_options, max_retries)
 
-  use os_util
+  type (pso_options_type), intent(in) :: pso_options
+  integer, intent(in) :: max_retries           
 
-  logical, intent(in)           :: show_improvement
-  integer, intent(in)           :: pso_pop, max_retries           !#exp-retry
+  logical            :: show_improvement, auto_retry
+  integer            :: nparticles           
+  character(200)     :: blanks = ' '
+  character (1)      :: s1
   character(:), allocatable     :: var_string
-  character(200)                :: blanks = ' '
+
+  show_improvement = pso_options%relative_fmin_report
+  auto_retry       = pso_options%auto_retry
+  nparticles       = pso_options%pop
 
   write(*,'(3x)', advance = 'no')
-  call  print_colored (COLOR_NOTE, "Particle result:  '+' improved   '~' quite good"//&
-                                   "   '-' bad   'x' xfoil no conv   '.' geometry failed")
+  call  print_colored (COLOR_NOTE, "Particle result:  '+' obj improved  '+' personal best"//&
+                                   "  '-' not better  'x' xfoil no conv  '.' geometry failed")
   write (*,*)
 
-  if (max_retries > 0 ) then                                      ! #exp-retry
-    write(*,'(3x)', advance = 'no')
-    call  print_colored (COLOR_NOTE, "Experimental: Particle max_retries =")
-    write(*,'(I3)', advance = 'no') max_retries
+  write (s1,'(I1)') max_retries
+  if (auto_retry ) then                                       
+    write(*,'(/,3x)', advance = 'no')
+    call print_colored (COLOR_NOTE, "Auto retry ")
+    call print_colored (COLOR_NOTE, "of a particle having failed geometry - starting with retry="//s1//"")
+    write (*,*)
+  elseif (max_retries > 0 ) then                                       
+    write(*,'(/,3x)', advance = 'no')
+    call  print_colored (COLOR_NOTE, "Retry of a particle having failed geometry (retry="//s1//")")
     write (*,*)
   end if
   write(*,*)
 
-  var_string = 'Particles...' // blanks (len('Particles...') : pso_pop)
-  write(*,'(3x,A6,3x,  A,          1x,A6,   5x,A9     )', advance ='no') &
-          'Iterat',var_string,'Radius','Objective'
+  var_string = 'Particles...' // blanks (len('Particles...') : nparticles)
+  write(*,'(3x,A6,3x,  A,          1x,A6,   5x)', advance ='no') &
+          'Iterat',var_string,'Radius'
   
   if (show_improvement) then
-    write(*,'(3x,A11)') 'Improvement'
+    write(*,'(A11)') 'Improvement'
   else
+    write(*,'(A9)') 'Objective'
     write (*,*)
   end if
 
@@ -617,11 +699,20 @@ end subroutine show_optimization_header
 ! Shows user info about result of a single iteration 
 !------------------------------------------------------------------------------
 
-subroutine  show_iteration_header (step)
+subroutine  show_iteration_header (step, max_retries)
 
-  integer, intent(in)          :: step
+  integer, intent(in)          :: step, max_retries
+  character (1) :: s1
 
-  write(*,'(3x,I5,A1,3x)', advance ='no') step, ':'
+  write(*,'(3x,I5,A1)', advance ='no') step, ':'
+
+  if (max_retries == 0) then 
+    write (*,'(1x,2x)',    advance ='no') 
+  else
+    write (s1,'(I1)') max_retries
+    call print_colored (COLOR_NOTE,  ' r'//s1)
+  end if
+
 
 end subroutine  show_iteration_header
 
@@ -631,15 +722,11 @@ end subroutine  show_iteration_header
 
 subroutine  show_iteration_result (radius, fmin, f0, improved, show_improvement)
 
-  use os_util,  only: COLOR_GOOD, COLOR_NORMAL, COLOR_NOTE, COLOR_ERROR, print_colored
-
   double precision, intent(in)  :: radius ,fmin, f0 
   logical, intent(in)           :: show_improvement, improved
   character(25)                 :: outstring
 
-  write(*,'(ES9.1)', advance ='no') radius
-
-  write (outstring,'(3x,F9.6,A1)') fmin
+  write (outstring,'(ES9.1)') radius
   if (improved) then 
     call  print_colored (COLOR_NORMAL, trim(outstring))
   else
@@ -653,6 +740,13 @@ subroutine  show_iteration_result (radius, fmin, f0, improved, show_improvement)
     else 
       call  print_colored (COLOR_NOTE, trim(outstring))
     end if
+  else
+    write (outstring,'(3x,F9.6,A1)') fmin
+    if (improved) then 
+      call  print_colored (COLOR_NORMAL, trim(outstring))
+    else
+      call  print_colored (COLOR_NOTE,   trim(outstring))
+    end if
   end if 
 
 end subroutine  show_iteration_result
@@ -662,38 +756,33 @@ end subroutine  show_iteration_result
 ! Shows user info about sucess of a single particle
 !------------------------------------------------------------------------------
 
-subroutine  show_particle_info (fmin, objval)
+subroutine  show_particle_info (overall_best, personal_best, objval)
 
-  use os_util
   use airfoil_evaluation, only : OBJ_XFOIL_FAIL, OBJ_GEO_FAIL
 
-  double precision, intent(in)  :: fmin, objval
-  integer         :: color 
+  double precision, intent(in)  :: overall_best, personal_best, objval
+  integer       :: color 
+  Character (1) :: sign 
 
-  if (objval < fmin) then 
-    color = COLOR_GOOD
+  if (objval < overall_best) then 
+    color = COLOR_GOOD                           ! better then current best
+    sign  = '+'
   else if (objval == OBJ_XFOIL_FAIL) then     
     color = COLOR_ERROR                          ! no xfoil convergence
-  else if (objval < (fmin * 1.005d0)) then 
-    color = COLOR_NORMAL                         ! not too bad (-0,5%)
+    sign  = 'x'
+  else if (objval < personal_best) then 
+    color = COLOR_NOTE                         ! best of particle up to now
+    sign  = '+'
   else if (objval >= OBJ_GEO_FAIL) then 
     color = COLOR_NOTE                           ! no valid design 
+    sign  = '.'
   else  
-    color = COLOR_NORMAL                         ! bad (-10%)
-  end if 
-  
-  if (objval < fmin) then 
-    call print_colored (color, '+')                 ! improved (+x%)
-  else if (objval == OBJ_XFOIL_FAIL) then     
-    call print_colored (color, 'x')                 ! no xfoil convergence
-  else if (objval < (fmin * 1.005d0)) then 
-    call print_colored (color, '~')                 ! not too bad (-0,5%)
-  else if (objval >= OBJ_GEO_FAIL) then 
-    call print_colored (color,'.')                  ! no valid design 
-  else  
-    call print_colored (color, '-')                 ! bad (-10%)
+    color = COLOR_NOTE                         ! no improvement
+    sign  = '-'
   end if 
 
+  call print_colored (color, sign)            
+  
 end subroutine show_particle_info
 
 end module particle_swarm

@@ -558,11 +558,75 @@ subroutine sort_vector_descend (vec, idxs)
 
 end subroutine sort_vector_descend
 
-!=============================================================================80
-!
-! jx-mod Smoothing - Additional functions 
-!
-!=============================================================================80
+!------------------------------------------------------------------------------
+! the MEDIAN of a vector
+!------------------------------------------------------------------------------
+function median (vec)
+
+  double precision :: median 
+
+  double precision, dimension(:), intent(in) :: vec
+
+  double precision, dimension(:), allocatable :: elements
+  integer :: nelem
+  
+  nelem = size (vec) 
+  
+  If (nelem == 0 ) then 
+    write (*,*) 'Error: median function called without an element'
+    stop 
+  elseif (nelem == 1) then 
+    median = vec (1)
+    return
+  end if 
+
+  elements = vec (1:nelem) 
+
+  ! sort elements 
+  call sort_vector(elements)
+
+  ! now get the element in the middle if odd elemenets, 
+  !    else the mid value of the two elements in the midle
+  
+  if (mod(nelem,2) == 1) then
+    median = elements (nelem / 2 + 1)                                 ! odd
+  else 
+    median = (elements (nelem / 2)  + elements (nelem / 2 + 1)) / 2   ! even
+  end if 
+
+end function median
+
+!------------------------------------------------------------------------------
+! arccos transformation of x() 
+!   Used for transformation of x-axis based on 
+!   https://ntrs.nasa.gov/archive/nasa/casi.ntrs.nasa.gov/19850022698.pdf
+!------------------------------------------------------------------------------
+function transformed_arccos (x) result (x_arccos)
+
+  double precision, dimension(:), intent(in) :: x
+  double precision, dimension(size(x))       :: x_arccos
+
+  double precision :: pi
+  integer          :: i
+
+  x_arccos = x
+  pi = acos(-1.d0)
+
+  if(x(1) == 0d0 .and. x(size(x)) == 1d0) then 
+    do i = 1, size(x)
+      if (x(i) < 0.d0) then         ! sanity check - nowbody knows ...
+        x_arccos(i) = 0.d0
+      else
+        x_arccos(i) = acos(1.d0 - x(i)) * 2.d0 / pi 
+      end if       
+    end do
+  else
+    Write (*,*) 'Error: Array to transform is not x(1)= 0. and x(n)=1.'
+  end if 
+
+end function transformed_arccos
+
+
 
 !------------------------------------------------------------------------------
 ! smooth polyline (x,y) with a Chaikin corner cutting see
@@ -650,114 +714,86 @@ Subroutine getSmootherChaikin(x, y, cuttingDist, x_smooth, y_smooth)
 
 end subroutine
 
-
 !------------------------------------------------------------------------------
-! Counts reversals and high/lows of 2nd derivative of polyline (x,y)
+! Counts reversals of 2nd derivative (curvature) of polyline (x,y)
 !    
 ! To find the "real" reversals only curve value greater curve_threshold
 !    are taken to check against the change from + to -
-! To find high/lows all high/lows of 2nd derivation with a distance
-!    greater highlow_threshold are taken
 !
 ! result_info holds a string of npoints for user entertainment 
 !------------------------------------------------------------------------------
-subroutine find_curvature_reversals(npt, i_start, highlow_threshold, curve_threshold, x, y, nhighlows2, nreversals2, result_info)
+subroutine find_curv_reversals(istart, iend, curve_threshold, &
+                                    x, y, nreversals, result_info)
 
-  integer, intent(in) :: npt, i_start
-  double precision, intent(in) :: curve_threshold, highlow_threshold
-  double precision, dimension(npt), intent(in) :: x, y
-  integer, intent(out) :: nreversals2, nhighlows2
-  character (npt), intent(inout) :: result_info
+  integer, intent(in) :: istart, iend
+  double precision, intent(in) :: curve_threshold
+  double precision, dimension(:), intent(in) :: x, y
+  integer, intent(out) :: nreversals
+  character (size(x)), intent(inout), optional :: result_info
 
-  double precision, dimension(npt) :: deriv2
-  double precision :: curv1, d_minmax, d_cur
-  integer :: i, i_first, nhighs, nlows, i_firstHighLow, i_max, i_min
-                                        ! strange: Looking at the derivative plot
-                                        ! highs and lows are just the opposite
-                                        ! --> hack the character (don't know the reason)
-  character (1) ::  reversal_sign = 'R', high_point = 'L', low_point = 'H', prev_highlow
+  double precision, dimension(size(x)) :: deriv2
+  double precision :: curv1
+  integer :: i, is, ie, npt 
+  character (1) ::  reversal_sign = 'R' 
 
-  nreversals2 = 0
-  nhighs = 0
-  nlows = 0
-  nhighlows2 = 0
+  nreversals = 0
 
-  curv1 = 0.d0
-  i_first = max (i_start, 1)        
-  i_firstHighLow = i_first +1       ! ... highLow detection needs point (i-1)
+  npt = size(x)
+  is = max (istart, 1)        
+  ie = min (iend, npt-1)             ! --> don't take last spike value as reversal 
 
   deriv2 = derivation2(npt, x, y)   ! get 2nd derivation 
 
-  i_min = i_firstHighLow
-  i_max = i_firstHighLow
-  prev_highlow = ' '
-
-  ! find the highs and lows in 2nd derivation - dist between must be > highlow_threshold 
-  !    do not take the last panel at TE into account as PANGEN tends to produce
-  !    a curvature peek for the last panel which could lead to a false highlow...
-  do i = i_firstHighLow, (npt-1)
-
-    ! low detect
-    if ( deriv2(i) - deriv2(i-1)> 0.d0 ) then             !.. going up now
-      d_minmax = abs(deriv2(i_max) - deriv2(i_min))       ! diff between last min-max
-      d_cur    = abs(deriv2(i_min) - deriv2(i))           ! diff between current -lastmin
-      if (((d_minmax > highlow_threshold) .and. (d_cur > highlow_threshold)) & 
-         .and. (prev_highlow /= low_point)) then          ! no succeding lows
-        if (prev_highlow /= ' ') then                     ! skip count for very first point
-          ! we passed a low - the curve is going highlow_threshold up
-          nlows = nlows + 1
-          result_info (i_min:i_min) = low_point
-        end if 
-        prev_highlow = low_point
-        i_max = i
-      else
-        if (deriv2(i) >deriv2(i_max)) i_max = i
-      end if
-    ! high detect
-    else                                                  ! going down
-      d_minmax = abs(deriv2(i_max) - deriv2(i_min))       ! diff betwenn min-max
-      d_cur    = abs(deriv2(i_max) - deriv2(i))           ! diff current-max
-      if (((d_minmax > highlow_threshold) .and. (d_cur > highlow_threshold)) &
-        .and. (prev_highlow /= high_point)) then          ! no succeding highs
-        ! we passed a high - the curve is going highlow_threshold down
-        if (prev_highlow /= ' ') then                     ! skip count for very first point
-          nhighs = nhighs + 1
-          result_info (i_max:i_max) = high_point
-        end if  
-        prev_highlow = high_point
-        i_min = i
-      else
-        if (deriv2(i) < deriv2(i_min)) i_min = i
-      end if
-    end if  
-  end do
-  nhighlows2 = nlows + nhighs
-
   ! get the real reversals with curve values from + to - 
   !    just the same as in the original function 
-  !    (npt-1) --> don't take last spike value as reversal 
-  do i = i_first, npt-1
+ 
+  curv1 = 0.d0
+  do i = 1, npt
     if (abs(deriv2(i)) >= curve_threshold) then
       if (deriv2(i) * curv1 < 0.d0) then 
-        nreversals2 = nreversals2 + 1
-        result_info (i:i) = reversal_sign
+        if (i >= is .and. i <= ie) then 
+          nreversals = nreversals + 1
+          if (present(result_info)) result_info (i:i) = reversal_sign
+        end if
       end if
       curv1 = deriv2(i)
     end if
   end do
 
-end subroutine find_curvature_reversals
+end subroutine find_curv_reversals
+
+
+!------------------------------------------------------------------------------
+! Gets the number of curve reversals if threshold 'curve_threshold' is applied
+!    detected on the polyline 
+!------------------------------------------------------------------------------
+function count_reversals (istart, iend, x, y, curve_threshold)
+
+  integer, intent(in)                         :: istart, iend
+  double precision, dimension(:), intent(in)  :: x, y
+  double precision, intent(in)                :: curve_threshold
+  integer          :: count_reversals
+
+  call find_curv_reversals(istart, iend, curve_threshold, &
+    x, y, count_reversals)
+
+  ! write (*,*) '--- is ie ', istart, iend, '  ncrversals ', count_reversals
+
+end function count_reversals
+
 
 !------------------------------------------------------------------------------
 ! Evaluates the min possible threshold that no more than nreversals will be
 !    detected on the polyline 
 !------------------------------------------------------------------------------
-function min_threshold_for_reversals (x, y, min_threshold, max_threshold, nreversals_to_detect)
+function min_threshold_for_reversals (istart, iend, x, y, min_threshold, max_threshold, &
+                                      nreversals_to_detect)
 
-  integer, intent(in)             :: nreversals_to_detect
+  integer, intent(in)             :: istart, iend, nreversals_to_detect
   double precision, intent(in)    :: min_threshold, max_threshold
   double precision, dimension(:), intent(in) :: x, y
-  double precision       :: min_threshold_for_reversals, threshold, delta
+  
+  double precision       :: min_threshold_for_reversals, threshold, decrease
   integer                :: nreversals
 
   if (min_threshold == 0d0) then
@@ -765,22 +801,20 @@ function min_threshold_for_reversals (x, y, min_threshold, max_threshold, nrever
     stop
   end if 
 
-  threshold          = max_threshold
-  delta              = 0.1                          ! iteration start, will be decreased
-  nreversals         = nreversals_using_threshold (x,y, threshold)
+  threshold     = max_threshold
+  decrease      = 0.9d0                     ! decrease threshold by 
+  nreversals    = count_reversals (istart, iend, x,y, threshold)
 
   do while ((threshold >= min_threshold) .and.  &
             (nreversals <= nreversals_to_detect))
 
-    if (threshold <= delta) delta = delta / 10d0           !decrease delta when getting close to 0    
-    threshold = threshold - delta
-
-    nreversals         = nreversals_using_threshold (x,y, threshold)
+    threshold  = threshold * decrease
+    nreversals = count_reversals (istart, iend, x,y, threshold)
 
   end do 
 
   if (nreversals > nreversals_to_detect) then
-    min_threshold_for_reversals = threshold + delta   ! to many - go delta back
+    min_threshold_for_reversals = threshold / decrease   ! to many - go delta back
   else
     min_threshold_for_reversals = threshold           ! exact match 
   end if
@@ -789,142 +823,100 @@ end function min_threshold_for_reversals
 
 
 !------------------------------------------------------------------------------
-! Evaluates the min possible threshold that no more than nhighlows will be
-!    detected on the polyline (in the range of min_threshold to max_threshold)
+! Evaluates the min possible threshold that no more than nreversals will be
+!    detected on the polyline 
 !------------------------------------------------------------------------------
-function min_threshold_for_highlows (x, y, min_threshold, max_threshold, nhighlows_to_detect)
+function min_threshold_for_spikes (istart, iend, x, y, min_threshold, max_threshold, &
+  nspikes_to_detect)
 
-  integer, intent(in)             :: nhighlows_to_detect
+  integer, intent(in)             :: istart, iend, nspikes_to_detect
   double precision, intent(in)    :: min_threshold, max_threshold
   double precision, dimension(:), intent(in) :: x, y
-  double precision       :: min_threshold_for_highlows, threshold, delta
-  integer                :: nhighlows
+  double precision       :: min_threshold_for_spikes, threshold, decrease
+  integer                :: nspikes
 
   if (min_threshold == 0d0) then
     write (*,*) 'Error: min_threshold must be > 0 in min_threshold_for_reversals'
     stop
   end if 
 
-  threshold          = max_threshold
-  delta              = 0.1                          ! iteration start, will be decreased
-  nhighlows          = nhighlows_using_threshold (x,y, threshold)
-
-  ! this is brute force - decrease threshold step by step until we get nhighlows_to_detect
+  threshold     = max_threshold
+  decrease      = 0.9d0                     ! decrease threshold by 
+  nspikes       = count_spikes (istart, iend, x,y, threshold)
 
   do while ((threshold >= min_threshold) .and.  &
-            (nhighlows <= nhighlows_to_detect))
+            (nspikes <= nspikes_to_detect))
 
-    if (threshold <= delta) delta = delta / 10d0           !decrease delta when getting close to 0    
-    threshold = threshold - delta
-    nhighlows = nhighlows_using_threshold (x,y, threshold)
+    threshold = threshold * decrease
+    nspikes         = count_spikes (istart, iend, x,y, threshold)
 
   end do 
 
-  if (nhighlows > nhighlows_to_detect) then
-    min_threshold_for_highlows = threshold + delta   ! to many - go delta back
+  if (nspikes > nspikes_to_detect) then
+    min_threshold_for_spikes = threshold / decrease  ! to many - go delta back
   else
-    min_threshold_for_highlows = threshold           ! exact match 
+    min_threshold_for_spikes = threshold             ! exact match 
   end if
 
-end function min_threshold_for_highlows
-
-
-!------------------------------------------------------------------------------
-! Gets the number of highlows if threshold 'highlow_threshold' is applied
-!    detected on the polyline 
-!------------------------------------------------------------------------------
-function nhighlows_using_threshold (x, y, highlow_threshold)
-
-  double precision, dimension(:), intent(in)  :: x, y
-  double precision, intent(in)                :: highlow_threshold
-  double precision :: curve_threshold
-  integer          :: nhighlows_using_threshold
-  integer          :: npt, i_start, nreversals
-  character (size(x)) :: result_info
-
-  npt     = size(x)
-  i_start = 5 
-  curve_threshold = 0.1d0             !dummy
-  result_info = repeat ('-', npt )    ! dummy 
-
-
-  call find_curvature_reversals(npt, i_start, highlow_threshold, curve_threshold, x, y, &
-                                nhighlows_using_threshold, nreversals, result_info)
-
-end function nhighlows_using_threshold
+end function min_threshold_for_spikes
 
 
 !------------------------------------------------------------------------------
 ! Gets the number of curve reversals if threshold 'curve_threshold' is applied
 !    detected on the polyline 
 !------------------------------------------------------------------------------
-function nreversals_using_threshold (x, y, curve_threshold)
+function count_spikes (istart, iend, x, y, spike_threshold)
 
+  integer, intent(in)                         :: istart, iend
   double precision, dimension(:), intent(in)  :: x, y
-  double precision, intent(in)                :: curve_threshold
-  integer          :: nreversals_using_threshold, nreversals
+  double precision, intent(in)                :: spike_threshold
+  integer          :: count_spikes
 
-  double precision, dimension(:), allocatable :: deriv2
-  integer          :: i, npt, i_first
-  double precision :: curv1 
+  call find_curv_spikes(istart, iend, spike_threshold, x, y, count_spikes)
 
-  nreversals   = 0
-  i_first      = 5                  ! start behind LE
-  curv1        = 0d0
-
-  npt = size(x)
-  allocate(deriv2(npt))
-
-  deriv2 = derivation2(npt, x, y)   ! get 2nd derivation 
-
-  do i = i_first, npt-1
-    if (abs(deriv2(i)) >= curve_threshold) then
-      if (deriv2(i) * curv1 < 0.d0) then 
-        nreversals = nreversals + 1
-      end if
-      curv1 = deriv2(i)
-    end if
-  end do
-
-  nreversals_using_threshold = nreversals
-
-end function nreversals_using_threshold
+end function count_spikes
 
 
 !------------------------------------------------------------------------------
 ! counts der curvature spikes of polyline (x,y)
 !     which a reversals of the third derivation 
 !------------------------------------------------------------------------------
-subroutine find_curvature_spikes(npt, i_start, spike_threshold, x, y, nspikes, result_info)
+subroutine find_curv_spikes(istart, iend, spike_threshold, &
+                                 x, y, nspikes, result_info)
 
-  integer, intent(in) :: npt, i_start
+  integer, intent(in) :: istart, iend
   double precision, intent(in) :: spike_threshold
-  double precision, dimension(npt), intent(in) :: x, y
+  double precision, dimension(:), intent(in) :: x, y
   integer, intent(out) :: nspikes
-  character (npt), intent(inout) :: result_info
+  character (size(x)), intent(inout), optional :: result_info
 
-  double precision, dimension(npt) :: deriv3
+  double precision, dimension(size(x)) :: deriv3
   double precision :: prev_deriv3
-  integer :: i, i_first
+  integer :: i, is, ie, npt
   character (1) :: spikeSign = 's'
 
   nspikes = 0
+  npt = size(x)
 
-  i_first = max (i_start, 1)            
+  is = max (istart, 1)            
+  ie = min (iend, (npt-1))          ! ignore last point of polyline
+
   prev_deriv3 = 0.d0
   deriv3 = derivation3(npt, x, y)
 
-  do i = i_first, npt
+  do i = 1, npt
     if (abs(deriv3(i)) >= spike_threshold) then
       if (deriv3(i) * prev_deriv3 < 0.d0) then
-        nspikes = nspikes + 1
-        result_info (i:i) = spikeSign
+        if (i >= is .and. i <= ie) then 
+          nspikes = nspikes + 1
+          if (present (result_info)) result_info (i:i) = spikeSign
+        end if
       end if
       prev_deriv3 = deriv3(i)
     end if
   end do
 
-end subroutine find_curvature_spikes
+end subroutine find_curv_spikes
 
 !------------------------------------------------------------------------------
 ! get third derivative of polyline (x,y)

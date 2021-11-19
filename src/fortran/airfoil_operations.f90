@@ -59,7 +59,7 @@ subroutine get_seed_airfoil (seed_airfoil, airfoil_file, naca_options, foil )
 
 !   Create NACA 4, 4M, 5, 6, or 6A series airfoil
 
-    pointsmcl = 200
+    pointsmcl = 100
     call naca_456(naca_options, pointsmcl, foil)
 
   else
@@ -131,9 +131,7 @@ subroutine airfoil_points(filename, npoints, labeled)
   iunit = 12
   open(unit=iunit, file=filename, status='old', position='rewind', iostat=ioerr)
   if (ioerr /= 0) then
-     call print_error ('Error: cannot find airfoil file '//trim(filename))
-     write(*,*)
-     stop
+     call my_stop ('Cannot find airfoil file '//trim(filename),'stop')
   end if
 
 ! Read first line; determine if it is a title or not
@@ -182,9 +180,7 @@ subroutine airfoil_read(filename, npoints, labeled, name, x, z)
   iunit = 12
   open(unit=iunit, file=filename, status='old', position='rewind', iostat=ioerr)
   if (ioerr /= 0) then
-    call print_error ('Error: cannot find airfoil file '//trim(filename))
-    write(*,*)
-    stop
+    call my_stop ('Error: cannot find airfoil file '//trim(filename),'stop')
   end if
 
 ! Read points from file
@@ -218,11 +214,13 @@ subroutine airfoil_read(filename, npoints, labeled, name, x, z)
   end if
 
 500 close(iunit)
-  write(*,'(A)') "Error: incorrect format in "//trim(filename)//". File should"
+  write (*,*)
+  write (*,*)
+  write(*,'(A)') "Incorrect format in "//trim(filename)//". File should"
   write(*,'(A)') "have x and y coordinates in 2 columns to form a single loop,"
   write(*,'(A)') "and there should be no blank lines.  See the user guide for"
   write(*,'(A)') "more information."
-  stop
+  call my_stop("Processing stopped","stop")
 
 end subroutine airfoil_read
 
@@ -454,7 +452,8 @@ subroutine repanel_and_normalize_airfoil (in_foil, npoint_paneling, symmetrical,
       foil%z(foil%leclose) = 0d0
     end if 
   else
-    call print_warning ("Leading edge couln't be moved close to 0,0. Continuing ...")
+    call print_warning ("Leading edge couln't be moved close to 0,0. Continuing ...",3)
+    write (*,*)
   end if 
 
   write (*,'(" - ",A)', advance = 'no') 'Repaneling and normalizing.'
@@ -633,8 +632,6 @@ subroutine split_foil(foil)
 
   allocate(foil%xt(pointst))
   allocate(foil%zt(pointst))
-  allocate(foil%xb(pointsb))
-  allocate(foil%zb(pointsb))
 
   foil%xt(1) = foil%xle
   foil%zt(1) = foil%zle
@@ -645,18 +642,20 @@ subroutine split_foil(foil)
 
 ! Copy points for the bottom surface
 
-  foil%xb(1) = foil%xle
-  foil%zb(1) = foil%zle
   if (.not. foil%symmetrical) then
+    allocate(foil%xb(pointsb))
+    allocate(foil%zb(pointsb))
+    foil%xb(1) = foil%xle
+    foil%zb(1) = foil%zle
     do i = 1, pointsb - 1
       foil%xb(i+1) = foil%x(boundsb+i-1)
       foil%zb(i+1) = foil%z(boundsb+i-1)
     end do
   else
-    do i = 1, pointsb - 1
-      foil%xb(i+1) =  foil%xt(i+1)
-      foil%zb(i+1) = -foil%zt(i+1)
-    end do
+    allocate(foil%xb(pointst))
+    allocate(foil%zb(pointst))
+    foil%xb =  foil%xt
+    foil%zb = -foil%zt
   end if
 
 end subroutine split_foil
@@ -816,28 +815,6 @@ function isnum(s)
 
 end function isnum
 
-!=============================================================================80
-!
-! Stops and prints an error message, or just warns
-!
-!=============================================================================80
-subroutine my_stop(message, stoptype)
-
-  character(*), intent(in) :: message
-  character(4), intent(in), optional :: stoptype
-
-  if ((.not. present(stoptype)) .or. (stoptype == 'stop')) then
-    write(*,*)
-    call print_error (message)
-    write(*,*)
-    stop 1
-  else
-    write(*,*)
-    call print_warning (message)
-    write(*,*)
-  end if
-
-end subroutine my_stop
 
 !------------------------------------------------------------------------------
 ! jx-mod - New high level functions
@@ -850,52 +827,48 @@ end subroutine my_stop
 !------------------------------------------------------------------------------
 
 subroutine assess_surface (show_details, info, &
-                           curv_threshold, spike_threshold, highlow_threshold, &
-                           max_te_curvature, &
+                           istart, iend, iend_spikes, &
+                           curv_threshold, spike_threshold, &
                            x, y, overall_quality)
 
-  use math_deps, only: find_curvature_reversals, find_curvature_spikes, curvature
+  use math_deps, only: find_curv_reversals, find_curv_spikes, curvature
 
   logical, intent(in)      :: show_details
   character(*), intent(in) :: info
-  double precision, intent(in) :: curv_threshold, spike_threshold, highlow_threshold
-  double precision, intent(in) :: max_te_curvature
+  integer, intent(in)      :: istart, iend, iend_spikes
+  double precision, intent(in) :: curv_threshold, spike_threshold
   double precision, dimension(:), intent(in) :: x, y
   integer, intent(out)      :: overall_quality
 
-  integer             :: nhighlows, nspikes, nreversals, i_check_start, npt
+  integer             :: nspikes, nreversals, npt
   double precision    :: cur_te_curvature
-  integer             :: quality_spikes, quality_highlows, quality_reversals
+  integer             :: quality_spikes, quality_reversals
   integer             :: quality_te
   character (size(x)) :: result_info
   character (90)      :: result_out
-  character (22)      :: label
+  character (14)      :: label
 
   nreversals = 0
-  nhighlows  = 0
   nspikes    = 0
   npt        = size(x)
 
-  result_info = repeat ('-', npt ) 
+  result_info           = repeat ('-', npt ) 
 
 ! have a look at 3rd derivation ... 
-  i_check_start  = 5              ! leave LE out from counting - too special there 
-  call find_curvature_spikes   (npt, i_check_start, spike_threshold, x, y, nspikes, &
-                                result_info)
+  call find_curv_spikes   (istart, iend_spikes, spike_threshold, &
+                                x, y, nspikes, result_info)
 
 ! have a look at 2nd derivation ... skip first 5 points at LE (too special there) 
-  call find_curvature_reversals(npt, i_check_start, highlow_threshold, curv_threshold, &
-                                x, y, nhighlows, nreversals, result_info)
+  call find_curv_reversals(istart, iend, curv_threshold, &
+                                x, y, nreversals, result_info)
 
   quality_spikes    = i_quality (nspikes, 2, 6, 40)
-  quality_highlows  = i_quality (nhighlows, 2, 6, 30)
   quality_reversals = i_quality (nreversals, 2, 3, 10)
-  overall_quality   = ior(ior (quality_spikes, quality_highlows), quality_reversals)
+  overall_quality   = ior(quality_spikes, quality_reversals)
 
 ! check te curvature 
-
-  call get_max_te_curvature (size(x), x,y, cur_te_curvature )
-  quality_te      = r_quality (cur_te_curvature, max_te_curvature, 1d0, 10d0)
+  cur_te_curvature = get_max_te_curvature (x,y )
+  quality_te      = r_quality (cur_te_curvature, 0.2d0, 1d0, 10d0)
   ! te quality counts only half as too often it is bad ... 
   overall_quality = ior(overall_quality, (quality_te / 2))
 
@@ -910,206 +883,52 @@ subroutine assess_surface (show_details, info, &
       result_out = result_info
     end if 
 
-    write (*,'("   ",A19,A)') adjustl(info) // ' ', result_out
+    write (*,'(3x)', advance ='no') 
+    write (label,'(A)') adjustl(trim(info)) 
+    call print_colored (COLOR_NOTE, label)
+    write (*,'(x,A)') result_out
 
-    write (*,'(26x)', advance ='no')   
+    write (*,'(18x)', advance ='no')   
     call print_colored (COLOR_NOTE, 'Spikes')
-    call print_colored_i (4, quality_spikes, nspikes)
-    call print_colored (COLOR_NOTE, '     HighLows')
-    call print_colored_i (4, quality_highlows, nhighlows)
+    call print_colored_i (3, quality_spikes, nspikes)
     call print_colored (COLOR_NOTE, '     Reversals')
-    call print_colored_i (4, quality_reversals, nreversals)
-    write (*,*)
-
-    write (*,'(26x)', advance = 'no')
-    label = 'max curvature at TE'
-    call print_colored (COLOR_NOTE, label//'=')
-    call print_colored_r (6,'(F6.2)', quality_te, cur_te_curvature) 
+    call print_colored_i (3, quality_reversals, nreversals)
+    call print_colored (COLOR_NOTE, '     Curvature at TE')
+    call print_colored_r (5,'(F5.2)', quality_te, cur_te_curvature) 
     if (quality_te > Q_BAD) then
-      call print_colored (COLOR_NOTE, '   typically indicating a geometric spoiler at TE')
+      call print_colored (COLOR_NOTE, '  (geometric spoiler at TE?)')
     end if 
     write(*,*)
   end if
                              
 end subroutine assess_surface
-
-
-!-------------------------------------------------------------------------
-! Get best estimate of nreversals and the corresponding threshold value
-!-------------------------------------------------------------------------
-
-subroutine get_best_reversal_threshold (npt, x,y, min_curv_thresh, max_reversals, best_threshold)
-
-  use math_deps,          only: min_threshold_for_reversals
-  use os_util
-
-  integer, intent(in)           :: npt 
-  double precision, dimension(npt), intent(in) :: x, y
-  double precision, intent(in)  :: min_curv_thresh
-  double precision, intent(out) :: best_threshold
-  integer, intent(out)          :: max_reversals
-
-  double precision       :: max_curv_thresh
-  double precision       :: min_for_0, min_for_1, min_for_2
-
-  best_threshold      = 0.10d0            ! default
-  max_reversals       = 0
-  max_curv_thresh     = 4.0d0
-  
-  ! evaluate the smallest threshold for 0,1,2 reversals...
-  
-  min_for_0 = min_threshold_for_reversals (x, y, min_curv_thresh, max_curv_thresh, 0)
-  min_for_1 = min_threshold_for_reversals (x, y, min_curv_thresh, max_curv_thresh, 1)
-  min_for_2 = min_threshold_for_reversals (x, y, min_curv_thresh, max_curv_thresh, 2)
-
-  ! ... and with some logic get the best estimate für nreversals and corresponding threshold
-
-  if (min_for_0 < max_curv_thresh) then
-    ! write (*,'(A,4F9.6)') 'min_curv_thresh ', min_curv_thresh, min_for_0, min_for_1, min_for_2
-    if (min_for_0 < (min_curv_thresh * 3d0)) then
-      max_reversals  = 0
-      best_threshold = min_for_0
-    elseif (min_for_1 < (min_curv_thresh * 2d0)) then
-      max_reversals  = 1
-      best_threshold = min_for_1
-    elseif (min_for_1 ==  min_for_2) then
-      max_reversals  = 2
-      best_threshold = min_for_1
-    elseif (min_for_1 >  min_curv_thresh) then
-      max_reversals  = 1
-      best_threshold = min_for_1
-    else
-      max_reversals  = 1
-      best_threshold = min_for_1
-    end if 
-  else
-    write (*,'(A,F6.3)') '!! Watch out - 1 reversal already with ', min_for_0
-    max_reversals       = 1
-  end if 
-
-  ! allow a liitle more to "live"
-  best_threshold = best_threshold * 1.1d0
-
-end subroutine get_best_reversal_threshold
-
-!-------------------------------------------------------------------------
-! Get best estimate of max highlows and the corresponding threshold value
-!-------------------------------------------------------------------------
-
-subroutine get_best_highlow_threshold (npt, x,y, min_highlow_thresh, max_highlows, &
-                                       best_threshold)
-
-  use math_deps,          only: min_threshold_for_highlows
-  use os_util
-
-  integer, intent(in)           :: npt 
-  double precision, dimension(npt), intent(in) :: x, y
-  double precision, intent(in)  :: min_highlow_thresh
-  double precision, intent(out) :: best_threshold
-  integer, intent(out)          :: max_highlows
-
-  double precision       :: max_highlow_thresh
-  double precision       :: min_for_0, min_for_1, min_for_2
-
-  best_threshold     = 0.03d0            ! default
-  max_highlows       = 0
-  max_highlow_thresh = 1.0d0
-  
-  ! evaluate the smallest threshold for 0,1,2 reversals...
-  
-  min_for_0 = min_threshold_for_highlows (x, y, min_highlow_thresh, max_highlow_thresh, 0)
-  min_for_1 = min_threshold_for_highlows (x, y, min_highlow_thresh, max_highlow_thresh, 1)
-  min_for_2 = min_threshold_for_highlows (x, y, min_highlow_thresh, max_highlow_thresh, 2)
-
-  ! ... and with some logic get the best estimate für nreversals and corresponding threshold
-
-  if (min_for_0 < max_highlow_thresh) then
-    if (min_for_0 < (min_highlow_thresh * 2d0)) then
-      max_highlows   = 0
-      best_threshold = min_for_0
-    elseif (min_for_1 < (min_highlow_thresh * 2d0)) then
-      max_highlows   = 1
-      best_threshold = min_for_1
-    elseif (min_for_0 >  (min_for_1 * 4d0)) then   ! the first bump is a outlier - accept 1
-      max_highlows   = 1
-      best_threshold = min_for_1
-    elseif (min_for_1 >  (min_for_2 * 4d0)) then   ! the first two are outlier - accept 2
-      max_highlows   = 2
-      best_threshold = min_for_2
-    elseif (min_for_1 ==  min_for_2) then
-      max_highlows   = 2
-      best_threshold = min_for_1
-    elseif (min_for_1 >  min_highlow_thresh) then
-      max_highlows   = 1
-      best_threshold = min_for_1
-    else
-      max_highlows  = 1
-      best_threshold = min_for_1
-    end if 
-  else
-    write (*,'(A,F6.3)') '!! Watch out - 1 highlow already with ', min_for_0
-    max_highlows      = 1
-  end if 
-
-end subroutine get_best_highlow_threshold
+ 
 
 
 !-------------------------------------------------------------------------
 ! get max. curvature at the end of polyline (= TE)
 !-------------------------------------------------------------------------
 
-subroutine get_max_te_curvature (npt, x,y, te_curvature)
+function get_max_te_curvature (x,y)
 
-  use math_deps,          only: curvature
+  use math_deps,        only: curvature
 
-  integer, intent(in)    :: npt 
-  double precision, dimension(npt), intent(in) :: x, y
-  double precision, intent(out)  :: te_curvature 
-
-  te_curvature = maxval (abs(curvature(11, x(npt-10:npt), y(npt-10:npt))))
-
-end subroutine get_max_te_curvature
-
-
-!------------------------------------------------------------------------------
-! Counts the number of highlows of 2nd derivative (bumps) of polyline (x,y) 
-!
-!   reversal_threshold  minimum +- of curvature to detect reversal 
-!   highlow_threshold   minimum height of a highlow to detect 
-!   max_curv_reverse    max. allowed curve reversals 
-!   max_curv_highlow    max. allowed curve highlow  
-!
-! Returns
-!    nreverse_violations     number of reversals exceeding max_curv_reverse
-!    nhighlow_violations     number of highlows exceeding max_curv_highlow
-!------------------------------------------------------------------------------
-
-subroutine get_curv_violations (x, y, & 
-                      reversal_threshold, highlow_threshold, & 
-                      max_curv_reverse, max_curv_highlow,   &
-                      nreverse_violations, nhighlow_violations)
-
-  use math_deps, only : find_curvature_reversals, find_curvature_spikes
+  double precision   :: get_max_te_curvature 
 
   double precision, dimension(:), intent(in) :: x, y
-  double precision, intent(in)   :: highlow_threshold, reversal_threshold
-  integer, intent(in)            :: max_curv_reverse, max_curv_highlow
+  double precision, dimension(:), allocatable  :: curv
 
-  integer, intent(out) :: nreverse_violations, nhighlow_violations
+  integer            :: npt, ite
+  
+  npt    = size(x)
+  ite    = npt - 10                !  "te" begins at index
 
-  character (size(x)) :: result_info
-  integer :: nhighlows, nreversals
+  allocate (curv (npt))
+  curv  = curvature(npt, x, y) 
+  get_max_te_curvature =  maxval (abs(curv(ite: npt)))
 
-  result_info = repeat ('-', size(x) )    ! dummy   
+end function get_max_te_curvature
 
-  ! have a look at 2nd derivation ... skip first 5 points at LE (too special there) 
-  call find_curvature_reversals(size(x), 5, highlow_threshold, reversal_threshold, x, y, &
-  nhighlows,nreversals, result_info)
-
-  nreverse_violations = max(0,(nreversals-max_curv_reverse))
-  nhighlow_violations = max(0,(nhighlows-max_curv_highlow))
-
-end subroutine get_curv_violations
 
 !------------------------------------------------------------------------------
 ! Assess polyline (x,y) for reversals and HighLows
@@ -1118,29 +937,38 @@ end subroutine get_curv_violations
 !   info                Id-String to print for User e.g. 'Top surface'
 !   reversal_threshold  minimum +- of curvature to detect reversal 
 !   highlow_threshold   minimum height of a highlow to detect 
+!   spike_threshold     minimum +- of 3rd derivation to detect reversal 
 !
 !------------------------------------------------------------------------------
 
   subroutine show_reversals_highlows (info, x, y, & 
-                                     reversal_threshold, highlow_threshold )
+                                     reversal_threshold, spike_threshold )
 
-  use math_deps, only : find_curvature_reversals, find_curvature_spikes
+  use math_deps, only : find_curv_reversals, find_curv_spikes
 
   character(*), intent(in) :: info
   double precision, dimension(:), intent(in) :: x, y
-  double precision, intent(in)   :: highlow_threshold, reversal_threshold
-  integer  :: nhighlows, nreversals
+  double precision, intent(in)   :: reversal_threshold, spike_threshold
+  integer  :: nreversals, nspikes, istart, iend
 
   character (size(x)) :: result_info
 
-  result_info = repeat ('-', size(x) )      
+  result_info = repeat ('-', size(x) ) 
+  istart = 5                              !skip first 5 points at LE (too special there) 
+  iend = size(x)
+     
 
   ! have a look at 2nd derivation ...
-  call find_curvature_reversals(size(x), 5, highlow_threshold, reversal_threshold, x, y, &
-                                nhighlows,nreversals, result_info)
+  call find_curv_reversals    (istart, iend, reversal_threshold, &
+                                x, y, nreversals, result_info)
 
-  write (*,'(11x,A,1x,2(I2,A),A)') info//' ', nreversals, 'R ', &
-            nhighlows, 'HL ', '  '// result_info
+  ! and a look at 3rd derivation ...
+  call find_curv_spikes       (istart, iend, spike_threshold,&
+                                 x, y, nspikes, result_info)
+                              
+
+  write (*,'(11x,A,1x,3(I2,A),A)') info//' ', nreversals, 'R ', &
+            nspikes, 'S ','  '// result_info
 
   end subroutine show_reversals_highlows
 
@@ -1167,7 +995,7 @@ end subroutine get_curv_violations
 
 subroutine smooth_it (show_details, spike_threshold, x, y)
 
-  use math_deps, only : find_curvature_spikes
+  use math_deps, only : find_curv_spikes, transformed_arccos
   use math_deps, only : smooth_it_Chaikin
 
   logical, intent(in) :: show_details  
@@ -1176,43 +1004,34 @@ subroutine smooth_it (show_details, spike_threshold, x, y)
   double precision, dimension(:), intent(inout) :: y
 
   integer :: max_iterations, nspikes_target, i_range_start, i_range_end
-  integer :: nspikes, i_check_start, nspikes_initial
+  integer :: nspikes, istart, iend, nspikes_initial
   integer :: i, n_Chaikin_iter, n_no_improve, nspikes_best, n_no_imp_max
   double precision :: tension, sum_y_before, sum_y_after, delta_y
   character (size(x)) :: result_info
   character (100)     :: text_change
   
   double precision, dimension(size(x)) :: x_cos
-  double precision :: pi
 
   sum_y_before = abs(sum(y))
-
 
 ! Transform the x-Axis with a arccos function so that the leading area will be stretched  
 ! resulting in lower curvature at LE - and the rear part a little compressed
 ! This great approach is from Harry Morgan in his smoothing algorithm
 !    see https://ntrs.nasa.gov/archive/nasa/casi.ntrs.nasa.gov/19850022698.pdf
 
-  x_cos = x
-  pi = acos(-1.d0)
-  do i = 1, size(x)
-    if (x(i) < 0.d0) then         ! sanity check - nowbody knows ...
-      x_cos(i) = 0.d0
-    else
-      x_cos(i) = acos(1.d0 - x(i)) * 2.d0 / pi 
-    end if       
-  end do 
+  x_cos = transformed_arccos (x)
 
   i_range_start  = 1              ! with transformation will start smoothing now at 1
   i_range_end    = size (x)       ! ... and end
   
 ! Count initial value of spikes
 
-  i_check_start  = 1              ! leave LE out from counting - too special there 
+  istart  = 1               
+  iend    = size(x)
   result_info    = repeat ('-', size(x) ) 
 
-  call find_curvature_spikes(size(x), i_check_start, spike_threshold, x, y, nspikes, result_info)
-  nspikes_target  = int(nspikes/5) ! how many curve spikes should be at the end?
+  call find_curv_spikes (istart, iend, spike_threshold, x, y, nspikes, result_info)
+  nspikes_target  = int(nspikes/10) ! how many curve spikes should be at the end?
   nspikes_initial = nspikes
                                   !   Reduce by factor 5 --> not too much as smoothing become critical for surface
   tension        = 0.5d0          ! = 0.5 equals to the original Chaikin cutting distance of 0.25 
@@ -1232,7 +1051,7 @@ subroutine smooth_it (show_details, spike_threshold, x, y)
     call smooth_it_Chaikin (i_range_start, i_range_end, tension, n_Chaikin_iter, x_cos, y)
 
     result_info    = repeat ('-', size(x) ) 
-    call find_curvature_spikes    (size(x), i_check_start, spike_threshold, x, y, nspikes, result_info)
+    call find_curv_spikes (istart, iend, spike_threshold, x, y, nspikes, result_info)
 
     if (nspikes < nspikes_best) then
       nspikes_best = nspikes
@@ -1251,7 +1070,8 @@ subroutine smooth_it (show_details, spike_threshold, x, y)
 
     sum_y_after = abs(sum(y)) 
     delta_y = 100d0 * (sum_y_after - sum_y_before)/sum_y_before
-    write (text_change,'(A,F8.5,A)') 'Overall change of y values ',delta_y,'%' 
+    write (*,'(3x, A)', advance = 'no') "Smoothing: "
+    write (text_change,'(I2, A,F8.5,A)') i, ' iterations - overall change of y values ',delta_y,'%' 
 
     if ( nspikes_initial == 0) then 
       write (*,'(1x, A,F4.1,A)') "No spikes found based on spike_threshold =", &
@@ -1261,7 +1081,7 @@ subroutine smooth_it (show_details, spike_threshold, x, y)
       write (*,'(1x, A)') " All spikes removed. "//trim(text_change)
 
     elseif (nspikes <= nspikes_target) then 
-      write (*,'(1x,A,I2,A)') "Number of spikes reduced by factor", nspikes_initial/nspikes, &
+      write (*,'(1x,A,I3,A)') "Number of spikes reduced by factor", nspikes_initial/nspikes, &
             ". "//trim(text_change)
 
     elseif (i > max_iterations) then 
