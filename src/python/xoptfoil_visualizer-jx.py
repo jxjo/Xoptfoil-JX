@@ -375,29 +375,35 @@ def load_full_polar (prefix, seedfoil, designfoils):
   filename = ''
   ioerror = 0
 
+  # Read seed foil polar
+
   if (len(seedfoil.full_polar_alpha) == 0):
     filename = prefix + DESIGN_SUBDIR_POSTFIX + 'Seed_FullPolar.txt'
     designcounter = 0
-  elif (len(designfoils) > 0 and len (designfoils[-1].full_polar_alpha) == 0 ):
-    filename = prefix + DESIGN_SUBDIR_POSTFIX + 'Design_FullPolar.txt'
-    designcounter = len(designfoils)
-
-  if(len(filename) > 0):
 
     alpha, cl, cd, cm, xtrt, xtrb, re, ioerror = read_full_polar(filename, designcounter)
 
-      # if (ioerror == 1):
-      # print("Warning: Full polar file " + filename + " not found.")
     if (ioerror == 2):
-      print("Full polar for design " + str(designcounter) + " not found.")
+      print("Full polar for seed foil not found within file.")
     elif(ioerror == 0):
+      seedfoil.setFullPolar (np.array(alpha), np.array(cl), np.array(cd), 
+                              np.array(cm),np.array(xtrt), np.array(xtrb), re)
+      print("Read polar Re=" + str(int(re)) +" for seed foil")
 
-      if (designcounter == 0):
-        seedfoil.setFullPolar (np.array(alpha), np.array(cl), np.array(cd), 
-                               np.array(cm),np.array(xtrt), np.array(xtrb), re)
-      else: 
-        designfoils[designcounter-1].setFullPolar (np.array(alpha), np.array(cl), np.array(cd),
-                               np.array(cm), np.array(xtrt), np.array(xtrb), re)
+  # Read design foil polar
+
+  if (len(designfoils) > 0 and len (designfoils[-1].full_polar_alpha) == 0 ):
+    filename = prefix + DESIGN_SUBDIR_POSTFIX + 'Design_FullPolar.txt'
+    designcounter = len(designfoils)
+
+    alpha, cl, cd, cm, xtrt, xtrb, re, ioerror = read_full_polar(filename, designcounter)
+
+    if (ioerror == 2):
+      print("Full polar for design " + str(designcounter) + " not found within file.")
+    elif(ioerror == 0):
+      designfoils[designcounter-1].setFullPolar (np.array(alpha), np.array(cl), np.array(cd),
+                              np.array(cm), np.array(xtrt), np.array(xtrb), re)
+      print("Read polar Re=" + str(int(re)) +" for design #"+  str(designcounter))
 
   return seedfoil, designfoils, ioerror
 
@@ -457,8 +463,6 @@ def read_full_polar(filename, designcounter):
   zonetitle = " -------"
   zonefound = False
   zonelen = len(zonetitle)
-
-  print("Read polar Re=" + str(int(re)) +" for design #"+  str(designcounter))
 
   for textline in f:
     if (not zonefound):
@@ -721,10 +725,19 @@ def plot_airfoil_coordinates(seedfoil, matchfoil, designfoils, plotnum, firsttim
               transform=ax.transAxes,  fontsize=8) 
 
   # show points of transition for the operating points
+
   if show_transition:
     iLE = np.argmin(seedfoil.x)
     plot_points_of_transition (ax, foil.x[0:iLE], foil.y[0:iLE], foil.xtrt, upperside = True)
     plot_points_of_transition (ax, foil.x[-iLE:] , foil.y[-iLE:], foil.xtrb, upperside = False)
+
+    # legend for transition markers
+    lines = []
+    lines.append(plt.Line2D((0,1),(0,0), color=sc,label='Transition top',    linewidth=0.1, marker = 'v'))
+    lines.append(plt.Line2D((0,1),(0,0), color=sc,label='bottom', linewidth=0.1, marker = '^'))
+
+    labels = [l.get_label() for l in lines]
+    ax.legend(lines, labels, loc="upper center", numpoints=1, ncol=2)
 
   # Legend for coordinates plot
 
@@ -1758,21 +1771,22 @@ def main_menu(initialchoice, seedfoil, designfoils, prefix):
         # Update plot
 
         if (ioerror != 1):
-          numfoils = len(designfoils)
-          if plotoptions["plot_airfoils"]:
-            plot_airfoil_coordinates(seedfoil, matchfoil, designfoils, numfoils,
-                                      firsttime=init, animation=True, prefix = prefix)
-          if plotoptions["plot_polars"]:
-            plot_polars(seedfoil, designfoils, numfoils,
-                                      firsttime=init, animation=True, prefix = prefix)
           if plotoptions["plot_optimization_history"]:
             plot_optimization_history(steps, fmins, relfmins, rads,
                                       firsttime=init, prefix = prefix, animation=True)
+          numfoils = len(designfoils)
+          if plotoptions["plot_polars"]:
+            plot_polars(seedfoil, designfoils, numfoils,
+                                      firsttime=init, animation=True, prefix = prefix)
+          if plotoptions["plot_airfoils"]:
+            plot_airfoil_coordinates(seedfoil, matchfoil, designfoils, numfoils,
+                                      firsttime=init, animation=True, prefix = prefix)
 
           init = False
 
-        # Pause for requested update interval
-        plt.pause(plotoptions["monitor_update_interval"])
+        # Show plots and pause for requested update interval
+        plt.pause(0.001)
+        time.sleep(plotoptions["monitor_update_interval"])
 
         # Update airfoil and optimization data
         seedfoil, designfoils, ioerror = read_new_airfoil_data(seedfoil,
@@ -1799,12 +1813,13 @@ def main_menu(initialchoice, seedfoil, designfoils, prefix):
             print("stop command found. Returning to main menu.")
             monitoring = False
         f.close()
-        if len(commands) > 0:
-          f = open('run_control', 'w')
-          for command in commands:
-            if command != "stop_monitoring":
-              f.write(command + '\n')
-          f.close()
+        # do not remove stop_monitoring
+        # if len(commands) > 0:
+        #  f = open('run_control', 'w')
+        #  for command in commands:
+        #    if command != "stop_monitoring":
+        #      f.write(command + '\n')
+        #  f.close()
 
       # Change save_animation_frames back to original setting when done
 
