@@ -959,22 +959,21 @@ subroutine auto_spike_threshold_polyline (show_details, x,y , c_spec)
   spike_threshold = min_threshold_for_spikes (istart, iend, x, y, &
                     min_threshold, max_threshold, nspikes)
 
-! allow a minimum number of spike if there are reversals 
-!  nspikes = max (nspikes, c_spec%max_curv_reverse)
-
 ! ... and give a little more threshold to breeze
-  spike_threshold = spike_threshold * 1.2d0     
+  c_spec%spike_threshold = spike_threshold * 1.2d0 
 
-  c_spec%spike_threshold = spike_threshold
+! Max Spikes - allow at least max_curv_reverse or seed spikes as max number of spikes 
 
-! Allow at least max_curv_reverse or seed spikes as max number of spikes 
-  c_spec%max_spikes = max (nspikes, c_spec%max_curv_reverse)
-  ! print *, '   ---max spikes --- ',  c_spec%max_spikes
+  nspikes = max (nspikes, c_spec%max_curv_reverse)
+  ! ... overwrite from input file by user? 
+  c_spec%max_spikes = max (nspikes, c_spec%max_spikes)
+  ! ... Tweak: if TE is NOT scanned, allow min one reversal (airfoil JX-GS)
+  if (c_spec%nskip_TE_spikes > 0 ) c_spec%max_spikes = max (1, c_spec%max_spikes)
 
 
 ! activate bump detection (reversal of 3rd derivative) if values are ok
 
-  if (spike_threshold <= ok_threshold .and. nspikes <= ok_nspikes) then 
+  if (c_spec%spike_threshold <= ok_threshold .and. c_spec%max_spikes <= ok_nspikes) then 
     c_spec%check_curvature_bumps = .true.
   else
     c_spec%check_curvature_bumps = .false.
@@ -983,13 +982,17 @@ subroutine auto_spike_threshold_polyline (show_details, x,y , c_spec)
 ! Print it all 
 
   if (show_details) then 
-    quality_threshold  = r_quality (spike_threshold, (min_threshold * 1.2d0), ok_threshold, 0.8d0)
+    quality_threshold  = r_quality (c_spec%spike_threshold, (min_threshold * 1.2d0), ok_threshold, 0.8d0)
     label = 'spike_threshold'
     call print_colored (COLOR_PALE, '         '//label//' =') 
-    call print_colored_r (5,'(F5.2)', quality_threshold, spike_threshold) 
+    call print_colored_r (5,'(F5.2)', quality_threshold, c_spec%spike_threshold) 
 
-    write (s3,'(I3)') nspikes
-    call print_colored (COLOR_NOTE, '   There will be '//trim(adjustl(s3)) //' spike(s).')
+    if (c_spec%max_spikes == 0) then 
+      call print_colored (COLOR_NOTE, '   There will be no spikes.')
+    else
+      write (s3,'(I3)') c_spec%max_spikes
+      call print_colored (COLOR_NOTE, '   There will be max '//trim(adjustl(s3)) //' spike(s).')
+    end if
 
     if (c_spec%check_curvature_bumps) then 
       call print_colored (COLOR_NOTE, " Good value - activating ")

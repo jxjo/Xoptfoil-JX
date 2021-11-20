@@ -657,6 +657,7 @@ subroutine  show_optimization_header  (pso_options, max_retries)
   integer            :: nparticles           
   character(200)     :: blanks = ' '
   character (1)      :: s1
+  character (5)      :: s5
   character(:), allocatable     :: var_string
 
   show_improvement = pso_options%relative_fmin_report
@@ -672,7 +673,10 @@ subroutine  show_optimization_header  (pso_options, max_retries)
   if (auto_retry ) then                                       
     write(*,'(/,3x)', advance = 'no')
     call print_colored (COLOR_NOTE, "Auto retry ")
-    call print_colored (COLOR_NOTE, "of a particle having failed geometry - starting with retry="//s1//"")
+    call print_colored (COLOR_NOTE, "of particle having failed geometry - starting with retry="//s1//"")
+    write (s5,'(I5)') pso_options%auto_frequency
+
+    call print_colored (COLOR_NOTE, " for next "//trim(adjustl(s5))// " iterations.")
     write (*,*)
   elseif (max_retries > 0 ) then                                       
     write(*,'(/,3x)', advance = 'no')
