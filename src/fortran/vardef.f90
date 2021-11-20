@@ -29,6 +29,7 @@ module vardef
     integer :: addpoint_loc                             ! whether to add point for LE 
     logical :: symmetrical                              ! airfoil symmetrical? -> bot equals top side
     double precision, dimension(:), allocatable :: xb, xt, zb, zt 
+    ! character, dimension(:), allocatable :: curve_info  ! #todo Info on rversals, spikes...
   end type airfoil_type
 
 ! Specify flap

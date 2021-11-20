@@ -1233,7 +1233,7 @@ function write_airfoil_optimization_progress(designvars, designcounter)
 !   Open coordinate file and write zone header
 
     open(unit=foilunit, file=foilfile, status='old', position='append', err=900)
-    title =  'zone t="Airfoil,  '//'name='//trim(foil%name)//', maxt='//trim(maxtchar)//&
+    title =  'zone t="Airfoil,  '//'name='//trim(adjustl(foil%name))//', maxt='//trim(maxtchar)//&
              ', xmaxt='//trim(xmaxtchar)//', maxc='//&
               trim(maxcchar)//', xmaxc='//trim(xmaxcchar)//'", '//&
              'SOLUTIONTIME='//trim(tcounter)
@@ -2176,7 +2176,7 @@ function write_matchfoil_optimization_progress(designvars, designcounter)
 
 !   Append to file: Header for design foil coordinates
     open(unit=foilunit, file=foilfile, status='old', position='append', err=910)
-    title =  'zone t="Airfoil, '//'name='//trim(foil%name)//', maxt='//trim(maxtchar)//&
+    title =  'zone t="Airfoil, '//'name='//trim(adjustl(foil%name))//', maxt='//trim(maxtchar)//&
              ', xmaxt='//trim(xmaxtchar)//', maxc='//&
               trim(maxcchar)//', xmaxc='//trim(xmaxcchar)//'", '//&
              'SOLUTIONTIME='//trim(text)

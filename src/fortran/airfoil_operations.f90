@@ -185,7 +185,10 @@ subroutine airfoil_read(filename, npoints, labeled, name, x, z)
 
 ! Read points from file
 
+  name = ""
   if (labeled) read(iunit,'(A)') name
+  name = trim(adjustl(name))
+
   do i = 1, npoints
     read(iunit,*,end=500,err=500) x(i), z(i)
   end do

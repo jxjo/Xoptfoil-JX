@@ -328,8 +328,6 @@ subroutine repanel_smooth (input_file, outname_auto, output_prefix, seed_foil, v
 
   use airfoil_operations, only : repanel_and_normalize_airfoil, rebuild_airfoil
   use input_output,       only : read_curvature_constraints_inputs, read_xfoil_paneling_inputs
-! jx-test
-  use math_deps,          only : transformed_arccos
 
 
   character(*), intent(in)          :: input_file, output_prefix
@@ -376,10 +374,6 @@ subroutine repanel_smooth (input_file, outname_auto, output_prefix, seed_foil, v
     foil_smoothed%name = trim(outname)
 
     call check_and_smooth_surface (.true., .true., foil_smoothed, overall_quality)
-  !jx-test 
-    foil_smoothed%xt = transformed_arccos (foil_smoothed%xt)
-    foil_smoothed%xb = transformed_arccos (foil_smoothed%xb)
-    call rebuild_airfoil((foil_smoothed%xt), (foil_smoothed%xb), (foil_smoothed%zt), (foil_smoothed%zb), foil_smoothed)
   
     write (*,*)
     call airfoil_write   (trim(outname)//'.dat', trim(foil_smoothed%name), foil_smoothed)
@@ -709,7 +703,7 @@ subroutine write_design_coordinates (output_prefix, designcounter, foil)
     text = adjustl(text)
 
     open(unit=foilunit, file=foilfile, status='old', position='append', err=900)
-    title =  'zone t="Airfoil, '//'name='//trim(foil%name)//', maxt='//trim(maxtchar)//&
+    title =  'zone t="Airfoil, '//'name='//trim(adjustl(foil%name))//', maxt='//trim(maxtchar)//&
              ', xmaxt='//trim(xmaxtchar)//', maxc='//&
               trim(maxcchar)//', xmaxc='//trim(xmaxcchar)//'", '//&
              'SOLUTIONTIME='//trim(text)
