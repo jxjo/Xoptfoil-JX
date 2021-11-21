@@ -1,1 +1,0 @@
-xoptfoil-JX -i iSD-root.txt  -r 220000 -a SD7003.dat         -o SD-root-22 

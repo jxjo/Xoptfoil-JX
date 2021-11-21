@@ -1,1 +1,0 @@
-xoptfoil_visualizer-jx.py -c SD-root-22  -o 3

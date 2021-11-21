@@ -1,0 +1,30 @@
+! Easy going exmyaple ...
+!
+! Optimize max glide ratio of SD7003 
+!
+
+&optimization_options
+  airfoil_file     = 'SD7003.dat'
+  shape_functions  = 'camb-thick'				! just optimize thickness & camber and their highpoints 
+/  
+
+&operating_conditions
+
+  re_default       = 400000						! use this Reynolds number for operating points
+  noppoint         = 2
+
+  op_mode(1) = 'spec-cl'						! Specifiy operating point based on cl-value						
+  op_point(1) = 0.2
+  optimization_type(1) = 'target-drag'			! keep drag konstant at cl = 0.2
+  target_value(1) = -1							!  "-1" means: take value from seed airfoil SD7003
+
+  op_mode(2) = 'spec-cl'
+  op_point(2) = 0.7								! optimize glide ratio cl/cd at cl= 0.7
+  optimization_type(2) = 'max-glide'            !  (this is equal to "minimize cd" because of 'spec-cl')
+/
+
+&polar_generation			
+  generate_polar = .true.						! generate a polar for all designs to show in visualizer
+/
+
+

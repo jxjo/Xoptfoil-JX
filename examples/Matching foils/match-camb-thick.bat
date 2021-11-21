@@ -1,1 +1,0 @@
-xoptfoil-JX -i imatch-camb-thick.txt -o matched-camb-thick
