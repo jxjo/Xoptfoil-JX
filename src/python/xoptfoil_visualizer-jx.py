@@ -40,12 +40,12 @@ plotoptions = dict(show_seed_airfoil = True,
                    plot_airfoils = True,
                    plot_polars = True,
                    plot_optimization_history = True,
-                   plot_Curvature = True,
-                   plot_3rd_derivative = False,
+                   plot_curvature = True,
+                   plot_3rd_derivative = True,
                    save_animation_frames = False,
                    color_for_seed = "dimgrey",
                    color_for_new_designs = "deeppink",
-                   monitor_update_interval = 1)
+                   monitor_update_interval = 0.5)
 
 ################################################################################
 #
@@ -164,7 +164,7 @@ def read_airfoil_coordinates(filename, zonetitle, designnum):
     f = open(filename)
   except IOError:
     ioerror = 1
-    return x, y, maxt, xmaxt, maxc, xmaxc, ioerror, deriv2, deriv3
+    return x, y, maxt, xmaxt, maxc, xmaxc, ioerror, deriv2, deriv3, name
 
   # Read lines until we get to the correct zone
 
@@ -238,7 +238,6 @@ def get_argument (args,argname):
   for argument in args:
     if (argument.split("=")[0].strip() == argname.strip()):
       argval = argument.split("=")[1].strip()
-
   return argval
 
 ################################################################################
@@ -614,11 +613,11 @@ def plot_airfoil_coordinates(seedfoil, matchfoil, designfoils, plotnum, firsttim
 
   # Set plot options ------
 
-  plot_2nd_deriv  = True                 # Plot of curvature / 2nd derivative of polyline
-  plot_3rd_deriv  = True                 # Plot of 3nd derivative of polyline
+  plot_2nd_deriv  = plotoptions["plot_curvature"]     
+  plot_3rd_deriv  = plotoptions["plot_3rd_derivative"] 
   plot_delta_y    = True                 # Plot delta of y ("z") value between current and seed
   plot_matchfoil  = True                 # Plot the matchfoil and the delta from current to match
-  plot_seedfoil   =     plotoptions["show_seed_airfoil_only"] or plotoptions["show_seed_airfoil"]
+  plot_seedfoil   = plotoptions["show_seed_airfoil_only"] or plotoptions["show_seed_airfoil"]
   plot_foil       = not plotoptions["show_seed_airfoil_only"]
 
   show_info       = plotoptions["show_airfoil_info"]
@@ -770,7 +769,7 @@ def plot_airfoil_coordinates(seedfoil, matchfoil, designfoils, plotnum, firsttim
     ax2.set_ylabel('curvature', color='grey')
     ax2.set_ylim(0.8, -0.8)
     if plot_seedfoil:   ax2.plot(seedfoil.x, seedfoil.deriv2, color=sc, linewidth=0.5) 
-    if plot_foil:       ax2.plot(foil.x,     foil.deriv2,     color=nc, linewidth=0.8)
+    if plot_foil:       ax2.plot(foil.x,     foil.deriv2,     color=nc, linewidth=1.0)
 
   if plot_3rd_deriv:
     mirrorax2.set_ylabel('3rd derivative', color='grey')
@@ -1387,7 +1386,7 @@ def read_new_airfoil_data(seedfoil, designfoils, prefix):
 
     # retry - maybe it was a timing problem between Xoptfoil and visualizer
     if (ioerror == 2):
-      time.sleep (2)
+      time.sleep (1)
       print("         Retry Zone labeled " + zonetitle )
       alpha, cl, cd, cm, xtrt, xtrb, flapangle, ioerror = read_airfoil_polars(polarfilename,
                                                                       zonetitle)
@@ -1595,6 +1594,7 @@ def options_menu():
   if ( (key == "show_seed_airfoil") or (key == "show_seed_airfoil_only") or
        (key == "show_seed_polar") or (key == "show_seed_polar_only") or
        (key == "save_animation_frames") or (key == "plot_airfoils") or
+       (key == "plot_3rd_derivative") or (key == "plot_curvature") or
        (key == "plot_polars") or (key == "show_airfoil_info") or
        (key == "plot_optimization_history") ):
     options_complete = False
@@ -1785,7 +1785,7 @@ def main_menu(initialchoice, seedfoil, designfoils, prefix):
           init = False
 
         # Show plots and pause for requested update interval
-        plt.pause(0.001)
+        plt.pause(0.01)
         time.sleep(plotoptions["monitor_update_interval"])
 
         # Update airfoil and optimization data
