@@ -162,7 +162,7 @@ subroutine particleswarm(xopt, fmin, step, fevals, objfunc, x0, xmin, xmax,    &
     whigh = 1.2d0      ! starting inertial parameter
     wlow = 0.02d0       ! ending inertial parameter
 !    convrate = 0.01d0   ! inertial parameter reduction rate
-    convrate = 0.03d0   ! inertial parameter reduction rate
+    convrate = 0.025d0   ! inertial parameter reduction rate
 
   else
     write(*,*) "Error in particleswarm: convergence mode should be"//          &
@@ -284,7 +284,7 @@ subroutine particleswarm(xopt, fmin, step, fevals, objfunc, x0, xmin, xmax,    &
   write(*,*)
   call  print_colored (COLOR_FEATURE, ' - Particle swarm ')
   write (text,'(I3)') pso_options%pop
-  call  print_colored (COLOR_NOTE, 'with '//trim(adjustl(text))// ' members will now try its best ...')
+  call  print_colored (COLOR_NORMAL, 'with '//trim(adjustl(text))// ' members will now try its best ...')
   write(*,*)
   write(*,*)
   call show_optimization_header  (pso_options, max_retries)

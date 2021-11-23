@@ -58,6 +58,11 @@ subroutine check_inputs(global_search, pso_options)
       curv_spec%check_curvature = .false. 
       curv_spec%auto_curvature  = .false. 
     end if 
+    if (.not. curv_spec%do_smoothing) then 
+      call print_note ("Smoothing switched on for shape function 'camb-thick' "// &
+                       "to ensure good results.")
+      curv_spec%do_smoothing = .true. 
+    end if 
   elseif (trim(shape_functions) == 'hicks-henne' .or. trim(shape_functions) == 'hicks-henne+') then
     if (.not. curv_spec%check_curvature) then 
       call print_warning ("When using shape function 'hicks-henne' curvature ckecking "// &
@@ -213,9 +218,7 @@ subroutine check_seed()
 
 ! Preset seed airfoil geometry to geo targets and/or thickness-camber constraints ----------
 
-  write(*,'(" - ",A)') 'Scaling thickness and camber to geo targets or constraints'
-
-  call preset_airfoil_to_targets (show_details, seed_foil, geo_targets, &
+  call preset_airfoil_to_targets (.true., seed_foil, geo_targets, &
                                   min_thickness, max_thickness, min_camber, max_camber) 
 
 ! Afterwards sanity check of thickness and camber 
@@ -251,7 +254,13 @@ subroutine check_seed()
     call check_te_curvature_violations ('Top surface', seed_foil%xt, seed_foil%zt, curv_top_spec)
     call check_te_curvature_violations ('Bot surface', seed_foil%xb, seed_foil%zb, curv_bot_spec)
 
-  end if
+    elseif (curv_spec%do_smoothing) then
+
+  ! In case of 'camb-thick' smoothing was activated 
+
+      call check_and_smooth_surface (show_details, curv_spec%do_smoothing, seed_foil, overall_quality)
+
+    end if
 
   
 
@@ -749,8 +758,11 @@ subroutine check_and_smooth_surface (show_details, do_smoothing, foil, overall_q
   if (show_details) then
     call print_colored (COLOR_NOTE, '   ')
   else
-    if (done_smoothing) then
+    if (done_smoothing .and. .not. do_smoothing) then
       call print_colored (COLOR_NORMAL, '   Smoothing airfoil due to bad surface quality')
+      write (*,*)
+    Elseif (done_smoothing .and. do_smoothing) then
+      call print_colored (COLOR_NOTE, '   Smoothing airfoil')
       write (*,*)
     end if
     call print_colored (COLOR_NOTE, '   Airfoil surface assessment: ')
@@ -967,9 +979,6 @@ subroutine auto_spike_threshold_polyline (show_details, x,y , c_spec)
   nspikes = max (nspikes, c_spec%max_curv_reverse)
   ! ... overwrite from input file by user? 
   c_spec%max_spikes = max (nspikes, c_spec%max_spikes)
-  ! ... Tweak: if TE is NOT scanned, allow min one reversal (airfoil JX-GS)
-  if (c_spec%nskip_TE_spikes > 0 ) c_spec%max_spikes = max (1, c_spec%max_spikes)
-
 
 ! activate bump detection (reversal of 3rd derivative) if values are ok
 
@@ -1248,7 +1257,7 @@ subroutine preset_airfoil_to_targets (show_details, foil, geo_targets, &
 
           if (show_details) then
             write (cvalue,'(F6.2)')  (new_thick * 100)
-            call print_note_only ('- Scaling thickness to target value '// trim(adjustl(cvalue))//'%', 3)
+            call print_note_only ('- Scaling thickness to target value '// trim(adjustl(cvalue))//'%')
           end if
 
         case ('Camber')                      
@@ -1258,7 +1267,7 @@ subroutine preset_airfoil_to_targets (show_details, foil, geo_targets, &
 
           if (show_details) then
             write (cvalue,'(F6.2)')  (new_camber * 100)
-            call print_note_only ('- Scaling camber to target value '// trim(adjustl(cvalue))//'%', 3)
+            call print_note_only ('- Scaling camber to target value '// trim(adjustl(cvalue))//'%')
           end if
 
       end select
@@ -1281,7 +1290,7 @@ subroutine preset_airfoil_to_targets (show_details, foil, geo_targets, &
 
       if (show_details) then
         write (cvalue,'(F6.2)')  (new_thick * 100)
-        call print_note_only ('- Scaling thickness according constraint to '// trim(adjustl(cvalue))//'%', 3)
+        call print_note_only ('- Scaling thickness according constraint to '// trim(adjustl(cvalue))//'%')
       end if 
 
     elseif (maxt < min_thickness) then 
@@ -1292,7 +1301,7 @@ subroutine preset_airfoil_to_targets (show_details, foil, geo_targets, &
 
       if (show_details) then
         write (cvalue,'(F6.2)')  (new_thick * 100)
-        call print_note_only ('- Scaling thickness according constraint to '// trim(adjustl(cvalue))//'%', 3)
+        call print_note_only ('- Scaling thickness according constraint to '// trim(adjustl(cvalue))//'%')
       end if 
 
     end if 
@@ -1305,7 +1314,7 @@ subroutine preset_airfoil_to_targets (show_details, foil, geo_targets, &
 
       if (show_details) then
         write (cvalue,'(F6.2)')  (new_camber * 100)
-        call print_note_only ('- Scaling camber according constraint to '// trim(adjustl(cvalue))//'%', 3)
+        call print_note_only ('- Scaling camber according constraint to '// trim(adjustl(cvalue))//'%')
       end if
       
     elseif (maxc < min_camber) then 
@@ -1316,7 +1325,7 @@ subroutine preset_airfoil_to_targets (show_details, foil, geo_targets, &
 
       if (show_details) then
         write (cvalue,'(F6.2)')  (new_camber * 100)
-        call print_note_only ('- Scaling camber according constraint to '// trim(adjustl(cvalue))//'%', 3)
+        call print_note_only ('- Scaling camber according constraint to '// trim(adjustl(cvalue))//'%')
       end if
 
     end if 
@@ -1342,9 +1351,6 @@ subroutine preset_airfoil_to_targets (show_details, foil, geo_targets, &
     do i = 1, nptb 
       foil%zb(i) = new_foil%z(nptt+i-1)      ! start from LE - bottom - to TE
     end do
-  else
-    if (show_details) &
-      call print_note_only ('- No geo targets, no constraints - nothing changed', 3)
   end if
   
 end subroutine preset_airfoil_to_targets

@@ -250,8 +250,8 @@ end subroutine create_shape
 subroutine create_airfoil(xt_seed, zt_seed, xb_seed, zb_seed, modest, modesb,  &
                           zt_new, zb_new, shapetype, symmetrical)
 
-! jx-test
   use math_deps,          only : transformed_arccos
+
   double precision, dimension(:), intent(in) :: xt_seed, zt_seed, xb_seed,     &
                                                 zb_seed
   double precision, dimension(:), intent(in) :: modest, modesb
@@ -343,8 +343,9 @@ end subroutine create_airfoil
 subroutine create_airfoil_camb_thick (xt_seed, zt_seed, xb_seed, zb_seed, modes, &
                                       zt_new, zb_new )
 
-  use vardef,       only : airfoil_type
-  use xfoil_driver, only : xfoil_scale_thickness_camber, xfoil_scale_LE_radius
+  use vardef,             only : airfoil_type
+  use xfoil_driver,       only : xfoil_scale_thickness_camber, xfoil_scale_LE_radius
+  use airfoil_operations, only : smooth_foil
                                    
   double precision, dimension(:), intent(in) :: xt_seed, zt_seed, xb_seed, zb_seed
   double precision, dimension(:), intent(in) :: modes
@@ -384,6 +385,10 @@ subroutine create_airfoil_camb_thick (xt_seed, zt_seed, xb_seed, zb_seed, modes,
   f_radius = 1.d0 + 3.d0 * modes(5)
   x_blend  = max (0.02d0, (5.d0 * modes(6) + 0.1d0))
   call xfoil_scale_LE_radius (new_foil_1, f_radius, x_blend, new_foil_2)
+  
+  ! Especially Xfoils HIPNT tends to produce artefacts in curvature
+  ! Smoothing should also be done for the seed airfoil 
+  call smooth_foil (.false., 0.05d0, new_foil_2)
 
   ! Sanity check - new_foil may not have different number of points
   if (seed_foil%npoint /= new_foil_2%npoint) then
@@ -422,97 +427,101 @@ end subroutine create_airfoil_camb_thick
 subroutine create_airfoil_camb_thick_plus (xt_seed, zt_seed, xb_seed, zb_seed, modes, &
   zt_new, zb_new )
 
-use vardef,       only : airfoil_type
-use xfoil_driver, only : xfoil_scale_thickness_camber, xfoil_scale_LE_radius
+  use vardef,             only : airfoil_type
+  use xfoil_driver,       only : xfoil_scale_thickness_camber, xfoil_scale_LE_radius
+  use airfoil_operations, only : smooth_foil
 
-double precision, dimension(:), intent(in) :: xt_seed, zt_seed, xb_seed, zb_seed
-double precision, dimension(:), intent(in) :: modes
-double precision, dimension(:), intent(inout) :: zt_new, zb_new
+  double precision, dimension(:), intent(in) :: xt_seed, zt_seed, xb_seed, zb_seed
+  double precision, dimension(:), intent(in) :: modes
+  double precision, dimension(:), intent(inout) :: zt_new, zb_new
 
-integer :: i,  nptt, nptb
-type(airfoil_type) :: seed_foil, new_foil_1, new_foil_2, new_foil_3, new_foil_4
-double precision :: f_thick,d_xthick,f_camb,d_xcamb
-double precision :: f_radius, x_blend 
+  integer :: i,  nptt, nptb
+  type(airfoil_type) :: seed_foil, new_foil_1, new_foil_2, new_foil_3, new_foil_4
+  double precision :: f_thick,d_xthick,f_camb,d_xcamb
+  double precision :: f_radius, x_blend 
 
-! Rebuild seed airfoil out of top and bottom coordinates
-nptt = size(zt_seed,1)
-nptb = size(zb_seed,1)
+  ! Rebuild seed airfoil out of top and bottom coordinates
+  nptt = size(zt_seed,1)
+  nptb = size(zb_seed,1)
 
-seed_foil%npoint = nptt + nptb - 1  
-allocate(seed_foil%x(seed_foil%npoint))
-allocate(seed_foil%z(seed_foil%npoint))
+  seed_foil%npoint = nptt + nptb - 1  
+  allocate(seed_foil%x(seed_foil%npoint))
+  allocate(seed_foil%z(seed_foil%npoint))
 
-do i = 1, nptt
-seed_foil%x(i) = xt_seed(nptt-i+1)
-seed_foil%z(i) = zt_seed(nptt-i+1)
-end do
-do i = 1, nptb-1
-seed_foil%x(i+nptt) = xb_seed(i+1)
-seed_foil%z(i+nptt) = zb_seed(i+1)
-end do
+  do i = 1, nptt
+  seed_foil%x(i) = xt_seed(nptt-i+1)
+  seed_foil%z(i) = zt_seed(nptt-i+1)
+  end do
+  do i = 1, nptb-1
+  seed_foil%x(i+nptt) = xb_seed(i+1)
+  seed_foil%z(i+nptt) = zb_seed(i+1)
+  end do
 
-! Top: Change thickness, camber ... according to new values hidden in modes
-f_camb   = 1.d0 + 10.d0 * modes(1) 
-f_thick  = 1.d0 + 5.d0 * modes(2)
-d_xcamb  = 4.d0 * modes(3)
-d_xthick = 4.d0 * modes(4)
+  ! Top: Change thickness, camber ... according to new values hidden in modes
+  f_camb   = 1.d0 + 10.d0 * modes(1) 
+  f_thick  = 1.d0 + 5.d0 * modes(2)
+  d_xcamb  = 4.d0 * modes(3)
+  d_xthick = 4.d0 * modes(4)
 
-call xfoil_scale_thickness_camber (seed_foil, f_thick,d_xthick,f_camb,d_xcamb, new_foil_1)
+  call xfoil_scale_thickness_camber (seed_foil, f_thick,d_xthick,f_camb,d_xcamb, new_foil_1)
 
-! Change LE radius ... according to new values hidden in modes
-f_radius = 1.d0 + 3.d0 * modes(5)
-! max() will deliver the bigger value of both arguments, so the minimum possible value
-! in this case is 0.005 / 0,5 percent
-x_blend  = max (0.005, modes(6)) 
-
-
-call xfoil_scale_LE_radius (new_foil_1, f_radius, x_blend, new_foil_2)
-
-! Sanity check - new_foil may not have different number of points
-if (seed_foil%npoint /= new_foil_2%npoint) then
-write(*,'(A)') 'Error: Number of points changed during thickness/camber modification'
-stop 1
-end if
-
-! Bottom: Change thickness, camber ... according to new values hidden in modes
-f_camb   = 1.d0 + 10.d0 * modes(7) 
-f_thick  = 1.d0 + 5.d0 * modes(8)
-d_xcamb  = 4.d0 * modes(9)
-d_xthick = 4.d0 * modes(10)
-
-call xfoil_scale_thickness_camber (seed_foil, f_thick,d_xthick,f_camb,d_xcamb, new_foil_3)
-
-! Change LE radius ... according to new values hidden in modes
-f_radius = 1.d0 + 3.d0 * modes(11)
-x_blend  = max (0.005, modes(6)) 
-call xfoil_scale_LE_radius (new_foil_1, f_radius, x_blend, new_foil_4)
-
-! Sanity check - new_foil may not have different number of points
-if (seed_foil%npoint /= new_foil_4%npoint) then
-write(*,'(A)') 'Error: Number of points changed during thickness/camber modification'
-stop 1
-end if
+  ! Change LE radius ... according to new values hidden in modes
+  f_radius = 1.d0 + 3.d0 * modes(5)
+  ! max() will deliver the bigger value of both arguments, so the minimum possible value
+  ! in this case is 0.005 / 0,5 percent
+  x_blend  = max (0.005, modes(6)) 
 
 
-! get new upper and lower z-coordinates from modified airfoil 
-do i = 1, nptt
-zt_new(i) = new_foil_2%z(nptt-i+1)      ! start from LE - top reverse - to LE
-end do
-do i = 1, nptb 
-zb_new(i) = new_foil_4%z(nptt+i-1)      ! start from LE - bottom - to TE
-end do
+  call xfoil_scale_LE_radius (new_foil_1, f_radius, x_blend, new_foil_2)
 
-! Clean up
-deallocate(seed_foil%x)
-deallocate(seed_foil%z)
-deallocate(new_foil_1%x)
-deallocate(new_foil_1%z)
-deallocate(new_foil_2%x)
-deallocate(new_foil_2%z)
-deallocate(new_foil_3%x)
-deallocate(new_foil_3%z)
-deallocate(new_foil_4%x)
-deallocate(new_foil_4%z)
+  ! Sanity check - new_foil may not have different number of points
+  if (seed_foil%npoint /= new_foil_2%npoint) then
+  write(*,'(A)') 'Error: Number of points changed during thickness/camber modification'
+  stop 1
+  end if
+
+  ! Bottom: Change thickness, camber ... according to new values hidden in modes
+  f_camb   = 1.d0 + 10.d0 * modes(7) 
+  f_thick  = 1.d0 + 5.d0 * modes(8)
+  d_xcamb  = 4.d0 * modes(9)
+  d_xthick = 4.d0 * modes(10)
+
+  call xfoil_scale_thickness_camber (seed_foil, f_thick,d_xthick,f_camb,d_xcamb, new_foil_3)
+
+  ! Change LE radius ... according to new values hidden in modes
+  f_radius = 1.d0 + 3.d0 * modes(11)
+  x_blend  = max (0.005, modes(6)) 
+  call xfoil_scale_LE_radius (new_foil_1, f_radius, x_blend, new_foil_4)
+
+  ! Sanity check - new_foil may not have different number of points
+  if (seed_foil%npoint /= new_foil_4%npoint) then
+  write(*,'(A)') 'Error: Number of points changed during thickness/camber modification'
+  stop 1
+  end if
+
+  ! Especially Xfoils HIPNT tends to produce artefacts in curvature
+  ! Smoothing should also be done for the seed airfoil 
+  call smooth_foil (.false., 0.05d0, new_foil_2)
+
+  ! get new upper and lower z-coordinates from modified airfoil 
+  do i = 1, nptt
+  zt_new(i) = new_foil_2%z(nptt-i+1)      ! start from LE - top reverse - to LE
+  end do
+  do i = 1, nptb 
+  zb_new(i) = new_foil_4%z(nptt+i-1)      ! start from LE - bottom - to TE
+  end do
+
+  ! Clean up
+  deallocate(seed_foil%x)
+  deallocate(seed_foil%z)
+  deallocate(new_foil_1%x)
+  deallocate(new_foil_1%z)
+  deallocate(new_foil_2%x)
+  deallocate(new_foil_2%z)
+  deallocate(new_foil_3%x)
+  deallocate(new_foil_3%z)
+  deallocate(new_foil_4%x)
+  deallocate(new_foil_4%z)
 
 end subroutine create_airfoil_camb_thick_plus
 

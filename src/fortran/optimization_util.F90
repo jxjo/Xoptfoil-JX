@@ -177,6 +177,7 @@ subroutine initial_designs(dv, objval, fevals, objfunc, xmin, xmax, use_x0,    &
     write(*,'(12x)', advance ='no') 
 
 !$omp end master
+!$omp barrier
 
 
 !$omp do

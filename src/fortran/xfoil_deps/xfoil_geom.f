@@ -2617,6 +2617,8 @@ C===================================================
       use xfoil_inc
 C      INCLUDE 'XFOIL.INC'
 C
+      integer    :: iLE
+
       CALL LEFIND(SBLE,XB,XBP,YB,YBP,SB,NB, SILENT_MODE)
 C
 C---This fails miserably with sharp LE foils, tsk,tsk,tsk HHY 4/24/01
@@ -2628,8 +2630,30 @@ c      DXC = DXC/DSC
 c      DYC = DYC/DSC
 C
 C---Rational alternative 4/24/01 HHY
-      XLE = SEVAL(SBLE,XB,XBP,SB,NB)
-      YLE = SEVAL(SBLE,YB,YBP,SB,NB)
+
+C---- JX-mod 
+C     Ensure, when LE is at 0,0 (default Xoptfoil-JX), it will be there.
+C     (THKCAM tries to find a "better" one)  
+      iLE = 0
+      DO I=2, (NB-1)
+        if (XB(I) == 0.0 .and. YB(I) .EQ. 0.0) then 
+          iLE = i
+          exit 
+        end if 
+      ENDDO
+
+      if (iLE == 0) then
+        XLE = SEVAL(SBLE,XB,XBP,SB,NB)
+        YLE = SEVAL(SBLE,YB,YBP,SB,NB)
+      ELSE
+        XLE = 0.0
+        YLE = 0.0
+      endif
+C      original 
+C      XLE = SEVAL(SBLE,XB,XBP,SB,NB)
+C      YLE = SEVAL(SBLE,YB,YBP,SB,NB)
+C-- End JX-Mod
+
       XTE = 0.5*(XB(1)+XB(NB))
       YTE = 0.5*(YB(1)+YB(NB))
       CHORD = SQRT((XTE-XLE)**2 + (YTE-YLE)**2)
@@ -2640,10 +2664,16 @@ C
 C---- go over each point, changing the y-thickness appropriately
       DO I=1, NB
 C------ coordinates of point on the opposite side with the same x value
-        CALL SOPPS(SBOPP, SB(I),XB,XBP,YB,YBP,SB,NB,SBLE, SILENT_MODE)
-        XBOPP = SEVAL(SBOPP,XB,XBP,SB,NB)
-        YBOPP = SEVAL(SBOPP,YB,YBP,SB,NB)
-C
+C--- JX-mod do not change LE (0,0)  coordinates 
+        if (I /= iLE) then
+          CALL SOPPS(SBOPP, SB(I),XB,XBP,YB,YBP,SB,NB,SBLE, SILENT_MODE)
+          XBOPP = SEVAL(SBOPP,XB,XBP,SB,NB)
+          YBOPP = SEVAL(SBOPP,YB,YBP,SB,NB)
+        ELSE
+          XBOPP = 0.0
+          YBOPP = 0.0
+        end if
+C  
 C------ set new y coordinate by changing camber & thickness appropriately
         XCAVG =        ( 0.5*(XB(I)+XBOPP)*DXC + 0.5*(YB(I)+YBOPP)*DYC )
         YCAVG = CFAC * ( 0.5*(YB(I)+YBOPP)*DXC - 0.5*(XB(I)+XBOPP)*DYC )
@@ -2655,13 +2685,20 @@ C
         W2(I) = (YCAVG+YCDEL)*DXC + (XCAVG+XCDEL)*DYC
       ENDDO
 C
-C     jx-mod do not change TE coordinates 
+C--- JX-mod do not change LE (0,0) and TE coordinates 
 C     DO I=1, NB
       DO I=2, (NB-1)
-        XB(I) = W1(I)
-        YB(I) = W2(I)
+        if (I /= iLE) then
+          XB(I) = W1(I)
+          YB(I) = W2(I)
+        end if 
       ENDDO
-C      jx mod: not needed
+C---  Final check ...
+      if ((iLE > 0) .and. YB(iLE) /= 0.0) then
+        write (*,*) "Error: THKCAM changed LE from 0,0"
+      end if
+
+C--- JX-mod not needed
 C      LGSAME = .FALSE.
 C
       CALL SCALC(XB,YB,SB,NB)
@@ -2695,6 +2732,7 @@ C     DIMENSION RINPUT(*)
 
 C---  jx-mod debug
       REAL*8 YBSAVE(NB)
+      integer  :: iLE
       YBSAVE  = YB (1:NB)
 C
 C---  jx-mod init global 
@@ -2705,6 +2743,17 @@ C---  jx-mod init global
 C
 C--- Check chordline direction (should be unrotated for camber routines)
 C    to function correctly
+
+C---- JX-mod 
+C     Ensure, when LE is at 0,0 (default Xoptfoil-JX), fix it there.
+C     (HIPNT tries to find a "better" one and rotates airfoil again)  
+      iLE = 0
+      DO I=2, (NB-1)
+        if (XB(I) == 0.0 .and. YB(I) .EQ. 0.0) then 
+          iLE = i
+          exit              
+        end if 
+      ENDDO
 
 C jx-mod LE must be calculated for the rotation test
       CALL LEFIND(SBLE,XB,XBP,YB,YBP,SB,NB, SILENT_MODE)
@@ -2723,9 +2772,18 @@ C jx-mod LE must be calculated for the rotation test
 C
 C
 C---- find leftmost point location 
+
+C---- JX-mod 
+C     Ensure, when LE is at 0,0 (default Xoptfoil-JX), fix it there
+C          HIPNT would try to find a better LE and rotate the airfoil
       CALL XLFIND(SBL,XB,XBP,YB,YBP,SB,NB)
-      XBL = SEVAL(SBL,XB,XBP,SB,NB)
-      YBL = SEVAL(SBL,YB,YBP,SB,NB)
+      if (iLE == 0) then 
+        XBL = SEVAL(SBL,XB,XBP,SB,NB)
+        YBL = SEVAL(SBL,YB,YBP,SB,NB)
+      ELSE
+        XBL = 0.0
+        YBL = 0.0
+      end if 
 C
  10   CONTINUE
 C
@@ -2819,21 +2877,33 @@ C--- HHY 4/24/01 got rid of splining vs X,Y vs S (buggy), now spline Y(X)
 C
 C
 C---- for each orig. airfoil point setup new YB from camber and thickness
+
+C---- JX-mod do not change LE (0,0) and TE coordinates 
+C     jx-test do change TE coordinates
+C     DO 40 I=2, (NB-1)
       DO 40 I=1, NB
+        if (i /= iLE) then
+
 C
 C------ spline camber and thickness at original xb points
-        YCC = SEVAL(XB(I),YCM,YCMP,XCM,NCM)
-        YTT = SEVAL(XB(I),YTK,YTKP,XTK,NTK)
+          YCC = SEVAL(XB(I),YCM,YCMP,XCM,NCM)
+          YTT = SEVAL(XB(I),YTK,YTKP,XTK,NTK)
 C
 C------ set new y coordinate from new camber & thickness
-        IF (SB(I) .LE. SBL) THEN
-          YB(I) = YCC + YTT
-         ELSE
-          YB(I) = YCC - YTT
-        ENDIF
+          IF (SB(I) .LE. SBL) THEN
+            YB(I) = YCC + YTT
+           ELSE
+            YB(I) = YCC - YTT
+          ENDIF
 C---- Add Y-offset for original leftmost (LE) point to camber
-        YB(I) = YB(I) + YBL
+          YB(I) = YB(I) + YBL
+      end if
    40 CONTINUE
+
+C---  jx-mod Double check  
+      if ((iLE > 0) .and. YB(iLE) /= 0.0) then
+        write (*,*) "Error: HIPNT changed LE from 0,0"
+      end if
 C      
 C     jx mod: not needed
 C     LGSAME = .FALSE.
@@ -2955,7 +3025,10 @@ C
       CALL LERSCL(XB,XBP,YB,YBP,SB,NB, DOC,RFAC, W1,W2)
 C
       DO 40 I=1, NB
-        XB(I) = W1(I)
+C jx-test
+        if (I > 1 .and. I < NB) then 
+          XB(I) = W1(I)
+        end if 
         YB(I) = W2(I)
    40 CONTINUE
       LGSAME = .FALSE.
@@ -3202,10 +3275,28 @@ C---------------------------------------------------------
       DIMENSION X(*),XP(*),Y(*),YP(*),S(*)
       DIMENSION XNEW(*), YNEW(*)
       LOGICAL :: SILENT_MODE
-C
+      integer :: iLE
+
+C---- JX-mod 
+C     Ensure, when LE is at 0,0 (default Xoptfoil-JX), it will be there.
+C     (THKCAM tries to find a "better" one)  
+      iLE = 0
+      DO I=2, (N-1)
+        if (X(I) == 0.0 .and. Y(I) .EQ. 0.0) then 
+          iLE = i
+          exit 
+        end if 
+      ENDDO
+
       CALL LEFIND(SLE,X,XP,Y,YP,S,N, SILENT_MODE)
-      XLE = SEVAL(SLE,X,XP,S,N)
-      YLE = SEVAL(SLE,Y,YP,S,N)
+
+      if (iLE == 0) then
+        XLE = SEVAL(SBLE,X,XP,S,N)
+        YLE = SEVAL(SBLE,Y,YP,S,N)
+      ELSE
+        XLE = 0.0
+        YLE = 0.0
+      endif
       XTE = 0.5*(X(1)+X(N))
       YTE = 0.5*(Y(1)+Y(N))
       CHORD = SQRT((XTE-XLE)**2 + (YTE-YLE)**2)
@@ -3236,9 +3327,20 @@ C
 C------ set new chord x,y coordinates by changing thickness locally
         YBARCT = 0.5*(YBAR+YBAROP) + TFAC*0.5*(YBAR-YBAROP)
 C
-        XNEW(I) = XLE + XBAR  *DXC - YBARCT*DYC
-        YNEW(I) = YLE + YBARCT*DXC + XBAR  *DYC
+C--- JX-mod do not change LE (0,0) and TE coordinates 
+        if (I /= iLE) then  
+          XNEW(I) = XLE + XBAR  *DXC - YBARCT*DYC
+          YNEW(I) = YLE + YBARCT*DXC + XBAR  *DYC
+        else
+          XNEW(I) = 0.0
+          YNEW(I) = 0.0
+        end if 
    30 CONTINUE
 C
+C---  Final check ...
+      if ((iLE > 0) .and. YNEW(iLE) /= 0.0) then
+        write (*,*) "Error: LERSCL changed LE from 0,0"
+      end if
+
       RETURN
       END
