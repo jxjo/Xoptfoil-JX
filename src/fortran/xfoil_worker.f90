@@ -197,12 +197,13 @@ subroutine set_geometry_value (outname_auto, output_prefix, seed_foil, value_arg
   use os_util
   use xfoil_driver,       only : xfoil_set_thickness_camber
   use airfoil_operations, only : airfoil_write
-
+  use airfoil_operations, only : smooth_foil, repanel_and_normalize_airfoil   
+  
   character(*), intent(in)     :: output_prefix, value_argument
   type (airfoil_type), intent (inout)  :: seed_foil
   logical, intent(in)          :: visualizer, outname_auto
 
-  type (airfoil_type) :: foil
+  type (airfoil_type) :: foil, foil_smoothed
   character (20)      :: value_str
   character (2)       :: value_type
   character (255)     :: outname
@@ -226,7 +227,11 @@ subroutine set_geometry_value (outname_auto, output_prefix, seed_foil, value_arg
 
     case ('xt') 
       write (*,'(" - ",A)') 'Setting max. thickness position to '//trim(adjustl(value_str))//'%'
-      call xfoil_set_thickness_camber (seed_foil, 0d0, (value_number / 100d0), 0d0, 0d0, foil)
+      call repanel_and_normalize_airfoil (seed_foil, 200, .false., foil_smoothed)
+      call smooth_foil (.true., 0.1d0, foil_smoothed)
+
+      call xfoil_set_thickness_camber (foil_smoothed, 0d0, (value_number / 100d0), 0d0, 0d0, foil)
+      call smooth_foil (.false., 0.1d0, foil)
 
     case ('c') 
       write (*,'(" - ",A)') 'Setting camber to '//trim(adjustl(value_str))//'%'
@@ -234,7 +239,11 @@ subroutine set_geometry_value (outname_auto, output_prefix, seed_foil, value_arg
 
     case ('xc') 
       write (*,'(" - ",A)') 'Setting max. camber position to '//trim(adjustl(value_str))//'%'
-      call xfoil_set_thickness_camber (seed_foil, 0d0, 0d0, 0d0, (value_number / 100d0), foil)
+      call repanel_and_normalize_airfoil (seed_foil, 200, .false., foil_smoothed)
+      call smooth_foil (.true., 0.1d0, foil_smoothed)
+
+      call xfoil_set_thickness_camber (foil_smoothed, 0d0, 0d0, 0d0, (value_number / 100d0), foil)
+      call smooth_foil (.false., 0.1d0, foil)
 
     case default
       call my_stop ('Unknown type for setting geometry')
