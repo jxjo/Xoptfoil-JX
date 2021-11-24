@@ -21,16 +21,19 @@ Main changes and improvements made up to now based on the original Xoptfoil
 
 * Aerodynamic target values for an operating point to ease the final tweaking of an optimization - or to reverse engineer an airfoil from an existing polar.
 * Geometric target values to replace optimization based on geometric constraints
+* Dynamic re-weighting of operating points during the optimization process
+* Bump detection and preventation when using Hicks-Heenne shape functions.
 * Instead of Hicks Henne shape functions the geometric airfoil parameters thickness, camber and leading edge radius can be used to perform a lightweight and fast optimization
 * Support for polar type 1 (fixed speed) and polar type 2 (fixed lift) optimization
-* Generation of a complete polar set of the final airfoil to import into xflr5 or flow5 (part of the sub project 'The Strak Machine')
-* Utility tool `Xfoil_worker` to perform a little jobs like airfoil normalization or smoothing of an airfoil
-* Minor other modifications in Xoptfoil and visualizer
+* Utility tool `Xfoil_worker` to perform a little jobs like airfoil normalization and smoothing of an airfoil or generation of a complete polar set of the final airfoil
+* Some enhancements in the Visualizer
 
 
 ## Documentation 
 
-The additional options of Xoptfoil-JX compared to the original Xoptfoil are described in [Xoptfoil-JX Reference](https://github.com/jxjo/Xoptfoil/blob/master/doc/Xoptfoil-JX%20Reference.pdf)
+The options of Xoptfoil-JX and some explanations can be found in the [Xoptfoil-JX Reference](https://github.com/jxjo/Xoptfoil/blob/master/doc/Xoptfoil-JX%20Reference.pdf)
+
+Also have a look into [ChangeLog](https://github.com/jxjo/Xoptfoil/blob/master/doc/ChangeLog.pdf) for the newest enhancements and changes.
 
 ## Usage example
 
@@ -45,10 +48,14 @@ Various ready to run examples can be found in the ./examples folder including a 
 The actual compiled Windows version of Xoptfoil-JX can be found in  [Code-Releases tab](https://github.com/jxjo/Xoptfoil/releases) on this side.
 Download the zip file and copy the files either in an existing Xoptfoil directory or into a new directory of your choice. In the latter case add the bin folder of Xoptfoil-JX to your path environment (or just copy the exe files into your project folder)
 
-Xoptfoil newbies will have to install a python environment like [Anaconda](https://www.anaconda.com/distribution/).
+Xoptfoil newbies will have to install a python environment to use the visualizer Xoptfoil_visualizer-JX
 
-- The optimizer Xopfoil-JX is started from a windows command prompt (shell).
-- The visualizer Xoptfoil_visualizer-JX.py is started from a 'Python/Anaconda prompt'.
+- [Python](https://www.python.org/downloads/) - the recommended minimum environment for Python. In this case two additional libraries have to be installed to Python with the command:
+  - pip install matplotlib
+  - pip install numpy
+- [Anaconda](https://www.anaconda.com/distribution/) - a complete but quite large environment
+
+Tip: There is also a ready-built EXE of the visualizer. Using this there is no need to install Python.
 
 ### Linux and Developers
 
@@ -63,4 +70,4 @@ Windows developers will have to install the [MinGW toolchain](https://sourceforg
 
 Feel free to contact us - and of course we are happy for any contributions and suggestions!
 
-Jochen Guenzel, November 2020
+Jochen Guenzel, November 2021

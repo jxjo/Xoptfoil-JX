@@ -12,7 +12,7 @@ Open Todos:
 - Finalize documentation
 - Revise exmaples
 - More testing
-- Maybe: Some seed airfoils 'hardcoded', revision of Xfoil set camber (bugs)  
+- Maybe: Some seed airfoils 'hardcoded' 
 
 
 ## Xoptfoil-JX
@@ -38,7 +38,7 @@ Dynamic weightings can be watched with `show_details = .true.`
 - All curvature related constraints moved from namelist `&constraints` to the new namelist `&curvature`
 - Depricated curvature constraints: `highlow_threshold` `max_curv_highlow_top` `max_curv_highlow_top` `max_spikes_top` `max_spikes_bot` 
 - Deprciated geometry target types: `zTop` and `zBot` including their extra parameter `x_pos`
-- Polar generation with Xptfoil-JX will now generate only a single intermediate polar but for every design. The polar generation with Xfoil_Worker will work as before. 
+- Polar generation with Xptfoil-JX will now generate a single intermediate polar each new design during optimization. This intermediate polar is used as a reference polar in the Viualizer. To create a polar set for the final, optimized airfoil, use the Xfoil_Worker (it will work like before). 
 
 
 
