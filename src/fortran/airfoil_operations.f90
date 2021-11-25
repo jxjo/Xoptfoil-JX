@@ -49,7 +49,7 @@ subroutine get_seed_airfoil (seed_airfoil, airfoil_file, naca_options, foil )
 
 !   Read seed airfoil from file
 
-    write (*,'(" - ", A)', advance = 'no') 'Reading airfoil from file '
+    write (*,'(" - ", A)', advance = 'no') 'Reading airfoil '
     call print_colored (COLOR_HIGH,trim(airfoil_file))
     write (*,*)
 
@@ -413,6 +413,7 @@ subroutine repanel_and_normalize_airfoil (in_foil, npoint_paneling, symmetrical,
   integer             :: i, pointst, pointsb
   logical             :: le_fixed
   double precision, dimension(2) :: p, p_next
+  character (10)       :: text
 
   ! iteration threshols
   double precision    :: epsilon = 1.d-12          ! distance xfoil LE to 0,0
@@ -472,14 +473,17 @@ subroutine repanel_and_normalize_airfoil (in_foil, npoint_paneling, symmetrical,
     write (*,*)
   end if 
 
-  write (*,'(" - ",A)', advance = 'no') 'Repaneling and normalizing.'
+  write (*,'(/," - ",A)', advance = 'no') 'Repaneling and normalizing.'
 
   if (foil%addpoint_loc /= 0) then 
-    write (*,'(1x, A,I3,A)') 'Leading edge added. Airfoil will have ',(npoint_paneling + 1),' Points'
+    write (text,'(I3)') (npoint_paneling + 1)
+    call print_colored (COLOR_NOTE, 'Leading edge added. ')
   else
-    write (*,'(1x, A,I3,A)') 'Airfoil will have ', npoint_paneling,' Points'
+    write (text,'(I3)') npoint_paneling 
   end if
-
+  call print_colored (COLOR_NOTE, 'Airfoil will have '//trim(adjustl(text)) //' Points')
+  write (*,*) 
+  
   ! now split airfoil to get upper and lower polyline 
   !     if there is a new leading added it will be added to the polylines
 

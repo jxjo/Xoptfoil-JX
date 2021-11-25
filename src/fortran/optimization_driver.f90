@@ -229,11 +229,7 @@ subroutine optimize(search_type, global_search, local_search, constrained_dvs, &
 ! Write seed airfoil coordinates and polars to file
 
   if (write_designs) then
-
-!   Analyze and write seed airfoil
-    write (*,'(" - ",A)') 'Writing design #0 being seed airfoil'
     stat = write_function(x0, 0) 
-
   end if
 
 ! Set temporary restart variable

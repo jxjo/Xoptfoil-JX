@@ -235,7 +235,7 @@ subroutine check_seed()
 
   if(curv_spec%check_curvature) then
 
-    write(*,'(" - ",A)') 'Check_curvature of seed airfoil if it is suitable for Hicks-Henne shape type'
+    write(*,'(/," - ",A)') "Check_curvature if it's suitable for Hicks-Henne shape type"
 
     call check_and_smooth_surface (show_details, curv_spec%do_smoothing, seed_foil, overall_quality)
 
@@ -266,7 +266,7 @@ subroutine check_seed()
 
 ! Check geometry ---------------------------
 
-  write(*,'(" - ",A)') 'Checking to make sure seed airfoil passes all constraints ...'
+  write(*,'(/," - ",A)') 'Checking to make sure seed airfoil passes all constraints ...'
 
   xt = seed_foil%xt               ! set it after smoothing
   xb = seed_foil%xb

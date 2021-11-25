@@ -282,6 +282,7 @@ subroutine particleswarm(xopt, fmin, step, fevals, objfunc, x0, xmin, xmax,    &
   max_retries = initial_max_retries (pso_options) 
 
   write(*,*)
+  write(*,*)
   call  print_colored (COLOR_FEATURE, ' - Particle swarm ')
   write (text,'(I3)') pso_options%pop
   call  print_colored (COLOR_NORMAL, 'with '//trim(adjustl(text))// ' members will now try its best ...')

@@ -1345,7 +1345,7 @@ subroutine read_curvature_constraints_inputs  (input_file, or_iunit, &
   integer :: max_spikes_top, max_spikes_bot
   doubleprecision :: highlow_threshold
 
-  namelist /curvature  / check_curvature, auto_curvature, &
+  namelist /curvature  / check_curvature, auto_curvature, do_smoothing, &
                          highlow_threshold, spike_threshold, curv_threshold, &
                          max_te_curvature, &
                          max_curv_reverse_top, max_curv_reverse_bot,  &

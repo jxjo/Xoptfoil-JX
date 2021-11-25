@@ -353,7 +353,7 @@ subroutine write_polar_data (out_unit, op_points_result)
       write (out_unit,  "(   F8.3,   F9.4,    F10.5,    F10.5,    F9.4,   F8.4,   F8.4)") &
                           op%alpha, op%cl, op%cd,    0d0,  op%cm,op%xtrt,op%xtrb
     else
-      write(text_out,'(A,F4.2)') "No convergence of xfoil - Skipped cl=",op%cl
+      write(text_out,'(A,F5.2,A)') "alpha =",op%alpha," not converged in polar generation. Skipping op point"
       call print_warning (trim(text_out),3)
     end if
 

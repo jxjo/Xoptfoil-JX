@@ -143,7 +143,7 @@ subroutine initial_designs(dv, objval, fevals, objfunc, xmin, xmax, use_x0,    &
 
   write(text3,*) pop
   text3 = adjustl(text3)
-  write(*,'(" - ",A)') 'Generating and evaluating '//trim(text3)//' initial designs'
+  write(*,'(/," - ",A)') 'Generating and evaluating '//trim(text3)//' initial designs'
 
 !$omp end master
 !$omp barrier

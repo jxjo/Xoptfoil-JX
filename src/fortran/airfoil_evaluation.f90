@@ -1129,11 +1129,14 @@ function write_airfoil_optimization_progress(designvars, designcounter)
   write(tcounter,*) designcounter
   tcounter = adjustl(tcounter)
 
-  if (designcounter > 0) then
-    call print_colored (COLOR_NORMAL,' -> Writing design #'//trim(tcounter))
-    if (generate_polar) call print_colored (COLOR_NOTE,' & polar')
+  if (designcounter == 0) then
     write (*,*)
+    call print_colored (COLOR_NORMAL,' - Writing design #0 being seed airfoil')
+  else
+    call print_colored (COLOR_NORMAL,' -> Writing design #'//trim(tcounter))
   end if
+  if (generate_polar) call print_colored (COLOR_NOTE,' & polar')
+  write (*,*)
 
 ! Design 0 is seed airfoil to output - take the original values 
 !     Smoothing - Restore the original, not smoothed seed airfoil to

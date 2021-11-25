@@ -45,7 +45,7 @@ plotoptions = dict(show_seed_airfoil = True,
                    save_animation_frames = False,
                    color_for_seed = "dimgrey",
                    color_for_new_designs = "deeppink",
-                   monitor_update_interval = 0.5)
+                   monitor_update_interval = 0.8)
 
 ################################################################################
 #
@@ -967,7 +967,7 @@ def plot_polars(seedfoil, designfoils, plotnum, firsttime=True, animation=False,
     plot_single_polar (axarr[5], foil.full_polar_cl,    foil.full_polar_climb, '--', nc, '')
     linestyle = 'None'
   else:
-    linestyle = '-'
+    linestyle = 'None'        #  linestyle = '-' No more lines to connect op points
 
   if plot_seed_polar :
     plot_single_polar (axarr[0], seedfoil.alpha,  seedfoil.cl,    linestyle, sc, 'o')
@@ -1386,7 +1386,7 @@ def read_new_airfoil_data(seedfoil, designfoils, prefix):
 
     # retry - maybe it was a timing problem between Xoptfoil and visualizer
     if (ioerror == 2):
-      time.sleep (1)
+      time.sleep (plotoptions["monitor_update_interval"])
       print("         Retry Zone labeled " + zonetitle )
       alpha, cl, cd, cm, xtrt, xtrb, flapangle, ioerror = read_airfoil_polars(polarfilename,
                                                                       zonetitle)
@@ -1732,7 +1732,7 @@ def main_menu(initialchoice, seedfoil, designfoils, prefix):
           plot_polars(seedfoil, designfoils, i+1,
                              firsttime=init, animation=True, prefix=imagepref)
 
-        plt.pause(0.1)
+        plt.pause(0.01)
 
     # Monitor optimization progress
 
