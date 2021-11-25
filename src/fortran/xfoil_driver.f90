@@ -103,7 +103,7 @@ module xfoil_driver
 
   end type value_statistics_type
 
-  type (value_statistics_type), dimension(:), allocatable, private :: drag_statistics
+  type (value_statistics_type), dimension(:), allocatable, private :: drag_stats
 
   contains
 
@@ -175,11 +175,13 @@ subroutine run_op_points (foil, geom_options, xfoil_options,         &
 
 
 ! init statistics for out lier detection the first time and when polar changes
-  if (.not. allocated(drag_statistics)) then
+!$omp critical
+  if (.not. allocated(drag_stats)) then
     call init_statistics (noppoint)
-  else if (size(drag_statistics) /= noppoint) then 
+  else if (size(drag_stats) /= noppoint) then 
     call init_statistics (noppoint)
   end if
+!$omp end critical
 
 
 ! Set default Xfoil parameters 
@@ -200,7 +202,7 @@ subroutine run_op_points (foil, geom_options, xfoil_options,         &
 ! Rules for initialization of xfoil boundary layer - xfoil_init_BL 
 !
 !   xfoil_options%reinitialize = 
-!   .true.    init will bed one before *every* xfoil calculation 
+!   .true.    init will be one before *every* xfoil calculation 
 !   .false.   init will be done only
 !             - at the first op_point
 !             - when the flap angle is changed (new foil is set)
@@ -220,6 +222,7 @@ subroutine run_op_points (foil, geom_options, xfoil_options,         &
     if(flap_spec%use_flap .and. (flap_degrees(i) /= prev_flap_degree)) then 
       flap_changed = .true.
       prev_flap_degree = flap_degrees(i)
+      drag_stats%no_check = .true.           !deactivate outlier detection when flapping
     else
       flap_changed = .false.
     end if 
@@ -352,6 +355,7 @@ subroutine run_op_points (foil, geom_options, xfoil_options,         &
 
 !   early exit if not converged for speed optimization 
     if ((.not. op%converged) .and. xfoil_options%exit_if_unconverged) then 
+!      write (*,'(I2,A)', advance = 'no') i, " no "
       exit
     end if 
 
@@ -371,11 +375,11 @@ subroutine run_op_points (foil, geom_options, xfoil_options,         &
     op      = op_points_result(i)   
 
     if (op%converged) then 
-      if (.not. is_out_lier (i, op%cd)) then 
-        call update_statistic (i, op%cd)
-      end if 
 
-      ! jx-mod Support Type 1 and 2 re numbers - cl may not be negative  
+    ! Update cd outlier statistics
+      call update_statistic (i, op%cd)
+
+    ! Support Type 1 and 2 re numbers - cl may not be negative  
       if ((op_spec%re%type == 2) .and. (op%cl <= 0d0)) then 
         write (*,*)
         write(*,'(15x,A,I2,A, F6.2)') "Warning: Negative lift for Re-Type 2 at" // &
@@ -1016,7 +1020,7 @@ end function xfoil_geometry_amax
 !------------------------------------------------------------------------------
 subroutine xfoil_driver_reset ()
 
-  if (allocated(drag_statistics))  deallocate (drag_statistics)
+  if (allocated(drag_stats))  deallocate (drag_stats)
 
 end subroutine xfoil_driver_reset 
 
@@ -1260,15 +1264,15 @@ subroutine init_statistics (npoints)
   integer, intent (in) :: npoints 
   integer :: i
   
-  if (allocated(drag_statistics))  deallocate (drag_statistics)
+  if (allocated(drag_stats))  deallocate (drag_stats)
 
-  allocate (drag_statistics(npoints))
+  allocate (drag_stats(npoints))
   do i = 1, npoints
-    drag_statistics(i)%nvalue   = 0
-    drag_statistics(i)%no_check = .false.
-    drag_statistics(i)%minval   = 0.d0
-    drag_statistics(i)%maxval   = 0.d0
-    drag_statistics(i)%meanval  = 0.d0
+    drag_stats(i)%nvalue   = 0
+    drag_stats(i)%no_check = .false.
+    drag_stats(i)%minval   = 0.d0
+    drag_stats(i)%maxval   = 0.d0
+    drag_stats(i)%meanval  = 0.d0
   end do 
 
 end subroutine init_statistics
@@ -1277,31 +1281,60 @@ subroutine update_statistic (iop, new_value)
 
   doubleprecision, intent (in) :: new_value 
   integer, intent (in)         :: iop
+
+!$omp critical
   
-  drag_statistics(iop)%minval  = min (drag_statistics(iop)%minval, new_value) 
-  drag_statistics(iop)%maxval  = max (drag_statistics(iop)%maxval, new_value)
-  drag_statistics(iop)%meanval = (drag_statistics(iop)%meanval * drag_statistics(iop)%nvalue + new_value) / &
-                                 (drag_statistics(iop)%nvalue + 1)
-  drag_statistics(iop)%nvalue  = drag_statistics(iop)%nvalue + 1
+  if (drag_stats(iop)%nvalue == 0) then      ! first value is best we have (could be outlier!)
+
+    drag_stats(iop)%minval  = new_value 
+    drag_stats(iop)%maxval  = new_value 
+    drag_stats(iop)%meanval = new_value 
+    drag_stats(iop)%nvalue  =  1
+
+  elseif (new_value < (drag_stats(iop)%maxval / 2d0)) then ! first value was probably outlier
+    drag_stats(iop)%minval  = new_value 
+    drag_stats(iop)%maxval  = new_value
+    drag_stats(iop)%meanval = new_value            ! reset statistics
+    drag_stats(iop)%nvalue  = 1
+
+  elseif (.not. is_out_lier (iop, new_value)) then   ! normal handling
+    drag_stats(iop)%minval  = min (drag_stats(iop)%minval, new_value) 
+    drag_stats(iop)%maxval  = max (drag_stats(iop)%maxval, new_value)
+    drag_stats(iop)%meanval = (drag_stats(iop)%meanval * drag_stats(iop)%nvalue + new_value) / &
+                                  (drag_stats(iop)%nvalue + 1)
+    drag_stats(iop)%nvalue  = drag_stats(iop)%nvalue + 1
+  end if 
+  
+
+!$omp end critical
 
 end subroutine update_statistic
 
 !------------------------------------------------------------------------------
-function is_out_lier (iop, check_value)
+function is_out_lier (iop, check_value) 
 
   doubleprecision, intent (in) :: check_value
   integer, intent (in)         :: iop
   logical :: is_out_lier 
-  doubleprecision :: out_lier_tolerance, value_tolerance
+
+  doubleprecision ::  dev_from_mean
 
   is_out_lier = .false. 
-  out_lier_tolerance = 0.4
 
-  if(drag_statistics(iop)%nvalue > 0 .and. (.not. drag_statistics(iop)%no_check)) then           !do we have enough values to check? 
+  if(drag_stats(iop)%nvalue > 0 .and. (.not. drag_stats(iop)%no_check)) then           !do we have enough values to check? 
 
-    value_tolerance    = abs(check_value - drag_statistics(iop)%meanval)/max(0.0001d0, drag_statistics(iop)%meanval) 
-    is_out_lier = (value_tolerance > out_lier_tolerance )  
+    dev_from_mean    = abs(check_value - drag_stats(iop)%meanval)/max(0.0001d0, drag_stats(iop)%meanval) 
 
+    if (dev_from_mean > 0.8d0   .or. &                          ! deviation from mean > 80%? 
+        check_value   <  (drag_stats(iop)%minval / 2d0) .or. &  ! half of minval? 
+        check_value   >  (drag_stats(iop)%maxval * 2d0)) then   ! double of maxval? 
+
+      is_out_lier = .true.
+
+    ! jx-test
+    !  call show_out_lier (iop, check_value) 
+    
+    end if 
   end if 
 
 end function is_out_lier
@@ -1311,9 +1344,14 @@ subroutine show_out_lier (iop, check_value)
 
   doubleprecision, intent (in) :: check_value
   integer, intent (in) :: iop
+  character (10)       :: text
 
-  write (*,'( 30x, A,A,I2,A,F8.6, A,F8.6)') 'Out lier - ', 'op', iop, ": ", check_value, & 
-              '    meanvalue: ', drag_statistics(iop)%meanval
+  write (text,'(I10)') drag_stats(iop)%nvalue
+  write (*,'(//,10x, "Outlier detect for op",I2,4x,"cd =", F7.4)', advance='no') iop, check_value
+  write (*,'(2x,"Min",F7.4,"  Mean", F7.4, "  Max",F7.4, "   nstat_values ",A)') &
+      drag_stats(iop)%minval, drag_stats(iop)%meanval, drag_stats(iop)%maxval, &
+      trim(adjustl(text))
+  write (*,*)
 
 end subroutine show_out_lier
 

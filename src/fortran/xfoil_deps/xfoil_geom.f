@@ -3025,7 +3025,7 @@ C
       CALL LERSCL(XB,XBP,YB,YBP,SB,NB, DOC,RFAC, W1,W2)
 C
       DO 40 I=1, NB
-C jx-test
+C---- jx-mod do not change x-value at TE 
         if (I > 1 .and. I < NB) then 
           XB(I) = W1(I)
         end if 
