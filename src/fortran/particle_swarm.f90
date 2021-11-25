@@ -462,8 +462,8 @@ subroutine particleswarm(xopt, fmin, step, fevals, objfunc, x0, xmin, xmax,    &
       converged = .true.
       stop_reason = "completed"
       if (step == pso_options%maxit) then
-        write(*,*) 'Warning: PSO optimizer forced to exit due to the max number'
-        write(*,*) '         of iterations being reached.'
+        write (*,*)
+        call print_warning ('PSO optimizer stopped due to the max number of iterations being reached.')
       end if
     end if 
 

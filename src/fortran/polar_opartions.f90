@@ -113,7 +113,7 @@ subroutine generate_polar_files (show_details, subdirectory, foil, xfoil_geom_op
 
     if (show_details) then 
       write (out_string,'(A,I1,A, I7,A)') 'Writing polar Type ',polars(i)%re%type,', Re=',  &
-            int(polars(i)%re%number), ' to '//trim(polars_subdirectory)//'/...'
+            int(polars(i)%re%number), ' to '//trim(polars_subdirectory)//'...'
       call print_colored (COLOR_NORMAL, ' - ' //trim(out_string))
       write (*,*) 
       write (*,*) 

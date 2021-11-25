@@ -1374,7 +1374,6 @@ subroutine read_curvature_constraints_inputs  (input_file, or_iunit, &
     iunit = or_iunit
     rewind(iunit)
     read(iunit, iostat=iostat1, nml=curvature)
-    call namelist_check('curvature', iostat1, 'warn')
   elseif (trim(input_file) /= '') then
     iunit = 12
     open(unit=iunit, file=input_file, status='old', iostat=ioerr)
@@ -1387,7 +1386,7 @@ subroutine read_curvature_constraints_inputs  (input_file, or_iunit, &
   else
     iostat1 = 0 
   end if
-  call namelist_check('constraints', iostat1, 'no-warn')
+  call namelist_check('curvature', iostat1, 'no-warn')
 
   if (max_curv_highlow_top /= -99999) & 
     call print_note ("'max_curv_highlow_top' is depricated and won't be considered") 

@@ -47,8 +47,6 @@ subroutine matchfoils_preprocessing(matchfoil_file)
   integer :: pointst, pointsb
   double precision, dimension(:), allocatable :: zttmp, zbtmp, xmatcht, xmatchb, zmatcht, zmatchb
 
-  call print_note ('Using the optimizer to match the seed airfoil to the '//&
-                   'airfoil about to be loaded.')
 
 ! Load airfoil to match
 
@@ -57,6 +55,10 @@ subroutine matchfoils_preprocessing(matchfoil_file)
 ! Repanel to npan_fixed points and normalize to get LE at 0,0 and TE (1,0) and split
 
   call repanel_and_normalize_airfoil (original_foil, npan_fixed, .false., foil_to_match)
+
+  call print_note_only ('Preparing '//trim(original_foil%name)//' to be matched by '//&
+                        trim(seed_foil%name),3)
+  write (*,*)
 
   xmatcht = foil_to_match%xt
   xmatchb = foil_to_match%xb
@@ -500,6 +502,7 @@ subroutine write_matchfoil_summary (zt_new, zb_new)
   write (*,'(1x, ES12.1, ES12.1, F10.3,A1)') averaget, maxdeltat, maxdt_rel,'%'
   write (*,'(A10)', advance = 'no') "   bot:"
   write (*,'(1x, ES12.1, ES12.1, F10.3,A1)') averageb, maxdeltab, maxdb_rel,'%'
+  write(*,*)
 
 end subroutine write_matchfoil_summary
 

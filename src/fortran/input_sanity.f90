@@ -58,13 +58,13 @@ subroutine check_inputs(global_search, pso_options)
       curv_spec%check_curvature = .false. 
       curv_spec%auto_curvature  = .false. 
     end if 
-    if (.not. curv_spec%do_smoothing) then 
+    if ((.not. curv_spec%do_smoothing) .and. (.not. match_foils)) then 
       call print_note ("Smoothing switched on for shape function 'camb-thick' "// &
                        "to ensure good results.")
       curv_spec%do_smoothing = .true. 
     end if 
   elseif (trim(shape_functions) == 'hicks-henne' .or. trim(shape_functions) == 'hicks-henne+') then
-    if (.not. curv_spec%check_curvature) then 
+    if (.not. curv_spec%check_curvature .and. (.not. match_foils)) then 
       call print_warning ("When using shape function 'hicks-henne' curvature ckecking "// &
                        "should be switched on during optimization to avoid bumps.")
     end if 
@@ -167,7 +167,13 @@ subroutine check_inputs(global_search, pso_options)
 ! Match foil  --------------------------------------------------
 
   ! Switch off geometric checks 
-  if (match_foils) check_geometry = .false.
+  if (match_foils) then 
+    check_geometry = .false.
+    curv_spec%check_curvature = .false. 
+    curv_spec%auto_curvature  = .false. 
+    curv_spec%do_smoothing = .false. 
+    call print_note ("Smoothing, geometry and curvature checks switched off for match foil mode.")
+  endif 
 
   end subroutine check_inputs
 
@@ -254,28 +260,44 @@ subroutine check_seed()
     call check_te_curvature_violations ('Top surface', seed_foil%xt, seed_foil%zt, curv_top_spec)
     call check_te_curvature_violations ('Bot surface', seed_foil%xb, seed_foil%zb, curv_bot_spec)
 
-    elseif (curv_spec%do_smoothing) then
+  elseif (curv_spec%do_smoothing) then
 
   ! In case of 'camb-thick' smoothing was activated 
 
       call check_and_smooth_surface (show_details, curv_spec%do_smoothing, seed_foil, overall_quality)
 
-    end if
+  end if
 
   
 
-! Check geometry ---------------------------
 
-  write(*,'(/," - ",A)') 'Checking to make sure seed airfoil passes all constraints ...'
+! Check geometry ------------------------------------------------------------------
 
-  xt = seed_foil%xt               ! set it after smoothing
+  xt = seed_foil%xt                
   xb = seed_foil%xb
   zt = seed_foil%zt
   zb = seed_foil%zb
   nptt = size(xt,1)
   nptb = size(xb,1)
 
+
+  if (match_foils) then
+    match_delta = norm_2(zt(2:nptt-1) - foil_to_match%zt(2:nptt-1)) + &
+                  norm_2(zb(2:nptb-1) - foil_to_match%zb(2:nptb-1))
+    ! Playground: Match foil equals seed foil. Take a dummy objective value to start
+    if (match_delta < 1d-10) then 
+      call ask_stop('Match foil and seed foil are equal. A dummy initial value '// &
+                     'for the objective function will be taken for demo')
+      match_delta = 1d-1 
+    end if
+    match_foils_scale_factor = 1.d0 / match_delta
+    return        ! end here with checks as it becomes aero specific, calc scale
+  end if 
+
+
   if(check_geometry) then
+
+    write(*,'(/," - ",A)') 'Checking to make sure seed airfoil passes all constraints ...'
                                   
   ! Top surface growth rates
 
@@ -412,23 +434,6 @@ subroutine check_seed()
     end if
 
   end if        ! check_geometry
-
-
-! If mode match_foils end here with checks as it becomes aero specific, calc scale
-
-  if (match_foils) then
-    match_delta = norm_2(zt(2:nptt-1) - foil_to_match%zt(2:nptt-1)) + &
-                  norm_2(zb(2:nptb-1) - foil_to_match%zb(2:nptb-1))
-    write (*,*) '---- match delta  ', match_delta
-    ! Playground: Match foil equals seed foil. Take a dummy objective value to start
-    if (match_delta < 1d-10) then 
-      call ask_stop('Match foil and seed foil are equal. A dummy initial value '// &
-                     'for the objective function will be taken for demo')
-      match_delta = 1d-1 
-    end if
-    match_foils_scale_factor = 1.d0 / match_delta
-    return
-  end if 
 
 
 ! Check for bad combinations of operating conditions and optimization types

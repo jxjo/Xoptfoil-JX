@@ -292,7 +292,6 @@ subroutine check_foil_curvature (input_file, output_prefix, seed_foil, visualize
   integer                      :: overall_quality
 
   write (*,*) 'Surface curvature with reversals, high lows and spikes'
-  write (*,*) 
 
   tmp_foil = seed_foil
 
@@ -307,6 +306,8 @@ subroutine check_foil_curvature (input_file, output_prefix, seed_foil, visualize
 
   ! do checks on repanel foil - also needed for LE point handling (!)
   call repanel_and_normalize_airfoil (tmp_foil, tmp_foil%npoint, .false., foil)
+
+  write(*,'(" - ",A)') "Check_curvature and smooth"
   call check_and_smooth_surface (.true., .true., foil, overall_quality)
 
 
@@ -355,7 +356,6 @@ subroutine repanel_smooth (input_file, outname_auto, output_prefix, seed_foil, v
     write (*,*) 'Repanel and normalize the airfoil'
   end if 
 
-  write (*,*) 
 
 ! Read inputs file to get options needed 
 
@@ -382,9 +382,9 @@ subroutine repanel_smooth (input_file, outname_auto, output_prefix, seed_foil, v
     foil_smoothed = foil
     foil_smoothed%name = trim(outname)
 
+    write(*,'(" - ",A)') "Smoothing..."
     call check_and_smooth_surface (.true., .true., foil_smoothed, overall_quality)
   
-    write (*,*)
     call airfoil_write   (trim(outname)//'.dat', trim(foil_smoothed%name), foil_smoothed)
 
   else                        ! no smoothing write repaneld foil 
@@ -395,7 +395,6 @@ subroutine repanel_smooth (input_file, outname_auto, output_prefix, seed_foil, v
       outname = trim(output_prefix)
     end if
 
-    write (*,*)
     foil%name   = output_prefix
     call airfoil_write   (trim(outname)//'.dat', trim(foil%name), foil)
 
@@ -447,7 +446,6 @@ subroutine blend_foils (input_file, outname_auto, output_prefix, seed_foil_in, b
 
 
   write (*,*) 'The coordinates of two airfoils'
-  write (*,*) 
 
   read (value_argument ,*, iostat = ierr) blend_factor  
 
@@ -504,7 +502,7 @@ subroutine blend_foils (input_file, outname_auto, output_prefix, seed_foil_in, b
 
   call rebuild_airfoil (xt, xb, zt_blended, zb_blended, blended_foil)
 
-! Write airfoil to _design_coordinates using Xoptfoil format for visualizer
+! Write airfoil to using Xoptfoil format for visualizer
 
   if (outname_auto) then 
     outname = trim(output_prefix) // '-blend'
@@ -581,7 +579,6 @@ subroutine set_flap (input_file, outname_auto, output_prefix, seed_foil, visuali
   write (*,'(1x,A,I2,A,F4.1,A)') 'at ', int (flap_spec%x_flap*1d2), &
                 '% ('//flap_spec%y_flap_spec//'=', flap_spec%y_flap,')'
 
-  write (*,*)
 
 ! Repanel seed airfoil with xfoil PANGEN 
 
@@ -613,7 +610,7 @@ subroutine set_flap (input_file, outname_auto, output_prefix, seed_foil, visuali
       write (text_degrees,'(SP,F6.1)') flap_degrees(i)
     end if
 
-    write (text_out,'(" - ",A,F4.1,A)') 'Setting flaps to '//trim(adjustl(text_degrees))//' degrees'
+    write (text_out,'(A,F4.1,A)') 'Setting flaps to '//trim(adjustl(text_degrees))//' degrees'
     call print_note_only ('- '//trim(text_out))
 
     call xfoil_set_airfoil(foil)

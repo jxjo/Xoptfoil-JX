@@ -2133,12 +2133,12 @@ function write_matchfoil_optimization_progress(designvars, designcounter)
   foilunit = 13
 
   if (designcounter == 0) then
-    write (*,'(4x,A)') '-> Writing seed airfoil to file '//trim(foilfile)
+    call print_colored (COLOR_NORMAL,' - Writing seed airfoil')
   else
     write (*,'(2x,A)', advance ='no') '-> Writing design '
     call  print_colored (COLOR_NORMAL,'#'//trim(text))
-    write (*,*)
   end if
+  write (*,*)
 
 
 ! Design 0 is seed airfoil to output - take the original values 
@@ -2192,7 +2192,8 @@ function write_matchfoil_optimization_progress(designvars, designcounter)
 
 ! Append the coordinates of the match foil when seed foil is written
   if (designcounter == 0) then
-    write (*,'(4x,A)') '-> Writing foil to match to file '//trim(foilfile)
+    call print_colored (COLOR_NORMAL,' - Writing airfoil to match')
+    write (*,*)
     title = 'zone t="Match airfoil, '//'name='//trim(foil_to_match%name)//'"'
     open(unit=foilunit, file=foilfile, status='old', position='append', err=910)
     call  airfoil_write_to_unit (foilunit, title, foil_to_match, .True.)
