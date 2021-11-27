@@ -773,11 +773,10 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
       trim(seed_airfoil) /= 'naca')                                            &
     call my_stop("seed_airfoil must be 'from_file' or 'naca'.")
   if (trim(shape_functions) /= 'hicks-henne' .and.                             &
-      trim(shape_functions) /= 'hicks-henne+' .and.                            &
       trim(shape_functions) /= 'camb-thick' .and.                              &
       trim(shape_functions) /= 'camb-thick-plus' .and.                         &
       trim(shape_functions) /= 'naca')                                         &
-    call my_stop("shape_functions must be 'hicks-henne(+)', 'camb-thick',"//   &
+    call my_stop("shape_functions must be 'hicks-henne', 'camb-thick',"//   &
                  " 'camb-thick-plus' or 'naca'.")
   if ((nfunctions_top < 0) .and.   & 
       trim(shape_functions) /= 'camb-thick' .and.                              &
@@ -1120,13 +1119,14 @@ subroutine read_op_points_spec  (input_file, or_iunit, noppoint, re_def, &
       trim(op%optimization_type) /= 'target-moment' .and.                      &
       trim(op%optimization_type) /= 'target-drag' .and.                        &
       trim(op%optimization_type) /= 'target-lift' .and.                        &
+      trim(op%optimization_type) /= 'target-glide' .and.                        &
       trim(op%optimization_type) /= 'max-xtr' .and.                            &
       trim(op%optimization_type) /= 'min-lift-slope' .and.                     &
       trim(op%optimization_type) /= 'min-glide-slope' .and.                    &
       trim(op%optimization_type) /= 'max-lift-slope')                          &
       call my_op_stop (i,op_points_spec, "optimization_type must be 'min-drag', 'max-glide', "//     &
                    "'min-sink', 'max-lift', 'max-xtr', 'target-moment', "//    &
-                   "'target-drag', 'min-lift-slope', 'min-glide-slope'"//      &
+                   "'target-drag', 'target-glide', 'min-lift-slope', 'min-glide-slope'"//      &
                    " or 'max-lift-slope'.")
     if ((trim(op%optimization_type) == 'max-lift-slope') .and. (noppoint == 1))&
       call my_op_stop (i,op_points_spec, "at least two operating points are required for to "//      &
@@ -1148,6 +1148,10 @@ subroutine read_op_points_spec  (input_file, or_iunit, noppoint, re_def, &
         (target_value(i)) == -1.d3) )                                         &
       call my_op_stop (i,op_points_spec, "No 'target-value' defined for "//  &
                      "for optimization_type 'target-drag'")
+    if (((trim(op%optimization_type) == 'target-glide') .and.                 &
+        (target_value(i)) == -1.d3) )                                         &
+      call my_op_stop (i,op_points_spec, "No 'target-value' defined for "//  &
+                     "for optimization_type 'target-glide'")
     if (((trim(op%optimization_type) == 'target-lift') .and.                  &
         (target_value(i)) == -1.d3) )                                         &
       call my_op_stop (i,op_points_spec, "No 'target-value' defined for "//  &

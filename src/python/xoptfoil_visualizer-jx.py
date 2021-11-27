@@ -1732,7 +1732,7 @@ def main_menu(initialchoice, seedfoil, designfoils, prefix):
           plot_polars(seedfoil, designfoils, i+1,
                              firsttime=init, animation=True, prefix=imagepref)
 
-        plt.pause(0.01)
+        plt.pause(0.1)
 
     # Monitor optimization progress
 
@@ -1785,8 +1785,8 @@ def main_menu(initialchoice, seedfoil, designfoils, prefix):
           init = False
 
         # Show plots and pause for requested update interval
-        plt.pause(0.01)
-        time.sleep(plotoptions["monitor_update_interval"])
+        plt.pause(0.2)
+        time.sleep(plotoptions["monitor_update_interval"] - 0.2)
 
         # Update airfoil and optimization data
         seedfoil, designfoils, ioerror = read_new_airfoil_data(seedfoil,

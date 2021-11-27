@@ -753,11 +753,11 @@ function aero_objective_function_on_results (op_points_result, eval_only_dynamic
 
     if (eval_all .or. (op_spec%dynamic_weighting .and. (.not. eval_all))) then
  
-     !   Objective function evaluation
+    ! Objective function evaluation
 
       if (trim(opt_type) == 'min-sink') then
 
-  !     Maximize Cl^1.5/Cd
+      ! Maximize Cl^1.5/Cd
 
         if (op%cl > 0.d0) then
           increment = (op%cd / op%cl**1.5d0) * op_spec%scale_factor
@@ -768,7 +768,7 @@ function aero_objective_function_on_results (op_points_result, eval_only_dynamic
 
       elseif (trim(opt_type) == 'max-glide') then
 
-  !     Maximize Cl/Cd
+      ! Maximize Cl/Cd
 
         if (op%cl > 0.d0) then
           increment = op%cd / op%cl * op_spec%scale_factor
@@ -779,14 +779,14 @@ function aero_objective_function_on_results (op_points_result, eval_only_dynamic
 
       elseif (trim(opt_type) == 'min-drag') then
 
-  !     Minimize Cd
+      ! Minimize Cd
 
         increment = op%cd * op_spec%scale_factor
         cur_value = op%cd 
 
       elseif (trim(opt_type) == 'target-drag') then
 
-  ! Minimize difference between target cd value and current value 
+      ! Minimize difference between target cd value and current value 
       
         dist = ABS (op_spec%target_value - op%cd)
         if (dist < 0.000004d0) dist = 0d0  ! little threshold to achieve target
@@ -794,27 +794,38 @@ function aero_objective_function_on_results (op_points_result, eval_only_dynamic
         increment = (op_spec%target_value + dist) * op_spec%scale_factor 
         cur_value = op%cd 
 
+      elseif (trim(opt_type) == 'target-glide') then
+
+      ! minimize difference between target glide ratio and current glide ratio 
+      
+        cur_value = op%cl / op%cd
+        dist = ABS (op_spec%target_value - cur_value)
+        if (dist < 0.001d0) dist = 0d0  ! little threshold to achieve target
+
+        correction = 0.7d0               ! glide ration is quite sensible to changes
+        increment = (op_spec%target_value + dist * correction) * op_spec%scale_factor 
+
       elseif (trim(opt_type) == 'target-lift') then
 
-  ! jx-mod Minimize difference between target cl value and current value 
-  !        Add a base value to the lift difference
+      ! Minimize difference between target cl value and current value 
+      !    Add a base value to the lift difference
       
-        correction = 0.8d0               ! lift is quite sensible to changes
-        increment = (1.d0 + ABS (op_spec%target_value  -op%cl) * correction) &
-                    * op_spec%scale_factor 
         cur_value = op%cl
+        dist = ABS (op_spec%target_value  - cur_value)
+        correction = 0.8d0               ! lift is quite sensible to changes
+        increment = (1.d0 + dist * correction)  * op_spec%scale_factor 
 
       elseif (trim(opt_type) == 'target-moment') then
 
-  ! jx-mod Minimize difference between target moment value and current value 
-  !        Add a base value (Clark y or so ;-) to the moment difference
-  !        so the relative change won't be to high
+      ! Minimize difference between target moment value and current value 
+      !        Add a base value (Clark y or so ;-) to the moment difference
+      !        so the relative change won't be to high
         increment = (ABS (op_spec%target_value - op%cm) + 0.05d0) * op_spec%scale_factor
         cur_value = op%cm
 
       elseif (trim(opt_type) == 'max-lift') then
 
-  !     Maximize Cl (at given angle of attack)
+      ! Maximize Cl (at given angle of attack)
 
         if (op%cl > 0.d0) then
           increment = op_spec%scale_factor / op%cl
@@ -825,20 +836,20 @@ function aero_objective_function_on_results (op_points_result, eval_only_dynamic
 
       elseif (trim(opt_type) == 'max-xtr') then
 
-  !     Maximize laminar flow on top and bottom (0.1 factor to ensure no
-  !     division by 0)
+      ! Maximize laminar flow on top and bottom (0.1 factor to ensure no
+      !   division by 0)
 
         increment = op_spec%scale_factor/(0.5d0*(op%xtrt + op%xtrb)+0.1d0)
         cur_value = 0.5d0*(op%xtrt + op%xtrb)
 
-        ! jx-mod Following optimization based on slope of the curve of op_point
-  !         convert alpha in rad to get more realistic slope values
-  !         convert slope in rad to get a linear target 
-  !         factor eg 4.d0*pi to adjust range of objective function (not negative)
+      ! Following optimization based on slope of the curve of op_point
+      !         convert alpha in rad to get more realistic slope values
+      !         convert slope in rad to get a linear target 
+      !         factor eg 4.d0*pi to adjust range of objective function (not negative)
 
       elseif (trim(opt_type) == 'max-lift-slope') then
 
-  !     Maximize dCl/dalpha (0.1 factor to ensure no division by 0)
+      ! Maximize dCl/dalpha (0.1 factor to ensure no division by 0)
 
         slope = derivation_at_point (i, (op_points_result%alpha * pi/180.d0) , &
                                         (op_points_result%cl))
@@ -847,7 +858,7 @@ function aero_objective_function_on_results (op_points_result, eval_only_dynamic
 
       elseif (trim(opt_type) == 'min-lift-slope') then
 
-  !     New: Minimize dCl/dalpha e.g. to reach clmax at alpha(i) 
+      ! Minimize dCl/dalpha e.g. to reach clmax at alpha(i) 
         slope = derivation_at_point (i, (op_points_result%alpha * pi/180.d0) , &
                                         (op_points_result%cl))
 
@@ -856,7 +867,7 @@ function aero_objective_function_on_results (op_points_result, eval_only_dynamic
 
       elseif (trim(opt_type) == 'min-glide-slope') then
 
-  !     New: Minimize d(cl/cd)/dcl e.g. to reach best glide at alpha(i) 
+      ! Minimize d(cl/cd)/dcl e.g. to reach best glide at alpha(i) 
         slope = derivation_at_point (i, (op_points_result%cl * 20d0), &
                                         (op_points_result%cl/op_points_result%cd))
 
@@ -1610,6 +1621,9 @@ subroutine collect_dyn_ops_data (op_points_result, dyn_ops, ndyn)
         case ('target-drag')
           dist = op%cd - op_spec%target_value       ! positive is worse
           dyn_ops(i)%dev = dist / op_spec%target_value * 100d0
+        case ('target-glide')
+          dist =op%cl / op%cd - op_spec%target_value  ! negative is worse
+          dyn_ops(i)%dev = dist / op_spec%target_value * 100d0
         case ('target-lift')
           dist =op%cl - op_spec%target_value        ! negative is worse
           dyn_ops(i)%dev = dist / (1d0 + op_spec%target_value) * 100d0
@@ -1816,11 +1830,13 @@ subroutine print_improvement_info (intent, header, op_spec, op)
   type(op_point_specification_type), intent(in), optional :: op_spec
   type(op_point_result_type),        intent(in), optional :: op
   integer, intent(in) :: intent
-  doubleprecision     :: dist, dev, improv
+  doubleprecision     :: dist, dev, improv, value_base
   integer             :: how_good
   character (5)       :: base
   character (4)       :: opt_type
   character (30)      :: s
+
+  value_base = 1d0
 
   call print_colored (COLOR_PALE, repeat(' ',intent))
 
@@ -1830,16 +1846,24 @@ subroutine print_improvement_info (intent, header, op_spec, op)
       select case  (op_spec%optimization_type)
         case ('target-drag')
           base  = 'cd'
+          value_base = 0.01d0
           dist  = op%cd - op_spec%target_value                ! positive is worse
+          dev   = dist / op_spec%target_value * 100d0
+        case ('target-glide')
+          base  = 'glide'
+          value_base = 10d0
+          dist  = op%cl /op%cd - op_spec%target_value         ! negative is worse
           dev   = dist / op_spec%target_value * 100d0
         case ('target-lift')  
           base = 'cl'
+          value_base = 1d0
           dist = op%cl - op_spec%target_value                  ! negative is worse
           dev  = dist / (1d0 + op_spec%target_value) * 100d0
         case ('target-moment')
           base = 'cm'
+          value_base = 0.1d0
           dist = op%cm - op_spec%target_value
-          dev  = dist / op_spec%target_value * 100d0
+          dev  = dist / (op_spec%target_value + 0.05d0) * 100d0 ! cm could be 0
       end select
       how_good = r_quality (abs(dev), 0.1d0, 2d0, 10d0)      ! in percent
     else
@@ -1847,36 +1871,42 @@ subroutine print_improvement_info (intent, header, op_spec, op)
         case ('min-sink')
           opt_type = 'max'
           base = 'climb'                                       ! scale_factor = seed value
+          value_base = 10d0
           dist = op%cl**1.5d0 / op%cd - op_spec%scale_factor   
           dev  = dist / op_spec%scale_factor * 100d0
           improv = dev                                         ! positive is good
         case ('max-glide')
           opt_type = 'max'
           base = 'cl/cd'                                       ! scale_factor = seed value
+          value_base = 10d0
           dist = op%cl / op%cd - op_spec%scale_factor          ! positive is good
           dev  = dist / op_spec%scale_factor * 100d0
           improv = dev                                         ! positive is good
         case ('min-drag')
           opt_type = 'min'
           base = 'cd'                                          ! scale_factor = seed value
+          value_base = 0.01d0
           dist = op%cd - 1d0 / op_spec%scale_factor                  
           dev  = dist * op_spec%scale_factor * 100d0
           improv = -dev                                        ! negative is good
         case ('max-lift')
           opt_type = 'max'
           base = 'cl'                                          ! scale_factor = seed value
+          value_base = 1d0
           dist = op%cl - op_spec%scale_factor                  
           dev  = dist / op_spec%scale_factor * 100d0
           improv = dev                                         ! positive is good
         case ('max-xtr')
           opt_type = 'max'
           base = 'xtr'                                         ! scale_factor = seed value
+          value_base = 1d0
           dist = 0.5d0*(op%xtrt + op%xtrb) -  op_spec%scale_factor  
           dev  = dist / op_spec%scale_factor * 100d0
           improv = dev                                         ! positive is good
         case default
           opt_type = 'n.a.'
           base  = ' '
+          value_base = 1d0
           dist  = 0d0           
           dev   = 0d0
           improv = 0d0                                          
@@ -1897,11 +1927,18 @@ subroutine print_improvement_info (intent, header, op_spec, op)
     call print_colored (COLOR_PALE, base//' ')
   ! --
     if (trim (opt_type) /= 'n.a.') then 
-      if (abs(dist) < 1.d0) then
+      if (value_base == 10d0) then 
+        call print_colored_r (7,'(SP,F7.2)', Q_BAD, dist) 
+      elseif (value_base == 1d0) then 
+        call print_colored_r (7,'(SP,F7.3)', Q_BAD, dist) 
+      elseif (value_base == 0.1d0) then 
+        call print_colored_r (7,'(SP,F7.4)', Q_BAD, dist) 
+      elseif (value_base == 0.01d0) then 
         call print_colored_r (7,'(SP,F7.5)', Q_BAD, dist) 
-      else
+      else 
         call print_colored_r (7,'(SP,F7.3)', Q_BAD, dist) 
       end if 
+
     ! --
       call print_colored (COLOR_PALE, '  ')
       if (how_good == Q_Good .and.  opt_type == 'targ') then 
@@ -1910,7 +1947,7 @@ subroutine print_improvement_info (intent, header, op_spec, op)
         if (abs(dev) < 10.0d0) then 
           call print_colored_r (4,'(SP,F4.1)', how_good, dev) 
         else
-          call print_colored_r (4,'(SP,F4.0)', how_good, dev) 
+          call print_colored_i (4, how_good, nint(dev)) 
         end if
         call print_colored_s (               how_good, '%') 
       end if

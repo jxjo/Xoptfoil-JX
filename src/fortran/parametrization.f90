@@ -191,7 +191,7 @@ subroutine create_shape(x, modes, shapetype, shape_function)
       shape_function(i,:) = shape_function(i,:)*dvscale
     end do
 
-  elseif (trim(shapetype) == 'hicks-henne' .or. trim(shapetype) == 'hicks-henne+') then 
+  elseif (trim(shapetype) == 'hicks-henne') then 
       
     nmodes = size(modes,1)/3
     t1fact = initial_perturb/(1.d0 - 0.001d0)
@@ -280,13 +280,7 @@ subroutine create_airfoil(xt_seed, zt_seed, xb_seed, zb_seed, modest, modesb,  &
 
   if (trim(shapetype) == 'hicks-henne') then 
     call create_shape_functions(xt_seed, xb_seed, modest, modesb, shapetype,   &
-                                first_time=.false.)
-     
-  elseif (trim(shapetype) == 'hicks-henne+') then
-! #exp-Hicks-Henne+  x-coordinates are transformed with an arc-cos function 
-!                    which stretches the nose --> see comment in function (and smooth_it) 
-    call create_shape_functions(transformed_arccos(xt_seed), transformed_arccos(xb_seed), modest, modesb, shapetype,   &
-                                first_time=.false.)
+                                first_time=.false.)  
   end if
 
 ! Top surface
@@ -502,6 +496,7 @@ subroutine create_airfoil_camb_thick_plus (xt_seed, zt_seed, xb_seed, zb_seed, m
   ! Especially Xfoils HIPNT tends to produce artefacts in curvature
   ! Smoothing should also be done for the seed airfoil 
   call smooth_foil (.false., 0.05d0, new_foil_2)
+  call smooth_foil (.false., 0.05d0, new_foil_4)
 
   ! get new upper and lower z-coordinates from modified airfoil 
   do i = 1, nptt

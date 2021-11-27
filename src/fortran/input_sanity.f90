@@ -41,11 +41,8 @@ subroutine check_inputs(global_search, pso_options)
   type (pso_options_type), intent(inout) :: pso_options
   character(80), intent(in)              :: global_search
 
-
   integer             :: i, nxtr_opt, ndyn, nscaled
   character           :: choice
-  type(op_point_specification_type) :: op_spec
-
 
 ! Shape functions and geomtry / curvature checks
 
@@ -63,10 +60,10 @@ subroutine check_inputs(global_search, pso_options)
                        "to ensure good results.")
       curv_spec%do_smoothing = .true. 
     end if 
-  elseif (trim(shape_functions) == 'hicks-henne' .or. trim(shape_functions) == 'hicks-henne+') then
+  elseif (trim(shape_functions) == 'hicks-henne' ) then
     if (.not. curv_spec%check_curvature .and. (.not. match_foils)) then 
-      call print_warning ("When using shape function 'hicks-henne' curvature ckecking "// &
-                       "should be switched on during optimization to avoid bumps.")
+      call print_warning ("When using shape function 'hicks-henne', curvature ckecking "// &
+                       "should be switched to avoid bumps.")
     end if 
   end if 
 
@@ -97,30 +94,11 @@ subroutine check_inputs(global_search, pso_options)
     end if
   end do 
 
-! Aero targets - Check for an existing target value 
-!              if optimization_type is target-moment or Target-drag
-  do i = 1, noppoint
 
-    op_spec  = op_points_spec(i) 
-
-    if ((trim(op_spec%optimization_type) == 'target-moment') .and.                &
-        (op_spec%target_value == -1.d3) )                                          &
-      call my_stop("No 'target-value' defined for "//  &
-                 "for optimization_type 'target-moment'")
-    if ((trim(op_spec%optimization_type) == 'target-drag') .and.                  &
-        (op_spec%target_value == -1.d3) )                                         &
-      call my_stop("No 'target-value' defined for "//  &
-                     "for optimization_type 'target-drag'")
-    if ((trim(op_spec%optimization_type) == 'target-lift') .and.                  &
-        (op_spec%target_value == -1.d3) )                                          &
-      call my_stop("No 'target-value' defined for "//  &
-                     "for optimization_type 'target-lift'")
-  end do
-
+! in case of camb_thick a re-paneling is not needed and
+! not good for high cl
   if ((trim(shape_functions) == 'camb-thick') .or. &
       (trim(shape_functions) == 'camb-thick-plus')) then
-    ! in case of camb_thick a re-paneling is not needed and
-    ! not good for high cl
         xfoil_geom_options%repanel = .false. 
   end if 
 
@@ -148,14 +126,14 @@ subroutine check_inputs(global_search, pso_options)
       call my_stop("Dynamic weighting needs at least 3 op points with a target based"//  &
                    " optimization_type")
     if (nscaled > (ndyn/4)) &
-      call my_stop("For Dynamic weighting only a few targets should have a scaled weightung <> 1.0."//&
-                   " Set weighting to 1.0")
+      call my_stop("For Dynamic weighting only a few targets should have a scaled weighting <> 1.0."//&
+                   " Set weighting to 1.0 (or just remove it)")
   end if
 
 
 ! PSO auto_retry  --------------------------------------------------
 
-  if ((trim(shape_functions) /= 'hicks-henne' .and. trim(shape_functions) /= 'hicks-henne+') .and. & 
+  if ((trim(shape_functions) /= 'hicks-henne') .and. & 
       (trim(global_search) == 'particle_swarm')) then 
     if (pso_options%max_retries >= 0) then 
       call print_note ('Particle retry swiched off (only for Hicks-Henne shape_type)')
@@ -448,7 +426,7 @@ subroutine check_seed()
     if ((op_spec%value <= 0.d0) .and. (op_spec%spec_cl)) then
       if ( (trim(opt_type) /= 'min-drag') .and.                                &
            (trim(opt_type) /= 'max-xtr') .and.                                 &
-            ! jx-mod - allow geo target and min-lift-slope, min-glide-slope
+            ! jx-mod - allow target and min-lift-slope, min-glide-slope
            (trim(opt_type) /= 'target-drag') .and.                             &
            (trim(opt_type) /= 'min-lift-slope') .and.                          &
            (trim(opt_type) /= 'min-glide-slope') .and.                         &
@@ -599,26 +577,39 @@ subroutine check_seed()
     !      - target_value negative?  --> take current seed value * |target_value| 
 
     elseif (trim(opt_type) == 'target-drag') then
-      if (op_spec%target_value < 0.d0) op_spec%target_value = op%cd * abs(op_spec%target_value)
+      seed_value = op%cd
+      if (op_spec%target_value < 0.d0) &
+          op_spec%target_value = seed_value * abs(op_spec%target_value)
 
       dist = ABS (op_spec%target_value - op%cd)
       if (dist < 0.000004d0) dist = 0d0  ! little threshold to achieve target
 
       checkval   = op_spec%target_value + dist
-      seed_value = op%cd
+
+    elseif (trim(opt_type) == 'target-glide') then
+      seed_value = op%cl / op%cd
+      if (op_spec%target_value < 0.d0) &
+          op_spec%target_value = seed_value * abs(op_spec%target_value)
+
+      dist = ABS (op_spec%target_value - seed_value)
+      if (dist < 0.001d0) dist = 0d0   ! little threshold to achieve target
+      correction = 0.7d0               ! glide ration is quite sensible to changes
+      checkval   = op_spec%target_value + dist * correction
 
     elseif (trim(opt_type) == 'target-lift') then
-      if (op_spec%target_value < 0.d0) op_spec%target_value = op%cl * abs(op_spec%target_value)
+      seed_value = op%cl
+      if (op_spec%target_value < 0.d0) &
+          op_spec%target_value = seed_value * abs(op_spec%target_value)
       ! add a constant base value to the lift difference so the relative change won't be to high
       correction = 0.8d0               ! lift is quite sensible to changes
       checkval   = 1.d0 + ABS (op_spec%target_value - op%cl) * correction
-      seed_value = op%cl
 
     elseif (trim(opt_type) == 'target-moment') then
-      if (op_spec%target_value < 0.d0) op_spec%target_value = op%cm * abs(op_spec%target_value) 
+      seed_value = op%cm
+      if (op_spec%target_value < 0.d0) &
+          op_spec%target_value = seed_value * abs(op_spec%target_value) 
       ! add a base value (Clark y or so ;-) to the moment difference so the relative change won't be to high
       checkval   = ABS (op_spec%target_value - op%cm) + 0.05d0
-      seed_value = op%cm
 
     elseif (trim(opt_type) == 'max-lift') then
       checkval   = 1.d0/op%cl

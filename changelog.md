@@ -16,7 +16,7 @@ Open Todos:
 
 
 ## Xoptfoil-JX
----  
+  
 
 - Dynamic weighting during optimization - The weighting of all op points having target values and all geometry targets will be automatically adjusted to ensure that targets will be uniformly reached. Dynamic weighting is carried out during optimization at a certain frequency of new designs. This eliminates the tedious task of fine tuning the weighting of each op point to get good results. The new parameter `dynamic_weighting` in namelist `&operating_conditions` is active by default.
 Dynamic weightings can be watched with `show_details = .true.`
@@ -44,7 +44,7 @@ Dynamic weightings can be watched with `show_details = .true.`
 
 
 ## Xoptfoil_visualizer-JX
----
+
 
 
 - General revision of the visualizer: additional plot for curvature and 3rd derivative of airfoil surface, new window sizes, colors, ...

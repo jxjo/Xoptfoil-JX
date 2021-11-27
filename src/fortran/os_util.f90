@@ -397,7 +397,10 @@ subroutine print_colored_i (strlen, quality, ivalue)
   integer, intent(in) :: ivalue, quality, strlen
 
   character (strlen)  :: str
+  character (10)      :: tmp_str
   integer             :: color 
+
+  if (strlen < 1) return 
 
   select case (quality)
     case (Q_GOOD)
@@ -413,14 +416,13 @@ subroutine print_colored_i (strlen, quality, ivalue)
   end select
   str = repeat('*',strlen)
 
-  if (ivalue >= 10** strlen-1) then
+  if ((ivalue >= 10**strlen) .or. (ivalue <= -10**(strlen-1))) then
     str = repeat('*',strlen)
   else
-    !jx-todo more flexibel with length (end of record)
-    write (str,'(I3)') ivalue
+    write (tmp_str, '(I10)') ivalue
+    str = tmp_str ((len(tmp_str)-strlen+1):len(tmp_str))
   endif
 
-  str = adjustr(str)
   call print_colored (color, str)
   
 end subroutine print_colored_i
