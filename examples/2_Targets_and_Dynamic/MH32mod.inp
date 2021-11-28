@@ -1,0 +1,57 @@
+!
+! Also an easy going example demonstrating targets, dynamic weighting
+!
+! Optimize MH 32 for lower Reynolds Numbers
+!         - Type 2 ( Re*sqrt(cl)) = 100.000
+!         - Best glide ratio at cl = 0.7
+!         - Improvement between cl=0.3 - cl=0.6  
+!		  - Thickness of 8.2%
+
+&optimization_options
+  airfoil_file     = 'MH32.dat'
+  shape_functions  = 'camb-thick'				! just optimize thickness & camber and their highpoints 
+  
+  show_details = .true. 						! understand more details during optimization 
+/  
+
+&operating_conditions
+
+  re_default       = 100000						! use this Reynolds number for operating points
+  re_default_as_resqrtcl = .true. 				!   ... and interpret as Type 2
+  dynamic_weighting = .true.					! let the optimizer choose best weightings to reach the target
+
+  noppoint         = 3
+
+  op_mode(1) = 'spec-cl'						! Specifiy operating point based on cl-value						
+  op_point(1) = 0.2
+  optimization_type(1) = 'target-drag'			! try to reach cd = 0.0084
+  target_value(1) = 0.0083							 
+
+  op_mode(2) = 'spec-cl'
+  op_point(2) = 0.4								 
+  optimization_type(2) = 'target-drag'          ! try to reach cd = 0.0098
+  target_value(2) = 0.0098							 
+
+  op_mode(3) = 'spec-cl'
+  op_point(3) = 0.7								! optimize glide ratio at cl= 0.7
+  optimization_type(3) = 'max-glide '               
+/
+
+
+&geometry_targets
+  ngeo_targets    = 1
+  target_type(1)  = 'Thickness'
+  target_geo(1)   = 0.082						! I would like 8.2% thickness ...
+/
+
+
+&polar_generation			
+  generate_polar = .true.						! generate a polar for each design to show in visualizer
+/
+
+&particle_swarm_options
+  pso_tol        = 1D-3							! earlier stop when particle swarm hasn't got really better ideas
+/
+
+
+

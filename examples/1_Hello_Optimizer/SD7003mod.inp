@@ -1,6 +1,7 @@
 ! Easy going examaple ...
 !
-! Optimize max glide ratio and minimize sink  rateof SD7003 
+! Optimize max glide ratio and minimize sink rate of the SD7003
+!   at Reynolds 400,000 
 !
 
 &optimization_options

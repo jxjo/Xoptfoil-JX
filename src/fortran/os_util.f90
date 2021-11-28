@@ -33,6 +33,7 @@ module os_util
 
   private
 
+  public :: stri
   public :: print_colored
   public :: make_directory
   public :: my_stop
@@ -309,6 +310,23 @@ end subroutine make_directory_unix
   end subroutine make_directory_windows
 
 #endif
+
+!------------------------------------------------------------------------------------------
+!  String functions - Integer to string 
+!------------------------------------------------------------------------------------------
+
+  pure function stri (a_int) result (as_string)
+
+    integer,  intent (in) :: a_int
+    character (:), allocatable ::as_string
+
+    as_string = repeat('*',10)
+    write (as_string, '(I10)') a_int
+
+    as_string = trim(adjustl(as_string))
+
+  end function 
+
 
 !------------------------------------------------------------------------------------------
 !  Print colored error, warning, note strings to console

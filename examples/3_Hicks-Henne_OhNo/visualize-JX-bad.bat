@@ -1,5 +1,5 @@
 @echo off
-set Airfoil=SD7003mod
+set Airfoil=JX-bad
 
 rem ... is xoptfoil_visualizer-jx in the default directory?  
 set LocalPath=..\..\windows\bin\

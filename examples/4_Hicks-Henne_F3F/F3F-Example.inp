@@ -1,0 +1,109 @@
+!
+! Generating a fine F3B/F3F airfoil
+!
+! An example of "polar by design" where the complete polar is descriped
+!    by operating points with cd targets. The main polar is at Re 600,000
+!    with at additional op point at Re 300.000 to reduce the laminar separation 
+!    bubble at lower Reynolds numbers
+! 
+! It's a good example of the power of Hicks-Henne shape functions provided with 
+!    some extra care like check_curvature
+!		
+! All op points ara balanced with dynamic weighting. Good to see during optimization
+!    when the op points move to their target nearly at the same time.
+!
+
+&optimization_options
+  airfoil_file     = 'JX-Seed-Rearload.dat'
+
+  nfunctions_top   = 5							! Unchain full Hicks-Henne power (default 4) 
+  nfunctions_bot   = 5							!    ... needs some extra CPU time 
+  show_details     = .true.                     ! provide info about op points and weighting  
+/  
+
+&operating_conditions
+
+  dynamic_weighting = .true. 					! activate dynamic weighting!
+  re_default       = 600000						! use this Reynolds number for operating points
+
+  noppoint = 12
+
+! --------------------- Re = 600,000 ---------------
+
+  op_point(1) = -0.1							! important to describe the polar also for negative cl!
+  optimization_type(1) = 'target-drag'
+  target_value(1) = 0.00870 ! 0.00855  			 
+
+  op_point(2) = 0.0   
+  optimization_type(2) = 'target-drag'
+  target_value(2) = 0.00660	   
+
+  op_point(3) = 0.1   
+  optimization_type(3) = 'target-drag'
+  target_value(3) = 0.00500 
+
+  op_point(4) = 0.2
+  optimization_type(4) = 'target-drag'
+  target_value(4) = 0.00482  
+
+  op_point(5) = 0.3
+  optimization_type(5) = 'target-drag'
+  target_value(5) = 0.00508
+
+  op_point(6) = 0.4			
+  optimization_type(6) = 'target-drag'
+  target_value(6) = 0.00550
+
+  op_point(7) = 0.5
+  optimization_type(7) = 'target-glide'
+  target_value(7) = 78.8		 
+  
+  op_point(8) = 0.6
+  optimization_type(8) = 'target-glide'
+  target_value(8) = 80.8
+  
+  op_point(9) = 0.75
+  optimization_type(9) = 'target-glide'
+  target_value(9) = 77.6  
+
+  op_point(10) = 0.9
+  optimization_type(10) = 'target-glide'
+  target_value(10) = 72.8
+
+  op_point(11) = 12.0							! ensure good cl-max value
+  op_mode(11) = 'spec-al'						! always use 'spec-al' at high cl values!
+  optimization_type(11) = 'target-lift'
+  target_value(11) = 1.266
+
+! --------------------- 300,000 ---------------
+
+  op_point(12) = 0.2							! Helper op point for bubble control at low Reynolds
+  optimization_type(12) = 'target-drag'
+  target_value(12) = 0.00660
+  reynolds(12) = 300000 
+/
+
+&curvature
+  check_curvature = .true.						! HH curvature control active (default)
+  auto_curvature = .true.						! HH auto curvature parms active (default)
+  max_curv_reverse_bot = 1						! Rearloading - explizit tell the reversal on bottom
+/
+
+&geometry_targets
+  ngeo_targets    = 1
+  target_type(1)  = 'Thickness'
+  target_geo(1)   = 0.078  
+/  
+
+&polar_generation
+  generate_polars = .true. 						! ... to show in visualizer for entertainment
+/
+
+&particle_swarm_options
+  pso_maxit        = 300						! ... abobe 300 only mini improvements
+/
+
+&xfoil_run_options
+  ncrit = 7										! default value for op points (more turbulentf flow) 
+/
+

@@ -128,6 +128,9 @@ subroutine check_inputs(global_search, pso_options)
     if (nscaled > (ndyn/4)) &
       call my_stop("For Dynamic weighting only a few targets should have a scaled weighting <> 1.0."//&
                    " Set weighting to 1.0 (or just remove it)")
+    call print_note ("Dynamic weighting starting with design #"// & 
+                      stri(dynamic_weighting_spec%start_with_design) //" repeating every " //&
+                      stri(dynamic_weighting_spec%frequency) //" designs.")
   end if
 
 
@@ -136,7 +139,7 @@ subroutine check_inputs(global_search, pso_options)
   if ((trim(shape_functions) /= 'hicks-henne') .and. & 
       (trim(global_search) == 'particle_swarm')) then 
     if (pso_options%max_retries >= 0) then 
-      call print_note ('Particle retry swiched off (only for Hicks-Henne shape_type)')
+      call print_note ('Particle retry swiched off (meaningful only for Hicks-Henne shape_type)')
       pso_options%max_retries = 0
       pso_options%auto_retry = .false.
     end if 

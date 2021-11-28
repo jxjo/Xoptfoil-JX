@@ -1292,6 +1292,8 @@ subroutine echo_op_points_spec  (op_points_spec, xfoil_options)
 
     if (op%target_value == -1.d3 ) then 
       target_value_char = '-'
+    elseif (op%target_value >= 10d0 ) then 
+      write (target_value_char,'(F9.2)') op%target_value
     else
       write (target_value_char,'(F9.5)') op%target_value
     end if
