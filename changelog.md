@@ -1,35 +1,30 @@
 # Change Log for Xoptfoil-JX
 
 
-## [1.70 beta] - 2021-11-15
+## [1.70 ] - 2021-12
 
 This is a major functional release with some enhancements and new features.
 Have a look in the following feature list and the updated reference guide. 
 
-Note: This beta-release may still include some annoying bugs. Please help by reporting any issue via Github.
 
-Open Todos: 
-- Finalize documentation
-- Revise exmaples
-- More testing
-- Maybe: Some seed airfoils 'hardcoded' 
 
 
 ## Xoptfoil-JX
   
 
-- Dynamic weighting during optimization - The weighting of all op points having target values and all geometry targets will be automatically adjusted to ensure that targets will be uniformly reached. Dynamic weighting is carried out during optimization at a certain frequency of new designs. This eliminates the tedious task of fine tuning the weighting of each op point to get good results. The new parameter `dynamic_weighting` in namelist `&operating_conditions` is active by default.
+- Dynamic weighting during optimization - The weighting of all operating points having target values and all geometry targets will be automatically adjusted to ensure that targets will be uniformly reached.  
+Dynamic weighting eliminates the tedious task of fine tuning the weighting of each op point to get good results. The new parameter `dynamic_weighting` in namelist `&operating_conditions` is active by default.
 Dynamic weightings can be watched with `show_details = .true.`
 
-- Auto curvature control when using 'Hicks-Henne' shape functions. Right before optimization the various curvature parameters and constraints are evaluated based on the curvature quality of the seed airfoil and the initial values in the input file. During optimization these parameters are constrained to achieve best possible quality for the optimized airfoil. The parameter `auto_curvature` in namelist `&curvature` is active by default for Hicks-Henne shape functions.
+- Auto curvature control when using 'Hicks-Henne' shape functions. Right before optimization the various curvature parameters and constraints are evaluated based on the curvature quality of the seed airfoil and the initial values in the input file. During optimization these parameters are constrained to achieve best possible quality for the optimized airfoil. The parameter `auto_curvature` in namelist `&curvature` is active by default for Hicks-Henne shape functions.  
 (This feature was already introduced in version 1.60 but didn't show the desired functionality)
 - Auto retry of a single particle if its shape design fails due to geometry or curvature constraints. With auto retry the particle will have a second chance to create a valid design. Auto retry highly improves optimization speed. The parameter `auto_retry` is active by default for Hicks-Henne shape functions.
-- Bubble detect of possible laminar separation bubble at an op points. The detection is based on xfoils TAU (sheer stress getting < 0). Bubble detection does not directly affect the objective function - but bubbles will influence the   aerodynamic results. Bubble information will be displayed with `show_details` is activated.
-- Preset of thickness and/or camber of the seed airfoil when geometry targets or thickness/camber constraints are defined. This greatly improves the quality of the initial designs for the particle swarm and reduces optimization time.
+- Bubble detect of possible laminar separation bubble at an operating point. The detection is based on Xfoils TAU value (sheer stress getting < 0). Bubble detection does not directly affect the objective function - but bubbles will influence the   aerodynamic results. Bubble information will be displayed with activated `show_details`.
+- Preset of thickness and/or camber of the seed airfoil when geometry targets or thickness/camber constraints are defined. This improves the quality of the initial designs for the particle swarm and reduces optimization time.
 - New screen output during particle swarm optimization to get more details about the ongoing optimization of each op point. Use `show_details` to activate the details.
-- When activated, a full Xfoil polar will be generated for each new design (parameter `generate_polar` in namelist `&polar_generation`). This polar will be red by the visualizer and displayed as additional information in the polar plots during optimzation. This intermediate polar file has the Xfoil polar format, so it can also be imported into Xflr5 or Flow5.
+- A full Xfoil polar will be generated for each new design (parameter `generate_polar` in namelist `&polar_generation`). This polar is used by the visualizer as additional information in the polar plots during optimzation. This intermediate polar file uses the Xfoil polar format, so it can be imported into Xflr5 or Flow5.
 - The temporary files to display the ongoing optimization with the visualizer moved to a subdirectory. This helps to keep working directory tidily.  
-- Complete revision of the `Xoptfoil-JX Reference`. You will now find not only the subset of parameters which extend the original Xoptfoil, but a complete listing with all parameters supported by Xoptfoil-JX including a bunch of tips for the usage. Please have a read...  
+- Revision of the `Xoptfoil-JX` documentation including the `visualizer` and `Xfoil_worker`. You will now find not only the subset of parameters which extend the original Xoptfoil, but a complete listing of all parameters supported by Xoptfoil-JX including a bunch of tips for  usage. Please have a read...  
 - New or improved example cases
 - ... plus a lot of minor things ...
 
@@ -38,7 +33,7 @@ Dynamic weightings can be watched with `show_details = .true.`
 - All curvature related constraints moved from namelist `&constraints` to the new namelist `&curvature`
 - Depricated curvature constraints: `highlow_threshold` `max_curv_highlow_top` `max_curv_highlow_top` `max_spikes_top` `max_spikes_bot` 
 - Deprciated geometry target types: `zTop` and `zBot` including their extra parameter `x_pos`
-- Polar generation with Xptfoil-JX will now generate a single intermediate polar each new design during optimization. This intermediate polar is used as a reference polar in the Viualizer. To create a polar set for the final, optimized airfoil, use the Xfoil_Worker (it will work like before). 
+- Polar generation with Xptfoil-JX will now generate a single intermediate polar for each new design during optimization. This intermediate polar is used as a reference polar in the Viualizer. To create a polar set for the final, optimized airfoil, use the `Xfoil_Worker` (it will work like before). 
 
 
 
@@ -47,8 +42,8 @@ Dynamic weightings can be watched with `show_details = .true.`
 
 
 
-- General revision of the visualizer: additional plot for curvature and 3rd derivative of airfoil surface, new window sizes, colors, ...
-- If available a real polar of the seed airfoil and the current design will pe plotted in the polar window (Xopfoil-JX option `generate_polar`). The polar is quite helpful for an early estimation of optimzation success.  
+- General revision of the visualizer with an additional plot for curvature and 3rd derivative of airfoil surface, new window sizes, colors, ...
+- If available a real polar of the seed airfoil and the current design will pe plotted in the polar window (Xopfoil-JX option `generate_polar`). The polar is  helpful for an early estimation of optimzation success.  
 
 ### Have Fun!
 

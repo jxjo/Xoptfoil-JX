@@ -33,7 +33,7 @@ module os_util
 
   private
 
-  public :: stri
+  public :: stri, strf
   public :: print_colored
   public :: make_directory
   public :: my_stop
@@ -312,7 +312,7 @@ end subroutine make_directory_unix
 #endif
 
 !------------------------------------------------------------------------------------------
-!  String functions - Integer to string 
+!  String functions - Integer  and Float to string 
 !------------------------------------------------------------------------------------------
 
   pure function stri (a_int) result (as_string)
@@ -327,6 +327,20 @@ end subroutine make_directory_unix
 
   end function 
 
+  pure function strf (format, a_float) result (as_string)
+
+    doubleprecision,  intent (in) :: a_float
+    character (*),  intent (in) :: format
+    character (:), allocatable ::as_string
+
+    if (trim(format) == '') return
+
+    as_string = repeat('*',20)
+    write (as_string, format) a_float
+
+    as_string = trim(adjustl(as_string))
+
+  end function 
 
 !------------------------------------------------------------------------------------------
 !  Print colored error, warning, note strings to console

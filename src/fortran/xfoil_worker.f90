@@ -291,7 +291,7 @@ subroutine check_foil_curvature (input_file, output_prefix, seed_foil, visualize
   type (airfoil_type)          :: foil, tmp_foil
   integer                      :: overall_quality
 
-  write (*,*) 'Surface curvature with reversals, high lows and spikes'
+  write (*,*) 'Surface curvature with reversals and spikes'
 
   tmp_foil = seed_foil
 
