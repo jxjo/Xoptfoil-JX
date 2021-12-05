@@ -45,7 +45,7 @@ plotoptions = dict(show_seed_airfoil = True,
                    save_animation_frames = False,
                    color_for_seed = "dimgrey",
                    color_for_new_designs = "deeppink",
-                   monitor_update_interval = 0.8)
+                   monitor_update_interval = 1.0)
 
 ################################################################################
 #
@@ -1785,8 +1785,8 @@ def main_menu(initialchoice, seedfoil, designfoils, prefix):
           init = False
 
         # Show plots and pause for requested update interval
-        plt.pause(0.2)
-        time.sleep(plotoptions["monitor_update_interval"] - 0.2)
+        plt.pause(plotoptions["monitor_update_interval"])
+        # time.sleep(0.2)
 
         # Update airfoil and optimization data
         seedfoil, designfoils, ioerror = read_new_airfoil_data(seedfoil,

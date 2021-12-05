@@ -1486,7 +1486,7 @@ subroutine read_xfoil_paneling_inputs  (input_file, or_iunit, geom_options)
 
   if (npan_fixed > 0 .and. (npan /= npan_fixed)) then 
     npan = npan_fixed 
-    call print_note ("Number of panels (npan) is fixed for optimizations and can't be hanged")
+    call print_note ("Number of panels (npan) is fixed for optimizations and can't be changed")
   end if 
 
   if (npan < 20) call my_stop("npan must be >= 20.")
