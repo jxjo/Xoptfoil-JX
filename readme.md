@@ -31,7 +31,7 @@ Main changes and improvements
 
 ## Documentation 
 
-The options of Xoptfoil-JX and some explanations can be found in the [Xoptfoil-JX Reference](https://github.com/jxjo/Xoptfoil/blob/master/doc/Xoptfoil-JX%20Reference.pdf)
+The options of Xoptfoil-JX and some explanations can be found in the [Xoptfoil-JX Reference](https://github.com/jxjo/Xoptfoil/blob/master/doc/Xoptfoil-JX.pdf)
 
 Also have a look into [ChangeLog](https://github.com/jxjo/Xoptfoil/blob/master/doc/ChangeLog.pdf) for the newest enhancements and changes.
 
