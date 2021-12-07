@@ -31,8 +31,8 @@ Dynamic weightings can be watched with `show_details = .true.`
 #### Breaking Changes
 
 - All curvature related constraints moved from namelist `&constraints` to the new namelist `&curvature`
-- Depricated curvature constraints: `highlow_threshold` `max_curv_highlow_top` `max_curv_highlow_top` `max_spikes_top` `max_spikes_bot` 
-- Deprciated geometry target types: `zTop` and `zBot` including their extra parameter `x_pos`
+- Deprecated curvature constraints: `highlow_threshold` `max_curv_highlow_top` `max_curv_highlow_top` `max_spikes_top` `max_spikes_bot` 
+- Deprecated geometry target types: `zTop` and `zBot` including their extra parameter `x_pos`
 - Polar generation with Xptfoil-JX will now generate a single intermediate polar for each new design during optimization. This intermediate polar is used as a reference polar in the Viualizer. To create a polar set for the final, optimized airfoil, use the `Xfoil_Worker` (it will work like before). 
 
 
