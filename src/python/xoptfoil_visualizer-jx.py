@@ -736,7 +736,9 @@ def plot_airfoil_coordinates(seedfoil, matchfoil, designfoils, plotnum, firsttim
     lines.append(plt.Line2D((0,1),(0,0), color=sc,label='bottom', linewidth=0.1, marker = '^'))
 
     labels = [l.get_label() for l in lines]
-    ax.legend(lines, labels, loc="upper center", numpoints=1, ncol=2)
+    # little trick to add a second legend to axis
+    #  .. this legend will be removed from following legend and then added again ...
+    legend2 = ax.legend (lines, labels, loc="upper center", numpoints=1, ncol=2)
 
   # Legend for coordinates plot
 
@@ -752,6 +754,9 @@ def plot_airfoil_coordinates(seedfoil, matchfoil, designfoils, plotnum, firsttim
 
   labels = [l.get_label() for l in lines]
   ax.legend(lines, labels, loc="lower center", numpoints=1, ncol=4)
+  
+  # little trick - see above
+  if show_transition: ax.add_artist(legend2)
 
 
   # Plot 2 --------  Curvature and 3rd derivative 
