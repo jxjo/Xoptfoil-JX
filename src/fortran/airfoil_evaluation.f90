@@ -116,7 +116,7 @@ module airfoil_evaluation
   type (curvature_polyline_specification_type) :: curv_top_spec
   type (curvature_polyline_specification_type) :: curv_bot_spec
 
-  integer, parameter             :: NSKIP_TE = 5
+  integer, parameter             :: NSKIP_TE = 3  !no of points to be skipped at TE
 
 ! Geo targets 
   integer, parameter :: max_geo_targets = 10
@@ -1431,10 +1431,7 @@ subroutine do_dynamic_weighting (designcounter, dyn_weight_spec, &
 
   ! 1. first guess of new weighting of relevant op_points and new objective function
   !    weighting is proportional to the deviation to target compared to average deviation
-  !    
-  !    Scale this weightings with user defined initial weightings 
 
-  ! Op points weighting 
     do i= 1, noppoint
       if (op_points_spec(i)%dynamic_weighting) then
 
@@ -1446,7 +1443,6 @@ subroutine do_dynamic_weighting (designcounter, dyn_weight_spec, &
       end if
     end do 
   
-  ! Geo targets weighting 
     do i= 1, ngeo_targets
       if (geo_targets(i)%dynamic_weighting) then
 
@@ -1459,7 +1455,8 @@ subroutine do_dynamic_weighting (designcounter, dyn_weight_spec, &
     end do 
 
   ! 1b. Reduce weightings when average deviation getting close to 0 
-  !         to avoid oscilaation  
+  !         to avoid oscillation  
+
     min_weighting     = dyn_weight_spec%min_weighting  
     max_weighting     = dyn_weight_spec%max_weighting
 
@@ -1471,7 +1468,8 @@ subroutine do_dynamic_weighting (designcounter, dyn_weight_spec, &
       weighting_diff = weighting_diff / REDUCTION 
     end if 
     max_weighting     = min_weighting + weighting_diff
-    if (show_dev) write (*,'(8x,A,2F5.2)') '- Min / Max weighting  ',min_weighting, max_weighting 
+    if (show_dev) write (*,'(8x,A,2F5.2)') '- Min / Max     weighting  ',min_weighting, max_weighting 
+    if (show_dev) write (*,'(8x,A,2F5.2)') '- Min / Max new weighting  ',min_new_weighting, max_new_weighting 
 
   
     do i= 1, noppoint
@@ -1481,6 +1479,8 @@ subroutine do_dynamic_weighting (designcounter, dyn_weight_spec, &
         dyn_ops(i)%new_weighting = min_weighting + &
                       (dyn_ops(i)%new_weighting - min_new_weighting) * &
                       ((max_weighting-min_weighting) / (max_new_weighting-min_new_weighting)) 
+        if (show_dev) write (*,'(8x, A,I2,A,F5.1)', advance='no') '- Op ', i, ' new:', &
+                                                      dyn_ops(i)%new_weighting
 
     ! 3. give an extra punch if deviation is too far away from average deviation
         if ((dyn_ops(i)%dev > (median_dev * 1.5d0 * EXTRA_PUNCH_THRESHOLD )) .and. &
@@ -1488,23 +1488,24 @@ subroutine do_dynamic_weighting (designcounter, dyn_weight_spec, &
         ! ... the super punch is much above the median (outlier)
           dyn_ops(i)%new_weighting = dyn_ops(i)%new_weighting * dyn_weight_spec%extra_punch **2
           op_points_spec(i)%extra_punch = .true.
-          if (show_dev) write (*,'(8x, A,I2,A)') '- Op ', i, ' extra + punch'
+          if (show_dev) write (*,'(A, F5.1)') ' +punch:', dyn_ops(i)%new_weighting
 
         elseif ((abs(dyn_ops(i)%dev) > (median_dev * EXTRA_PUNCH_THRESHOLD )) .and. &
                 (avg_dev > 0.2d0)) then
           dyn_ops(i)%new_weighting = dyn_ops(i)%new_weighting * dyn_weight_spec%extra_punch
           op_points_spec(i)%extra_punch = .true.
-          if (show_dev) write (*,'(8x, A,I2,A)') '- Op ', i, ' extra punch'
+          if (show_dev) write (*,'(A, F5.1)') '  punch:', dyn_ops(i)%new_weighting
 
         elseif (op_points_spec(i)%extra_punch) then 
-        ! ... also an extra punch if this op got an extra punch in the round before
-        !     this should avoid oscillation of reszlts 
-          dyn_ops(i)%new_weighting = dyn_ops(i)%new_weighting * dyn_weight_spec%extra_punch
+        ! ... also give a good, at least medium weighting if op had a punch before
+        !     to avoid oscillation of results 
+          dyn_ops(i)%new_weighting = & 
+              max (dyn_ops(i)%new_weighting, (max_weighting+min_weighting) / 2d0)
           op_points_spec(i)%extra_punch = .false.
-          if (show_dev) write (*,'(8x, A,I2,A)') '- Op ', i, ' got post extra punch'
-
+          if (show_dev) write (*,'(A, F5.1)') '   post:', dyn_ops(i)%new_weighting
         else
           op_points_spec(i)%extra_punch = .false.
+          if (show_dev) write (*,*)
         end if
       end if
     end do 
@@ -1517,32 +1518,47 @@ subroutine do_dynamic_weighting (designcounter, dyn_weight_spec, &
                       (dyn_geos(i)%new_weighting - min_new_weighting) * &
                       ((max_weighting-min_weighting) / (max_new_weighting-min_new_weighting)) 
                       
+        if (show_dev) write (*,'(8x, A,I2,A,F5.1)', advance='no') '- Geo', i, ' new:', &
+                                                      dyn_geos(i)%new_weighting
       ! 3b. give an extra punch if deviation is too far away from average deviation
 
-        !if ((abs(dyn_geos(i)%dev) > (median_dev * 1.5d0 * EXTRA_PUNCH_THRESHOLD )) .and. &
-        !    (avg_dev  > 0.2d0)) then
-        !! ... the super punch is much above the median (outlier)
-        !  dyn_geos(i)%new_weighting = dyn_geos(i)%new_weighting * dyn_weight_spec%extra_punch **2
-        !  geo_targets(i)%extra_punch = .true.
-        !  write (*,'(8x, A,I2,A)') '- Geo ', i, ' extra + punch'
         if ((abs(dyn_geos(i)%dev) > (median_dev * EXTRA_PUNCH_THRESHOLD )) .and. &
                 (avg_dev  > 0.2d0)) then
           dyn_geos(i)%new_weighting = dyn_geos(i)%new_weighting * dyn_weight_spec%extra_punch
           geo_targets(i)%extra_punch = .true.
-          if (show_dev) write (*,'(8x, A,I2,A)') '- Geo ', i, ' extra punch'
-        elseif (geo_targets(i)%extra_punch) then 
-        ! ... also an extra punch if this op got an extra punch in the round before
-        !     this should avoid oscillation of reszlts 
-          dyn_geos(i)%new_weighting = dyn_geos(i)%new_weighting * dyn_weight_spec%extra_punch
-          geo_targets(i)%extra_punch = .false.
-          if (show_dev) write (*,'(8x, A,I2,A)') '- Geo ', i, ' got post extra punch'
+          if (show_dev) write (*,'(A, F5.1)') '  punch:', dyn_geos(i)%new_weighting
 
+        elseif (geo_targets(i)%extra_punch) then 
+        ! ... also give a good, at least medium weighting if op had a punch before
+        !     to avoid oscillation of results 
+          dyn_geos(i)%new_weighting = & 
+              max (dyn_geos(i)%new_weighting, (max_weighting + min_weighting) / 2d0)
+          geo_targets(i)%extra_punch = .false.
+          if (show_dev) write (*,'(A, F5.1)') '   post:', dyn_geos(i)%new_weighting
+        else
+          geo_targets(i)%extra_punch = .false.
+          if (show_dev) write (*,*)
         end if
       end if
     end do 
 
+  ! 4. Multiply weighting by user defined weighting 
 
-  ! 4. cur and new objective function with new (raw) weightings)
+    do i= 1, noppoint
+      if (op_points_spec(i)%dynamic_weighting) then
+        dyn_ops(i)%new_weighting = dyn_ops(i)%new_weighting * &
+                                  op_points_spec(i)%weighting_user 
+      end if
+    end do 
+
+    do i= 1, ngeo_targets
+      if (geo_targets(i)%dynamic_weighting) then
+        dyn_geos(i)%new_weighting = dyn_geos(i)%new_weighting * &
+                                    geo_targets(i)%weighting_user
+      end if
+    end do 
+
+  ! 5. cur and new objective function with new (raw) weightings)
 
     cur_dyn_obj_fun = aero_objective_function_on_results (op_points_result, .true.) + &
                       geo_objective_function_on_results (geo_result, .true. )
@@ -1554,7 +1570,7 @@ subroutine do_dynamic_weighting (designcounter, dyn_weight_spec, &
                       geo_objective_function_on_results  (geo_result, .true. )
 
 
-  ! 5. Done - scale and assign new weightings to current optimization weightings
+  ! 6. Done - scale and assign new weightings to current optimization weightings
 
 
     scale_dyn_obj_fun = cur_dyn_obj_fun / new_dyn_obj_fun
@@ -1568,7 +1584,7 @@ subroutine do_dynamic_weighting (designcounter, dyn_weight_spec, &
         geo_targets(i)%weighting    = dyn_geos(i)%new_weighting * scale_dyn_obj_fun
     end do
 
-  ! 6. Store data for user information 
+  ! 7. Store data for user information 
                          
     sum_weighting_user = sum(op_points_spec%weighting_user) + &
                          sum(geo_targets%weighting_user)

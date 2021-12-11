@@ -125,7 +125,7 @@ subroutine check_inputs(global_search, pso_options)
     if (ndyn < 3) &
       call my_stop("Dynamic weighting needs at least 3 op points with a target based"//  &
                    " optimization_type")
-    if (nscaled > (ndyn/4)) &
+    if (nscaled > (ndyn/3)) &
       call my_stop("For Dynamic weighting only a few targets should have a scaled weighting <> 1.0."//&
                    " Set weighting to 1.0 (or just remove it)")
     call print_note ("Dynamic weighting starting with design #"// & 
@@ -825,7 +825,7 @@ subroutine auto_curvature_constraints (show_details, foil)
   
 ! -------------- Top Side -----
                             
-  if (show_details) call print_note_only ('- Bop side',3)
+  if (show_details) call print_note_only ('- Bot side',3)
 
   call auto_curvature_threshold_polyline ('bot', show_details, xb, yb, curv_bot_spec)
   call auto_spike_threshold_polyline     (       show_details, xb, yb, curv_bot_spec)
