@@ -1331,7 +1331,6 @@ function is_out_lier (iop, check_value)
 
       is_out_lier = .true.
 
-    ! jx-test
     !  call show_out_lier (iop, check_value) 
     
     end if 

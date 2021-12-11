@@ -883,7 +883,7 @@ C---- normalize curvature array
       DO I=1, NB
         W5(I) = W5(I) / CVMAX
       ENDDO
-C
+
 C---- spline curvature array
       CALL SEGSPL(W5,W6,SB,NB)
 C
@@ -893,7 +893,10 @@ C     temporarily used  for more reliable convergence.
       NN = IPFAC*(N-1)+1
 C
 C---- ratio of lengths of panel at TE to one away from the TE
-      RDSTE = 0.667
+C     jx-mod The original ration leads to a curvature jump at TE
+C            With 1.0 it's fine. Hopefully no side effects!  
+C      RDSTE = 0.667
+      RDSTE = 1.0
       RTF = (RDSTE-1.0)*2.0 + 1.0
 C
       IF(IBLE.EQ.0) THEN
