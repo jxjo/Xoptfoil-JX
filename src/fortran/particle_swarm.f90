@@ -127,7 +127,7 @@ subroutine particleswarm(xopt, fmin, step, fevals, objfunc, x0, xmin, xmax,    &
   character(25) :: relfminchar
   character(80) :: histfile
   character(80), dimension(20) :: commands
-  integer       :: i_retry, max_retries                           
+  integer       :: i_retry, max_retries, ndone                      
   
   nconstrained = size(constrained_dvs,1)
 
@@ -308,6 +308,7 @@ subroutine particleswarm(xopt, fmin, step, fevals, objfunc, x0, xmin, xmax,    &
 
 
 !$omp end master
+    ndone= 0
 !$omp barrier
 
 !   Use OMP DYNAMIC (and not STATIC which is default) so every thread will take a new "i" 
@@ -367,19 +368,21 @@ subroutine particleswarm(xopt, fmin, step, fevals, objfunc, x0, xmin, xmax,    &
       end do 
 
 !     Display some info about success of single particle 
-      call show_particle_info (fmin,  minvals(i), objval(i))        
+      !call show_particle_info (fmin,  minvals(i), objval(i))        
 
-!     Update local best design if appropriate
-      if (objval(i) < minvals(i)) then
-        minvals(i) = objval(i)
-        bestdesigns(:,i) = dv(:,i)
-      end if
+!$OMP ATOMIC  
+      ndone = ndone + 1
+      call show_particles_progress (pso_options%pop, ndone)
 
-    end do
+    end do    !--------------------------------------------------------------------------
 
 !$omp end do
 
 !$omp master
+
+!   Display some info about success of single particle 
+
+    call show_particles_info (fmin, minvals, objval)        
 
 !   Update best overall design, if appropriate
 
@@ -401,8 +404,17 @@ subroutine particleswarm(xopt, fmin, step, fevals, objfunc, x0, xmin, xmax,    &
 !   Update velocity of each particle
 
     do i = 1, pso_options%pop
+
+    ! Update  best design if appropriate
+      if (objval(i) < minvals(i)) then
+        minvals(i) = objval(i)
+        bestdesigns(:,i) = dv(:,i)
+      end if
+
       call random_number(randvec1)
       call random_number(randvec2)
+
+    ! The incredible Particle Swarm formula ...
       vel(:,i) = wcurr*vel(:,i) + c1*randvec1*(bestdesigns(:,i) - dv(:,i)) +   &
                                   c2*randvec2*(xopt - dv(:,i))
       speed(i) = norm_2(vel(:,i))
@@ -667,8 +679,12 @@ subroutine  show_optimization_header  (pso_options, max_retries)
   nparticles       = pso_options%pop
 
   write(*,'(3x)', advance = 'no')
-  call  print_colored (COLOR_NOTE, "Particle result:  '+' obj improved  '+' personal best"//&
-                                   "  '-' not better  'x' xfoil no conv  '.' geometry failed")
+  call  print_colored (COLOR_NOTE, "Particle result:  '")
+  call  print_colored (COLOR_GOOD, "+")
+  call  print_colored (COLOR_NOTE, "' new swarm best  '+' personal best"//&
+                                   "  '-' not better  '")
+  call  print_colored (COLOR_ERROR, "x")
+  call  print_colored (COLOR_NOTE, "' xfoil no conv  ' ' geometry failed")
   write (*,*)
 
   write (s1,'(I1)') max_retries
@@ -687,9 +703,9 @@ subroutine  show_optimization_header  (pso_options, max_retries)
   end if
   write(*,*)
 
-  var_string = 'Particles...' // blanks (len('Particles...') : nparticles)
-  write(*,'(3x,A6,3x,  A,          1x,A6,   5x)', advance ='no') &
-          'Iterat',var_string,'Radius'
+  var_string = 'Particles result' // blanks (len('Particles result') : nparticles)
+  write(*,'(3x,A6,3x, A, A,          1x,A6,   5x)', advance ='no') &
+          'Iterat','Progress   ', var_string,'Radius'
   
   if (show_improvement) then
     write(*,'(A11)') 'Improvement'
@@ -790,5 +806,66 @@ subroutine  show_particle_info (overall_best, personal_best, objval)
   call print_colored (color, sign)            
   
 end subroutine show_particle_info
+
+
+!------------------------------------------------------------------------------
+! Shows user info about sucess of a single particle
+!------------------------------------------------------------------------------
+
+subroutine  show_particles_info (overall_best, personal_best, objval)
+
+  use airfoil_evaluation, only : OBJ_XFOIL_FAIL, OBJ_GEO_FAIL
+
+  double precision, intent(in)  :: overall_best
+  double precision, dimension (:), intent(in)  :: personal_best, objval
+  integer       :: color, i, ibest 
+  Character (1) :: sign 
+
+  call print_colored (COLOR_NOTE, ' ')
+
+  ibest = minloc(objval,1)
+
+  do i = 1, size(objval)
+    if (objval(i) < overall_best .and. i == ibest) then 
+      color = COLOR_GOOD                           ! better then current best
+      sign  = '+'
+    else if (objval(i) == OBJ_XFOIL_FAIL) then     
+      color = COLOR_ERROR                          ! no xfoil convergence
+      sign  = 'x'
+    else if (objval(i) < personal_best(i)) then 
+      color = COLOR_NOTE                         ! best of particle up to now
+      sign  = '+'
+    else if (objval(i) >= OBJ_GEO_FAIL) then 
+      color = COLOR_NOTE                           ! no valid design 
+      sign  = ' '
+    else  
+      color = COLOR_NOTE                         ! no improvement
+      sign  = '-'
+    end if 
+
+    call print_colored (color, sign)            
+
+  end do 
+  
+end subroutine show_particles_info
+
+
+!------------------------------------------------------------------------------
+! Shows user info about progress of particles work 
+!------------------------------------------------------------------------------
+
+subroutine  show_particles_progress (nparticles, ndone)
+
+
+  integer, intent(in)  :: nparticles, ndone
+  doubleprecision      :: div 
+
+  div = float (nparticles/10)
+
+  if (mod(float(ndone),div) < 0.1d0) then 
+    call print_colored (COLOR_NOTE, '.') 
+  end if 
+  
+end subroutine show_particles_progress
 
 end module particle_swarm
