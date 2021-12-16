@@ -350,7 +350,7 @@ subroutine write_polar_data (out_unit, op_points_result)
 
     op = op_points_result(i)
     if (op%converged) then
-      write (out_unit,  "(   F8.3,   F9.4,    F10.5,    F10.5,    F9.4,   F8.4,   F8.4)") &
+      write (out_unit,  "(   F8.3,   F9.5,    F10.6,    F10.5,    F9.4,   F8.4,   F8.4)") &
                           op%alpha, op%cl, op%cd,    0d0,  op%cm,op%xtrt,op%xtrb
     else
       write(text_out,'(A,F5.2,A)') "alpha =",op%alpha," not converged in polar generation. Skipping op point"
