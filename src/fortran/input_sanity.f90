@@ -196,21 +196,14 @@ subroutine check_seed()
   character(100) :: text, text2
   character(15) :: opt_type
   logical :: addthick_violation
-  double precision :: ref_value, seed_value, tar_value, match_delta
+  double precision :: ref_value, seed_value, tar_value, match_delta, cur_value
   double precision :: dist = 0d0
 
   penaltyval = 0.d0
   pi = acos(-1.d0)
 
 
-! Preset seed airfoil geometry to geo targets and/or thickness-camber constraints ----------
 
-  call preset_airfoil_to_targets (.true., seed_foil, geo_targets, &
-                                  min_thickness, max_thickness, min_camber, max_camber) 
-
-! Afterwards sanity check of thickness and camber 
-
-  call check_thickness_camber (seed_foil, min_thickness, max_thickness, min_camber, max_camber)
 
 ! Smooth surfaces of airfoil *before* other checks are made
 !     save original seed surface before smoothing
@@ -228,18 +221,25 @@ subroutine check_seed()
 
   ! Get best values fur surface constraints 
 
-    if (curv_spec%auto_curvature) &
-      call auto_curvature_constraints (show_details, seed_foil)
+    if (curv_spec%auto_curvature) then 
+      write (*,'(/," - ", A)') 'Auto_curvature: Best values for curvature constraints'
+      call auto_curvature_constraints ('Top side', show_details, seed_foil%xt, seed_foil%zt, curv_top_spec)
+      call auto_curvature_constraints ('Bot side', show_details, seed_foil%xb, seed_foil%zb, curv_bot_spec)
+    end if
+
+    write (*,*)
+    call info_check_curvature ('Top side', seed_foil%xt, seed_foil%zt, curv_top_spec)
+    call info_check_curvature ('Bot side', seed_foil%xb, seed_foil%zb, curv_bot_spec)
 
   ! Final check for curvature reversals
 
-    call check_handle_curve_violations ('Top surface', seed_foil%xt, seed_foil%zt, curv_top_spec)
-    call check_handle_curve_violations ('Bot surface', seed_foil%xb, seed_foil%zb, curv_bot_spec)
+    call check_handle_curve_violations ('Top side', seed_foil%xt, seed_foil%zt, curv_top_spec)
+    call check_handle_curve_violations ('Bot side', seed_foil%xb, seed_foil%zb, curv_bot_spec)
     
   ! Final check trailing edge 
 
-    call check_te_curvature_violations ('Top surface', seed_foil%xt, seed_foil%zt, curv_top_spec)
-    call check_te_curvature_violations ('Bot surface', seed_foil%xb, seed_foil%zb, curv_bot_spec)
+    call check_te_curvature_violations ('Top side', seed_foil%xt, seed_foil%zt, curv_top_spec)
+    call check_te_curvature_violations ('Bot side', seed_foil%xb, seed_foil%zb, curv_bot_spec)
 
   elseif (curv_spec%do_smoothing) then
 
@@ -279,6 +279,10 @@ subroutine check_seed()
   if(check_geometry) then
 
     write(*,'(/," - ",A)') 'Checking to make sure seed airfoil passes all constraints ...'
+
+  ! Sanity check of thickness and camber 
+
+    call check_thickness_camber (seed_foil, min_thickness, max_thickness, min_camber, max_camber)
                                   
   ! Top surface growth rates
 
@@ -564,63 +568,96 @@ subroutine check_seed()
     end if
 
     if (trim(opt_type) == 'min-sink') then
+
       checkval   = op%cd / op%cl**1.5d0
-      seed_value = op%cl ** 1.5d0 / op%cd
 
     elseif (trim(opt_type) == 'max-glide') then
+
       checkval   = op%cd / op%cl
-      seed_value = op%cl / op%cd
 
     elseif (trim(opt_type) == 'min-drag') then
+
       checkval   = op%cd
-      seed_value = op%cd
 
     ! Op point type 'target-....'
     !      - minimize the difference between current value and target value
     !      - target_value negative?  --> take current seed value * |target_value| 
 
     elseif (trim(opt_type) == 'target-drag') then
-      seed_value = op%cd
-      if (op_spec%target_value < 0.d0) &
-          op_spec%target_value = seed_value * abs(op_spec%target_value)
 
-      dist = ABS (op_spec%target_value - op%cd)
-      if (dist < 0.000004d0) dist = 0d0  ! little threshold to achieve target
+      cur_value = op%cd
+
+      if (op_spec%target_value < 0.d0) &          ! negative? - value is factor to seed
+          op_spec%target_value = cur_value * abs(op_spec%target_value)
+
+      if (op_spec%allow_improved_target) then
+        dist = max (0d0, (cur_value - op_spec%target_value))
+      else 
+        dist = abs(cur_value - op_spec%target_value)
+        if (dist < 0.000004d0) dist = 0d0         ! little threshold to achieve target
+      end if 
 
       checkval   = op_spec%target_value + dist
 
     elseif (trim(opt_type) == 'target-glide') then
-      seed_value = op%cl / op%cd
-      if (op_spec%target_value < 0.d0) &
-          op_spec%target_value = seed_value * abs(op_spec%target_value)
 
-      dist = ABS (op_spec%target_value - seed_value)
-      if (dist < 0.001d0) dist = 0d0   ! little threshold to achieve target
-      correction = 0.7d0               ! glide ration is quite sensible to changes
+      cur_value = op%cl / op%cd
+
+      if (op_spec%target_value < 0.d0) &          ! negative? - value is factor to seed
+          op_spec%target_value = cur_value * abs(op_spec%target_value)
+
+      if (op_spec%allow_improved_target) then
+        dist = max (0d0, (op_spec%target_value - cur_value))
+      else 
+        dist = abs(cur_value - op_spec%target_value)
+        if (dist < 0.01d0) dist = 0d0             ! little threshold to achieve target
+      end if 
+      
+      correction = 0.7d0                          ! glide ration is quite sensible to changes
       checkval   = op_spec%target_value + dist * correction
 
     elseif (trim(opt_type) == 'target-lift') then
-      seed_value = op%cl
-      if (op_spec%target_value < 0.d0) &
-          op_spec%target_value = seed_value * abs(op_spec%target_value)
-      ! add a constant base value to the lift difference so the relative change won't be to high
-      correction = 0.8d0               ! lift is quite sensible to changes
+
+      cur_value = op%cl
+
+      if (op_spec%target_value < 0.d0) &          ! negative? - value is factor to seed
+          op_spec%target_value = cur_value * abs(op_spec%target_value)
+
+      if (op_spec%allow_improved_target) then
+        dist = max (0d0, (op_spec%target_value - cur_value))
+      else 
+        dist = abs(cur_value - op_spec%target_value)
+        if (dist < 0.001d0) dist = 0d0            ! little threshold to achieve target
+      end if 
+
+    ! add a constant base value to the lift difference so the relative change won't be to high
+      correction = 0.8d0                          ! lift is quite sensible to changes
       checkval   = 1.d0 + ABS (op_spec%target_value - op%cl) * correction
 
     elseif (trim(opt_type) == 'target-moment') then
-      seed_value = op%cm
-      if (op_spec%target_value < 0.d0) &
-          op_spec%target_value = seed_value * abs(op_spec%target_value) 
+
+      cur_value = op%cm
+
+      if (op_spec%target_value < 0.d0) &          ! negative? - value is factor to seed
+          op_spec%target_value = cur_value * abs(op_spec%target_value) 
+
+      if (op_spec%allow_improved_target) then
+        dist = max (0d0, (op_spec%target_value - cur_value))
+      else 
+        dist = abs(cur_value - op_spec%target_value)
+        if (dist < 0.001d0) dist = 0d0            ! little threshold to achieve target
+      end if 
+  
       ! add a base value (Clark y or so ;-) to the moment difference so the relative change won't be to high
       checkval   = ABS (op_spec%target_value - op%cm) + 0.05d0
 
     elseif (trim(opt_type) == 'max-lift') then
+
       checkval   = 1.d0/op%cl
-      seed_value = op%cl
 
     elseif (trim(opt_type) == 'max-xtr') then
+
       checkval   = 1.d0/(0.5d0*(op%xtrt + op%xtrb) + 0.1d0)  ! Ensure no division by 0
-      seed_value = 0.5d0*(op%xtrt + op%xtrb)
 
 ! jx-mod Following optimization based on slope of the curve of op_point
 !         convert alpha in rad to get more realistic slope values
@@ -628,25 +665,25 @@ subroutine check_seed()
 !         factor 4.d0*pi to adjust range of objective function (not negative)
 
     elseif (trim(opt_type) == 'max-lift-slope') then
-    ! Maximize dCl/dalpha (0.1 factor to ensure no division by 0)
+
+    ! Maximize dCl/dalpha 
       slope = derivation_at_point (i, (op_points_result%alpha * pi/180.d0) , &
                                       (op_points_result%cl))
       checkval   = 1.d0 / (atan(abs(slope))  + 2.d0*pi)
-      seed_value = atan(abs(slope))
 
     elseif (trim(opt_type) == 'min-lift-slope') then
-    ! New: Minimize dCl/dalpha e.g. to reach clmax at alpha(i) 
+
+    ! Minimize dCl/dalpha e.g. to reach clmax at alpha(i) 
       slope = derivation_at_point (i, (op_points_result%alpha * pi/180.d0) , &
                                       (op_points_result%cl))
       checkval   = atan(abs(slope)) + 2.d0*pi
-      seed_value = atan(abs(slope))
 
     elseif (trim(opt_type) == 'min-glide-slope') then
-    ! New: Minimize d(cl/cd)/dcl e.g. to reach best glide at alpha(i) 
+
+    ! Minimize d(cl/cd)/dcl e.g. to reach best glide at alpha(i) 
       slope = derivation_at_point (i, (op_points_result%cl * 20d0), &
                                       (op_points_result%cl/op_points_result%cd))
       checkval   = atan(abs(slope)) + 2.d0*pi
-      seed_value = atan(abs(slope)) 
      
     else
       write(*,*)
@@ -798,39 +835,22 @@ end subroutine
 ! Evaluates and sets the best values for surface thresholds and constraints
 !-------------------------------------------------------------------------
 
-subroutine auto_curvature_constraints (show_details, foil)
+subroutine auto_curvature_constraints (info, show_details, x,y , c_spec)
 
   use vardef,             only: airfoil_type
-  use airfoil_evaluation, only: curv_top_spec, curv_bot_spec
-
-  type (airfoil_type), intent (inout)  :: foil
-  logical, intent (in)            :: show_details
+  use airfoil_evaluation, only: curvature_polyline_specification_type
   
-  double precision, dimension(:), allocatable :: xt, xb, yt, yb
-
-  write (*,'(" - ", A)') 'Auto_curvature: Best values for curvature constraints'
-
-  xt = foil%xt
-  xb = foil%xb
-  yt = foil%zt
-  yb = foil%zb
-
-! -------------- Top Side -----
-
-  if (show_details) call print_note_only ('- Top side',3)
-
-  call auto_curvature_threshold_polyline ('top', show_details, xt, yt, curv_top_spec)
-  call auto_spike_threshold_polyline     (       show_details, xt, yt, curv_top_spec)
-  call auto_te_curvature_polyline        (       show_details, xt, yt, curv_top_spec)
+  character(*),     intent(in) :: info
+  logical, intent (in)         :: show_details
+  double precision, dimension (:), intent(in) :: x,y 
+  type (curvature_polyline_specification_type), intent (inout)  :: c_spec
   
-! -------------- Top Side -----
-                            
-  if (show_details) call print_note_only ('- Bot side',3)
+  if (show_details) call print_note_only ('- '//trim(info),3)
 
-  call auto_curvature_threshold_polyline ('bot', show_details, xb, yb, curv_bot_spec)
-  call auto_spike_threshold_polyline     (       show_details, xb, yb, curv_bot_spec)
-  call auto_te_curvature_polyline        (       show_details, xb, yb, curv_bot_spec)
- 
+  call auto_curvature_threshold_polyline (info, show_details, x, y, c_spec)
+  call auto_spike_threshold_polyline     (      show_details, x, y, c_spec)
+  call auto_te_curvature_polyline        (      show_details, x, y, c_spec)
+   
 end subroutine auto_curvature_constraints
 
 
@@ -854,7 +874,6 @@ subroutine auto_curvature_threshold_polyline (info, show_details, x,y , c_spec)
   integer             :: max_curv_reverse
   double precision    :: min_threshold, max_threshold 
   integer             :: istart, iend, nreversals, quality_threshold
-  character (2)       :: s2a, s2b
   character (16)      :: label
 
   min_threshold = 0.01d0
@@ -881,17 +900,14 @@ subroutine auto_curvature_threshold_polyline (info, show_details, x,y , c_spec)
   nreversals = count_reversals (istart, iend, x, y, curv_threshold)
 
   if (nreversals > max_curv_reverse) then
-    write(s2a,'(I2)') nreversals
-    write(s2b,'(I2)') max_curv_reverse
     call print_warning ( &
-        'The current seed airfoil has '// trim(adjustl(s2a)) // ' reversals on '//trim(info)//&
-        ' - but max_curv_reverse_'//trim(info)//' ist set to '//trim(adjustl(s2b)), 9)
+        'The current seed airfoil has '// stri(nreversals) // ' reversals on '//trim(info)//&
+        ' - but max_curv_reverse is set to '//stri(max_curv_reverse), 9)
     call print_note_only ( &
         'This will lead to a high curvature threshold value to fulfil this constraint.', 9)
     call print_note_only (& 
         'Better choose another seed airfoil which fits to the reversal constraints.', 9)
     write (*,*)  
-    ! Call ask_stop ('')
   end if 
 
 ! now get smallest threshold for max_reversals defined by user 
@@ -914,8 +930,7 @@ subroutine auto_curvature_threshold_polyline (info, show_details, x,y , c_spec)
     if (quality_threshold > Q_BAD) then
       call print_note_only ('The contour will have some reversals within this high treshold', 3)
     else
-      write(s2a,'(I2)') max_curv_reverse
-      call print_note_only ('Optimal value for '//trim(adjustl(s2a))//&
+      call print_note_only ('Optimal value for '//stri(max_curv_reverse)//&
                             ' reversals based on seed airfoil',3)
     end if 
   end if 
@@ -937,15 +952,14 @@ subroutine auto_spike_threshold_polyline (show_details, x,y , c_spec)
   type (curvature_polyline_specification_type), intent (inout)  :: c_spec
 
   double precision    :: spike_threshold
-  double precision    :: min_threshold, max_threshold, ok_threshold
-  integer             :: istart, iend, nspikes, quality_threshold, ok_nspikes
-  character (3)       :: s3
+  double precision    :: min_threshold, max_threshold
+  integer             :: istart, iend, nspikes, quality_threshold
   character (16)      :: label
+
+  double precision, parameter    :: OK_THRESHOLD  = 0.4d0
 
   min_threshold = 0.1d0
   max_threshold = 1.0d0
-  ok_threshold  = 0.3d0
-  ok_nspikes    = 5
   spike_threshold = c_spec%spike_threshold
 
 ! Is there a spike close to TE? - which is quite often ...If yes, skip TE for ever
@@ -979,40 +993,24 @@ subroutine auto_spike_threshold_polyline (show_details, x,y , c_spec)
   ! ... overwrite from input file by user? 
   c_spec%max_spikes = max (nspikes, c_spec%max_spikes)
 
-! activate bump detection (reversal of 3rd derivative) if values are ok
-
-  if (c_spec%spike_threshold <= ok_threshold .and. c_spec%max_spikes <= ok_nspikes) then 
-    c_spec%check_curvature_bumps = .true.
-  else
-    c_spec%check_curvature_bumps = .false.
-  end if
 
 ! Print it all 
 
   if (show_details) then 
-    quality_threshold  = r_quality (c_spec%spike_threshold, (min_threshold * 1.2d0), ok_threshold, 0.8d0)
+    quality_threshold  = r_quality (c_spec%spike_threshold, (min_threshold * 1.2d0), OK_THRESHOLD, 0.8d0)
     label = 'spike_threshold'
     call print_colored (COLOR_PALE, '         '//label//' =') 
     call print_colored_r (5,'(F5.2)', quality_threshold, c_spec%spike_threshold) 
 
     if (c_spec%max_spikes == 0) then 
-      call print_colored (COLOR_NOTE, '   There will be no spikes.')
+      call print_colored (COLOR_NOTE, '   There will be no spikes or bumps.')
     else
-      write (s3,'(I3)') c_spec%max_spikes
-      call print_colored (COLOR_NOTE, '   There will be max '//trim(adjustl(s3)) //' spike(s).')
+      call print_colored (COLOR_NOTE, '   There will be max '//stri(c_spec%max_spikes) //' spike(s) or bump(s).')
     end if
-
-    if (c_spec%check_curvature_bumps) then 
-      call print_colored (COLOR_NOTE, " Good value - activating ")
-      call print_colored (COLOR_FEATURE, "bump detetction ...")
-      write (*,*)
-    else
-      call print_note_only ("Values not good enough for auto bump detetction", 1)
-    end if 
+    write (*,*)
   end if 
 
 end subroutine auto_spike_threshold_polyline
-
 
 
 !-------------------------------------------------------------------------
@@ -1032,7 +1030,10 @@ subroutine auto_te_curvature_polyline (show_details, x,y , c_spec)
   integer                     :: quality_te
   character (16)              :: label
 
-  max_te_curvature = get_max_te_curvature (x, y) * 1.2d0       ! little more to breath during opt.
+  max_te_curvature = get_max_te_curvature (x, y)  
+  
+! give a little more to breath during opt.
+  max_te_curvature = max ((max_te_curvature * 1.2d0), (max_te_curvature + 0.1d0))
 
   c_spec%max_te_curvature = max_te_curvature
 
@@ -1135,6 +1136,62 @@ function ask_forced_transition()
 
 end function ask_forced_transition
 
+
+!-----------------------------------------------------------------------------
+! Print info about check_curvature  
+!     - activate bump_detetction if possible 
+!-----------------------------------------------------------------------------
+
+subroutine  info_check_curvature (info, x, y, c_spec)
+
+  use airfoil_evaluation, only : curvature_polyline_specification_type
+  use airfoil_operations, only : show_reversals_highlows
+  use math_deps,          only : count_reversals, count_spikes
+
+
+  character(*),                   intent(in) :: info
+  double precision, dimension(:), intent(in) :: x, y
+  type(curvature_polyline_specification_type), intent(inout) :: c_spec
+
+  integer :: istart, iend 
+  integer :: nspikes
+
+  double precision, parameter    :: OK_THRESHOLD  = 0.4d0
+  integer, parameter             :: OK_NSPIKES    = 5
+
+
+  istart = c_spec%nskip_LE
+  iend   = size(x) - c_spec%nskip_TE_revers
+
+! How many spikes = Rversals of 3rd derivation = Bumps of curvature
+  nspikes = count_spikes (istart, iend, x, y, c_spec%spike_threshold)
+
+! activate bump detection (reversal of 3rd derivative) if values are ok
+
+  if (c_spec%spike_threshold <= OK_THRESHOLD .and. &
+      c_spec%max_spikes <= OK_NSPIKES .and. &
+      nspikes <= c_spec%max_spikes) then 
+
+    c_spec%check_curvature_bumps = .true.
+
+  else
+    c_spec%check_curvature_bumps = .false.
+  end if
+
+
+  call print_colored (COLOR_NOTE,'   - '//trim(info)//': ')
+
+  if (c_spec%check_curvature_bumps) then 
+    call print_colored (COLOR_NOTE, " Activating ")
+    call print_colored (COLOR_FEATURE, "bump detetction")
+    call print_colored (COLOR_NOTE, ' for max '//stri(c_spec%max_spikes)//' bump(s).')
+    write (*,*)
+  else
+    call print_note_only ("Spike values not good enough for bump detetction", 1)
+  end if
+
+end subroutine info_check_curvature
+
 !-----------------------------------------------------------------------------
 ! Checks surface x,y for violations of curvature contraints 
 !     reversals > max_curv_reverse
@@ -1145,14 +1202,15 @@ subroutine  check_handle_curve_violations (info, x, y, c)
 
   use airfoil_evaluation, only : curvature_polyline_specification_type
   use airfoil_operations, only : show_reversals_highlows
-  use math_deps, only : count_reversals
+  use math_deps,          only : count_reversals, count_spikes
 
 
   character(*),                   intent(in) :: info
   double precision, dimension(:), intent(in) :: x, y
   type(curvature_polyline_specification_type), intent(in) :: c
 
-  integer :: n, max_rev, nreverse_violations, istart, iend, nreverse
+  integer :: n, max_rev, nreverse_violations, istart, iend, nreverse 
+  integer :: max_spikes, nspikes, nspike_violations
 
   istart = c%nskip_LE
   iend   = size(x) - c%nskip_TE_revers
@@ -1161,8 +1219,17 @@ subroutine  check_handle_curve_violations (info, x, y, c)
   nreverse = count_reversals (istart, iend, x, y, c%curv_threshold)  
   nreverse_violations  = max(0,(nreverse - c%max_curv_reverse))
 
+! How many spikes = Rversals of 3rd derivation = Bumps of curvature
+  if (c%check_curvature_bumps) then 
+    nspikes = count_spikes (istart, iend, x, y, c%spike_threshold)
+    nspike_violations  = max(0,(nspikes - c%max_spikes))
+  else
+    nspike_violations  = 0
+  end if
+
+
   ! Exit if everything is ok 
-  if (nreverse_violations > 0) then 
+  if (nreverse_violations > 0 .or. nspike_violations > 0) then 
 
     write (*,*)
     call print_warning ("Curvature violations on " // trim(info))
@@ -1174,6 +1241,12 @@ subroutine  check_handle_curve_violations (info, x, y, c)
       write (*,'(10x,A,I2,A,I2)')"Found ",n, " Reversal(s) where max_curv_reverse is set to ", max_rev
     end if 
 
+    if (nspike_violations > 0) then 
+      n          = nspike_violations + c%max_spikes
+      max_spikes = c%max_spikes
+      write (*,'(10x,A,I2,A,I2)')"Found ",n, " Spikes(s) or bumps where max_spikes is set to ", max_spikes
+    end if 
+
     write (*,*)
     write (*,'(10x,A)') 'The Optimizer may not found a solution with this inital violation.'
     write (*,'(10x,A)') 'Either increase max_... or ..._threshold (not recommended) or'
@@ -1182,6 +1255,7 @@ subroutine  check_handle_curve_violations (info, x, y, c)
   end if
 
 end subroutine check_handle_curve_violations
+
 
 !-----------------------------------------------------------------------------
 ! Checks trailing edga curvature x,y for violations max_te_crvature
@@ -1211,148 +1285,6 @@ subroutine  check_te_curvature_violations (info, x, y, c)
 
 end subroutine check_te_curvature_violations
 
-!-----------------------------------------------------------------------------
-! Set airfoil thickness and camber according to defined geo targets 
-!   and/or thickness/camber constraints
-!-----------------------------------------------------------------------------
-
-subroutine preset_airfoil_to_targets (show_details, foil, geo_targets, &
-                                min_thickness, max_thickness, min_camber, max_camber) 
-
-  use vardef,             only: airfoil_type
-  use airfoil_evaluation, only: geo_target_type
-  use xfoil_driver,       only: xfoil_set_thickness_camber, xfoil_set_airfoil
-  use xfoil_driver,       only: xfoil_get_geometry_info
-
-  logical, intent (in)           :: show_details 
-  type (airfoil_type), intent (inout)  :: foil
-  type (geo_target_type), dimension(:), intent (in)  :: geo_targets
-  doubleprecision, intent(inout) :: min_thickness, max_thickness, min_camber, max_camber
-
-  type (airfoil_type) :: new_foil
-  doubleprecision     :: maxt, xmaxt, maxc, xmaxc, new_camber, new_thick
-  character (10)      :: cvalue
-  integer             :: i, nptt, nptb, ngeo_targets
-  logical             :: foil_changed 
-
-  foil_changed = .false.
-  ngeo_targets = size(geo_targets)
-
-  new_thick  = 0d0
-  new_camber = 0d0
-
-  if (ngeo_targets > 0) then 
-
-  ! Set thickness / Camber of seed airfoil according geo targets, adjust constraints
-
-    do i= 1, ngeo_targets
-
-      select case (trim(geo_targets(i)%type))
-
-        case ('Thickness')                   
-
-          new_thick = geo_targets(i)%target_value
-          foil_changed = .true.
-
-          if (show_details) then
-            write (cvalue,'(F6.2)')  (new_thick * 100)
-            call print_note_only ('- Scaling thickness to target value '// trim(adjustl(cvalue))//'%')
-          end if
-
-        case ('Camber')                      
-
-          new_camber = geo_targets(i)%target_value
-          foil_changed = .true.
-
-          if (show_details) then
-            write (cvalue,'(F6.2)')  (new_camber * 100)
-            call print_note_only ('- Scaling camber to target value '// trim(adjustl(cvalue))//'%')
-          end if
-
-      end select
-
-    end do
-    call xfoil_set_thickness_camber (foil, new_thick, 0d0, new_camber, 0d0, new_foil)
-
-  else
-
-  ! Set thickness / Camber of seed airfoil according constraints
-
-    call xfoil_set_airfoil (foil)        
-    call xfoil_get_geometry_info (maxt, xmaxt, maxc, xmaxc)
-
-    if (maxt > max_thickness) then
-
-      new_thick = max_thickness *0.95d0
-      call xfoil_set_thickness_camber (foil, new_thick, 0d0, 0d0, 0d0, new_foil)
-      foil_changed = .true.
-
-      if (show_details) then
-        write (cvalue,'(F6.2)')  (new_thick * 100)
-        call print_note_only ('- Scaling thickness according constraint to '// trim(adjustl(cvalue))//'%')
-      end if 
-
-    elseif (maxt < min_thickness) then 
-
-      new_thick = min_thickness *1.05d0
-      call xfoil_set_thickness_camber (foil, new_thick, 0d0, 0d0, 0d0, new_foil)
-      foil_changed = .true.
-
-      if (show_details) then
-        write (cvalue,'(F6.2)')  (new_thick * 100)
-        call print_note_only ('- Scaling thickness according constraint to '// trim(adjustl(cvalue))//'%')
-      end if 
-
-    end if 
-
-    if (maxc > max_camber) then
-
-      new_camber = max_camber *0.95d0
-      call xfoil_set_thickness_camber (foil, 0d0, new_camber, 0d0, 0d0, new_foil)
-      foil_changed = .true.
-
-      if (show_details) then
-        write (cvalue,'(F6.2)')  (new_camber * 100)
-        call print_note_only ('- Scaling camber according constraint to '// trim(adjustl(cvalue))//'%')
-      end if
-      
-    elseif (maxc < min_camber) then 
-
-      new_camber = min_camber *1.05d0
-      call xfoil_set_thickness_camber (foil, 0d0, new_camber, 0d0, 0d0, new_foil)
-      foil_changed = .true.
-
-      if (show_details) then
-        write (cvalue,'(F6.2)')  (new_camber * 100)
-        call print_note_only ('- Scaling camber according constraint to '// trim(adjustl(cvalue))//'%')
-      end if
-
-    end if 
-
-  end if
-
-  if (foil_changed) then
-
-! Now rebuild foil out of new coordinates  ----------------------
-  ! Sanity check - new_foil may not have different number of points
-    if (foil%npoint /= new_foil%npoint) then
-      call my_stop ('Number of points changed during thickness/camber modification')
-    end if
-
-    foil%z = new_foil%z
-    nptt = size(foil%zt,1)
-    nptb = size(foil%zb,1)
-
-  ! get new upper and lower z-coordinates from modified airfoil 
-    do i = 1, nptt
-      foil%zt(i) = new_foil%z(nptt-i+1)      ! start from LE - top reverse - to LE
-    end do
-    do i = 1, nptb 
-      foil%zb(i) = new_foil%z(nptt+i-1)      ! start from LE - bottom - to TE
-    end do
-  end if
-  
-end subroutine preset_airfoil_to_targets
 
 
 !-----------------------------------------------------------------------------
@@ -1367,8 +1299,8 @@ subroutine check_thickness_camber (foil,  &
   use xfoil_driver,       only: xfoil_get_geometry_info
 
 
-  type (airfoil_type), intent (inout)  :: foil
-  doubleprecision, intent(inout) :: min_thickness, max_thickness, min_camber, max_camber
+  type (airfoil_type), intent (in)  :: foil
+  doubleprecision, intent(in)       :: min_thickness, max_thickness, min_camber, max_camber
 
   doubleprecision     :: maxt, xmaxt, maxc, xmaxc
   character (10)      :: text

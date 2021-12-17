@@ -872,6 +872,10 @@ C---- solve for smoothed curvature array W5
        I = IBLE+1
        CALL TRISOL(W2(I),W1(I),W3(I),W5(I),NB-IBLE)
       ENDIF
+C jx-mod Force curvature at last panel to value of panel before
+C         ... otherwise last curvature flips away
+      W5(1)  = W5(2)
+      W5(NB) = W5(NB-1)
 C
 C---- find max curvature
       CVMAX = 0.

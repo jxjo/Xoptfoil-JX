@@ -121,6 +121,8 @@ module airfoil_evaluation
 ! Geo targets 
   integer, parameter :: max_geo_targets = 10
   type(geo_target_type), dimension (:), allocatable  :: geo_targets
+
+  logical            :: preset_seed_airfoil       ! .. to geo targets and constraints
                         
 ! Parms for operating point specification
   integer :: noppoint
@@ -362,7 +364,7 @@ function geo_penalty_function(foil, actual_flap_degrees)
       penalty_info = trim(penalty_info) // ' maxReversal'
     end if 
 
-  ! How many spikes = Rversals of 3rd derivation = Bumps of cirvature
+  ! How many spikes = Rversals of 3rd derivation = Bumps of curvature
     if (c%check_curvature_bumps) then 
       iend   = size(foil%xb) - c%nskip_TE_spikes
       nspikes = count_spikes (istart, iend, foil%xb, foil%zb, c%spike_threshold)
@@ -786,21 +788,31 @@ function aero_objective_function_on_results (op_points_result, eval_only_dynamic
 
       elseif (trim(opt_type) == 'target-drag') then
 
-      ! Minimize difference between target cd value and current value 
-      
-        dist = ABS (op_spec%target_value - op%cd)
-        if (dist < 0.000004d0) dist = 0d0  ! little threshold to achieve target
+      ! Minimize difference between target cd value and current value
+
+        cur_value = op%cd
+
+        if (op_spec%allow_improved_target) then
+          dist = max (0d0, (cur_value - op_spec%target_value))
+        else 
+          dist = abs(cur_value - op_spec%target_value)
+          if (dist < 0.000004d0) dist = 0d0         ! little threshold to achieve target
+        end if 
 
         increment = (op_spec%target_value + dist) * op_spec%scale_factor 
-        cur_value = op%cd 
 
       elseif (trim(opt_type) == 'target-glide') then
 
       ! minimize difference between target glide ratio and current glide ratio 
       
         cur_value = op%cl / op%cd
-        dist = ABS (op_spec%target_value - cur_value)
-        if (dist < 0.001d0) dist = 0d0  ! little threshold to achieve target
+
+        if (op_spec%allow_improved_target) then
+          dist = max (0d0, (op_spec%target_value - cur_value))
+        else 
+          dist = abs(cur_value - op_spec%target_value)
+          if (dist < 0.01d0) dist = 0d0         ! little threshold to achieve target
+        end if 
 
         correction = 0.7d0               ! glide ration is quite sensible to changes
         increment = (op_spec%target_value + dist * correction) * op_spec%scale_factor 
@@ -811,7 +823,14 @@ function aero_objective_function_on_results (op_points_result, eval_only_dynamic
       !    Add a base value to the lift difference
       
         cur_value = op%cl
-        dist = ABS (op_spec%target_value  - cur_value)
+
+        if (op_spec%allow_improved_target) then
+          dist = max (0d0, (op_spec%target_value - cur_value))
+        else 
+          dist = abs(cur_value - op_spec%target_value)
+          if (dist < 0.001d0) dist = 0d0         ! little threshold to achieve target
+        end if 
+
         correction = 0.8d0               ! lift is quite sensible to changes
         increment = (1.d0 + dist * correction)  * op_spec%scale_factor 
 
@@ -820,8 +839,16 @@ function aero_objective_function_on_results (op_points_result, eval_only_dynamic
       ! Minimize difference between target moment value and current value 
       !        Add a base value (Clark y or so ;-) to the moment difference
       !        so the relative change won't be to high
-        increment = (ABS (op_spec%target_value - op%cm) + 0.05d0) * op_spec%scale_factor
         cur_value = op%cm
+
+        if (op_spec%allow_improved_target) then
+          dist = max (0d0, (op_spec%target_value - cur_value))
+        else 
+          dist = abs(cur_value - op_spec%target_value)
+          if (dist < 0.001d0) dist = 0d0         ! little threshold to achieve target
+        end if 
+
+        increment = (dist + 0.05d0) * op_spec%scale_factor
 
       elseif (trim(opt_type) == 'max-lift') then
 
@@ -1102,6 +1129,151 @@ subroutine get_flap_degrees_from_design (designvars, actual_flap_degrees)
 end subroutine get_flap_degrees_from_design 
 
 
+!-----------------------------------------------------------------------------
+! Set airfoil thickness and camber according to defined geo targets 
+!   and/or thickness/camber constraints (in airfoil evaluation commons)
+!-----------------------------------------------------------------------------
+
+subroutine preset_airfoil_to_targets (show_details, foil) 
+
+  use vardef,             only: airfoil_type
+  use xfoil_driver,       only: xfoil_set_thickness_camber, xfoil_set_airfoil
+  use xfoil_driver,       only: xfoil_get_geometry_info
+
+  logical, intent (in)           :: show_details 
+  type (airfoil_type), intent (inout)  :: foil
+
+  type (airfoil_type) :: new_foil
+  doubleprecision     :: maxt, xmaxt, maxc, xmaxc, new_camber, new_thick
+  character (10)      :: cvalue
+  integer             :: i, nptt, nptb, ngeo_targets
+  logical             :: foil_changed 
+
+
+! Is presetting activated? 
+
+  if (.not. preset_seed_airfoil) return 
+
+  foil_changed = .false.
+  ngeo_targets = size(geo_targets)
+
+  new_thick  = 0d0
+  new_camber = 0d0
+
+  if (ngeo_targets > 0) then 
+
+  ! Set thickness / Camber of seed airfoil according geo targets, adjust constraints
+
+    do i= 1, ngeo_targets
+
+      select case (trim(geo_targets(i)%type))
+
+        case ('Thickness')                   
+
+          new_thick = geo_targets(i)%target_value
+          foil_changed = .true.
+
+          if (show_details) then
+            write (cvalue,'(F6.2)')  (new_thick * 100)
+            call print_note_only ('- Scaling thickness to target value '// trim(adjustl(cvalue))//'%')
+          end if
+
+        case ('Camber')                      
+
+          new_camber = geo_targets(i)%target_value
+          foil_changed = .true.
+
+          if (show_details) then
+            write (cvalue,'(F6.2)')  (new_camber * 100)
+            call print_note_only ('- Scaling camber to target value '// trim(adjustl(cvalue))//'%')
+          end if
+
+      end select
+
+    end do
+    call xfoil_set_thickness_camber (foil, new_thick, 0d0, new_camber, 0d0, new_foil)
+
+  else
+
+  ! Set thickness / Camber of seed airfoil according constraints
+
+    call xfoil_set_airfoil (foil)        
+    call xfoil_get_geometry_info (maxt, xmaxt, maxc, xmaxc)
+
+    if (maxt > max_thickness) then
+
+      new_thick = max_thickness *0.95d0
+      call xfoil_set_thickness_camber (foil, new_thick, 0d0, 0d0, 0d0, new_foil)
+      foil_changed = .true.
+
+      if (show_details) then
+        write (cvalue,'(F6.2)')  (new_thick * 100)
+        call print_note_only ('- Scaling thickness according constraint to '// trim(adjustl(cvalue))//'%')
+      end if 
+
+    elseif (maxt < min_thickness) then 
+
+      new_thick = min_thickness *1.05d0
+      call xfoil_set_thickness_camber (foil, new_thick, 0d0, 0d0, 0d0, new_foil)
+      foil_changed = .true.
+
+      if (show_details) then
+        write (cvalue,'(F6.2)')  (new_thick * 100)
+        call print_note_only ('- Scaling thickness according constraint to '// trim(adjustl(cvalue))//'%')
+      end if 
+
+    end if 
+
+    if (maxc > max_camber) then
+
+      new_camber = max_camber *0.95d0
+      call xfoil_set_thickness_camber (foil, 0d0, new_camber, 0d0, 0d0, new_foil)
+      foil_changed = .true.
+
+      if (show_details) then
+        write (cvalue,'(F6.2)')  (new_camber * 100)
+        call print_note_only ('- Scaling camber according constraint to '// trim(adjustl(cvalue))//'%')
+      end if
+      
+    elseif (maxc < min_camber) then 
+
+      new_camber = min_camber *1.05d0
+      call xfoil_set_thickness_camber (foil, 0d0, new_camber, 0d0, 0d0, new_foil)
+      foil_changed = .true.
+
+      if (show_details) then
+        write (cvalue,'(F6.2)')  (new_camber * 100)
+        call print_note_only ('- Scaling camber according constraint to '// trim(adjustl(cvalue))//'%')
+      end if
+
+    end if 
+
+  end if
+
+  if (foil_changed) then
+
+! Now rebuild foil out of new coordinates  ----------------------
+  ! Sanity check - new_foil may not have different number of points
+    if (foil%npoint /= new_foil%npoint) then
+      call my_stop ('Number of points changed during thickness/camber modification')
+    end if
+
+    foil%z = new_foil%z
+    nptt = size(foil%zt,1)
+    nptb = size(foil%zb,1)
+
+  ! get new upper and lower z-coordinates from modified airfoil 
+    do i = 1, nptt
+      foil%zt(i) = new_foil%z(nptt-i+1)      ! start from LE - top reverse - to LE
+    end do
+    do i = 1, nptb 
+      foil%zb(i) = new_foil%z(nptt+i-1)      ! start from LE - bottom - to TE
+    end do
+  end if
+  
+end subroutine preset_airfoil_to_targets
+
+
 !=============================================================================80
 !
 ! Writes airfoil coordinates and polars to files during optimization
@@ -1361,8 +1533,9 @@ subroutine do_dynamic_weighting (designcounter, dyn_weight_spec, &
   character(15)                     :: text
   logical                           :: show_dev
 
-  doubleprecision                   :: EXTRA_PUNCH_THRESHOLD = 1.5d0
-  doubleprecision                   :: REDUCTION = 1.2d0
+  doubleprecision, parameter        :: EXTRA_PUNCH_THRESHOLD = 1.5d0
+  doubleprecision, parameter        :: SUPER_PUNCH_THRESHOLD = 3.0d0
+  doubleprecision, parameter        :: REDUCTION = 1.3d0
 
   noppoint    = size(op_points_spec)
   ngeo_targets = size(geo_targets)
@@ -1435,8 +1608,7 @@ subroutine do_dynamic_weighting (designcounter, dyn_weight_spec, &
     do i= 1, noppoint
       if (op_points_spec(i)%dynamic_weighting) then
 
-        dyn_ops(i)%new_weighting = abs(dyn_ops(i)%dev) / (avg_dev) * &
-                                  op_points_spec(i)%weighting_user 
+        dyn_ops(i)%new_weighting = abs(dyn_ops(i)%dev) / (avg_dev) 
 
         min_new_weighting = min (dyn_ops(i)%new_weighting, min_new_weighting)
         max_new_weighting = max (dyn_ops(i)%new_weighting, max_new_weighting)
@@ -1446,15 +1618,14 @@ subroutine do_dynamic_weighting (designcounter, dyn_weight_spec, &
     do i= 1, ngeo_targets
       if (geo_targets(i)%dynamic_weighting) then
 
-        dyn_geos(i)%new_weighting = abs(dyn_geos(i)%dev) / avg_dev * &
-                                    geo_targets(i)%weighting_user
+        dyn_geos(i)%new_weighting = abs(dyn_geos(i)%dev) / avg_dev 
 
         min_new_weighting = min (dyn_geos(i)%new_weighting, min_new_weighting)
         max_new_weighting = max (dyn_geos(i)%new_weighting, max_new_weighting)
       end if
     end do 
 
-  ! 1b. Reduce weightings when average deviation getting close to 0 
+  ! 1b. Reduce weighting range when average deviation getting close to 0 
   !         to avoid oscillation  
 
     min_weighting     = dyn_weight_spec%min_weighting  
@@ -1462,9 +1633,9 @@ subroutine do_dynamic_weighting (designcounter, dyn_weight_spec, &
 
     weighting_diff = max_weighting - min_weighting
 
-    if (avg_dev < 0.3d0) then 
+    if (avg_dev < 0.1d0) then 
       weighting_diff = weighting_diff / REDUCTION ** 2 
-    elseif (avg_dev < 1d0) then 
+    elseif (avg_dev < 0.5d0) then 
       weighting_diff = weighting_diff / REDUCTION 
     end if 
     max_weighting     = min_weighting + weighting_diff
@@ -1472,37 +1643,45 @@ subroutine do_dynamic_weighting (designcounter, dyn_weight_spec, &
     if (show_dev) write (*,'(8x,A,2F5.2)') '- Min / Max new weighting  ',min_new_weighting, max_new_weighting 
 
   
+  ! 2. Scale weighting of each op point to defined weighting range 
+
     do i= 1, noppoint
       if (op_points_spec(i)%dynamic_weighting) then
 
-    ! 2. Scale current deviation range to defined weighting range and set weighting for op point
         dyn_ops(i)%new_weighting = min_weighting + &
                       (dyn_ops(i)%new_weighting - min_new_weighting) * &
                       ((max_weighting-min_weighting) / (max_new_weighting-min_new_weighting)) 
-        if (show_dev) write (*,'(8x, A,I2,A,F5.1)', advance='no') '- Op ', i, ' new:', &
-                                                      dyn_ops(i)%new_weighting
 
-    ! 3. give an extra punch if deviation is too far away from average deviation
-        if ((dyn_ops(i)%dev > (median_dev * 1.5d0 * EXTRA_PUNCH_THRESHOLD )) .and. &
-            (dyn_ops(i)%dev > 0d0) .and. (avg_dev > 0.6d0)) then
-        ! ... the super punch is much above the median (outlier)
+        if (show_dev) write (*,'(8x, A,I2,3x, A,F6.2,A,F5.1)', advance='no') '- Op ', i, &
+                 ' dev:',dyn_ops(i)%dev,'  weight:', dyn_ops(i)%new_weighting
+
+    ! 2a. Outlier - give a super extra punch if deviation is too far away from average deviation
+
+        if ((abs(dyn_ops(i)%dev) > (avg_dev * SUPER_PUNCH_THRESHOLD )) .and. &
+                 (avg_dev > 0.3d0)) then
+
           dyn_ops(i)%new_weighting = dyn_ops(i)%new_weighting * dyn_weight_spec%extra_punch **2
           op_points_spec(i)%extra_punch = .true.
           if (show_dev) write (*,'(A, F5.1)') ' +punch:', dyn_ops(i)%new_weighting
 
-        elseif ((abs(dyn_ops(i)%dev) > (median_dev * EXTRA_PUNCH_THRESHOLD )) .and. &
-                (avg_dev > 0.2d0)) then
+    ! 2b. Bad Op - give a extra punch if deviation is quite far away from average deviation
+
+          elseif ((abs(dyn_ops(i)%dev) > (avg_dev * EXTRA_PUNCH_THRESHOLD )) .and. &
+                (avg_dev > 0.1d0)) then
+
           dyn_ops(i)%new_weighting = dyn_ops(i)%new_weighting * dyn_weight_spec%extra_punch
           op_points_spec(i)%extra_punch = .true.
           if (show_dev) write (*,'(A, F5.1)') '  punch:', dyn_ops(i)%new_weighting
 
+    ! 2c. Former bad Op - also give a good, at least medium weighting if op had a punch before
+    !                     to avoid oscillation of results 
+
         elseif (op_points_spec(i)%extra_punch) then 
-        ! ... also give a good, at least medium weighting if op had a punch before
-        !     to avoid oscillation of results 
           dyn_ops(i)%new_weighting = & 
-              max (dyn_ops(i)%new_weighting, (max_weighting+min_weighting) / 2d0)
+              max (dyn_ops(i)%new_weighting, (max_weighting * 0.9d0))
           op_points_spec(i)%extra_punch = .false.
           if (show_dev) write (*,'(A, F5.1)') '   post:', dyn_ops(i)%new_weighting
+
         else
           op_points_spec(i)%extra_punch = .false.
           if (show_dev) write (*,*)
@@ -1518,8 +1697,9 @@ subroutine do_dynamic_weighting (designcounter, dyn_weight_spec, &
                       (dyn_geos(i)%new_weighting - min_new_weighting) * &
                       ((max_weighting-min_weighting) / (max_new_weighting-min_new_weighting)) 
                       
-        if (show_dev) write (*,'(8x, A,I2,A,F5.1)', advance='no') '- Geo', i, ' new:', &
-                                                      dyn_geos(i)%new_weighting
+        if (show_dev) write (*,'(8x, A,I2,3x, A,F6.2,A,F5.1)', advance='no') '- Geo', i, &
+                 ' dev:',dyn_geos(i)%dev,'  weight:', dyn_geos(i)%new_weighting
+
       ! 3b. give an extra punch if deviation is too far away from average deviation
 
         if ((abs(dyn_geos(i)%dev) > (median_dev * EXTRA_PUNCH_THRESHOLD )) .and. &
@@ -1542,20 +1722,16 @@ subroutine do_dynamic_weighting (designcounter, dyn_weight_spec, &
       end if
     end do 
 
-  ! 4. Multiply weighting by user defined weighting 
+  ! 4. Multiply weighting by user defined weighting - default = 1 but user may overwrite  
 
     do i= 1, noppoint
-      if (op_points_spec(i)%dynamic_weighting) then
-        dyn_ops(i)%new_weighting = dyn_ops(i)%new_weighting * &
-                                  op_points_spec(i)%weighting_user 
-      end if
+      if (op_points_spec(i)%dynamic_weighting) &
+        dyn_ops(i)%new_weighting = dyn_ops(i)%new_weighting * op_points_spec(i)%weighting_user 
     end do 
 
     do i= 1, ngeo_targets
-      if (geo_targets(i)%dynamic_weighting) then
-        dyn_geos(i)%new_weighting = dyn_geos(i)%new_weighting * &
-                                    geo_targets(i)%weighting_user
-      end if
+      if (geo_targets(i)%dynamic_weighting) &
+        dyn_geos(i)%new_weighting = dyn_geos(i)%new_weighting * geo_targets(i)%weighting_user
     end do 
 
   ! 5. cur and new objective function with new (raw) weightings)
@@ -1617,7 +1793,7 @@ subroutine collect_dyn_ops_data (op_points_result, dyn_ops, ndyn)
   type(op_point_result_type)        :: op
   character(15)                     :: opt_type
   integer                           :: i
-  doubleprecision                   :: dist
+  doubleprecision                   :: dist, cur_value
   
   dyn_ops%weighting     = op_points_spec%weighting
   dyn_ops%new_weighting = op_points_spec%weighting
@@ -1634,18 +1810,59 @@ subroutine collect_dyn_ops_data (op_points_result, dyn_ops, ndyn)
       if (op_spec%dynamic_weighting) ndyn = ndyn + 1
 
       select case  (trim(opt_type))
+
         case ('target-drag')
-          dist = op%cd - op_spec%target_value       ! positive is worse
+
+          cur_value = op%cd
+
+          if (op_spec%allow_improved_target) then
+            dist = max (0d0, (cur_value - op_spec%target_value))
+          else 
+            dist = abs(cur_value - op_spec%target_value)
+            if (dist < 0.000004d0) dist = 0d0         ! little threshold to achieve target
+          end if 
+    
           dyn_ops(i)%dev = dist / op_spec%target_value * 100d0
+
         case ('target-glide')
-          dist =op%cl / op%cd - op_spec%target_value  ! negative is worse
+
+          cur_value = op%cl / op%cd
+
+          if (op_spec%allow_improved_target) then
+            dist = max (0d0, (op_spec%target_value - cur_value))
+          else 
+            dist = abs(cur_value - op_spec%target_value)
+            if (dist < 0.01d0) dist = 0d0         ! little threshold to achieve target
+          end if 
+  
           dyn_ops(i)%dev = dist / op_spec%target_value * 100d0
+
         case ('target-lift')
-          dist =op%cl - op_spec%target_value        ! negative is worse
+
+          cur_value = op%cl
+
+          if (op_spec%allow_improved_target) then
+            dist = max (0d0, (op_spec%target_value - cur_value))
+          else 
+            dist = abs(cur_value - op_spec%target_value)
+            if (dist < 0.001d0) dist = 0d0         ! little threshold to achieve target
+          end if 
+    
           dyn_ops(i)%dev = dist / (1d0 + op_spec%target_value) * 100d0
+
         case ('target-moment')
-          dist = op%cm - op_spec%target_value
+
+          cur_value = op%cm
+
+          if (op_spec%allow_improved_target) then
+            dist = max (0d0, (op_spec%target_value - cur_value))
+          else 
+            dist = abs(cur_value - op_spec%target_value)
+            if (dist < 0.001d0) dist = 0d0         ! little threshold to achieve target
+          end if 
+  
           dyn_ops(i)%dev  = dist / (0.05d0 + op_spec%target_value) * 100d0
+
       end select
     end if
   end do
@@ -1859,12 +2076,19 @@ subroutine print_improvement_info (intent, header, op_spec, op)
   if (present(op_spec)) then 
     if (trim(op_spec%optimization_type (1:6)) == 'target') then
       opt_type = 'targ'
+      how_good = -1
+
       select case  (op_spec%optimization_type)
         case ('target-drag')
           base  = 'cd'
           value_base = 0.01d0
           dist  = op%cd - op_spec%target_value                ! positive is worse
           dev   = dist / op_spec%target_value * 100d0
+          if (op_spec%allow_improved_target .and. dev < 0d0) then
+            how_good = Q_GOOD
+          else
+            how_good = r_quality (abs(dev), 0.1d0, 2d0, 10d0)      ! in percent
+          end if
         case ('target-glide')
           base  = 'glide'
           value_base = 10d0
@@ -1878,10 +2102,17 @@ subroutine print_improvement_info (intent, header, op_spec, op)
         case ('target-moment')
           base = 'cm'
           value_base = 0.1d0
-          dist = op%cm - op_spec%target_value
+          dist = op%cm - op_spec%target_value                 ! negative is worse
           dev  = dist / (op_spec%target_value + 0.05d0) * 100d0 ! cm could be 0
       end select
-      how_good = r_quality (abs(dev), 0.1d0, 2d0, 10d0)      ! in percent
+      if (how_good == -1) then
+        if (op_spec%allow_improved_target .and. dev > 0d0) then
+          how_good = Q_GOOD
+        else
+          how_good = r_quality (abs(dev), 0.1d0, 2d0, 10d0)      ! in percent
+        end if
+      end if
+
     else
       select case  (op_spec%optimization_type)
         case ('min-sink')
@@ -1957,16 +2188,17 @@ subroutine print_improvement_info (intent, header, op_spec, op)
 
     ! --
       call print_colored (COLOR_PALE, '  ')
-      if (how_good == Q_Good .and.  opt_type == 'targ') then 
-        call print_colored_s (how_good, '  hit') 
-      else
+! jx-test
+!      if (how_good == Q_Good .and.  opt_type == 'targ') then 
+!        call print_colored_s (how_good, '  hit') 
+!      else
         if (abs(dev) < 10.0d0) then 
           call print_colored_r (4,'(SP,F4.1)', how_good, dev) 
         else
           call print_colored_i (4, how_good, nint(dev)) 
         end if
         call print_colored_s (               how_good, '%') 
-      end if
+!      end if
     else
       call print_colored (COLOR_PALE, repeat(' ',14))
     end if

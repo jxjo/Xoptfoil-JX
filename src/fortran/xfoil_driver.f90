@@ -46,6 +46,7 @@ module xfoil_driver
     double precision :: ncrit                   ! xfoil ncrit
     character(15)    :: optimization_type       ! eg 'min-drag'
     double precision :: target_value            ! target value to achieve
+    logical          :: allow_improved_target   ! the result value may be better than tagrte value
 
     double precision :: weighting               ! weighting within objective function
     double precision :: weighting_user          ! original weighting entered by user
@@ -718,10 +719,13 @@ subroutine smooth_paneling(foilin, npoint, foilout, opt_geom_options)
     ! set xoptfoil standard values 
     geom_options%npan = npoint
     geom_options%cvpar = 1.d0
-  ! jx-mod If set to geom_options%cterat = 0.15d0 the curvature at TE panel
-  !     tends to flip away and have tripple value (bug in xfoil) 
-  !     with a very small value the panel gets wider and the quality better
-    geom_options%cterat = 0.0d0
+
+  ! if set to normal value 0.15d0, the curvature at TE panel
+  !   tends to flip away and have tripple value (bug in xfoil) 
+  !   This value equals to the curvature at TE in xfoil PANGEN
+  !   --> see JX-mod in PANGEN
+    geom_options%cterat = 0.05d0     
+
     geom_options%ctrrat = 0.2d0
     geom_options%xsref1 = 1.d0
     geom_options%xsref2 = 1.d0

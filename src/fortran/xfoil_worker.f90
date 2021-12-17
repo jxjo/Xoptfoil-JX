@@ -14,7 +14,7 @@
 
 program xfoil_worker
 
-  use vardef,             only : airfoil_type
+  use vardef,             only : airfoil_type 
   use memory_util,        only : deallocate_airfoil
   use os_util 
   use airfoil_operations, only : load_airfoil, airfoil_write,le_find
@@ -314,9 +314,10 @@ subroutine check_foil_curvature (input_file, output_prefix, seed_foil, visualize
 !  ------------ set best values  -----
 
   write (*,*) 
-  call auto_curvature_constraints (.true., foil) 
+  call auto_curvature_constraints ('Top side', .true., foil%xt, foil%zt, curv_top_spec)
+  call auto_curvature_constraints ('Bot side', .true., foil%xb, foil%zb, curv_bot_spec)
 
-  if (visualizer) then 
+  if (visualizer) then
     call write_design_coordinates (output_prefix, 0, seed_foil)
     call write_design_coordinates (output_prefix, 1, foil)
   end if 

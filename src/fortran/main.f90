@@ -37,7 +37,7 @@ program main
   use particle_swarm,      only : pso_options_type
   use genetic_algorithm,   only : ga_options_type
   use simplex_search,      only : ds_options_type
-  use airfoil_evaluation,  only : xfoil_geom_options, match_foils
+  use airfoil_evaluation,  only : xfoil_geom_options, match_foils, preset_airfoil_to_targets
   use airfoil_operations,  only : get_seed_airfoil
   use airfoil_operations,  only : repanel_and_normalize_airfoil
   use memory_util,         only : deallocate_airfoil, allocate_airfoil_data,   &
@@ -107,17 +107,16 @@ program main
                    symmetrical) 
 
   write (*,*) 
-  
   call check_inputs(global_search, pso_options)
-                   
-! Load original airfoil into memory, repanel, normalize 
-!   to get seed airfoil ready for optimization 
+    
+  
+! Load seed airfoil into memory, repanel, normalize, rotate
 
-  call get_seed_airfoil(seed_airfoil_type, airfoil_file, naca_options, original_foil)
-
+  call get_seed_airfoil (seed_airfoil_type, airfoil_file, naca_options, original_foil)
   call repanel_and_normalize_airfoil (original_foil, npan_fixed, symmetrical, seed_foil)  
                             !   ... to have run_xfoil results equal airfoil external results
   xfoil_geom_options%npan = seed_foil%npoint    ! will use this constant value now
+
 
 ! Allocate optimal solution
 
@@ -161,8 +160,12 @@ program main
   call make_directory (trim(design_subdir))
   design_subdir = trim(design_subdir) // '/'
 
-! Make sure seed airfoil passes constraints, and get scaling factors for
-! operating points, smooth foil if requested
+! Make sure seed airfoil passes constraints
+!  - preset airfoil to constraints and/or targets
+!  - smooth foil if requested
+!  - get scaling factors for operating points, 
+
+  call preset_airfoil_to_targets (show_details, seed_foil) 
 
   call check_seed()
 

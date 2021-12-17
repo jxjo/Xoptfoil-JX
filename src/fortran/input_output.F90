@@ -99,6 +99,7 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
   
   namelist /optimization_options/ search_type, global_search, local_search,    &
             seed_airfoil, airfoil_file, shape_functions, nfunctions_top,       &
+            preset_seed_airfoil,                                               &
             nfunctions_bot, initial_perturb, min_bump_width, restart,          &
             restart_write_freq, write_designs,                                 &
             show_details, echo_input_parms
@@ -144,6 +145,7 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
   global_search = 'particle_swarm'
   local_search = 'simplex'
   seed_airfoil = 'from_file'
+  preset_seed_airfoil = .true.        ! default: presetting to geo targets active
   airfoil_file = ''
   shape_functions = 'hicks-henne'
   min_bump_width = 0.1d0
@@ -974,6 +976,7 @@ subroutine read_op_points_spec  (input_file, or_iunit, noppoint, re_def, &
 
   double precision :: re_default
   logical          :: re_default_as_resqrtcl, dynamic_weighting
+  logical          :: allow_improved_target
   type(op_point_specification_type) :: op
 
   integer               :: i, iunit, ioerr, iostat1
@@ -990,7 +993,8 @@ subroutine read_op_points_spec  (input_file, or_iunit, noppoint, re_def, &
   namelist /operating_conditions/ noppoint, op_mode, op_point, reynolds, mach,   &
             target_value, weighting, optimization_type, ncrit_pt,                & 
             re_default_as_resqrtcl, re_default, dynamic_weighting, dynamic_weighting_spec, &
-            use_flap, x_flap, y_flap, y_flap_spec, flap_degrees, flap_selection
+            use_flap, x_flap, y_flap, y_flap_spec, flap_degrees, flap_selection, &
+            allow_improved_target
 
   ! Set defaults for operating conditions and constraints
 
@@ -1008,11 +1012,13 @@ subroutine read_op_points_spec  (input_file, or_iunit, noppoint, re_def, &
   ncrit_pt(:) = -1.d0
   target_value(:) = -1.d3 
 
+  allow_improved_target = .false.
+
   ! Default values controlling dynamic weighting 
   dynamic_weighting = .false. 
   dynamic_weighting_spec%min_weighting = 0.7d0 
   dynamic_weighting_spec%max_weighting = 1.4d0 
-  dynamic_weighting_spec%extra_punch   = 1.4d0 
+  dynamic_weighting_spec%extra_punch   = 1.2d0 
   dynamic_weighting_spec%start_with_design = 10
   dynamic_weighting_spec%frequency = 20
 
@@ -1053,6 +1059,7 @@ subroutine read_op_points_spec  (input_file, or_iunit, noppoint, re_def, &
     op_points_spec(i)%ncrit = ncrit_pt(i)    
     op_points_spec(i)%optimization_type = optimization_type (i)
     op_points_spec(i)%target_value = target_value (i)
+    op_points_spec(i)%allow_improved_target = allow_improved_target
     
     if (reynolds(i) /= -1.d0) then
       op_points_spec(i)%re%number  = reynolds(i)
@@ -1455,9 +1462,10 @@ subroutine read_xfoil_paneling_inputs  (input_file, or_iunit, geom_options)
   end if             
 
   cvpar  = 1.d0
-  cterat = 0.d0             ! if set to normal value 0.15d0, the curvature at TE panel
+  cterat = 0.05d0           ! if set to normal value 0.15d0, the curvature at TE panel
                             !   tends to flip away and have tripple value (bug in xfoil) 
-                            !   with a very small value the panel gets wider and the quality better
+                            !   This value equals to the curvature at TE in xfoil PANGEN
+                            !   --> see JX-mod in PANGEN
   ctrrat = 0.2d0
   xsref1 = 1.d0
   xsref2 = 1.d0
