@@ -25,62 +25,60 @@
 
   dynamic_weighting = .true. 					! activate dynamic weighting!
   re_default       = 600000						! use this Reynolds number for operating points
-
-  noppoint = 12
+  allow_improved_target = .true.				! op points may be better than target
+  
+  noppoint = 11
 
 ! --------------------- Re = 600,000 ---------------
 
-  op_point(1) = -0.1							! important to describe the polar also for negative cl!
+
+  op_point(1) = -0.05  
   optimization_type(1) = 'target-drag'
-  target_value(1) = 0.00870 ! 0.00855  			 
+  target_value(1) = 0.00770	   
 
-  op_point(2) = 0.0   
+  op_point(2) = 0.05   
   optimization_type(2) = 'target-drag'
-  target_value(2) = 0.00660	   
+  target_value(2) = 0.00552 
 
-  op_point(3) = 0.1   
+  op_point(3) = 0.2
   optimization_type(3) = 'target-drag'
-  target_value(3) = 0.00500 
+  target_value(3) = 0.00483  
 
-  op_point(4) = 0.2
+  op_point(4) = 0.3
   optimization_type(4) = 'target-drag'
-  target_value(4) = 0.00482  
+  target_value(4) = 0.00508
 
-  op_point(5) = 0.3
+  op_point(5) = 0.4			
   optimization_type(5) = 'target-drag'
-  target_value(5) = 0.00508
+  target_value(5) = 0.00550
 
-  op_point(6) = 0.4			
-  optimization_type(6) = 'target-drag'
-  target_value(6) = 0.00550
-
-  op_point(7) = 0.5
+  op_point(6) = 0.5
+  optimization_type(6) = 'target-glide'
+  target_value(6) = 78.8		 
+  
+  op_point(7) = 0.6
   optimization_type(7) = 'target-glide'
-  target_value(7) = 78.8		 
+  target_value(7) = 80.3
   
-  op_point(8) = 0.6
+  op_point(8) = 0.75
   optimization_type(8) = 'target-glide'
-  target_value(8) = 80.8
-  
-  op_point(9) = 0.75
+  target_value(8) = 77.8  
+
+  op_point(9) = 0.9
   optimization_type(9) = 'target-glide'
-  target_value(9) = 77.6  
+  target_value(9) = 72.5
 
-  op_point(10) = 0.9
-  optimization_type(10) = 'target-glide'
-  target_value(10) = 72.8
-
-  op_point(11) = 12.0							! ensure good cl-max value
-  op_mode(11) = 'spec-al'						! always use 'spec-al' at high cl values!
-  optimization_type(11) = 'target-lift'
-  target_value(11) = 1.266
+  op_point(10) = 12.0							! ensure good cl-max value
+  op_mode(10) = 'spec-al'						! always use 'spec-al' at high cl values!
+  optimization_type(10) = 'target-lift'
+  target_value(10) = 1.266
 
 ! --------------------- 300,000 ---------------
 
-  op_point(12) = 0.2							! Helper op point for bubble control at low Reynolds
-  optimization_type(12) = 'target-drag'
-  target_value(12) = 0.00660
-  reynolds(12) = 300000 
+  op_point(11) = 0.2							! Helper op point for bubble control at low Reynolds
+  optimization_type(11) = 'target-drag'
+  target_value(11) = 0.00661
+  reynolds(11) = 300000 
 /
 
 &curvature

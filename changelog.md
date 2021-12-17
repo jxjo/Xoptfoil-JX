@@ -1,5 +1,21 @@
 # Change Log for Xoptfoil-JX
 
+## [1.71 ] - 2021-12
+
+This is a minor maintenance release with a few, but fine enhancements. 
+Have a look in the version 1.70 feature list to get all enhancements of version 1.70. 
+
+  
+- Optimization with target values - The new parameter `allow_improved_target` does not penalize an operating point if the result is better than the defined target. "Better" depends on the `optimization_type` of the operating point: lower drag, higher lift, higher glide ratio. Especially when all operating points are based on targets, `allow_improved_target` may show suprising improvements. 
+- Presetting of the seed airfoil to geometry targets or constraints is now optional
+- Further tweaks of dynamic weighting to be more robust
+- Improvement of Xfoil PANGEN (repanel airfoil) mal beviour at trailing edge leading to smoother trailing edges
+- Some minor bugs and enhancements...
+
+
+
+
+## Xoptfoil-JX
 
 ## [1.70 ] - 2021-12
 
