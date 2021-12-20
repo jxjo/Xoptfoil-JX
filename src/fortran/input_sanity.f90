@@ -169,12 +169,12 @@ subroutine check_seed()
   use vardef
   use airfoil_evaluation 
   use math_deps,          only : interp_vector, curvature, derv1f1, derv1b1, norm_2
-  use math_deps,          only : interp_point, derivation_at_point
+  use math_deps,          only : interp_point, derivation_at_point, smooth_it
   use xfoil_driver,       only : run_op_points, op_point_result_type
   use xfoil_driver,       only : xfoil_geometry_amax, xfoil_set_airfoil, &
                                  xfoil_get_geometry_info
   use airfoil_evaluation, only : xfoil_options, xfoil_geom_options
-  use airfoil_operations, only : assess_surface, smooth_it, rebuild_airfoil
+  use airfoil_operations, only : assess_surface,  rebuild_airfoil
   use airfoil_operations, only : show_reversals_highlows
   use airfoil_operations, only : get_max_te_curvature
 
@@ -710,8 +710,9 @@ end subroutine check_seed
 subroutine check_and_smooth_surface (show_details, do_smoothing, foil, overall_quality)
 
   use vardef,             only: airfoil_type
+  use math_deps,          only: smooth_it
   use airfoil_evaluation, only: curv_top_spec, curv_bot_spec
-  use airfoil_operations, only: assess_surface, smooth_it
+  use airfoil_operations, only: assess_surface
   use airfoil_operations, only: get_max_te_curvature, rebuild_airfoil
 
   logical, intent(in)       :: show_details, do_smoothing
@@ -736,9 +737,9 @@ subroutine check_and_smooth_surface (show_details, do_smoothing, foil, overall_q
   if (show_details) then 
     write (*,'(3x)', advance = 'no') 
     call print_colored (COLOR_NOTE, 'Using curv_threshold =')
-    call print_colored_r (5,'(F5.2)', Q_BAD, curv_threshold) 
+    call print_colored_r (5,'(F5.2)', Q_OK, curv_threshold) 
     call print_colored (COLOR_NOTE, ', spike_threshold =')
-    call print_colored_r (5,'(F5.2)', Q_BAD, spike_threshold) 
+    call print_colored_r (5,'(F5.2)', Q_OK, spike_threshold) 
     call print_colored (COLOR_NOTE, ' for detection')
     write (*,*)
   end if

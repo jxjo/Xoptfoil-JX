@@ -197,7 +197,8 @@ subroutine set_geometry_value (outname_auto, output_prefix, seed_foil, value_arg
   use os_util
   use xfoil_driver,       only : xfoil_set_thickness_camber
   use airfoil_operations, only : airfoil_write
-  use airfoil_operations, only : smooth_foil, repanel_and_normalize_airfoil   
+  use airfoil_operations, only : repanel_and_normalize_airfoil   
+  use parametrization,    only : smooth_foil  
   
   character(*), intent(in)     :: output_prefix, value_argument
   type (airfoil_type), intent (inout)  :: seed_foil

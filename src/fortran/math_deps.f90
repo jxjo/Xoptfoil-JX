@@ -628,6 +628,133 @@ end function transformed_arccos
 
 
 
+
+!-------------------------------------------------------------------------------------
+! Central entrypoint for smoothing a polyline (x,y) being the top or bottom surface
+!
+! Smoothing of the polyline is done until 
+!   - a certain quality (= min number of spikes) is reached
+!   - no more improvment for reduction of spikes happens
+!   - or max. number of iterations reached (max_iterations)
+!
+! Two nested loops are used for smoothing
+!   The inner loop is the modified Chaikin (Corner Cut) algorithm. This loop is limited
+!   to n_Chaikin_iter (typically = 5) because
+!     - in each iteration the number of points will be doubled (memory / speed)
+!     - there will be no real improvement ...
+!   The outer loop calls Chaikin is until one of the above criteria is reached.
+!
+! The starting point for smoothing in the polyline is set by i_range_start.
+! 
+! Be careful in changin the parameters and always take a look at the result 
+!    delta = y_smoothed - y_original
+!------------------------------------------------------------------------------
+
+subroutine smooth_it (show_details, spike_threshold, x, y)
+
+  logical, intent(in) :: show_details  
+  double precision, intent(in) :: spike_threshold
+  double precision, dimension(:), intent(in) :: x
+  double precision, dimension(:), intent(inout) :: y
+
+  integer :: max_iterations, nspikes_target, i_range_start, i_range_end
+  integer :: nspikes, istart, iend, nspikes_initial
+  integer :: i, n_Chaikin_iter, n_no_improve, nspikes_best, n_no_imp_max
+  double precision :: tension, sum_y_before, sum_y_after, delta_y
+  character (size(x)) :: result_info
+  character (100)     :: text_change
+  
+  double precision, dimension(size(x)) :: x_cos
+
+  sum_y_before = abs(sum(y))
+
+! Transform the x-Axis with a arccos function so that the leading area will be stretched  
+! resulting in lower curvature at LE - and the rear part a little compressed
+! This great approach is from Harry Morgan in his smoothing algorithm
+!    see https://ntrs.nasa.gov/archive/nasa/casi.ntrs.nasa.gov/19850022698.pdf
+
+  x_cos = transformed_arccos (x)
+
+  i_range_start  = 1              ! with transformation will start smoothing now at 1
+  i_range_end    = size (x)       ! ... and end
+  
+! Count initial value of spikes
+
+  istart  = 1               
+  iend    = size(x)
+  result_info    = repeat ('-', size(x) ) 
+
+  call find_curv_spikes (istart, iend, spike_threshold, x, y, nspikes, result_info)
+  nspikes_target  = int(nspikes/10) ! how many curve spikes should be at the end?
+  nspikes_initial = nspikes
+                                  !   Reduce by factor 5 --> not too much as smoothing become critical for surface
+  tension        = 0.5d0          ! = 0.5 equals to the original Chaikin cutting distance of 0.25 
+  n_Chaikin_iter = 4              ! number of iterations within Chaikin
+  max_iterations = 10             ! max iterations over n_Chaikin_iter 
+
+  nspikes_best = nspikes          ! init with current to check if there is improvement of nspikes over iterations
+  n_no_improve = 0                ! iterate only until iteration with no improvements of nspikes 
+  n_no_imp_max = 3                !  ... within  n_no_imp_max
+  
+! Now do iteration 
+
+  i = 1
+
+  do while ((i <= max_iterations) .and. (nspikes > nspikes_target) .and. (n_no_improve < n_no_imp_max))
+
+    call smooth_it_Chaikin (i_range_start, i_range_end, tension, n_Chaikin_iter, x_cos, y)
+
+    result_info    = repeat ('-', size(x) ) 
+    call find_curv_spikes (istart, iend, spike_threshold, x, y, nspikes, result_info)
+
+    if (nspikes < nspikes_best) then
+      nspikes_best = nspikes
+      n_no_improve = 0
+    else
+      n_no_improve = n_no_improve + 1  
+    end if 
+
+    i = i + 1
+
+  end do
+
+! Summarize - final info for user 
+
+  if (show_details) then
+
+    sum_y_after = abs(sum(y)) 
+    delta_y = 100d0 * (sum_y_after - sum_y_before)/sum_y_before
+    write (*,'(3x, A)', advance = 'no') "Smoothing: "
+    write (text_change,'(I2, A,F8.5,A)') i, ' iterations - overall change of y values ',delta_y,'%' 
+
+    if ( nspikes_initial == 0) then 
+      write (*,'(1x, A,F4.1,A)') "No spikes found based on spike_threshold =", &
+                                   spike_threshold," - Nothing done"
+
+    elseif (nspikes == 0) then 
+      write (*,'(1x, A)') " All spikes removed. "//trim(text_change)
+
+    elseif (nspikes <= nspikes_target) then 
+      write (*,'(1x,A,I3,A)') "Number of spikes reduced by factor", nspikes_initial/nspikes, &
+            ". "//trim(text_change)
+
+    elseif (i > max_iterations) then 
+      write (*,'(1x,A,I2,A)') "Reached maximum iterations = ", max_iterations, &
+            ". "//trim(text_change)
+
+    elseif (n_no_improve >= n_no_imp_max) then 
+      write (*,'(1x,A,I2,A)') "No further improvement with ",n_no_imp_max, &
+             " iteration. " // trim(text_change)
+
+    else 
+      write (*,'(1x,A)') "Smoothing ended."          ! this shouldn't happen
+    end if 
+
+  end if
+
+end subroutine smooth_it
+
+
 !------------------------------------------------------------------------------
 ! smooth polyline (x,y) with a Chaikin corner cutting see
 !     https://www.codeproject.com/Articles/1093960/D-Polyline-Vertex-Smoothing

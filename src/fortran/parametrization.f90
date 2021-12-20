@@ -339,7 +339,6 @@ subroutine create_airfoil_camb_thick (xt_seed, zt_seed, xb_seed, zb_seed, modes,
 
   use vardef,             only : airfoil_type
   use xfoil_driver,       only : xfoil_scale_thickness_camber, xfoil_scale_LE_radius
-  use airfoil_operations, only : smooth_foil
                                    
   double precision, dimension(:), intent(in) :: xt_seed, zt_seed, xb_seed, zb_seed
   double precision, dimension(:), intent(in) :: modes
@@ -423,7 +422,6 @@ subroutine create_airfoil_camb_thick_plus (xt_seed, zt_seed, xb_seed, zb_seed, m
 
   use vardef,             only : airfoil_type
   use xfoil_driver,       only : xfoil_scale_thickness_camber, xfoil_scale_LE_radius
-  use airfoil_operations, only : smooth_foil
 
   double precision, dimension(:), intent(in) :: xt_seed, zt_seed, xb_seed, zb_seed
   double precision, dimension(:), intent(in) :: modes
@@ -519,5 +517,86 @@ subroutine create_airfoil_camb_thick_plus (xt_seed, zt_seed, xb_seed, zb_seed, m
   deallocate(new_foil_4%z)
 
 end subroutine create_airfoil_camb_thick_plus
+
+
+
+!-------------------------------------------------------------------------------------
+! Smooth an airfoil with its coordinate in foil%x and foil%z
+!    ---   see details in smooth_it ---
+!
+! Returns  the smoothed airfoil  
+!   - foil%x and foil%z
+!   - the polylines foil%xb, foil%zb, foil%xt, foil%zt 
+!
+! *** this subroutine is in this module because of module hierarchy ***
+!-------------------------------------------------------------------------------------
+subroutine smooth_foil (show_details, spike_threshold, foil)
+
+  use vardef,          only : airfoil_type
+  use os_util,         only : my_stop
+  use math_deps,       only : smooth_it
+ 
+  logical, intent(in) :: show_details  
+  double precision, intent(in) :: spike_threshold
+  type(airfoil_type), intent(inout) :: foil
+
+  integer :: i, iLE, pointst, pointsb
+
+! find LE - it MUST be at 0,0 
+
+  iLE = 0 
+  do i = 1, size(foil%x)
+    if (foil%x(i) == 0d0 .and. foil%z(i) == 0d0 ) then 
+      iLE = i
+      exit
+    end if 
+  end do 
+
+  if (iLE == 0) then 
+    call my_stop ("smooth_foil: No foil with LE at 0,0")
+  end if 
+
+! Split the foil into top and bot polyline
+  pointst = ilE
+  pointsb = size(foil%x) - iLE + 1
+
+
+  if (allocated (foil%xt)) deallocate(foil%xt)
+  if (allocated (foil%zt)) deallocate(foil%zt)
+  allocate(foil%xt(pointst))
+  allocate(foil%zt(pointst))
+
+  do i = 1, pointst
+    foil%xt(i) = foil%x(pointst-i+1)
+    foil%zt(i) = foil%z(pointst-i+1)
+  end do
+
+  if (allocated (foil%xb)) deallocate(foil%xb)
+  if (allocated (foil%zb)) deallocate(foil%zb)
+  allocate(foil%xb(pointsb))
+  allocate(foil%zb(pointsb))
+
+  do i = 1, pointsb
+    foil%xb(i) = foil%x(iLE+i-1)
+    foil%zb(i) = foil%z(iLE+i-1)
+  end do
+
+! Now smooth both polylines
+  call smooth_it (show_details, spike_threshold, foil%xt, foil%zt)
+  call smooth_it (show_details, spike_threshold, foil%xb, foil%zb)
+
+! and rebuild foil coordinates
+
+  do i = 1, pointst
+    foil%x(i) = foil%xt(pointst-i+1)
+    foil%z(i) = foil%zt(pointst-i+1)
+  end do
+  do i = 1, pointsb-1
+    foil%x(i+pointst) = foil%xb(i+1)
+    foil%z(i+pointst) = foil%zb(i+1)
+  end do
+
+  end subroutine smooth_foil
+
 
 end module parametrization
