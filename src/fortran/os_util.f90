@@ -443,8 +443,10 @@ subroutine print_colored_i (strlen, quality, ivalue)
       color = COLOR_WARNING
     case (Q_NEW)
       color = COLOR_FEATURE
-    case default 
+    case (Q_PROBLEM)
       color = COLOR_BAD
+    case default 
+      color = COLOR_NOTE
   end select
   str = repeat('*',strlen)
 
@@ -479,11 +481,13 @@ subroutine print_colored_r (strlen, format_string, quality, rvalue)
     case (Q_OK)
       color = COLOR_NORMAL
     case (Q_BAD)
-      color = COLOR_NOTE
+      color = COLOR_WARNING
     case (Q_NEW)
       color = COLOR_FEATURE
-    case default 
+    case (Q_PROBLEM)
       color = COLOR_BAD
+    case default 
+      color = COLOR_NOTE
   end select
 
   write (str,format_string) rvalue
@@ -552,11 +556,13 @@ subroutine print_colored_s (quality, str)
     case (Q_OK)
       color = COLOR_NORMAL
     case (Q_BAD)
-      color = COLOR_NOTE
+      color = COLOR_WARNING
     case (Q_NEW)
       color = COLOR_FEATURE
-    case default 
+    case (Q_PROBLEM)
       color = COLOR_BAD
+    case default 
+      color = COLOR_NOTE
   end select
 
   call print_colored (color, str)

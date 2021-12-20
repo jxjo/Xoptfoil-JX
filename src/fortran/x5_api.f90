@@ -149,7 +149,7 @@ function x5_eval_objective_function (foil)
   allocate (actual_flap_degrees(size(op_points_spec)))
   actual_flap_degrees = 0d0
 
-  x5_eval_objective_function = aero_objective_function(foil, actual_flap_degrees)
+  !x5_eval_objective_function = aero_objective_function(foil, actual_flap_degrees)
 
 end function x5_eval_objective_function
 

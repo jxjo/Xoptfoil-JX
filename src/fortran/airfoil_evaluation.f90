@@ -22,6 +22,7 @@ module airfoil_evaluation
   use vardef       
   use xfoil_driver, only : xfoil_options_type, xfoil_geom_options_type
   use xfoil_driver, only : op_point_specification_type, re_type
+  use xfoil_driver, only : op_point_result_type
   use os_util
 
   implicit none 
@@ -141,6 +142,13 @@ module airfoil_evaluation
 ! Generate full polar for each new design 
   logical    :: generate_polar
 
+! Save the best result of evaluation for write_design (+ dynamic weighting)
+!    so no extra run_xfoil is needed
+  double precision, private       :: best_objective = 1d0
+  type(airfoil_type), private     :: best_foil
+  type(op_point_result_type), dimension(:), allocatable, private :: best_op_points_result
+
+
   contains
 
 
@@ -153,6 +161,8 @@ module airfoil_evaluation
 !=============================================================================80
 function objective_function(designvars, evaluate_only_geometry)
 
+  use xfoil_driver,       only : op_point_result_type
+
   double precision, dimension(:), intent(in) :: designvars
   logical, intent(in), optional :: evaluate_only_geometry
 
@@ -160,6 +170,7 @@ function objective_function(designvars, evaluate_only_geometry)
   type(airfoil_type)          :: foil
   double precision, dimension(noppoint) :: actual_flap_degrees
   logical                     :: only_geometry
+  type(op_point_result_type), dimension(:), allocatable :: op_points_result
 
   only_geometry = present(evaluate_only_geometry) .and. evaluate_only_geometry
   
@@ -194,7 +205,7 @@ function objective_function(designvars, evaluate_only_geometry)
       objective_function = 1d0 + geo_penalty
     else
 !     finally we've reached the core - evaluate the foil ...
-      aero = aero_objective_function (foil, actual_flap_degrees)
+      aero = aero_objective_function (foil, actual_flap_degrees, op_points_result)
       geo  = geo_objective_function  (foil)
 
       if(aero == OBJ_XFOIL_FAIL) then
@@ -203,6 +214,15 @@ function objective_function(designvars, evaluate_only_geometry)
         objective_function = aero + geo + geo_penalty
       end if
 
+!   Save the best result to be written latte at write_design ...
+!$omp critical
+      if (objective_function < best_objective) then
+        best_objective = objective_function 
+        best_foil = foil 
+        best_op_points_result = op_points_result
+      end if 
+!$omp end critical
+    
     end if
 
   end if
@@ -217,10 +237,13 @@ end function objective_function
 !=============================================================================80
 function objective_function_nopenalty(designvars)
 
+  use xfoil_driver,       only : op_point_result_type
+
   double precision, dimension(:), intent(in) :: designvars
   double precision         :: objective_function_nopenalty, aero, geo
   type(airfoil_type)       :: foil
   double precision, dimension(noppoint) :: actual_flap_degrees
+  type(op_point_result_type), dimension(:), allocatable :: op_points_result
 
   objective_function_nopenalty = 0d0
   aero               = 0d0
@@ -238,7 +261,7 @@ function objective_function_nopenalty(designvars)
     call get_flap_degrees_from_design (designvars, actual_flap_degrees)
 
 !   finally we've reached the core - do xfoil calculations...
-    aero = aero_objective_function (foil, actual_flap_degrees)
+    aero = aero_objective_function (foil, actual_flap_degrees, op_points_result)
     geo  = geo_objective_function  (foil)
 
     if(aero == OBJ_XFOIL_FAIL) then
@@ -660,7 +683,7 @@ end function geo_objective_function_on_results
 !==============================================================================
 !==============================================================================
 
-function aero_objective_function(foil, actual_flap_degrees)
+function aero_objective_function(foil, actual_flap_degrees,op_points_result)
 
   use xfoil_driver,       only : run_op_points, xfoil_set_airfoil, op_point_result_type
 
@@ -668,7 +691,7 @@ function aero_objective_function(foil, actual_flap_degrees)
   double precision, dimension(:), intent(in)  :: actual_flap_degrees
   double precision                  :: aero_objective_function
 
-  type(op_point_result_type), dimension(:), allocatable :: op_points_result
+  type(op_point_result_type), dimension(:), allocatable, intent(out) :: op_points_result
   type(xfoil_options_type)          :: local_xfoil_options
 
   integer          :: i
@@ -1302,12 +1325,10 @@ function write_airfoil_optimization_progress(designvars, designcounter)
   double precision, dimension(noppoint) :: actual_flap_degrees
   double precision :: maxt, xmaxt, maxc, xmaxc
  
-  character(255) :: foilfile, polarfile, text, title, full_polar_file
+  character(255) :: foilfile, polarfile, title, full_polar_file
   character(20)   :: maxtchar, xmaxtchar, maxcchar, xmaxcchar, tcounter
   integer        :: foilunit, polarunit
   logical        :: dynamic_done
-
-  local_xfoil_options = xfoil_options
 
   write(tcounter,*) designcounter
   tcounter = adjustl(tcounter)
@@ -1320,15 +1341,11 @@ function write_airfoil_optimization_progress(designvars, designcounter)
   end if
   if (generate_polar) call print_colored (COLOR_NOTE,' & polar')
   write (*,*)
+  if (show_details .and. (designcounter > 0)) write (*,*) 
 
 ! Design 0 is seed airfoil to output - take the original values 
-!     Smoothing - Restore the original, not smoothed seed airfoil to
-!                 ...design_coordinates.dat to show it in visualizer
-
-  if (designcounter == 0) then
+  if (designcounter == 0) then 
     foil = seed_foil
-    local_xfoil_options%reinitialize = .true.    ! ensure convergence for seed 
-
 ! Design > 0 - Build current foil out seed foil and current design 
   else 
     call create_airfoil_form_design (seed_foil, designvars, foil)
@@ -1338,15 +1355,34 @@ function write_airfoil_optimization_progress(designvars, designcounter)
 ! Get actual flap angles based on design variables
   call get_flap_degrees_from_design (designvars, actual_flap_degrees)
 
+! Try to get xfoil result for foil from "save best" in objective function
+  if (allocated(best_op_points_result)) then 
+  ! Sanity check - Is the "best" really our current foil
+    if (abs(sum(foil%z) - sum(best_foil%z)) < 1d-10 ) then  ! use epsilon (num issues with symmetrical) 
+      op_points_result = best_op_points_result
+    else
+      write (*,*) sum(foil%x) , sum(best_foil%x) , sum(foil%z) , sum(best_foil%z)
+      best_objective = 1d0                 ! reset best store - something wrong...?
+    end if 
+  end if 
 
-! Analyze airfoil at requested operating conditions with Xfoil
+! There is no stored result - so re-calc for this foil
+  if (.not. allocated(op_points_result)) then 
 
-  if (show_details .and. (designcounter > 0)) write (*,*) 
+  ! Analyze airfoil at requested operating conditions with Xfoil
 
-  call run_op_points (foil, xfoil_geom_options, local_xfoil_options,  &
-                      flap_spec, actual_flap_degrees, &
-                      op_points_spec, op_points_result)
+    local_xfoil_options = xfoil_options
+  ! jx-test
+    local_xfoil_options%show_details        = .true.  
+    local_xfoil_options%exit_if_unconverged = .false.  ! we need all op points
+    if (designcounter == 0) &
+      local_xfoil_options%reinitialize = .true.        ! ensure convergence for seed 
 
+    call run_op_points (foil, xfoil_geom_options, local_xfoil_options,  &
+                        flap_spec, actual_flap_degrees, &
+                        op_points_spec, op_points_result)
+
+  end if 
 
 ! Generate and write the full polar before design_coordinates and polar
 !     so it's available for the visualizer early enough
@@ -1358,6 +1394,9 @@ function write_airfoil_optimization_progress(designvars, designcounter)
       full_polar_file = trim(design_subdir) // 'Design_FullPolar.txt'
     end if
     call set_polar_info (foil%name, trim(full_polar_file), 'Design '//trim(tcounter))
+    local_xfoil_options = xfoil_options
+    local_xfoil_options%show_details        = .false.  
+    local_xfoil_options%exit_if_unconverged = .false.  ! we need all op points
     call generate_polar_files (.false., '' , foil, xfoil_geom_options, local_xfoil_options)
   end if 
 
@@ -1452,9 +1491,7 @@ function write_airfoil_optimization_progress(designvars, designcounter)
     op = op_points_result(i) 
 
     if (.not. op%converged) then 
-      write(text,*) i
-      text = adjustl(text)
-      call print_error ('  Error: Op '//trim(text) // &
+      call print_error ('  Error: Op '//stri(i) // &
                         ' not converged in final calculation (this should not happen...)')
     end if 
     ! Add current flap angle to polars to show it in visualizer
@@ -2106,7 +2143,7 @@ subroutine print_improvement_info (intent, header, op_spec, op)
           dev  = dist / (op_spec%target_value + 0.05d0) * 100d0 ! cm could be 0
       end select
       if (how_good == -1) then
-        if (op_spec%allow_improved_target .and. dev > 0d0) then
+        if (op_spec%allow_improved_target .and. dev >= 0d0) then
           how_good = Q_GOOD
         else
           how_good = r_quality (abs(dev), 0.1d0, 2d0, 10d0)      ! in percent
@@ -2175,24 +2212,23 @@ subroutine print_improvement_info (intent, header, op_spec, op)
   ! --
     if (trim (opt_type) /= 'n.a.') then 
       if (value_base == 10d0) then 
-        call print_colored_r (7,'(SP,F7.2)', Q_BAD, dist) 
+        call print_colored_r (7,'(SP,F7.2)', -1, dist) 
       elseif (value_base == 1d0) then 
-        call print_colored_r (7,'(SP,F7.3)', Q_BAD, dist) 
+        call print_colored_r (7,'(SP,F7.3)', -1, dist) 
       elseif (value_base == 0.1d0) then 
-        call print_colored_r (7,'(SP,F7.4)', Q_BAD, dist) 
+        call print_colored_r (7,'(SP,F7.4)', -1, dist) 
       elseif (value_base == 0.01d0) then 
-        call print_colored_r (7,'(SP,F7.5)', Q_BAD, dist) 
+        call print_colored_r (7,'(SP,F7.5)', -1, dist) 
       else 
-        call print_colored_r (7,'(SP,F7.3)', Q_BAD, dist) 
+        call print_colored_r (7,'(SP,F7.3)', -1, dist) 
       end if 
 
     ! --
       call print_colored (COLOR_PALE, '  ')
-! jx-test
 !      if (how_good == Q_Good .and.  opt_type == 'targ') then 
 !        call print_colored_s (how_good, '  hit') 
 !      else
-        if (abs(dev) < 10.0d0) then 
+        if (abs(dev) < 9.95d0) then 
           call print_colored_r (4,'(SP,F4.1)', how_good, dev) 
         else
           call print_colored_i (4, how_good, nint(dev)) 
@@ -2248,7 +2284,7 @@ subroutine print_geo_improvement_info (intent, header, geo_spec, geo_result)
   ! --
     dev   = dist / geo_spec%target_value * 100d0
     how_good = r_quality (abs(dev), 0.07d0, 2d0, 10d0)   ! in percent
-    call print_colored_r (7,'(SP,F7.5)', Q_BAD, dist) 
+    call print_colored_r (7,'(SP,F7.5)', -1, dist) 
   ! --
     call print_colored (COLOR_PALE, '  ')
     if (how_good == Q_Good) then 

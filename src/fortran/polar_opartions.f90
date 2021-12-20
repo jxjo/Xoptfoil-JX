@@ -63,7 +63,9 @@ subroutine generate_polar_files (show_details, subdirectory, foil, xfoil_geom_op
   use vardef,             only : airfoil_type, flap_spec_type
   use os_util,            only : make_directory
   use xfoil_driver,       only : xfoil_geom_options_type, xfoil_options_type
-  use xfoil_driver,       only : op_point_result_type, run_op_points, xfoil_driver_reset
+  use xfoil_driver,       only : op_point_result_type, run_op_points 
+  use xfoil_driver,       only : xfoil_driver_reset_statistic
+  use xfoil_driver,       only : xfoil_driver_push_statistic, xfoil_driver_pop_statistic
 
   type (airfoil_type), intent (in)  :: foil
   logical, intent(in)               :: show_details
@@ -87,6 +89,8 @@ subroutine generate_polar_files (show_details, subdirectory, foil, xfoil_geom_op
 
   ! calc and write all polars
 
+  call xfoil_driver_push_statistic          ! hack - save xfoil_driver outlier statistics
+
   do i = 1, npolars
 
 
@@ -96,7 +100,7 @@ subroutine generate_polar_files (show_details, subdirectory, foil, xfoil_geom_op
     flap_degrees (:)    = 0.d0 
   
     ! reset out lier detection tect. for a new polar 
-    call xfoil_driver_reset
+    call xfoil_driver_reset_statistic
  
     if (show_details) then 
       write (out_string,'(A,I1,A, I7)') 'Generating polar Type ',polars(i)%re%type,', Re=',  &
@@ -109,7 +113,7 @@ subroutine generate_polar_files (show_details, subdirectory, foil, xfoil_geom_op
                         flap_spec, flap_degrees, &
                         polars(i)%op_points_spec, op_points_result)
   
-    call xfoil_driver_reset
+    call xfoil_driver_reset_statistic
 
     if (show_details) then 
       write (out_string,'(A,I1,A, I7,A)') 'Writing polar Type ',polars(i)%re%type,', Re=',  &
@@ -125,6 +129,8 @@ subroutine generate_polar_files (show_details, subdirectory, foil, xfoil_geom_op
     close (13)
 
   end do 
+
+  call xfoil_driver_pop_statistic        ! hack - retrieve xfoil_driver outlier statistics
 
 end subroutine generate_polar_files
 

@@ -105,6 +105,7 @@ module xfoil_driver
   end type value_statistics_type
 
   type (value_statistics_type), dimension(:), allocatable, private :: drag_stats
+  type (value_statistics_type), dimension(:), allocatable, private :: drag_stats_saved
 
   contains
 
@@ -192,7 +193,7 @@ subroutine run_op_points (foil, geom_options, xfoil_options,         &
   call xfoil_set_paneling(geom_options)
 
   if (show_details) then 
-    call print_colored (COLOR_NOTE, 'Xfoil  ')
+    call print_colored (COLOR_NOTE, '   Xfoil  ')
     if (geom_options%repanel)       call print_colored (COLOR_NOTE, 'repanel ')
     if (xfoil_options%reinitialize) call print_colored (COLOR_NOTE, 'init_BL ')
   end if
@@ -209,7 +210,6 @@ subroutine run_op_points (foil, geom_options, xfoil_options,         &
 !             - when the flap angle is changed (new foil is set)
 !             - when a point didn't converge
 !             - when the direction of alpha or cl changes along op points
-  !call print_colored (COLOR_WARNING, '2')
 
   do i = 1, noppoint
 
@@ -292,49 +292,67 @@ subroutine run_op_points (foil, geom_options, xfoil_options,         &
 !     Try to initialize BL at intermediate new point (in the direction away from stall)
       tmp_op_spec = op_spec
       if (op_spec%spec_cl) then
-        tmp_op_spec%value = op_spec%value - 0.02d0
+        if (op_spec%value > 0d0) then 
+           tmp_op_spec%value = op_spec%value - 0.02d0
+        else 
+          tmp_op_spec%value = op_spec%value + 0.02d0
+        end if 
         if (tmp_op_spec%value == 0.d0) tmp_op_spec%value = 0.01d0       !because of Type 2 polar calc
       else
-        tmp_op_spec%value = op_spec%value - 0.25d0
+        if (op_spec%value > 0d0) then 
+          tmp_op_spec%value = op_spec%value - 0.25d0
+        else 
+          tmp_op_spec%value = op_spec%value + 0.25d0
+        end if 
       end if
 
       ! init BL for this new point to start for fix with little increased Re
       tmp_op_spec%re%number = tmp_op_spec%re%number * 1.001d0
       call xfoil_init_BL (show_details .and. (.not. xfoil_options%reinitialize))
-      call run_op_point  (tmp_op_spec, &
-                          xfoil_options%viscous_mode, xfoil_options%maxit, show_details , & 
-                          op)
+      call run_op_point  (tmp_op_spec, xfoil_options%viscous_mode, xfoil_options%maxit, &
+                          show_details , op)
 
-!     Now try to run again at the old operating point increasing RE a little ...
+!     If this intermediate point converged
+!       try to run again at the old operating point increasing RE a little ...
 
-      iretry = 1
-      nretry = 3
       point_fixed = .false.
 
-      do while (.not. point_fixed .and. (iretry <= nretry)) 
+      if (op%converged) then 
 
-        op_spec%re%number = op_spec%re%number * 1.002d0
+        iretry = 1
+        ! jx-test 
+        !nretry = 3
+        nretry = 1
+        do while (.not. point_fixed .and. (iretry <= nretry)) 
 
-        if (xfoil_options%reinitialize) call xfoil_init_BL (.false.)
+! jx-test
+!          op_spec%re%number = op_spec%re%number * 1.002d0
+          op_spec%re%number = op_spec%re%number * 0.998d0
 
-        call run_op_point (op_spec, &
-                           xfoil_options%viscous_mode, xfoil_options%maxit, show_details, & 
-                          op)
-                              
-        if (.not. op%converged    & 
-            .or. (is_out_lier (i, op%cd))  &
-            .or. (cl_changed (op_spec%spec_cl, op_spec%value, op%cl))) then 
+          if (xfoil_options%reinitialize) call xfoil_init_BL (.false.)
 
-        ! Re-init the second try
-          call xfoil_init_BL (show_details .and. (.not. xfoil_options%reinitialize))
+          call run_op_point (op_spec, xfoil_options%viscous_mode, xfoil_options%maxit, &
+                            show_details, op)
+                                
+          if (.not. op%converged .or. (is_out_lier (i, op%cd))  &
+              .or. (cl_changed (op_spec%spec_cl, op_spec%value, op%cl))) then 
+            call xfoil_init_BL (show_details .and. (.not. xfoil_options%reinitialize))
+          else 
+            point_fixed = .true.
+          end if 
 
-        else 
-          point_fixed = .true.
-        end if 
+          iretry = iretry + 1
 
-        iretry = iretry + 1
-
-      end do 
+        end do
+        
+        if (point_fixed) then 
+          ! call print_colored (COLOR_GOOD, 'f'//stri(i))
+        else
+          ! call print_colored (COLOR_WARNING, 'x'//stri(i))
+        end if
+      else
+        ! call print_colored (COLOR_BAD, 'x'//stri(i))
+      end if  
 
       if(show_details) then 
         write (*,'(A)',advance = 'no') ']'
@@ -356,7 +374,6 @@ subroutine run_op_points (foil, geom_options, xfoil_options,         &
 
 !   early exit if not converged for speed optimization 
     if ((.not. op%converged) .and. xfoil_options%exit_if_unconverged) then 
-!      write (*,'(I2,A)', advance = 'no') i, " no "
       exit
     end if 
 
@@ -417,7 +434,6 @@ subroutine run_op_point (op_point_spec,        &
   type(op_point_result_type),        intent(out) :: op_point_result
 
   integer         :: niter_needed
-  ! character(20)   :: outstring 
   doubleprecision :: save_ACRIT
 
 
@@ -522,12 +538,11 @@ subroutine run_op_point (op_point_spec,        &
   end if
 
   if(show_details) then 
-!   write (outstring,'(I4)') niter_needed
     if (op_point_result%converged) then
-!     call print_colored (COLOR_NORMAL,  ' ' // trim(adjustl(outstring)))
+      !call print_colored (COLOR_NORMAL,  '.' // stri(niter_needed))
       call print_colored (COLOR_NORMAL,  '.')
     else
-!     call print_colored (COLOR_WARNING, ' ' // trim(adjustl(outstring)))
+      !call print_colored (COLOR_WARNING, 'x' // stri(niter_needed))
       call print_colored (COLOR_WARNING, 'x')
     end if
   end if
@@ -1019,14 +1034,6 @@ function xfoil_geometry_amax()
 
 end function xfoil_geometry_amax
 
-!------------------------------------------------------------------------------
-! Reset xfoil_driver e.g. for an new polar 
-!------------------------------------------------------------------------------
-subroutine xfoil_driver_reset ()
-
-  if (allocated(drag_stats))  deallocate (drag_stats)
-
-end subroutine xfoil_driver_reset 
 
 !------------------------------------------------------------------------------
 ! Init Boundary layer of xfoil viscous calculation  
@@ -1280,11 +1287,14 @@ subroutine init_statistics (npoints)
   end do 
 
 end subroutine init_statistics
+
+
 !------------------------------------------------------------------------------
 subroutine update_statistic (iop, new_value)
 
   doubleprecision, intent (in) :: new_value 
   integer, intent (in)         :: iop
+  integer                      :: nmean
 
 !$omp critical
   
@@ -1295,7 +1305,8 @@ subroutine update_statistic (iop, new_value)
     drag_stats(iop)%meanval = new_value 
     drag_stats(iop)%nvalue  =  1
 
-  elseif (new_value < (drag_stats(iop)%maxval / 2d0)) then ! first value was probably outlier
+  elseif (drag_stats(iop)%nvalue == 1 .and. &
+          new_value < (drag_stats(iop)%maxval / 2d0)) then ! first value was probably outlier
     drag_stats(iop)%minval  = new_value 
     drag_stats(iop)%maxval  = new_value
     drag_stats(iop)%meanval = new_value            ! reset statistics
@@ -1304,8 +1315,8 @@ subroutine update_statistic (iop, new_value)
   elseif (.not. is_out_lier (iop, new_value)) then   ! normal handling
     drag_stats(iop)%minval  = min (drag_stats(iop)%minval, new_value) 
     drag_stats(iop)%maxval  = max (drag_stats(iop)%maxval, new_value)
-    drag_stats(iop)%meanval = (drag_stats(iop)%meanval * drag_stats(iop)%nvalue + new_value) / &
-                                  (drag_stats(iop)%nvalue + 1)
+    nmean = min (drag_stats(iop)%nvalue, 50)    ! take max 50 values for mean, so it may develop...
+    drag_stats(iop)%meanval = (drag_stats(iop)%meanval * nmean + new_value) / (nmean + 1)
     drag_stats(iop)%nvalue  = drag_stats(iop)%nvalue + 1
   end if 
   
@@ -1313,6 +1324,38 @@ subroutine update_statistic (iop, new_value)
 !$omp end critical
 
 end subroutine update_statistic
+
+!------------------------------------------------------------------------------
+! Push / pop / reset statistics for outlier statistics
+!  This is quite a hack to get detection of outlier a little re-entrant 
+!  During optimization (objective function) a polar may be generated for each new design
+!     ... which would lead to a reset of statistics
+!------------------------------------------------------------------------------
+
+subroutine xfoil_driver_push_statistic ()
+
+  if (allocated(drag_stats)) then 
+    drag_stats_saved = drag_stats
+    deallocate (drag_stats)
+  end if 
+
+end subroutine xfoil_driver_push_statistic
+
+subroutine xfoil_driver_pop_statistic ()
+
+  if (allocated(drag_stats_saved)) then 
+    drag_stats = drag_stats_saved
+    deallocate (drag_stats_saved)
+  end if 
+
+end subroutine xfoil_driver_pop_statistic
+
+subroutine xfoil_driver_reset_statistic ()
+
+  if (allocated(drag_stats))  deallocate (drag_stats)
+
+end subroutine xfoil_driver_reset_statistic 
+
 
 !------------------------------------------------------------------------------
 function is_out_lier (iop, check_value) 
@@ -1329,7 +1372,7 @@ function is_out_lier (iop, check_value)
 
     dev_from_mean    = abs(check_value - drag_stats(iop)%meanval)/max(0.0001d0, drag_stats(iop)%meanval) 
 
-    if (dev_from_mean > 0.8d0   .or. &                          ! deviation from mean > 80%? 
+    if (dev_from_mean > 0.4d0   .or. &                          ! deviation from mean > 40%? 
         check_value   <  (drag_stats(iop)%minval / 2d0) .or. &  ! half of minval? 
         check_value   >  (drag_stats(iop)%maxval * 2d0)) then   ! double of maxval? 
 
