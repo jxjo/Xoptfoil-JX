@@ -1016,7 +1016,7 @@ subroutine read_op_points_spec  (input_file, or_iunit, noppoint, re_def, &
 
   ! Default values controlling dynamic weighting 
   dynamic_weighting = .false. 
-  dynamic_weighting_spec%min_weighting = 0.7d0 
+  dynamic_weighting_spec%min_weighting = 0.6d0 
   dynamic_weighting_spec%max_weighting = 1.4d0 
   dynamic_weighting_spec%extra_punch   = 1.2d0 
   dynamic_weighting_spec%start_with_design = 10
@@ -1549,7 +1549,7 @@ subroutine read_xfoil_options_inputs  (input_file, or_iunit, xfoil_options)
   xtripb = 1.d0
   viscous_mode = .true.
   silent_mode = .true.
-  bl_maxit = 40             ! reduced to 40 as above the potential result is rarely usable..
+  bl_maxit = 50             ! reduced to 50 as above the potential result is rarely usable..
   vaccel = 0.005d0          ! the original value of 0.01 leads to too many non convergences at 
                             !   higher lift --> reduced 
   fix_unconverged = .true.

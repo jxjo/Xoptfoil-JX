@@ -1,4 +1,14 @@
-# Change Log for Xoptfoil-JX
+Change Log for Xoptfoil-JX
+
+## [1.71.1 ] - 2021-12
+
+This is bugfix release.  
+Have a look in the version 1.70 feature list to get all enhancements of version 1.70. 
+
+  
+- Revision of "xfoil non convergence" logic. Avoid message "This should not happen..."
+- Source module hierarchy corrected to allow compilation again ...  
+
 
 ## [1.71 ] - 2021-12
 

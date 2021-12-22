@@ -313,21 +313,17 @@ subroutine run_op_points (foil, geom_options, xfoil_options,         &
                           show_details , op)
 
 !     If this intermediate point converged
-!       try to run again at the old operating point increasing RE a little ...
+!       try to run again at the old operating point decreasing RE a little ...
 
       point_fixed = .false.
 
       if (op%converged) then 
 
         iretry = 1
-        ! jx-test 
-        !nretry = 3
-        nretry = 1
+        nretry = 1              ! only 1 retry - early fail of critical design is better
         do while (.not. point_fixed .and. (iretry <= nretry)) 
 
-! jx-test
-!          op_spec%re%number = op_spec%re%number * 1.002d0
-          op_spec%re%number = op_spec%re%number * 0.998d0
+          op_spec%re%number = op_spec%re%number * 0.998d0 ! result will be worse (penalite!)
 
           if (xfoil_options%reinitialize) call xfoil_init_BL (.false.)
 

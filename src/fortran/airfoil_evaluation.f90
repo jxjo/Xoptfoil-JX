@@ -1372,8 +1372,7 @@ function write_airfoil_optimization_progress(designvars, designcounter)
   ! Analyze airfoil at requested operating conditions with Xfoil
 
     local_xfoil_options = xfoil_options
-  ! jx-test
-    local_xfoil_options%show_details        = .true.  
+    local_xfoil_options%show_details        = .false.  
     local_xfoil_options%exit_if_unconverged = .false.  ! we need all op points
     if (designcounter == 0) &
       local_xfoil_options%reinitialize = .true.        ! ensure convergence for seed 
