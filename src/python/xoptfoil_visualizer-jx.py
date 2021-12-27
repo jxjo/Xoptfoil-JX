@@ -404,7 +404,7 @@ def load_full_polar (prefix, seedfoil, designfoils):
                               np.array(cm), np.array(xtrt), np.array(xtrb), re)
       print("Read polar Re=" + str(int(re)) +" for design #"+  str(designcounter))
 
-  return seedfoil, designfoils, ioerror
+  return seedfoil, designfoils
 
 #-------------------------------------------------------------------------------
 #
@@ -1800,7 +1800,7 @@ def main_menu(initialchoice, seedfoil, designfoils, prefix):
                                                    steps, fmins, relfmins, rads)
 
         # Is there a complete xfoil polar for reference info 
-        seedfoil, designfoils, ioerror = load_full_polar (prefix, seedfoil, designfoils)
+        seedfoil, designfoils = load_full_polar (prefix, seedfoil, designfoils)
 
         # Check for stop_monitoring in run_control file
         try:
@@ -1888,7 +1888,7 @@ if __name__ == "__main__":
     print("Only airfoils are available for plotting (no polars).")
   else: 
     # Is there a complete xfoil polar for reference info 
-    seedfoil, designfoils, ioerror = load_full_polar (prefix, seedfoil, designfoils)
+    seedfoil, designfoils = load_full_polar (prefix, seedfoil, designfoils)
 
   # Is there a matchfoil? If yes switch of polars as there will be no polars..
 
