@@ -373,39 +373,42 @@ function geo_penalty_function(foil, actual_flap_degrees)
 
 ! Bottom side - 
 
-    c = curv_bot_spec
+    if (.not. foil%symmetrical) then 
 
-  ! How many reversals?  ... 
+      c = curv_bot_spec 
 
-    istart = c%nskip_LE
-    iend   = size(foil%xb) - c%nskip_TE_revers
-  
-    nreverse = count_reversals (istart, iend, foil%xb, foil%zb, c%curv_threshold)  
-    nreverse_violations  = max(0,(nreverse - c%max_curv_reverse))
-    if (nreverse_violations > 0 ) then 
-      penaltyval = penaltyval + nreverse_violations
-      penalty_info = trim(penalty_info) // ' maxReversal'
-    end if 
+    ! How many reversals?  ... 
 
-  ! How many spikes = Rversals of 3rd derivation = Bumps of curvature
-    if (c%check_curvature_bumps) then 
-      iend   = size(foil%xb) - c%nskip_TE_spikes
-      nspikes = count_spikes (istart, iend, foil%xb, foil%zb, c%spike_threshold)
-      nspike_violations  = max(0,(nspikes - c%max_spikes))
-    else
-      nspike_violations  = 0
+      istart = c%nskip_LE
+      iend   = size(foil%xb) - c%nskip_TE_revers
+    
+      nreverse = count_reversals (istart, iend, foil%xb, foil%zb, c%curv_threshold)  
+      nreverse_violations  = max(0,(nreverse - c%max_curv_reverse))
+      if (nreverse_violations > 0 ) then 
+        penaltyval = penaltyval + nreverse_violations
+        penalty_info = trim(penalty_info) // ' maxReversal'
+      end if 
+
+    ! How many spikes = Rversals of 3rd derivation = Bumps of curvature
+      if (c%check_curvature_bumps) then 
+        iend   = size(foil%xb) - c%nskip_TE_spikes
+        nspikes = count_spikes (istart, iend, foil%xb, foil%zb, c%spike_threshold)
+        nspike_violations  = max(0,(nspikes - c%max_spikes))
+      else
+        nspike_violations  = 0
+      end if
+      if (nspike_violations > 0 ) then 
+        penaltyval = penaltyval + nspike_violations
+        penalty_info = trim(penalty_info) // ' maxSpike'
+      end if 
+    
+    ! Penalty for TE panel problem 
+
+      if (get_max_te_curvature (foil%xb, foil%zb)  > c%max_te_curvature) then 
+        penalty_info = trim(penalty_info) // ' TEmaxCurv'
+        penaltyval = penaltyval + c%max_te_curvature
+      end if 
     end if
-    if (nspike_violations > 0 ) then 
-      penaltyval = penaltyval + nspike_violations
-      penalty_info = trim(penalty_info) // ' maxSpike'
-    end if 
-  
-  ! Penalty for TE panel problem 
-
-    if (get_max_te_curvature (foil%xb, foil%zb)  > c%max_te_curvature) then 
-      penalty_info = trim(penalty_info) // ' TEmaxCurv'
-      penaltyval = penaltyval + c%max_te_curvature
-    end if 
 
   ! geo penalties are quite high to distinguish from "normal" objective value
     geo_penalty_function = penaltyval*5.0D+04
@@ -1052,6 +1055,8 @@ subroutine create_airfoil_form_design (seed, designvars, foil)
     dvbbnd1 = 1
     dvbbnd2 = dvtbnd2
     foil%symmetrical = .true.
+  else
+    foil%symmetrical = .false.
   end if
   
   if (trim(shape_functions) == 'camb-thick') then

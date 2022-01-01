@@ -203,8 +203,6 @@ subroutine check_seed()
   pi = acos(-1.d0)
 
 
-
-
 ! Smooth surfaces of airfoil *before* other checks are made
 !     save original seed surface before smoothing
 !     to show original data later in visualizer 
@@ -220,26 +218,27 @@ subroutine check_seed()
     call check_and_smooth_surface (show_details, curv_spec%do_smoothing, seed_foil, overall_quality)
 
   ! Get best values fur surface constraints 
-
     if (curv_spec%auto_curvature) then 
       write (*,'(/," - ", A)') 'Auto_curvature: Best values for curvature constraints'
       call auto_curvature_constraints ('Top side', show_details, seed_foil%xt, seed_foil%zt, curv_top_spec)
-      call auto_curvature_constraints ('Bot side', show_details, seed_foil%xb, seed_foil%zb, curv_bot_spec)
+      if (.not. seed_foil%symmetrical) & 
+        call auto_curvature_constraints ('Bot side', show_details, seed_foil%xb, seed_foil%zb, curv_bot_spec)
     end if
 
     write (*,*)
     call info_check_curvature ('Top side', seed_foil%xt, seed_foil%zt, curv_top_spec)
-    call info_check_curvature ('Bot side', seed_foil%xb, seed_foil%zb, curv_bot_spec)
+    if (.not. seed_foil%symmetrical) & 
+      call info_check_curvature ('Bot side', seed_foil%xb, seed_foil%zb, curv_bot_spec)
 
   ! Final check for curvature reversals
-
     call check_handle_curve_violations ('Top side', seed_foil%xt, seed_foil%zt, curv_top_spec)
-    call check_handle_curve_violations ('Bot side', seed_foil%xb, seed_foil%zb, curv_bot_spec)
-    
-  ! Final check trailing edge 
+    if (.not. seed_foil%symmetrical) & 
+      call check_handle_curve_violations ('Bot side', seed_foil%xb, seed_foil%zb, curv_bot_spec)
 
+  ! Final check trailing edge 
     call check_te_curvature_violations ('Top side', seed_foil%xt, seed_foil%zt, curv_top_spec)
-    call check_te_curvature_violations ('Bot side', seed_foil%xb, seed_foil%zb, curv_bot_spec)
+    if (.not. seed_foil%symmetrical) & 
+      call check_te_curvature_violations ('Bot side', seed_foil%xb, seed_foil%zb, curv_bot_spec)
 
   elseif (curv_spec%do_smoothing) then
 
@@ -497,7 +496,7 @@ subroutine check_seed()
       text = adjustl(text)
       write(*,*) "Max panel angle: "//trim(text)
       call ask_stop("Seed airfoil panel angles are too large. Try adjusting "//&
-                    "xfoil_paneling_options.")
+                    "xfoil_paneling_options (parameter 'cvpar').")
     end if
   ! Free memory
     deallocate(x_interp)
@@ -763,25 +762,30 @@ subroutine check_and_smooth_surface (show_details, do_smoothing, foil, overall_q
 
 !  ------------ analyze & smooth  bot -----
 
-  curv_threshold  = curv_bot_spec%curv_threshold
-  spike_threshold = curv_bot_spec%spike_threshold
-  istart          = curv_bot_spec%nskip_LE
-  iend            = size(foil%xb) - curv_bot_spec%nskip_TE_revers
-  iend_spikes     = size(foil%xb) - curv_bot_spec%nskip_TE_spikes
+  if (.not. foil%symmetrical) then 
 
-  call assess_surface (show_details, '- Bot side', &
-                       istart, iend, iend_spikes, &
-                       curv_threshold, spike_threshold, foil%xb, foil%zb, bot_quality)
-  
-  if (bot_quality >= Q_BAD .or. do_smoothing) then 
+    curv_threshold  = curv_bot_spec%curv_threshold
+    spike_threshold = curv_bot_spec%spike_threshold
+    istart          = curv_bot_spec%nskip_LE
+    iend            = size(foil%xb) - curv_bot_spec%nskip_TE_revers
+    iend_spikes     = size(foil%xb) - curv_bot_spec%nskip_TE_spikes
 
-    call smooth_it (.false., spike_threshold, foil%xb, foil%zb)
-    bot_quality     = 0 
-    done_smoothing  = .true.
-    call assess_surface (show_details, 'smoothed', &
-                         istart, iend, iend_spikes, &
-                         curv_threshold, spike_threshold, foil%xb, foil%zb, bot_quality)
-  end if
+    call assess_surface (show_details, '- Bot side', &
+                        istart, iend, iend_spikes, &
+                        curv_threshold, spike_threshold, foil%xb, foil%zb, bot_quality)
+    
+    if (bot_quality >= Q_BAD .or. do_smoothing) then 
+
+      call smooth_it (.false., spike_threshold, foil%xb, foil%zb)
+      bot_quality     = 0 
+      done_smoothing  = .true.
+      call assess_surface (show_details, 'smoothed', &
+                          istart, iend, iend_spikes, &
+                          curv_threshold, spike_threshold, foil%xb, foil%zb, bot_quality)
+    end if
+  else
+    bot_quality = top_quality
+  end if 
 
   overall_quality = int((top_quality + bot_quality)/2)
 

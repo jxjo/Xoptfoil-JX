@@ -1256,14 +1256,14 @@ def my_input(message):
 
   # Check python version
 
-  python_version = version_info[0]
+  # python_version = version_info[0]
 
   # Issue correct input command
 
-  if (python_version == 2):
-    return raw_input(message)
-  else:
-    return input(message)
+  #if (python_version == 2):
+  #  return raw_input(message)
+  #else:
+  return input(message)
 
 ################################################################################
 # Plotting menu
