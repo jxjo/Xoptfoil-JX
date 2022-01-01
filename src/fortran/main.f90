@@ -113,7 +113,7 @@ program main
 ! Load seed airfoil into memory, repanel, normalize, rotate
 
   call get_seed_airfoil (seed_airfoil_type, airfoil_file, naca_options, original_foil)
-  call repanel_and_normalize_airfoil (original_foil, npan_fixed, symmetrical, seed_foil)  
+  call repanel_and_normalize_airfoil (original_foil, xfoil_geom_options, symmetrical, seed_foil)  
                             !   ... to have run_xfoil results equal airfoil external results
   xfoil_geom_options%npan = seed_foil%npoint    ! will use this constant value now
 

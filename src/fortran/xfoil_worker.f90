@@ -101,7 +101,7 @@ program xfoil_worker
 
     case ('set')         ! set geometry value like thickness etc...
       
-      call set_geometry_value (outname_auto, output_prefix, foil, value_argument, visualizer)
+      call set_geometry_value (input_file, outname_auto, output_prefix, foil, value_argument, visualizer)
 
     case ('blend')         ! blend two airfoils...
       
@@ -155,7 +155,7 @@ subroutine check_and_do_polar_generation (input_file, output_prefix, foil)
   logical                        :: generate_polar
   character (255)                :: polars_subdirectory
 
-
+ 
   call read_xfoil_options_inputs  (input_file, 0, xfoil_options)
 
 ! Read and set options for polar generation for each new design (generate_polar = .true.) 
@@ -191,26 +191,32 @@ end subroutine check_and_do_polar_generation
 ! Setting thickness of foil
 !-------------------------------------------------------------------------
 
-subroutine set_geometry_value (outname_auto, output_prefix, seed_foil, value_argument, visualizer)
+subroutine set_geometry_value (input_file, outname_auto, output_prefix, seed_foil, &
+                               value_argument, visualizer)
 
   use vardef,             only: airfoil_type
   use os_util
   use xfoil_driver,       only : xfoil_set_thickness_camber
+  use xfoil_driver,       only : xfoil_geom_options_type
   use airfoil_operations, only : airfoil_write
   use airfoil_operations, only : repanel_and_normalize_airfoil   
   use parametrization,    only : smooth_foil  
+  use input_output,       only : read_xfoil_paneling_inputs
   
-  character(*), intent(in)     :: output_prefix, value_argument
+  character(*), intent(in)     :: output_prefix, value_argument, input_file
   type (airfoil_type), intent (inout)  :: seed_foil
   logical, intent(in)          :: visualizer, outname_auto
 
   type (airfoil_type) :: foil, foil_smoothed
+  type (xfoil_geom_options_type)  :: geom_options
   character (20)      :: value_str
   character (2)       :: value_type
   character (255)     :: outname
 
   write (*,*) 'Max thickness or camber' 
   write (*,*) 
+
+  call read_xfoil_paneling_inputs  (input_file, 0, geom_options)
 
   value_type = value_argument (1:(index (value_argument,'=') - 1))
   value_str  = value_argument ((index (value_argument,'=') + 1):)
@@ -228,7 +234,7 @@ subroutine set_geometry_value (outname_auto, output_prefix, seed_foil, value_arg
 
     case ('xt') 
       write (*,'(" - ",A)') 'Setting max. thickness position to '//trim(adjustl(value_str))//'%'
-      call repanel_and_normalize_airfoil (seed_foil, 200, .false., foil_smoothed)
+      call repanel_and_normalize_airfoil (seed_foil, geom_options, .false., foil_smoothed)
       call smooth_foil (.true., 0.1d0, foil_smoothed)
 
       call xfoil_set_thickness_camber (foil_smoothed, 0d0, (value_number / 100d0), 0d0, 0d0, foil)
@@ -240,7 +246,7 @@ subroutine set_geometry_value (outname_auto, output_prefix, seed_foil, value_arg
 
     case ('xc') 
       write (*,'(" - ",A)') 'Setting max. camber position to '//trim(adjustl(value_str))//'%'
-      call repanel_and_normalize_airfoil (seed_foil, 200, .false., foil_smoothed)
+      call repanel_and_normalize_airfoil (seed_foil, geom_options, .false., foil_smoothed)
       call smooth_foil (.true., 0.1d0, foil_smoothed)
 
       call xfoil_set_thickness_camber (foil_smoothed, 0d0, 0d0, 0d0, (value_number / 100d0), foil)
@@ -287,12 +293,15 @@ subroutine check_foil_curvature (input_file, output_prefix, seed_foil, visualize
   character(*), intent(in)     :: input_file
   character(*), intent(in)     :: output_prefix
   type (airfoil_type), intent (in)  :: seed_foil
+  type (xfoil_geom_options_type)  :: geom_options
   logical, intent(in)          :: visualizer
 
   type (airfoil_type)          :: foil, tmp_foil
   integer                      :: overall_quality
 
   write (*,*) 'Surface curvature with reversals and spikes'
+
+  call read_xfoil_paneling_inputs  (input_file, 0, geom_options)
 
   tmp_foil = seed_foil
 
@@ -306,7 +315,7 @@ subroutine check_foil_curvature (input_file, output_prefix, seed_foil, visualize
 !  ------------ analyze & smooth  -----
 
   ! do checks on repanel foil - also needed for LE point handling (!)
-  call repanel_and_normalize_airfoil (tmp_foil, tmp_foil%npoint, .false., foil)
+  call repanel_and_normalize_airfoil (tmp_foil, geom_options, .false., foil)
 
   write(*,'(" - ",A)') "Check_curvature and smooth"
   call check_and_smooth_surface (.true., .true., foil, overall_quality)
@@ -369,7 +378,7 @@ subroutine repanel_smooth (input_file, outname_auto, output_prefix, seed_foil, v
 
 ! Prepare airfoil  - Repanel and split 
 
-  call repanel_and_normalize_airfoil (seed_foil, geom_options%npan, .false., foil)
+  call repanel_and_normalize_airfoil (seed_foil, geom_options, .false., foil)
 
 ! Smooth it 
 
@@ -467,8 +476,8 @@ subroutine blend_foils (input_file, outname_auto, output_prefix, seed_foil_in, b
 
 ! Prepare - Repanel both airfoils 
 
-  call repanel_and_normalize_airfoil (seed_foil_in,  geom_options%npan, .false., in_foil)
-  call repanel_and_normalize_airfoil (blend_foil_in, geom_options%npan, .false., blend_foil)
+  call repanel_and_normalize_airfoil (seed_foil_in,  geom_options, .false., in_foil)
+  call repanel_and_normalize_airfoil (blend_foil_in, geom_options, .false., blend_foil)
 
 ! Now split  in upper & lower side 
 
@@ -584,7 +593,7 @@ subroutine set_flap (input_file, outname_auto, output_prefix, seed_foil, visuali
 
 ! Repanel seed airfoil with xfoil PANGEN 
 
-  call repanel_and_normalize_airfoil (seed_foil, geom_options%npan, .false., foil)
+  call repanel_and_normalize_airfoil (seed_foil, geom_options, .false., foil)
 
   call xfoil_set_airfoil(foil)
 

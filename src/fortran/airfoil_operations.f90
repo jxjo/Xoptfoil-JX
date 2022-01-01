@@ -398,37 +398,34 @@ end subroutine le_find
 !    offset. SO this is iterated until the offset is smaller than epsilon
 !
 !-----------------------------------------------------------------------------
-subroutine repanel_and_normalize_airfoil (in_foil, npoint_paneling, symmetrical, foil)
+subroutine repanel_and_normalize_airfoil (in_foil, xfoil_geom_options, symmetrical, foil)
 
   use vardef,       only : airfoil_type         
   use math_deps,    only : norm_2
-  use xfoil_driver, only : smooth_paneling
+  use xfoil_driver, only : smooth_paneling, xfoil_geom_options_type
 
   type(airfoil_type), intent(in)    :: in_foil
   type(airfoil_type), intent(out)   :: foil
-  integer,            intent(in)    :: npoint_paneling
+  type(xfoil_geom_options_type),intent(in)    :: xfoil_geom_options
   logical,            intent(in)    :: symmetrical
 
   type(airfoil_type)  :: tmp_foil
-  integer             :: i, pointst, pointsb, npoint_new
+  integer             :: i, pointst, pointsb
   logical             :: le_fixed
   double precision, dimension(2) :: p, p_next
-  character (10)       :: text
 
   ! iteration thresholds
   double precision, parameter    :: EPSILON = 1.d-12          ! distance xfoil LE to 0,0
   double precision, parameter    :: LE_PANEL_FACTOR = 0.2d0   ! lenght LE panel / length prev panel
 
-  npoint_new = npoint_paneling
-  
-  allocate (tmp_foil%x(npoint_new))  
-  allocate (tmp_foil%z(npoint_new))  
-  tmp_foil%npoint = npoint_new
+  tmp_foil%npoint = xfoil_geom_options%npan
+  allocate (tmp_foil%x(tmp_foil%npoint))  
+  allocate (tmp_foil%z(tmp_foil%npoint))  
 
   foil%name = in_foil%name
 
   ! initial paneling to npoint_new
-  call smooth_paneling(in_foil, npoint_new, foil)
+  call smooth_paneling(in_foil, 0, foil, xfoil_geom_options)
  
   call le_find(foil%x, foil%z, foil%leclose, foil%xle, foil%zle, foil%addpoint_loc)
   le_fixed = .false. 
@@ -449,7 +446,7 @@ subroutine repanel_and_normalize_airfoil (in_foil, npoint_paneling, symmetrical,
     
     tmp_foil%x = foil%x
     tmp_foil%z = foil%z
-    call smooth_paneling(tmp_foil, npoint_new, foil)
+    call smooth_paneling(tmp_foil, 0, foil, xfoil_geom_options)
     call le_find(foil%x, foil%z, foil%leclose, foil%xle, foil%zle, foil%addpoint_loc)
     
   end do
@@ -473,17 +470,6 @@ subroutine repanel_and_normalize_airfoil (in_foil, npoint_paneling, symmetrical,
     call print_warning ("Leading edge couln't be moved close to 0,0. Continuing ...",3)
     write (*,*)
   end if 
-
-  write (*,'(/," - ",A)', advance = 'no') 'Repaneling and normalizing.'
-
-  if (foil%addpoint_loc /= 0) then 
-    write (text,'(I3)') (npoint_new + 1)
-    call print_colored (COLOR_NOTE, ' Leading edge added.')
-  else
-    write (text,'(I3)') npoint_new 
-  end if
-  call print_colored (COLOR_NOTE, ' Airfoil will have '//trim(adjustl(text)) //' Points')
-  write (*,*) 
 
   ! now split airfoil to get upper and lower polyline 
   !     if there is a new leading added it will be added to the polylines
@@ -512,6 +498,14 @@ subroutine repanel_and_normalize_airfoil (in_foil, npoint_paneling, symmetrical,
     foil%x(i+pointst) = foil%xb(i+1)
     foil%z(i+pointst) = foil%zb(i+1)
   end do
+
+  write (*,'(/," - ",A)', advance = 'no') 'Repaneling and normalizing.'
+
+  if (foil%addpoint_loc /= 0) then 
+    call print_colored (COLOR_NOTE, ' Leading edge added.')
+  end if
+  call print_colored (COLOR_NOTE, ' Airfoil will have '//stri(foil%npoint) //' Points')
+  write (*,*) 
 
 
 end subroutine repanel_and_normalize_airfoil

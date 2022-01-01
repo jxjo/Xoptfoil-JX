@@ -33,8 +33,8 @@ module optimization_driver
 !=============================================================================80
 subroutine matchfoils_preprocessing(matchfoil_file)
 
-  use vardef,             only : airfoil_type,  npan_fixed, seed_foil
-  use airfoil_evaluation, only : foil_to_match
+  use vardef,             only : airfoil_type, seed_foil
+  use airfoil_evaluation, only : foil_to_match, xfoil_geom_options
   use airfoil_operations, only : get_seed_airfoil,  rebuild_airfoil
   use airfoil_operations, only : repanel_and_normalize_airfoil
   use math_deps,          only : interp_vector, transformed_arccos
@@ -54,7 +54,7 @@ subroutine matchfoils_preprocessing(matchfoil_file)
 
 ! Repanel to npan_fixed points and normalize to get LE at 0,0 and TE (1,0) and split
 
-  call repanel_and_normalize_airfoil (original_foil, npan_fixed, .false., foil_to_match)
+  call repanel_and_normalize_airfoil (original_foil, xfoil_geom_options, .false., foil_to_match)
 
   call print_note_only ('Preparing '//trim(original_foil%name)//' to be matched by '//&
                         trim(seed_foil%name),3)
