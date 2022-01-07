@@ -125,7 +125,7 @@ subroutine check_inputs(global_search, pso_options)
     if (ndyn < 3) &
       call my_stop("Dynamic weighting needs at least 3 op points with a target based"//  &
                    " optimization_type")
-    if (nscaled > (ndyn/3)) &
+    if ((ndyn - nscaled) < 3) &
       call my_stop("For Dynamic weighting only a few targets should have a scaled weighting <> 1.0."//&
                    " Set weighting to 1.0 (or just remove it)")
     call print_note ("Dynamic weighting starting with design #"// & 
@@ -921,7 +921,7 @@ subroutine auto_curvature_threshold_polyline (info, show_details, x,y , c_spec)
                              min_threshold, max_threshold, max_curv_reverse)
   
 ! ... and give a little more threshold to breeze
-  curv_threshold = curv_threshold * 1.2d0     
+  curv_threshold = curv_threshold * 1.1d0     
 
   c_spec%curv_threshold = curv_threshold
 
@@ -960,6 +960,7 @@ subroutine auto_spike_threshold_polyline (show_details, x,y , c_spec)
   double precision    :: min_threshold, max_threshold
   integer             :: istart, iend, nspikes, quality_threshold
   character (16)      :: label
+  character (5)       :: text_who
 
   double precision, parameter    :: OK_THRESHOLD  = 0.4d0
 
@@ -990,13 +991,17 @@ subroutine auto_spike_threshold_polyline (show_details, x,y , c_spec)
                     min_threshold, max_threshold, nspikes)
 
 ! ... and give a little more threshold to breeze
-  c_spec%spike_threshold = spike_threshold * 1.2d0 
+  c_spec%spike_threshold = spike_threshold * 1.1d0 
 
 ! Max Spikes - allow at least max_curv_reverse or seed spikes as max number of spikes 
 
-  nspikes = max (nspikes, c_spec%max_curv_reverse)
+  if (c_spec%max_spikes == 0 )  then 
+    c_spec%max_spikes = max (nspikes, c_spec%max_curv_reverse)
+    text_who = 'Auto:'
+  else
   ! ... overwrite from input file by user? 
-  c_spec%max_spikes = max (nspikes, c_spec%max_spikes)
+    text_who = 'User:'
+  end if 
 
 
 ! Print it all 
@@ -1010,7 +1015,7 @@ subroutine auto_spike_threshold_polyline (show_details, x,y , c_spec)
     if (c_spec%max_spikes == 0) then 
       call print_colored (COLOR_NOTE, '   There will be no spikes or bumps.')
     else
-      call print_colored (COLOR_NOTE, '   There will be max '//stri(c_spec%max_spikes) //' spike(s) or bump(s).')
+      call print_colored (COLOR_NOTE, '   '//text_who//' There will be max '//stri(c_spec%max_spikes) //' spike(s) or bump(s).')
     end if
     write (*,*)
   end if 
@@ -1038,7 +1043,7 @@ subroutine auto_te_curvature_polyline (show_details, x,y , c_spec)
   max_te_curvature = get_max_te_curvature (x, y)  
   
 ! give a little more to breath during opt.
-  max_te_curvature = max ((max_te_curvature * 1.2d0), (max_te_curvature + 0.1d0))
+  max_te_curvature = max ((max_te_curvature * 1.1d0), (max_te_curvature + 0.05d0))
 
   c_spec%max_te_curvature = max_te_curvature
 

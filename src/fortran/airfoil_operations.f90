@@ -579,6 +579,13 @@ subroutine transform_airfoil (foil)
     end if
   end do
 
+  ! Ensure TE is at x=1
+
+  If (foil%x(1) /= 1d0 .or. foil%x(npoints) /= 1d0) then 
+    foil%x(1)       = 1d0
+    foil%x(npoints) = 1d0
+  end if 
+
   ! Force TE to 0.0 if z < epsilon 
 
   if (foil%z(1) == foil%z(npoints) .and. abs(foil%z(1)) < EPSILON) then 

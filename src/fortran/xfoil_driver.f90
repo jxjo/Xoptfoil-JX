@@ -952,7 +952,6 @@ subroutine xfoil_set_paneling(geom_options)
                         XPREF2
 
   type(xfoil_geom_options_type), intent(in) :: geom_options
-
   NPAN = geom_options%npan
   CVPAR = geom_options%cvpar
   CTERAT = geom_options%cterat
@@ -1129,9 +1128,43 @@ subroutine xfoil_set_thickness_camber (infoil, maxt, xmaxt, maxc, xmaxc, outfoil
 
 ! Check to make sure xfoil is initialized
   if (.not. allocated(AIJ)) then
-    write(*,*) "Error: xfoil is not initialized!  Call xfoil_init() first."
+    call print_error ("Set thickness or camber: xfoil is not initialized!  Call xfoil_init() first.")
     stop
   end if
+
+! Sanity Checks
+
+  if (maxt > 0d0) then
+    if (maxt < 0.01d0 .or. maxt > 0.2d0) then 
+      call print_error ("Set thickness or camber: Thickness must be between 0.01 and 0.2", 3)
+      outfoil = infoil
+      return 
+    end if 
+  end if  
+
+  if (xmaxt > 0d0) then
+    if (xmaxt < 0.1d0 .or. xmaxt > 0.9d0) then 
+      call print_error ("Set thickness or camber: Max thickness location must be between 0.1 and 0.9", 3)
+      outfoil = infoil
+      return 
+    end if 
+  end if  
+
+  if (maxc > 0d0) then
+    if (maxc > 0.1d0) then 
+      call print_error ("Set thickness or camber: Camber must be less than 0.1", 3)
+      outfoil = infoil
+      return 
+    end if 
+  end if  
+
+  if (xmaxc > 0d0) then
+    if (xmaxc < 0.1d0 .or. xmaxc > 0.9d0) then 
+      call print_error ("Set thickness or camber: Max camber location must be between 0.1 and 0.9", 3)
+      outfoil = infoil
+      return 
+    end if 
+  end if  
 
 ! Set xfoil airfoil and prepare globals, get current thickness
   call xfoil_set_airfoil (infoil)
