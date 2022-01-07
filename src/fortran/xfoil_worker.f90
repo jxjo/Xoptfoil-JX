@@ -406,7 +406,7 @@ subroutine repanel_smooth (input_file, outname_auto, output_prefix, seed_foil, v
       outname = trim(output_prefix)
     end if
 
-    foil%name   = output_prefix
+    foil%name   = trim(outname)
     call airfoil_write   (trim(outname)//'.dat', trim(foil%name), foil)
 
   end if 
