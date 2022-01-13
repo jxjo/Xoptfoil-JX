@@ -24,10 +24,11 @@ import numpy as np
 from math import log10, floor
 from sys import version_info
 import time
+import os
 
 # Directory where all the Xoptfoil-FX data files coming from 
 
-DESIGN_SUBDIR_POSTFIX = '_temp\\'
+DESIGN_SUBDIR_POSTFIX = '_temp'
 
 
 # Default plottiong options
@@ -325,8 +326,8 @@ def read_optimization_history(prefix, step):
 
   # Try to open the file
 
-  try:
-    f = open(prefix + DESIGN_SUBDIR_POSTFIX + 'Optimization_History.dat')
+  try:   
+    f = open(os.path.join(prefix + DESIGN_SUBDIR_POSTFIX, 'Optimization_History.dat'))
   except IOError:
     ioerror = 1
     return fmin, relfmin, rad, ioerror
@@ -377,7 +378,7 @@ def load_full_polar (prefix, seedfoil, designfoils):
   # Read seed foil polar
 
   if (len(seedfoil.full_polar_alpha) == 0):
-    filename = prefix + DESIGN_SUBDIR_POSTFIX + 'Seed_FullPolar.txt'
+    filename = os.path.join(prefix + DESIGN_SUBDIR_POSTFIX, 'Seed_FullPolar.txt')
     designcounter = 0
 
     alpha, cl, cd, cm, xtrt, xtrb, re, ioerror = read_full_polar(filename, designcounter)
@@ -392,7 +393,7 @@ def load_full_polar (prefix, seedfoil, designfoils):
   # Read design foil polar
 
   if (len(designfoils) > 0 and len (designfoils[-1].full_polar_alpha) == 0 ):
-    filename = prefix + DESIGN_SUBDIR_POSTFIX + 'Design_FullPolar.txt'
+    filename = os.path.join(prefix + DESIGN_SUBDIR_POSTFIX, 'Design_FullPolar.txt')
     designcounter = len(designfoils)
 
     alpha, cl, cd, cm, xtrt, xtrb, re, ioerror = read_full_polar(filename, designcounter)
@@ -1339,8 +1340,8 @@ def read_new_airfoil_data(seedfoil, designfoils, prefix):
 
   # Set up file names to monitor
 
-  coordfilename = prefix + DESIGN_SUBDIR_POSTFIX + 'Design_Coordinates.dat'
-  polarfilename = prefix + DESIGN_SUBDIR_POSTFIX + 'Design_Polars.dat'
+  coordfilename = os.path.join(prefix + DESIGN_SUBDIR_POSTFIX, 'Design_Coordinates.dat')
+  polarfilename = os.path.join(prefix + DESIGN_SUBDIR_POSTFIX, 'Design_Polars.dat')
 
   # Loop through files until we reach latest available design
 
@@ -1873,8 +1874,8 @@ if __name__ == "__main__":
     prefix = my_input("is the default case name): ")
     print("")
 
-  coordfilename = prefix + DESIGN_SUBDIR_POSTFIX + 'Design_Coordinates.dat'
-  polarfilename = prefix + DESIGN_SUBDIR_POSTFIX + 'Design_Polars.dat'
+  coordfilename = os.path.join(prefix + DESIGN_SUBDIR_POSTFIX, 'Design_Coordinates.dat')
+  polarfilename = os.path.join(prefix + DESIGN_SUBDIR_POSTFIX, 'Design_Polars.dat')
 
   # Read airfoil coordinates and polars
 
