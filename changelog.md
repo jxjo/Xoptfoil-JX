@@ -4,9 +4,16 @@ Change Log for Xoptfoil-JX
 
 This is bugfix release.  
 Have a look in the version 1.70 feature list to get all enhancements of version 1.70. 
-  
-- Bug: Setting and optimization of flpas didn't work.
-- Improvement: Polar generation is done now in two parts starting at alpha = 0 downwards and then at alpha = 0 upwards to improve xfoil convergence.
+
+Fixes:
+- Setting and optimization of flpas didn't work.
+- Less safety threshold for auto curvature checks.
+- Worker: Output filename for option -norm.
+- Visualizer: Handling of directory path now compatible with LINUX
+- Minor docu fixes.
+
+Improvements: 
+- Polar generation is done now in two parts starting at alpha = 0 downwards and then at alpha = 0 upwards to improve xfoil convergence.
 
 ## [1.71.2 ] - 2022-01
 
