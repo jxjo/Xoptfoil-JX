@@ -1,5 +1,22 @@
 Change Log for Xoptfoil-JX
 
+## [1.71.3] - 2022-01
+
+This is bugfix release.  
+Have a look in the version 1.70 feature list to get all enhancements of version 1.70. 
+  
+- Bug: Setting and optimization of flpas didn't work.
+- Improvement: Polar generation is done now in two parts starting at alpha = 0 downwards and then at alpha = 0 upwards to improve xfoil convergence.
+
+## [1.71.2 ] - 2022-01
+
+This is bugfix release.  
+Have a look in the version 1.70 feature list to get all enhancements of version 1.70. 
+  
+- Visualizer stopped monitoring when no polar was generated during optimization.
+- Xfoil paneling options didn't work. 
+- Minor improvements for symmetrical airfoils. 
+
 ## [1.71.1 ] - 2021-12
 
 This is bugfix release.  
