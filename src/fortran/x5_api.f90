@@ -68,7 +68,7 @@ subroutine x5_init (input_file, seed_foil_in)
 
   use os_util
   use vardef,             only : airfoil_type, seed_foil
-  use vardef,             only : flap_spec, flap_degrees
+  use vardef,             only : flap_spec, flap_degrees, flap_selection
   use xfoil_driver,       only : xfoil_init, xfoil_defaults, re_type
   use airfoil_evaluation, only : xfoil_options, xfoil_geom_options
   use airfoil_evaluation, only : check_geometry
@@ -85,12 +85,15 @@ subroutine x5_init (input_file, seed_foil_in)
   type(re_type)                   :: re_default
 
 
+  show_details = .true.
+
+  call read_op_points_spec(input_file, 0,noppoint, re_default, &
+                           flap_spec, flap_degrees, flap_selection, &
+                           op_points_spec, dynamic_weighting_spec)
+
   flap_degrees (:)    = 0.d0                      ! no flaps used, needed for check_seed
   flap_spec%use_flap  = .false. 
 
-  show_details = .true.
-
-  call read_op_points_spec        (input_file, 0, noppoint, re_default, op_points_spec, dynamic_weighting_spec) 
   call read_xfoil_options_inputs  (input_file, 0, xfoil_options)
   xfoil_options%show_details = .true.
   call read_xfoil_paneling_inputs (input_file, 0, xfoil_geom_options)

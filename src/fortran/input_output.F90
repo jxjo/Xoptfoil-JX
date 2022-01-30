@@ -200,16 +200,12 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
 
   if (.not. match_foils) then
 
-    call read_op_points_spec('', iunit, noppoint, re_default, op_points_spec, dynamic_weighting_spec)
-
+    call read_op_points_spec('', iunit, noppoint, re_default, &
+                             flap_spec, flap_degrees, flap_selection, &
+                             op_points_spec, dynamic_weighting_spec)
   else 
      noppoint = 0
   end if
-
-
-  ! Read flap spec in operating conditions - flaps to optimize
-
-  call read_flap_inputs   ('', iunit, flap_spec, flap_degrees, flap_selection)
 
   nflap_optimize = 0
   if (flap_spec%use_flap .and. (.not. match_foils)) then
@@ -953,16 +949,21 @@ end subroutine read_inputs
 !=============================================================================
 
 subroutine read_op_points_spec  (input_file, or_iunit, noppoint, re_def, &
+                                 flap_spec, flap_degrees, flap_selection, &
                                  op_points_spec, dynamic_weighting_spec)
 
   use xfoil_driver,       only : op_point_specification_type, re_type
   use airfoil_evaluation, only : dynamic_weighting_specification_type
-  use vardef,             only : max_op_points
+  use vardef,             only : max_op_points, flap_spec_type
 
   character(*), intent(in)    :: input_file 
   integer, intent(in)         :: or_iunit
   integer, intent(out)        :: noppoint
   type (re_type), intent(out) :: re_def
+
+  type(flap_spec_type), intent(out) :: flap_spec
+  double precision, dimension(:), intent(inout) :: flap_degrees
+  character(8),     dimension(:), intent(inout) :: flap_selection
 
   type(op_point_specification_type), dimension(:), allocatable, intent(out)  :: op_points_spec
   type(dynamic_weighting_specification_type), intent(out) :: dynamic_weighting_spec
@@ -974,20 +975,17 @@ subroutine read_op_points_spec  (input_file, or_iunit, noppoint, re_def, &
   double precision, dimension(max_op_points)  :: op_point, weighting, &
                                                  ncrit_pt, target_value, reynolds, mach
 
-  double precision :: re_default
-  logical          :: re_default_as_resqrtcl, dynamic_weighting
-  logical          :: allow_improved_target
+  double precision      :: re_default
+  logical               :: re_default_as_resqrtcl, dynamic_weighting
+  logical               :: allow_improved_target
   type(op_point_specification_type) :: op
 
   integer               :: i, iunit, ioerr, iostat1
   character(10)         :: text
 
-  ! dummy flap variables
-  double precision, dimension(max_op_points) :: flap_degrees
-  character(8),     dimension(max_op_points) :: flap_selection
-  double precision               :: x_flap, y_flap
-  character(3)                   :: y_flap_spec
-  logical                        :: use_flap
+  double precision      :: x_flap, y_flap
+  character(3)          :: y_flap_spec
+  logical               :: use_flap
 
 
   namelist /operating_conditions/ noppoint, op_mode, op_point, reynolds, mach,   &
@@ -1011,6 +1009,13 @@ subroutine read_op_points_spec  (input_file, or_iunit, noppoint, re_def, &
   weighting(:) = 1.d0
   ncrit_pt(:) = -1.d0
   target_value(:) = -1.d3 
+
+  use_flap     = .false.                
+  x_flap       = 0.75d0
+  y_flap       = 0.d0
+  y_flap_spec  = 'y/c'
+  flap_degrees      = 0d0
+  flap_selection    = 'specify'
 
   allow_improved_target = .false.
 
@@ -1099,6 +1104,12 @@ subroutine read_op_points_spec  (input_file, or_iunit, noppoint, re_def, &
   op_points_spec%weighting    = op_points_spec%weighting_user / sum(op_points_spec%weighting_user)
   op_points_spec%scale_factor = 1d0
 
+! Flap settings to final data structure
+
+  flap_spec%use_flap    = use_flap
+  flap_spec%x_flap      = x_flap
+  flap_spec%y_flap      = y_flap
+  flap_spec%y_flap_spec = y_flap_spec
 
 ! Check input data  ------------------------
 
@@ -1108,6 +1119,16 @@ subroutine read_op_points_spec  (input_file, or_iunit, noppoint, re_def, &
      text = adjustl(text)
      call my_stop("noppoints must be <= "//trim(text)//".")
   end if
+
+  if ((use_flap) .and. (x_flap <= 0.0)) call my_stop("x_flap must be > 0.")
+  if ((use_flap) .and. (x_flap >= 1.0)) call my_stop("x_flap must be < 1.")
+  if ((use_flap) .and. (y_flap_spec /= 'y/c') .and. (y_flap_spec /= 'y/t'))    &
+    call my_stop("y_flap_spec must be 'y/c' or 'y/t'.")
+
+  if ((y_flap_spec  /= 'y/c') .and. (y_flap_spec  /= 'y/t')) &
+    call my_stop ("Vertical hinge definition must be 'y/c' or 'y/t'")
+
+
 
   do i = 1, noppoint
 
@@ -1163,6 +1184,13 @@ subroutine read_op_points_spec  (input_file, or_iunit, noppoint, re_def, &
         (target_value(i)) == -1.d3) )                                         &
       call my_op_stop (i,op_points_spec, "No 'target-value' defined for "//  &
                      "for optimization_type 'target-lift'")
+
+    if (abs(flap_degrees(i)) > 70d0) &
+      call my_stop ('Flap angle must be less than 70 degrees')
+    if ((flap_selection(i) /= 'specify') .and. (flap_selection(i) /= 'optimize')) then
+      call my_stop ("Flap selection must be 'spcify' or 'optimize')")
+    end if 
+
   end do
 
 end subroutine read_op_points_spec
