@@ -463,6 +463,7 @@ def read_full_polar(filename, designcounter):
   zonetitle = " -------"
   zonefound = False
   zonelen = len(zonetitle)
+  last_alpha = -1000.0              # dummy start value
 
   for textline in f:
     if (not zonefound):
@@ -473,12 +474,25 @@ def read_full_polar(filename, designcounter):
 
       # Otherwise read polars
       line = textline.split()
-      alpha.append(float(line[0]))
-      cl.append(float(line[1]))
-      cd.append(float(line[2]))
-      cm.append(float(line[4]))
-      xtrt.append(float(line[5]))
-      xtrb.append(float(line[6]))
+      current_alpha = float(line[0])
+
+      # op points could be mixed up in order 
+      if (current_alpha < last_alpha):
+        alpha.insert(0,float(line[0]))
+        cl.insert(0,float(line[1]))
+        cd.insert(0,float(line[2]))
+        cm.insert(0,float(line[4]))
+        xtrt.insert(0,float(line[5]))
+        xtrb.insert(0,float(line[6]))
+      else:
+        alpha.append(float(line[0]))
+        cl.append(float(line[1]))
+        cd.append(float(line[2]))
+        cm.append(float(line[4]))
+        xtrt.append(float(line[5]))
+        xtrb.append(float(line[6]))
+
+      last_alpha = current_alpha 
 
   # Error if zone has not been found after reading the file
   if (not zonefound):
@@ -934,8 +948,10 @@ def plot_polars(seedfoil, designfoils, plotnum, firsttime=True, animation=False,
   almax = almax + 0.1*alrng
   almin = almin - 0.1*alrng
   cdrng = cdmax - cdmin
-  cdmax = cdmax + 0.0*cdrng          # use full range
-  cdmin = cdmin - 0.1*cdrng
+  # cdmax = cdmax + 0.0*cdrng          # use full range
+  cdmax = min ((cdmin * 3), cdmax)     # cd tends to have a wide range - limit it ...
+  # cdmin = cdmin - 0.1*cdrng
+  cdmin = cdmin - 0.3 * cdmin
   clrng = clmax - clmin
   clmax = clmax + 0.0*clrng          # use full range
   clmin = clmin - 0.1*clrng

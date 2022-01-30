@@ -288,20 +288,51 @@ subroutine init_polars ()
     polars(ipol)%file_name = build_filename (polars(ipol))
 
   ! init op data points of polar
+  !
+  ! if polar is running from eg -5 to +10, split the polar in
+  !   0     ... -5
+  !   (0+x) ... + 10
+  ! to ensure xfoil convergence (starting with a high negative value is critical)
 
-    cur_value = polars(ipol)%start_value
+    i = 0 
 
-    do i = 1, polars(ipol)%n_op_points
+    if (polars(ipol)%start_value < 0d0) then 
 
-      polars(ipol)%op_points_spec(i)%value    = cur_value
-      polars(ipol)%op_points_spec(i)%spec_cl  = polars(ipol)%spec_cl
-      polars(ipol)%op_points_spec(i)%re       = polars(ipol)%re
-      polars(ipol)%op_points_spec(i)%ma       = polars(ipol)%ma
-      polars(ipol)%op_points_spec(i)%ncrit    = polars(ipol)%ncrit
+    ! go downward from smallest-1 to start value 
 
-      cur_value = cur_value + polars(ipol)%increment
+      if (polars(ipol)%end_value > 0d0) then 
+        cur_value =  smallest_op_point (polars(ipol)) - polars(ipol)%increment
+      else 
+        cur_value =  smallest_op_point (polars(ipol)) 
+      end if 
 
-    end do
+      do while (cur_value >= polars(ipol)%start_value)
+        i = i + 1
+        polars(ipol)%op_points_spec(i)%value    = cur_value
+        polars(ipol)%op_points_spec(i)%spec_cl  = polars(ipol)%spec_cl
+        polars(ipol)%op_points_spec(i)%re       = polars(ipol)%re
+        polars(ipol)%op_points_spec(i)%ma       = polars(ipol)%ma
+        polars(ipol)%op_points_spec(i)%ncrit    = polars(ipol)%ncrit
+        cur_value = cur_value - polars(ipol)%increment
+      end do       
+    end if 
+
+    if (polars(ipol)%end_value > 0d0) then 
+
+      ! go upward from smallest to end value 
+
+      cur_value = smallest_op_point (polars(ipol))
+      do while (cur_value <= polars(ipol)%end_value + 1.d-6)
+        i = i + 1
+        polars(ipol)%op_points_spec(i)%value    = cur_value
+        polars(ipol)%op_points_spec(i)%spec_cl  = polars(ipol)%spec_cl
+        polars(ipol)%op_points_spec(i)%re       = polars(ipol)%re
+        polars(ipol)%op_points_spec(i)%ma       = polars(ipol)%ma
+        polars(ipol)%op_points_spec(i)%ncrit    = polars(ipol)%ncrit
+        cur_value = cur_value + polars(ipol)%increment
+      end do       
+    end if 
+
   end do
 
 end subroutine init_polars
@@ -430,6 +461,29 @@ function  get_n_op_points (polar)
     end do 
   
   end function get_n_op_points
+
+!-----------------------------------------------------------------------------
+! the smallest (absolute) value of operating points of polar 
+!-----------------------------------------------------------------------------
+  function  smallest_op_point (polar)
+
+    type (polar_type), intent (in) :: polar
+    double precision :: smallest_op_point
+    double precision :: cur_value, end_value
+  
+    smallest_op_point = polar%start_value
+    cur_value       = polar%start_value
+    end_value       = polar%end_value + 1.d-6    ! due to double prec compare
+  
+    do while (cur_value <= end_value)
+      if (abs (cur_value) < abs(smallest_op_point)) then
+        smallest_op_point = cur_value
+      end if 
+      cur_value = cur_value +  polar%increment
+    end do 
+  
+  end function smallest_op_point
+
   
 !-----------------------------------------------------------------------------
 ! build filename for polar file in this special xflr5 format
