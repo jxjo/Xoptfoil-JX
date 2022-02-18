@@ -80,6 +80,8 @@ cl_sections = 'grey'
 cl_userAirfoil = 'aqua'
 cl_optAirfoil = 'yellow'
 cl_infotext = 'aqua'
+cl_referenceChord = 'gray'
+cl_normalizedChord = 'blue'
 
 ls_quarterChordLine = 'solid'
 lw_quarterChordLine  = 0.8
@@ -178,6 +180,19 @@ class wingSection:
 
 ################################################################################
 #
+# normalizedGrid class
+#
+################################################################################
+class normalizedGrid:
+
+    # class init
+     def __init__(self):
+        self.y = 0.0
+        self.chord = 0.0
+        self.referenceChord = 0.0
+
+################################################################################
+#
 # wingGrid class
 #
 ################################################################################
@@ -230,6 +245,7 @@ class wing:
         self.polarReynolds = []    # for polar creation
         self.sections = []
         self.grid = []
+        self.normalizedGrid = []
         self.valueList = []
         self.chords = []
         self.isFin = False
@@ -266,6 +282,8 @@ class wing:
             cl_userAirfoil = 'black'
             cl_optAirfoil = 'black'
             cl_infotext = 'black'
+            cl_referenceChord = 'gray'
+            cl_normalizedChord = 'black'
         else:
             # dark theme
             cl_background = 'dark_background'
@@ -279,6 +297,8 @@ class wing:
             cl_userAirfoil = 'aqua'
             cl_optAirfoil = 'yellow'
             cl_infotext = 'aqua'
+            cl_referenceChord = 'gray'
+            cl_normalizedChord = 'blue'
 
 
     # compose a name from the airfoil basic name and the Re-number
@@ -543,6 +563,37 @@ class wing:
     def set_lastSectionAirfoilName(self, section):
             section.airfoilName = self.airfoilNames[section.number-2]
 
+   # calculates a chord-distribution, which is normalized to root_chord = 1.0
+   # half wingspan = 1
+    def calculate_normalizedChordDistribution(self):
+         # calculate interval for setting up the grid
+        grid_delta_y = 1 / (self.numberOfGridChords-1)
+        normalizedTipChord = self.tipDepthPercent / 100
+
+        # calculate all Grid-chords
+        for i in range(1, (self.numberOfGridChords + 1)):
+            # create new normalized grid
+            grid = normalizedGrid()
+
+            # calculate grid coordinates
+            grid.y = grid_delta_y * (i-1)
+
+            # pure elliptical shaping of the wing as a reference
+            grid.referenceChord = np.sqrt(1.0-(grid.y*grid.y))
+
+            # normalized chord-length
+            if self.planformShape == 'elliptical':
+                # elliptical shaping of the wing
+                grid.chord = (1.0 - normalizedTipChord)\
+                 *np.sqrt(1.0-(grid.y*grid.y))\
+                 + normalizedTipChord
+            else:
+                # trapezoidal shaping of the wing
+                grid.chord = (1.0-grid.y) \
+                            + normalizedTipChord * (grid.y)
+
+            # append section to section-list of wing
+            self.normalizedGrid.append(grid)
 
     # calculate planform-shape of the half-wing (high-resolution wing planform)
     def calculate_planform(self):
@@ -590,6 +641,11 @@ class wing:
 
         # calculate all Grid-chords
         for i in range(1, (self.numberOfGridChords + 1)):
+
+            # Get normalized grid for chordlength calculation
+            normalizedGrid = self.normalizedGrid[i-1]
+            normalizedChord = normalizedGrid.chord
+
             # create new grid
             grid = wingGrid()
 
@@ -597,16 +653,18 @@ class wing:
             grid.y = grid_delta_y * (i-1)
 
             # chord-length
-            if self.planformShape == 'elliptical':
-                # elliptical shaping of the wing with straight hing-line
-                #self.rootchord*(1-self.overElipticOffset)
-                grid.chord = (self.rootchord-self.tipDepth)\
-                 *np.sqrt(1-(grid.y*grid.y/(self.halfwingspan*self.halfwingspan)))\
-                 + self.tipDepth
-            else:
-                # trapezoidal shaping of the wing
-                grid.chord = self.rootchord*(self.halfwingspan-grid.y)/self.halfwingspan \
-                            + self.tipDepth* (grid.y/self.halfwingspan)
+##            if self.planformShape == 'elliptical':
+##                # elliptical shaping of the wing with straight hing-line
+##                #self.rootchord*(1-self.overElipticOffset)
+##                grid.chord = (self.rootchord-self.tipDepth)\
+##                 *np.sqrt(1-(grid.y*grid.y/(self.halfwingspan*self.halfwingspan)))\
+##                 + self.tipDepth
+##            else:
+##                # trapezoidal shaping of the wing
+##                grid.chord = self.rootchord*(self.halfwingspan-grid.y)/self.halfwingspan \
+##                            + self.tipDepth* (grid.y/self.halfwingspan)
+
+            grid.chord = self.rootchord * normalizedChord
 
             # calculate hingeDepth in percent at this particular point along the wing
             hingeDepth_y = interpolate(0.0, self.halfwingspan,
@@ -1244,6 +1302,51 @@ class wing:
         # customize grid
         ax.grid(True, color='dimgrey',  linestyle='dotted', linewidth=0.4)
 
+    def draw_NormalizedChordDistribution(self):
+        # set background style
+        plt.style.use(cl_background)
+
+        # customize grid
+        plt.grid(True, color='dimgrey',  linestyle='dotted', linewidth=0.4)
+
+        normalizedHalfwingspan = []
+        normalizedChord = []
+        referenceChord = []
+
+        for element in self.normalizedGrid:
+            normalizedHalfwingspan.append(element.y)
+            normalizedChord.append(element.chord)
+            referenceChord.append(element.referenceChord)
+
+        # set axes and labels
+        #self.set_AxesAndLabels(ax, "Half-wing planform")
+
+
+        plt.plot(normalizedHalfwingspan, normalizedChord, color=cl_normalizedChord,
+                linewidth = lw_planform, solid_capstyle="round",
+                label = "normalized chord")
+
+        plt.plot(normalizedHalfwingspan, referenceChord, color=cl_referenceChord,
+                linewidth = lw_planform, solid_capstyle="round",
+                label = "pure ellipse")
+
+
+        plt.title("Normalized chord distribution")
+        plt.legend(loc='lower right', fontsize = fs_legend)
+
+        # maximize window
+        figManager = plt.get_current_fig_manager()
+        try:
+            figManager.window.Maximize(True)
+        except:
+            try:
+                figManager.window.state('zoomed')
+            except:
+                pass
+
+        # show diagram
+        plt.show()
+
 
     # draw the graph
     def draw(self):
@@ -1829,6 +1932,10 @@ if __name__ == "__main__":
     # set data for the planform
     newWing.set_Data(planformData)
 
+    # before calculating the planform with absolute numbers,
+    # calculate normalized chord distribution
+    newWing.calculate_normalizedChordDistribution()
+
     # calculate the grid, the chordlengths of the airfoils and the sections
     newWing.calculate_planform()
     newWing.calculate_ReNumbers()
@@ -1925,6 +2032,9 @@ if __name__ == "__main__":
 
     # set colours according to selected theme
     newWing.set_colours()
+
+    # plot the normalized chord distribution
+    newWing.draw_NormalizedChordDistribution()
 
     # plot the planform
     newWing.draw()
