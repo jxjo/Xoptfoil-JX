@@ -33,6 +33,8 @@ from matplotlib import pyplot as plt
 from matplotlib import rcParams
 import numpy as np
 from scipy.interpolate import make_interp_spline
+from scipy import interpolate as scipy_interpolate
+from scipy.ndimage import gaussian_filter1d
 from math import log10, floor, tan, atan, sin, cos, pi, sqrt
 import json
 import tkinter
@@ -228,6 +230,8 @@ class wing:
         self.wingspan = 2.54
         self.fuselageWidth = 0.035
         self.planformShape = 'elliptical'
+        self.planform_x = []
+        self.planform_y = []
         self.halfwingspan = 0.0
         self.numberOfGridChords = 16384
         self.hingeDepthRoot = 23.0
@@ -371,7 +375,8 @@ class wing:
         self.wingspan =  get_MandatoryParameterFromDict(dictData, "wingspan")
         self.fuselageWidth =  get_MandatoryParameterFromDict(dictData, "fuselageWidth")
         self.planformShape =  get_MandatoryParameterFromDict(dictData, "planformShape")
-
+        self.planform_x = get_MandatoryParameterFromDict(dictData, "planform_x")
+        self.planform_y = get_MandatoryParameterFromDict(dictData, "planform_y")
         if self.planformShape == 'elliptical':
             self.leadingEdgeCorrection = get_MandatoryParameterFromDict(dictData, "leadingEdgeCorrection")
 
@@ -570,6 +575,10 @@ class wing:
         grid_delta_y = 1 / (self.numberOfGridChords-1)
         normalizedTipChord = self.tipDepthPercent / 100
 
+        # Create an interpolation function
+        #interpolationFunction = scipy_interpolate.interp1d(self.planform_x, self.planform_y)
+        #interpolationFunction = make_interp_spline(self.planform_x, self.planform_y)
+
         # calculate all Grid-chords
         for i in range(1, (self.numberOfGridChords + 1)):
             # create new normalized grid
@@ -580,13 +589,30 @@ class wing:
 
             # pure elliptical shaping of the wing as a reference
             grid.referenceChord = np.sqrt(1.0-(grid.y*grid.y))
+            #if (grid.y % 0.1) < grid_delta_y:
+            #    print(grid.referenceChord)
 
             # normalized chord-length
             if self.planformShape == 'elliptical':
-                # elliptical shaping of the wing
-                grid.chord = (1.0 - normalizedTipChord)\
-                 *np.sqrt(1.0-(grid.y*grid.y))\
-                 + normalizedTipChord
+                #grid.chord = interpolationFunction(grid.y)
+
+                # elliptical shaping of the wing, adding rectangle
+                distanceToTip = 1.0 - grid.y
+                if (distanceToTip > normalizedTipChord):
+                    delta = normalizedTipChord
+                else:
+                    nt_2 = normalizedTipChord*normalizedTipChord
+                    y_2 = normalizedTipChord-distanceToTip
+                    y_2 = y_2 * y_2
+
+                    if(nt_2 > y_2):
+                        delta = np.sqrt(nt_2 - y_2)
+                    else:
+                        delta = 0
+
+                #delta = normalizedTipChord
+                grid.chord = (1.0-delta) * np.sqrt(1.0-(grid.y*grid.y)) + delta
+
             else:
                 # trapezoidal shaping of the wing
                 grid.chord = (1.0-grid.y) \
@@ -689,7 +715,7 @@ class wing:
             self.grid.append(grid)
 
         # interpolate / smooth tip section
-        self.interpolate_tip()
+        #self.interpolate_tip()
         self.calculate_wingArea()
 
         # calculate aspect ratio of the wing
@@ -1330,6 +1356,7 @@ class wing:
                 linewidth = lw_planform, solid_capstyle="round",
                 label = "pure ellipse")
 
+        #plt.scatter(self.planform_x, self.planform_y, color=cl_normalizedChord)
 
         plt.title("Normalized chord distribution")
         plt.legend(loc='lower right', fontsize = fs_legend)
