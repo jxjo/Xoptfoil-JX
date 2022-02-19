@@ -11,6 +11,7 @@
  "showTipLine" : "True",
  "rootchord": 0.219,
  "tipchord": 0.031,
+ "tipSharpness": 0.1,
  "rootTipSweep": 3.2,
  "fuselageWidth": 0.035,
  "hingeDepthRoot": 24.8,
