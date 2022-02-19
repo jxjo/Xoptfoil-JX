@@ -280,7 +280,7 @@ class wing:
             cl_background = 'default'
             cl_quarterChordLine = 'black'
             cl_areaCenterLine = 'black'
-            cl_hingeLine = 'black'
+            cl_hingeLine = 'dimgray'
             cl_planform = 'black'
             cl_hingeLineFill = 'gray'
             cl_planformFill = 'lightgray'
@@ -806,6 +806,12 @@ class wing:
             self.chords.append(chord)
 
 
+    def denormalize_positions(self):
+        for idx in range(len(self.airfoilPositions)):
+            if self.airfoilPositions[idx] != None:
+                self.airfoilPositions[idx] = self.airfoilPositions[idx] * self.halfwingspan
+
+
     def calculate_positions(self):
         for idx in range(len(self.airfoilPositions)):
             if self.airfoilPositions[idx] == None:
@@ -835,6 +841,48 @@ class wing:
         else:
             return False
 
+    def getFlapPartingLines(self):
+        flapPositions_x = []
+        flapPositions_y =[]
+        flapPositions_x_left =[]
+        flapPositions_x_right =[]
+
+        # As we have a projected drawing of the wing, we must consider the
+        # projection factor
+        proj_fact = cos(self.dihedral*pi/180.0)
+        proj_halfwingSpan = self.halfwingspan * proj_fact
+
+        sections = self.sections
+        numSections = len(sections)
+        actualFlapGroup = 0
+
+        # Calculate zero Axis (center of the wing)
+        zeroAxis = proj_halfwingSpan + self.fuselageWidth/2
+
+        # check all sections
+        for idx in range (0, numSections):
+            # Change of Flap-Group ? -->Parting line
+            if (actualFlapGroup != sections[idx].flapGroup):
+                # determine x_pos to zeroAxis
+                x_pos_rightZeroAxis = sections[idx].y * proj_fact
+                # Shift by offset of zeroAxis
+                x_pos_right = x_pos_rightZeroAxis + zeroAxis
+                x_pos_leftZeroAxis = -1.0*x_pos_rightZeroAxis
+                x_pos_left = x_pos_leftZeroAxis + zeroAxis
+                x_tupel_left = (x_pos_left, x_pos_left)
+                x_tupel_right = (x_pos_right, x_pos_right)
+                y_tupel = (sections[idx].hingeLine, sections[idx].trailingEdge)
+                flapPositions_x_right.append(x_tupel_right)
+                flapPositions_x_left.append(x_tupel_left)
+                flapPositions_y.append(y_tupel)
+
+            actualFlapGroup = sections[idx].flapGroup
+
+        # join all values
+        flapPositions_x = flapPositions_x_left + flapPositions_x_right
+        flapPositions_y = flapPositions_y + flapPositions_y
+
+        return (flapPositions_x, flapPositions_y)
 
     # adds a section using given grid-values
     def add_sectionFromGrid(self, grid):
@@ -982,10 +1030,8 @@ class wing:
         self.flapGroups.append(self.flapGroups[-1])
 
         # assign flap groups now
-        idx = 0
-        for flapGroup in self.flapGroups:
-            self.sections[idx].flapGroup = flapGroup
-            idx = idx + 1
+        for idx in range (len(self.sections)):
+            self.sections[idx].flapGroup = self.flapGroups[idx]
 
     # get color for plotting
     def get_colorFromAirfoilType(self, airfoilType):
@@ -1161,15 +1207,26 @@ class wing:
     def plot_WingPlanform(self, ax):
         #create empty lists
         xValues = []
+        xValuesLeft = []
+        xValuesRight = []
         leadingEdge = []
         trailingEdge = []
         hingeLine = []
-        quarterChordLine = []
-        areaCenterLine = []
+        leadingEdgeLeft = []
+        trailingEdgeLeft = []
+        hingeLineLeft = []
+        leadingEdgeRight = []
+        trailingEdgeRight = []
+        hingeLineRight = []
+
         # determine factor for projection of the wing according the dihedral
         proj_fact = cos(self.dihedral*pi/180.0)
-        proj_wingspan = self.wingspan * proj_fact
+
+        # Halfwingspan already without fuselage
         proj_halfwingSpan = self.halfwingspan * proj_fact
+
+        # Caution, fuselageWidth does not change due to projection
+        proj_wingspan = (2*proj_halfwingSpan) + self.fuselageWidth
 
         # set axes and labels
         self.set_AxesAndLabels(ax, "Full-wing planform")
@@ -1177,64 +1234,72 @@ class wing:
         # build up list of x-values,
         # first left half-wing
         for element in self.grid:
-            proj_y = element.y * proj_fact
-            xValues.append(proj_y-(self.fuselageWidth/2))
+            proj_y = (element.y- (self.fuselageWidth/2)) * proj_fact
+            xVal = proj_y#-(self.fuselageWidth/2)
+            #xValues.append(xVal)
+            xValuesLeft.append(xVal)
 
         # offset for beginning of right half-wing
-        xOffset = proj_halfwingSpan + self.fuselageWidth/2
+        xOffset = proj_halfwingSpan + self.fuselageWidth
 
         # center-section / fuselage (x)
-        lastElement = len(xValues)-1
-        Left_x = xValues[lastElement]
+        Left_x = xValuesLeft[-1]
         Right_x = Left_x + self.fuselageWidth
         leftWingRoot_x = (Left_x, Left_x)
         rightWingRoot_x = (Right_x, Right_x)
 
         # right half-wing (=reversed right-half-wing)
         for element in self.grid:
-            proj_y = element.y * proj_fact
-            xValues.append(proj_y + xOffset)
+            proj_y = (element.y - (self.fuselageWidth/2)) * proj_fact
+            xVal = proj_y + xOffset
+            xValues.append(xVal)
+            xValuesRight.append(xVal)
 
         # build up lists of y-values
         # left half wing
         for element in reversed(self.grid):
-            leadingEdge.append(element.leadingEdge)
-            hingeLine.append(element.hingeLine)
-            trailingEdge.append(element.trailingEdge)
+            leadingEdgeLeft.append(element.leadingEdge)
+            hingeLineLeft.append(element.hingeLine)
+            trailingEdgeLeft.append(element.trailingEdge)
 
         # center-section / fuselage (y)
-        wingRoot_y = (leadingEdge[lastElement],trailingEdge[lastElement])
+        #wingRoot_y = (leadingEdgeLeft[lastElement],trailingEdgeLeft[lastElement])
+        wingRoot_y = (leadingEdgeLeft[-1],trailingEdgeLeft[-1])
 
         # right half wing
         for element in (self.grid):
-            leadingEdge.append(element.leadingEdge)
-            hingeLine.append(element.hingeLine)
-            trailingEdge.append(element.trailingEdge)
+            leadingEdgeRight.append(element.leadingEdge)
+            hingeLineRight.append(element.hingeLine)
+            trailingEdgeRight.append(element.trailingEdge)
 
         # setup root- and tip-joint
-        trailingEdge[0] = leadingEdge[0]
-        trailingEdge[-1] = leadingEdge[-1]
+        trailingEdgeLeft[0] = leadingEdgeLeft[0]
+        trailingEdgeRight[-1] = leadingEdgeRight[-1]
 
-##        # get flap parting lines
-##        actualFlapGroup = 0
-##        flapPositions_x = []
-##        flapPositions_y =[]
-##
-##        for section in self.sections:
-##            if section.flapGroup > 0:
-##                if actualFlapGroup != section.flapGroup:
-##                    flapPositions_x = (section.y, section.y)
-##                    flapPositions_y = (section.hingeLine, section.trailingEdge)
-##                    actualFlapGroup = section.flapGroup
-##                    # plot the flap parting lines
-##                    ax.plot(flapPositions_x, flapPositions_y, color=cl_hingeLine,
-##                    linewidth = lw_planform, solid_capstyle="round")
+        # get flap parting lines
+        (flapPositions_x, flapPositions_y) = self.getFlapPartingLines()
+
+        # plot the flap parting lines
+        numLines = len(flapPositions_x)
+        for idx in range(numLines):
+            ax.plot(flapPositions_x[idx], flapPositions_y[idx],
+            color=cl_hingeLine, linewidth = lw_hingeLine, solid_capstyle="round")
+
+        # plot the hingeline
+        ax.plot(xValuesLeft, hingeLineLeft, color=cl_hingeLine,
+                linewidth = lw_hingeLine, solid_capstyle="round")
+        ax.plot(xValuesRight, hingeLineRight, color=cl_hingeLine,
+                linewidth = lw_hingeLine, solid_capstyle="round")
 
         # plot the planform last
-        ax.plot(xValues, leadingEdge, color=cl_planform,
+        ax.plot(xValuesLeft, leadingEdgeLeft, color=cl_planform,
+                linewidth = lw_planform, solid_capstyle="round")
+        ax.plot(xValuesRight, leadingEdgeRight, color=cl_planform,
                 linewidth = lw_planform, solid_capstyle="round")
 
-        ax.plot(xValues, trailingEdge, color=cl_planform,
+        ax.plot(xValuesLeft, trailingEdgeLeft, color=cl_planform,
+                linewidth = lw_planform, solid_capstyle="round")
+        ax.plot(xValuesRight, trailingEdgeRight, color=cl_planform,
                 linewidth = lw_planform, solid_capstyle="round")
 
         # center-section
@@ -1254,14 +1319,16 @@ class wing:
             ax.set_ylim(ax.get_ylim()[::-1])
 
         # plot hinge-line
-        if (self.showHingeLine == 'true'):
-            ax.plot(xValues, hingeLine, color=cl_hingeLine,
-              linestyle = ls_hingeLine, linewidth = lw_hingeLine,
-              solid_capstyle="round")
+##        if (self.showHingeLine == 'true'):
+##            ax.plot(xValuesLeft, hingeLine, color=cl_hingeLine,
+##              linestyle = ls_hingeLine, linewidth = lw_hingeLine,
+##              solid_capstyle="round")
 
         # fill the wing
-        ax.fill_between(xValues, leadingEdge, hingeLine, color=cl_planformFill, alpha=0.4)
-        ax.fill_between(xValues, hingeLine, trailingEdge, color=cl_hingeLineFill, alpha=0.4)
+        ax.fill_between(xValuesLeft, leadingEdgeLeft, hingeLineLeft, color=cl_planformFill, alpha=0.4)
+        ax.fill_between(xValuesLeft, hingeLineLeft, trailingEdgeLeft, color=cl_hingeLineFill, alpha=0.4)
+        ax.fill_between(xValuesRight, leadingEdgeRight, hingeLineRight, color=cl_planformFill, alpha=0.4)
+        ax.fill_between(xValuesRight, hingeLineRight, trailingEdgeRight, color=cl_hingeLineFill, alpha=0.4)
 
         # setup list for new x-tick locations
         new_tick_locations = [0.0, proj_halfwingSpan, (proj_halfwingSpan + self.fuselageWidth/2),
@@ -1923,6 +1990,9 @@ if __name__ == "__main__":
     # before calculating the planform with absolute numbers,
     # calculate normalized chord distribution
     newWing.calculate_normalizedChordDistribution()
+
+    # denormalize position / calculate absolute numbers
+    newWing.denormalize_positions()
 
     # calculate the grid, the chordlengths of the airfoils and the sections
     newWing.calculate_planform()
