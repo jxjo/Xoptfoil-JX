@@ -82,6 +82,7 @@ cl_sections = 'grey'
 cl_userAirfoil = 'aqua'
 cl_optAirfoil = 'yellow'
 cl_infotext = 'aqua'
+cl_chordlengths = 'darkgray'
 cl_referenceChord = 'gray'
 cl_normalizedChord = 'blue'
 
@@ -238,6 +239,7 @@ class wing:
         self.hingeDepthTip = 23.0
         self.tipDepthPercent = 8.0
         self.tipDepth = 0
+        self.tipSharpness = 0.5
         self.hingeInnerPoint = 0
         self.hingeOuterPoint = 0
         self.hingeLineAngle = 0.0
@@ -286,6 +288,7 @@ class wing:
             cl_userAirfoil = 'black'
             cl_optAirfoil = 'black'
             cl_infotext = 'black'
+            cl_chordlengths = 'lightgray'
             cl_referenceChord = 'gray'
             cl_normalizedChord = 'black'
         else:
@@ -301,6 +304,7 @@ class wing:
             cl_userAirfoil = 'aqua'
             cl_optAirfoil = 'yellow'
             cl_infotext = 'aqua'
+            cl_chordlengths = 'darkgray'
             cl_referenceChord = 'gray'
             cl_normalizedChord = 'blue'
 
@@ -375,12 +379,14 @@ class wing:
         self.wingspan =  get_MandatoryParameterFromDict(dictData, "wingspan")
         self.fuselageWidth =  get_MandatoryParameterFromDict(dictData, "fuselageWidth")
         self.planformShape =  get_MandatoryParameterFromDict(dictData, "planformShape")
-        self.planform_x = get_MandatoryParameterFromDict(dictData, "planform_x")
-        self.planform_y = get_MandatoryParameterFromDict(dictData, "planform_y")
+        #self.planform_x = get_MandatoryParameterFromDict(dictData, "planform_x")
+        #self.planform_y = get_MandatoryParameterFromDict(dictData, "planform_y")
+
         if self.planformShape == 'elliptical':
             self.leadingEdgeCorrection = get_MandatoryParameterFromDict(dictData, "leadingEdgeCorrection")
 
         self.tipchord =  get_MandatoryParameterFromDict(dictData, "tipchord")
+        self.tipSharpness =  get_MandatoryParameterFromDict(dictData, "tipSharpness")
         self.rootTipSweep =  get_MandatoryParameterFromDict(dictData, "rootTipSweep")
         self.hingeDepthRoot = get_MandatoryParameterFromDict(dictData, "hingeDepthRoot")
         self.hingeDepthTip = get_MandatoryParameterFromDict(dictData, "hingeDepthTip")
@@ -574,6 +580,7 @@ class wing:
          # calculate interval for setting up the grid
         grid_delta_y = 1 / (self.numberOfGridChords-1)
         normalizedTipChord = self.tipDepthPercent / 100
+        tipRoundingDistance = normalizedTipChord * self.tipSharpness
 
         # Create an interpolation function
         #interpolationFunction = scipy_interpolate.interp1d(self.planform_x, self.planform_y)
@@ -596,22 +603,28 @@ class wing:
             if self.planformShape == 'elliptical':
                 #grid.chord = interpolationFunction(grid.y)
 
-                # elliptical shaping of the wing, adding rectangle
+                # elliptical shaping of the wing
                 distanceToTip = 1.0 - grid.y
-                if (distanceToTip > normalizedTipChord):
+                if (distanceToTip > tipRoundingDistance):
+                    # add constant value
                     delta = normalizedTipChord
                 else:
-                    nt_2 = normalizedTipChord*normalizedTipChord
-                    y_2 = normalizedTipChord-distanceToTip
-                    y_2 = y_2 * y_2
+                    # add decreasing value according to quarter ellipse
+                    a = tipRoundingDistance
+                    x = tipRoundingDistance-distanceToTip
+                    b = normalizedTipChord
+                    radicand = (a*a)-(x*x)
 
-                    if(nt_2 > y_2):
-                        delta = np.sqrt(nt_2 - y_2)
+                    if radicand > 0:
+                        # quarter ellipse formula
+                        delta = (b/a) * np.sqrt(radicand)
                     else:
                         delta = 0
 
-                #delta = normalizedTipChord
                 grid.chord = (1.0-delta) * np.sqrt(1.0-(grid.y*grid.y)) + delta
+                # correct chord
+                delta = self.leadingEdgeCorrection * sin(interpolate(0.0, 1.0, 0.0, pi, grid.y))
+                grid.chord = grid.chord - delta
 
             else:
                 # trapezoidal shaping of the wing
@@ -679,17 +692,6 @@ class wing:
             grid.y = grid_delta_y * (i-1)
 
             # chord-length
-##            if self.planformShape == 'elliptical':
-##                # elliptical shaping of the wing with straight hing-line
-##                #self.rootchord*(1-self.overElipticOffset)
-##                grid.chord = (self.rootchord-self.tipDepth)\
-##                 *np.sqrt(1-(grid.y*grid.y/(self.halfwingspan*self.halfwingspan)))\
-##                 + self.tipDepth
-##            else:
-##                # trapezoidal shaping of the wing
-##                grid.chord = self.rootchord*(self.halfwingspan-grid.y)/self.halfwingspan \
-##                            + self.tipDepth* (grid.y/self.halfwingspan)
-
             grid.chord = self.rootchord * normalizedChord
 
             # calculate hingeDepth in percent at this particular point along the wing
@@ -699,6 +701,7 @@ class wing:
 
             # correction of leading edge for elliptical planform, avoid swept forward part of the wing
             delta = self.leadingEdgeCorrection * sin(interpolate(0.0, self.halfwingspan, 0.0, pi, grid.y))
+
             grid.hingeDepth = (hingeDepth_y/100)*grid.chord + delta
             grid.hingeLine = (self.hingeOuterPoint-self.hingeInnerPoint)/(self.halfwingspan) * (grid.y) + self.hingeInnerPoint
             grid.leadingEdge = grid.hingeLine -(grid.chord-grid.hingeDepth)
@@ -714,8 +717,7 @@ class wing:
             # append section to section-list of wing
             self.grid.append(grid)
 
-        # interpolate / smooth tip section
-        #self.interpolate_tip()
+        # calculate the area of the wing
         self.calculate_wingArea()
 
         # calculate aspect ratio of the wing
@@ -745,47 +747,6 @@ class wing:
 
         # calculate area of the whole wing
         self.area = self.area * 2.0
-
-
-    # function to interpolate the tip and avoid sharp edges
-    def interpolate_tip(self):
-        x_coordinates = []
-        LE_coordinates = []
-        TE_coordinates = []
-
-        TipInterpolationRangePercent = 5
-        numInterpolationPoints = 11
-
-        # interpolation starts at 3% of tip
-        interpolation_start_idx = len(self.grid) - int((len(self.grid) * TipInterpolationRangePercent) / 100.0)
-        interpolation_end_idx = len(self.grid)
-        delta = int((interpolation_end_idx - interpolation_start_idx) / numInterpolationPoints)
-
-        for idx in range(numInterpolationPoints):
-            n = interpolation_start_idx + idx*delta
-            x_coordinates.append(self.grid[n].y)
-            LE_coordinates.append(self.grid[n].leadingEdge)
-            TE_coordinates.append(self.grid[n].trailingEdge)
-
-        # append tip point
-        x_coordinates.append(self.grid[-1].y)
-        LE_coordinates.append(self.grid[-1].hingeLine)
-        TE_coordinates.append(self.grid[-1].hingeLine)
-
-
-        # interpolate leading edge and trailing edge in the tip region
-        interpolatedTip_LE = make_interp_spline(x_coordinates, LE_coordinates, k=9)
-        interpolatedTip_TE = make_interp_spline(x_coordinates, TE_coordinates, k=9)
-
-        # exchange grid LE-/TE-elements with interpolated values
-        for idx in range (interpolation_start_idx, len(self.grid)):
-            self.grid[idx].leadingEdge = interpolatedTip_LE(self.grid[idx].y)
-            self.grid[idx].trailingEdge = interpolatedTip_TE(self.grid[idx].y)
-            self.grid[idx].chord = self.grid[idx].trailingEdge - self.grid[idx].leadingEdge
-            # calculate centerLine, quarterChordLine
-            self.grid[idx].centerLine = self.grid[idx].leadingEdge + (self.grid[idx].chord/2)
-            self.grid[idx].quarterChordLine = self.grid[idx].leadingEdge + (self.grid[idx].trailingEdge-self.grid[idx].leadingEdge)/4
-
 
 
     # get chordlength from position, according to the planform-data
@@ -1099,7 +1060,7 @@ class wing:
 
             ax.annotate(text,
             xy=(xPos, yPosChordLabel), xycoords='data',
-            xytext=(2, 5), textcoords='offset points', color = 'white',
+            xytext=(2, 5), textcoords='offset points', color = cl_chordlengths,
             fontsize=fs_infotext, rotation='vertical')
 
 
