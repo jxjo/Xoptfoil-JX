@@ -55,6 +55,11 @@ from strak_machineV2 import (copyAndSmooth_Airfoil, get_ReString,
 from colorama import init
 from termcolor import colored
 from FLZ_Vortex_export import export_toFLZ
+import bezier
+
+
+
+
 
 ################################################################################
 # some global variables
@@ -379,14 +384,16 @@ class wing:
         self.wingspan =  get_MandatoryParameterFromDict(dictData, "wingspan")
         self.fuselageWidth =  get_MandatoryParameterFromDict(dictData, "fuselageWidth")
         self.planformShape =  get_MandatoryParameterFromDict(dictData, "planformShape")
-        #self.planform_x = get_MandatoryParameterFromDict(dictData, "planform_x")
-        #self.planform_y = get_MandatoryParameterFromDict(dictData, "planform_y")
 
         if self.planformShape == 'elliptical':
             self.leadingEdgeCorrection = get_MandatoryParameterFromDict(dictData, "leadingEdgeCorrection")
+            self.tipSharpness =  get_MandatoryParameterFromDict(dictData, "tipSharpness")
+        elif self.planformShape == 'bezier':
+            self.planform_x = get_MandatoryParameterFromDict(dictData, "planform_x")
+            self.planform_y = get_MandatoryParameterFromDict(dictData, "planform_y")
+
 
         self.tipchord =  get_MandatoryParameterFromDict(dictData, "tipchord")
-        self.tipSharpness =  get_MandatoryParameterFromDict(dictData, "tipSharpness")
         self.rootTipSweep =  get_MandatoryParameterFromDict(dictData, "rootTipSweep")
         self.hingeDepthRoot = get_MandatoryParameterFromDict(dictData, "hingeDepthRoot")
         self.hingeDepthTip = get_MandatoryParameterFromDict(dictData, "hingeDepthTip")
@@ -577,14 +584,19 @@ class wing:
    # calculates a chord-distribution, which is normalized to root_chord = 1.0
    # half wingspan = 1
     def calculate_normalizedChordDistribution(self):
+
          # calculate interval for setting up the grid
         grid_delta_y = 1 / (self.numberOfGridChords-1)
         normalizedTipChord = self.tipDepthPercent / 100
         tipRoundingDistance = normalizedTipChord * self.tipSharpness
 
-        # Create an interpolation function
-        #interpolationFunction = scipy_interpolate.interp1d(self.planform_x, self.planform_y)
-        #interpolationFunction = make_interp_spline(self.planform_x, self.planform_y)
+        # setup bezier corve, if requested
+        if self.planformShape == 'bezier':
+            nodeslist = []
+            for idx in range(len(self.planform_x)):
+                nodeslist.append([self.planform_x[idx], self.planform_y[idx]])
+            nodes = np.asfortranarray(nodeslist)
+            curve = bezier.Curve(nodes, degree=2)
 
         # calculate all Grid-chords
         for i in range(1, (self.numberOfGridChords + 1)):
@@ -597,11 +609,10 @@ class wing:
             # pure elliptical shaping of the wing as a reference
             grid.referenceChord = np.sqrt(1.0-(grid.y*grid.y))
             #if (grid.y % 0.1) < grid_delta_y:
-            #    print(grid.referenceChord)
+             #   print("%1.5f\n" % grid.referenceChord)
 
             # normalized chord-length
             if self.planformShape == 'elliptical':
-                #grid.chord = interpolationFunction(grid.y)
 
                 # elliptical shaping of the wing
                 distanceToTip = 1.0 - grid.y
@@ -622,14 +633,20 @@ class wing:
                         delta = 0
 
                 grid.chord = (1.0-delta) * np.sqrt(1.0-(grid.y*grid.y)) + delta
+
                 # correct chord
                 delta = self.leadingEdgeCorrection * sin(interpolate(0.0, 1.0, 0.0, pi, grid.y))
                 grid.chord = grid.chord - delta
 
-            else:
+            elif self.planformShape == 'trapeziodal':
                 # trapezoidal shaping of the wing
                 grid.chord = (1.0-grid.y) \
                             + normalizedTipChord * (grid.y)
+
+            elif self.planformShape == 'bezier':
+                # from bezier-curve
+                array = curve.evaluate(grid.y)
+                grid.chord = array[0][1]
 
             # append section to section-list of wing
             self.normalizedGrid.append(grid)
