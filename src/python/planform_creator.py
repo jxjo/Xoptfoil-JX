@@ -236,7 +236,7 @@ class wing:
         self.wingspan = 2.54
         self.fuselageWidth = 0.035
         self.planformShape = 'elliptical'
-        self.planform_x = []
+        self.planform_chord = []
         self.planform_y = []
         self.halfwingspan = 0.0
         self.numberOfGridChords = 16384
@@ -389,7 +389,7 @@ class wing:
             self.leadingEdgeCorrection = get_MandatoryParameterFromDict(dictData, "leadingEdgeCorrection")
             self.tipSharpness =  get_MandatoryParameterFromDict(dictData, "tipSharpness")
         elif self.planformShape == 'bezier':
-            self.planform_x = get_MandatoryParameterFromDict(dictData, "planform_x")
+            self.planform_chord = get_MandatoryParameterFromDict(dictData, "planform_chord")
             self.planform_y = get_MandatoryParameterFromDict(dictData, "planform_y")
 
 
@@ -590,13 +590,10 @@ class wing:
         normalizedTipChord = self.tipDepthPercent / 100
         tipRoundingDistance = normalizedTipChord * self.tipSharpness
 
-        # setup bezier corve, if requested
+        # setup bezier curve, if requested
         if self.planformShape == 'bezier':
-            nodeslist = []
-            for idx in range(len(self.planform_x)):
-                nodeslist.append([self.planform_x[idx], self.planform_y[idx]])
-            nodes = np.asfortranarray(nodeslist)
-            curve = bezier.Curve(nodes, degree=2)
+            nodes = np.asfortranarray([self.planform_chord , self.planform_y])
+            curve = bezier.Curve(nodes, degree=(len(self.planform_chord)-1))
 
         # calculate all Grid-chords
         for i in range(1, (self.numberOfGridChords + 1)):
@@ -646,7 +643,7 @@ class wing:
             elif self.planformShape == 'bezier':
                 # from bezier-curve
                 array = curve.evaluate(grid.y)
-                grid.chord = array[0][1]
+                grid.chord = array.item(1)
 
             # append section to section-list of wing
             self.normalizedGrid.append(grid)
@@ -1401,7 +1398,9 @@ class wing:
                 linewidth = lw_planform, solid_capstyle="round",
                 label = "pure ellipse")
 
-        #plt.scatter(self.planform_x, self.planform_y, color=cl_normalizedChord)
+        if self.planformShape =='bezier':
+            plt.scatter(self.planform_chord, self.planform_y, color=cl_normalizedChord,
+            label = "control points")
 
         plt.title("Normalized chord distribution")
         plt.legend(loc='lower right', fontsize = fs_legend)
