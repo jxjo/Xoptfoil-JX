@@ -35,6 +35,7 @@ import numpy as np
 from scipy.interpolate import make_interp_spline
 from scipy import interpolate as scipy_interpolate
 from scipy.ndimage import gaussian_filter1d
+from scipy.optimize import curve_fit
 from math import log10, floor, tan, atan, sin, cos, pi, sqrt
 import json
 import tkinter
@@ -158,6 +159,57 @@ PLanformDict =	{
             }
 
 
+# define the true objective function for curve fitting
+def objective(x, a, b, c, d, e, f):
+	return (a * x) + (b * x**2) + (c * x**3) + (d * x**4) + (e * x**5) + f
+
+
+def objective_elliptical_wrapper(values, normalizedTipChord, tipSharpness,
+                                 leadingEdgeCorrection):
+    result = []
+
+    for x in values:
+        y = objective_elliptical(x, normalizedTipChord, tipSharpness,
+                                 leadingEdgeCorrection)
+        result.append(y)
+
+    return result
+
+
+def objective_elliptical(x, normalizedTipChord, tipSharpness,
+                         leadingEdgeCorrection):
+
+    # calculate distance to tip, where rounding starts
+    tipRoundingDistance = normalizedTipChord * tipSharpness
+
+    # calculate actual distance to tip
+    distanceToTip = 1.0 - x
+
+   # calculate delta that will be added to pure ellipse
+    if (distanceToTip > tipRoundingDistance):
+        # add constant value, as we are far away from the tip
+        delta = normalizedTipChord
+    else:
+        # add decreasing value according to quarter ellipse
+        a = tipRoundingDistance
+        x1 = tipRoundingDistance-distanceToTip
+        b = normalizedTipChord
+        radicand = (a*a)-(x1*x1)
+
+        if radicand > 0:
+            # quarter ellipse formula
+            delta = (b/a) * np.sqrt(radicand)
+        else:
+            delta = 0
+
+    # elliptical shaping of the wing plus additonal delta
+    y = (1.0-delta) * np.sqrt(1.0-(x*x)) + delta
+
+    # correct chord with leading edge correction
+    y = y - leadingEdgeCorrection * sin(interpolate(0.0, 1.0, 0.0, pi, x))
+
+    return y
+
 
 ################################################################################
 #
@@ -231,6 +283,7 @@ class wing:
         self.numAirfoils= 0
         self.planformName= "Main Wing"
         self.rootchord = 0.223
+        self.tipchord = 0.03
         self.leadingEdgeOrientation = 'up'
         self.leadingEdgeCorrection = 0.0
         self.wingspan = 2.54
@@ -385,15 +438,23 @@ class wing:
         self.fuselageWidth =  get_MandatoryParameterFromDict(dictData, "fuselageWidth")
         self.planformShape =  get_MandatoryParameterFromDict(dictData, "planformShape")
 
+        if ((self.planformShape != 'elliptical') and\
+            (self.planformShape != 'curve_fitting') and\
+            (self.planformShape != 'trapezoidal')):
+            ErrorMsg("planformshape must be elliptical or curve_fitting or trapezoidal")
+            sys.exit(-1)
+
         if self.planformShape == 'elliptical':
             self.leadingEdgeCorrection = get_MandatoryParameterFromDict(dictData, "leadingEdgeCorrection")
             self.tipSharpness =  get_MandatoryParameterFromDict(dictData, "tipSharpness")
-        elif self.planformShape == 'bezier':
+        elif self.planformShape == 'curve_fitting':
             self.planform_chord = get_MandatoryParameterFromDict(dictData, "planform_chord")
             self.planform_y = get_MandatoryParameterFromDict(dictData, "planform_y")
 
+        if (self.planformShape == 'elliptical') or\
+           (self.planformShape == 'trapezoidal'):
+            self.tipchord =  get_MandatoryParameterFromDict(dictData, "tipchord")
 
-        self.tipchord =  get_MandatoryParameterFromDict(dictData, "tipchord")
         self.rootTipSweep =  get_MandatoryParameterFromDict(dictData, "rootTipSweep")
         self.hingeDepthRoot = get_MandatoryParameterFromDict(dictData, "hingeDepthRoot")
         self.hingeDepthTip = get_MandatoryParameterFromDict(dictData, "hingeDepthTip")
@@ -584,16 +645,24 @@ class wing:
    # calculates a chord-distribution, which is normalized to root_chord = 1.0
    # half wingspan = 1
     def calculate_normalizedChordDistribution(self):
+        # In case of curve fitting, determine the optimum parameters
+        # automatically
+        if self.planformShape == 'curve_fitting':
+            # curve fitting with objective function
+            popt, _ = curve_fit(objective_elliptical_wrapper,
+                                self.planform_chord, self.planform_y)
 
-         # calculate interval for setting up the grid
+            # summarize the parameter values
+            normalizedTipChord, tipSharpness, leadingEdgeCorrection = popt
+
+            # write back the optimum parameters
+            self.leadingEdgeCorrection = leadingEdgeCorrection
+            self.tipSharpness = tipSharpness
+            self.tipDepthPercent = normalizedTipChord * 100
+
+        # calculate interval for setting up the grid
         grid_delta_y = 1 / (self.numberOfGridChords-1)
         normalizedTipChord = self.tipDepthPercent / 100
-        tipRoundingDistance = normalizedTipChord * self.tipSharpness
-
-        # setup bezier curve, if requested
-        if self.planformShape == 'bezier':
-            nodes = np.asfortranarray([self.planform_chord , self.planform_y])
-            curve = bezier.Curve(nodes, degree=(len(self.planform_chord)-1))
 
         # calculate all Grid-chords
         for i in range(1, (self.numberOfGridChords + 1)):
@@ -609,41 +678,16 @@ class wing:
              #   print("%1.5f\n" % grid.referenceChord)
 
             # normalized chord-length
-            if self.planformShape == 'elliptical':
-
+            if ((self.planformShape == 'elliptical') or
+               (self.planformShape == 'curve_fitting')):
                 # elliptical shaping of the wing
-                distanceToTip = 1.0 - grid.y
-                if (distanceToTip > tipRoundingDistance):
-                    # add constant value
-                    delta = normalizedTipChord
-                else:
-                    # add decreasing value according to quarter ellipse
-                    a = tipRoundingDistance
-                    x = tipRoundingDistance-distanceToTip
-                    b = normalizedTipChord
-                    radicand = (a*a)-(x*x)
+                grid.chord = objective_elliptical(grid.y, normalizedTipChord,
+                                 self.tipSharpness, self.leadingEdgeCorrection)
 
-                    if radicand > 0:
-                        # quarter ellipse formula
-                        delta = (b/a) * np.sqrt(radicand)
-                    else:
-                        delta = 0
-
-                grid.chord = (1.0-delta) * np.sqrt(1.0-(grid.y*grid.y)) + delta
-
-                # correct chord
-                delta = self.leadingEdgeCorrection * sin(interpolate(0.0, 1.0, 0.0, pi, grid.y))
-                grid.chord = grid.chord - delta
-
-            elif self.planformShape == 'trapeziodal':
+            elif self.planformShape == 'trapezoidal':
                 # trapezoidal shaping of the wing
                 grid.chord = (1.0-grid.y) \
                             + normalizedTipChord * (grid.y)
-
-            elif self.planformShape == 'bezier':
-                # from bezier-curve
-                array = curve.evaluate(grid.y)
-                grid.chord = array.item(1)
 
             # append section to section-list of wing
             self.normalizedGrid.append(grid)
@@ -2006,6 +2050,7 @@ if __name__ == "__main__":
     # before calculating the planform with absolute numbers,
     # calculate normalized chord distribution
     newWing.calculate_normalizedChordDistribution()
+    newWing.draw_NormalizedChordDistribution()#FIXME
 
     # denormalize position / calculate absolute numbers
     newWing.denormalize_positions()
