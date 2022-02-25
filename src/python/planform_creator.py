@@ -160,9 +160,11 @@ PLanformDict =	{
 
 
 # define the true objective function for curve fitting
-def objective(x, a, b, c, d, e, f):
-	return (a * x) + (b * x**2) + (c * x**3) + (d * x**4) + (e * x**5) + f
+##def objective(x, a, b, c, d, e, f):
+##	return (a * x) + (b * x**2) + (c * x**3) + (d * x**4) + (e * x**5) + f
 
+def objective(x, a, b, c):
+	return (a * x) + (b * x**2) + c
 
 def objective_elliptical_wrapper(values, normalizedTipChord, tipSharpness,
                                  leadingEdgeCorrection):
@@ -170,10 +172,11 @@ def objective_elliptical_wrapper(values, normalizedTipChord, tipSharpness,
 
     for x in values:
         y = objective_elliptical(x, normalizedTipChord, tipSharpness,
-                                 leadingEdgeCorrection)
+                         leadingEdgeCorrection)
+
         result.append(y)
 
-    return result
+    return (result)
 
 
 def objective_elliptical(x, normalizedTipChord, tipSharpness,
@@ -649,8 +652,7 @@ class wing:
         # automatically
         if self.planformShape == 'curve_fitting':
             # curve fitting with objective function
-            popt, _ = curve_fit(objective_elliptical_wrapper,
-                                self.planform_chord, self.planform_y)
+            popt, _ = curve_fit(objective_elliptical_wrapper, self.planform_chord, self.planform_y)
 
             # summarize the parameter values
             normalizedTipChord, tipSharpness, leadingEdgeCorrection = popt
@@ -1442,7 +1444,7 @@ class wing:
                 linewidth = lw_planform, solid_capstyle="round",
                 label = "pure ellipse")
 
-        if self.planformShape =='bezier':
+        if self.planformShape =='curve_fitting':
             plt.scatter(self.planform_chord, self.planform_y, color=cl_normalizedChord,
             label = "control points")
 
@@ -2050,7 +2052,7 @@ if __name__ == "__main__":
     # before calculating the planform with absolute numbers,
     # calculate normalized chord distribution
     newWing.calculate_normalizedChordDistribution()
-    newWing.draw_NormalizedChordDistribution()#FIXME
+    #newWing.draw_NormalizedChordDistribution()#FIXME
 
     # denormalize position / calculate absolute numbers
     newWing.denormalize_positions()
