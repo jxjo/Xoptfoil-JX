@@ -5,13 +5,15 @@
  "FLZVortex_inFileName" : "plane_template.flz",
  "FLZVortex_outFileName" : "FLZ_plane.flz",
  "planformName": "main wing",
- "wingspan":3.636,
- "planformShape": "elliptical",
+ "wingspan":2.636,
+ "planformShape": "curve_fitting",
  "showQuarterChordLine" : "True",
  "showTipLine" : "False",
  "rootchord": 0.219,
- "tipchord": 0.007,
- "tipSharpness": 0.1,
+ "tipchord": 0.019,
+ "tipSharpness": 0.5,
+ "planform_chord":[    0.0,     0.1,     0.2,     0.3,     0.4,     0.5,     0.6,     0.7,  0.8,  0.9, 0.95, 1.0], 
+ "planform_y":    [1.00000, 0.99498, 0.97979, 0.95394, 0.91649, 0.86601, 0.79999, 0.71409, 0.61, 0.45, 0.37, 0.0],
  "rootTipSweep": 2.95,
  "fuselageWidth": 0.035,
  "hingeDepthRoot": 26.5,
@@ -27,7 +29,5 @@
  "userAirfoils":     [".\\airfoil_library\\F3F\\JX\\JX-GS\\JX-GS-14.dat",
                       ".\\airfoil_library\\F3F\\JX\\JX-GS\\JX-GS-10.dat",
                       ".\\airfoil_library\\F3F\\JX\\JX-GS\\JX-GS-06.dat",
-                      ".\\airfoil_library\\F3F\\JX\\JX-GS\\JX-GS-04.dat"],
-"planform_x":[    0.0,     0.1,     0.2,     0.3,     0.4,     0.5,     0.6,     0.7,     0.8,     0.9, 1.0], 
-"planform_y":[1.00000, 0.99498, 0.97979, 0.95394, 0.91649, 0.86601, 0.79999, 0.71409, 0.59995, 0.43585, 0.0]
+                      ".\\airfoil_library\\F3F\\JX\\JX-GS\\JX-GS-04.dat"]
 }
