@@ -70,7 +70,7 @@ module os_util
 #ifdef UNIX
 
   character (4)  :: FOREGROUND_YELLOW      = '[33m'
-  character (4)  :: FOREGROUND_MAGENTA     = '[35m'
+  character (4)  :: FOREGROUND_MAGENTA_UX  = '[35m'
   character (4)  :: FOREGROUND_CYAN        = '[36m'
   character (4)  :: FOREGROUND_GRAY        = '[37m'
   character (4)  :: FOREGROUND_LIGHT_GREEN = '[92m'
@@ -128,7 +128,7 @@ module os_util
   interface
     function GetConsoleScreenBufferInfo(hConsoleOutput, &
         lpConsoleScreenBufferInfo) bind(C,name='GetConsoleScreenBufferInfo')
-        import
+        import BOOL, HANDLE, T_CONSOLE_SCREEN_BUFFER_INFO
         implicit none
 !gcc$ attributes stdcall :: GetConsoleScreenBufferInfo
         integer(BOOL) GetConsoleScreenBufferInfo
@@ -140,7 +140,7 @@ module os_util
 !   public GetStdHandle
   interface
     function GetStdHandle(nStdHandle) bind(C,name='GetStdHandle')
-        import
+        import HANDLE, DWORD
         implicit none
 !gcc$ attributes stdcall :: GetStdHandle
         integer(HANDLE) GetStdHandle
@@ -150,7 +150,7 @@ module os_util
 !   public SetConsoleMode
   interface
     function SetConsoleMode(hConsoleHandle, dwMode) bind(C,name='SetConsoleMode')
-        import
+        import HANDLE, DWORD, BOOL
         implicit none
 !gcc$ attributes stdcall :: SetConsoleMode
         integer(BOOL) SetConsoleMode
@@ -163,7 +163,7 @@ module os_util
   interface
     function SetConsoleTextAttribute(hConsoleOutput, wAttributes) &
         bind(C,name='SetConsoleTextAttribute')
-        import
+        import HANDLE, WORD, BOOL
         implicit none
 !gcc$ attributes stdcall :: SetConsoleTextAttribute
         integer(BOOL) SetConsoleTextAttribute
@@ -205,7 +205,7 @@ subroutine print_colored (color_typ, text)
     case (COLOR_PALE)
       color_string = FOREGROUND_GRAY
     case (COLOR_FIXED)
-      color_string = FOREGROUND_MAGENTA
+      color_string = FOREGROUND_MAGENTA_UX
     case default
       color_string = ''
   end select

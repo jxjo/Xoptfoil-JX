@@ -41,8 +41,9 @@ module my_equivalence
 !=============================================================================80
 subroutine my_equiv_3_2(A, B, aequividx, bequividx, bcopyidx, direction)
 
-  double precision, dimension(:,:,:), intent(inout) :: A
-  double precision, dimension(:,:), intent(inout) :: B
+! jx-mod use real for xfoil
+  real*8, dimension(:,:,:), intent(inout) :: A
+  real*8, dimension(:,:), intent(inout) :: B
   integer, dimension(3), intent(in) :: aequividx
   integer, dimension(2), intent(in) :: bequividx, bcopyidx
   integer, intent(in) :: direction
@@ -100,8 +101,9 @@ end subroutine my_equiv_3_2
 !=============================================================================80
 subroutine my_equiv_2_3(A, B, aequividx, bequividx, acopyidx, direction)
 
-  double precision, dimension(:,:,:), intent(inout) :: A
-  double precision, dimension(:,:), intent(inout) :: B
+! jx-mod use real for xfoil
+  real*8, dimension(:,:,:), intent(inout) :: A
+  real*8, dimension(:,:), intent(inout) :: B
   integer, dimension(3), intent(in) :: aequividx, acopyidx
   integer, dimension(2), intent(in) :: bequividx
   integer, intent(in) :: direction
@@ -158,8 +160,9 @@ end subroutine my_equiv_2_3
 !=============================================================================80
 subroutine my_equiv_3_1(A, B, aequividx, bequividx, bcopyidx, direction)
 
-  double precision, dimension(:,:,:), intent(inout) :: A
-  double precision, dimension(:), intent(inout) :: B
+! jx-mod use real for xfoil
+  real*8, dimension(:,:,:), intent(inout) :: A
+  real*8, dimension(:), intent(inout) :: B
   integer, dimension(3), intent(in) :: aequividx
   integer, intent(in) :: bequividx, bcopyidx, direction
 

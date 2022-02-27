@@ -107,9 +107,9 @@ subroutine particleswarm(xopt, fmin, step, fevals, objfunc, x0, xmin, xmax,    &
 
   optional :: converterfunc
   interface
-    integer function converterfunc(x, designcounter)
+    integer function converterfunc(x, designcounter_dummy)
       double precision, dimension(:), intent(in) :: x
-      integer, intent(in) :: designcounter
+      integer, intent(in) :: designcounter_dummy
     end function
   end interface
 

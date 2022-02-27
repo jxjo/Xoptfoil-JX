@@ -71,9 +71,9 @@ subroutine simplexsearch(xopt, fmin, step, fevals, objfunc, x0, given_f0_ref,  &
 
   optional :: converterfunc
   interface
-    integer function converterfunc(x, designcounter)
+    integer function converterfunc(x, designcounter_dum)
       double precision, dimension(:), intent(in) :: x
-      integer, intent(in) :: designcounter
+      integer, intent(in) :: designcounter_dum
     end function
   end interface
 
