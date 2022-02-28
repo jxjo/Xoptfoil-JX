@@ -308,10 +308,10 @@ subroutine le_find(x, z, le, xle, zle, addpoint_loc)
   double precision :: sle, dist1, dist2, dot
 
   interface
-    double precision function SEVAL(SS, X, XS, S, N)
+    double precision function SEVAL(SS, X_dum, XS, S_dum, N)
       integer, intent(in) :: N
       double precision, intent(in) :: SS
-      double precision, dimension(N), intent(in) :: X, XS, S
+      double precision, dimension(N), intent(in) :: X_dum, XS, S_dum
     end function SEVAL
   end interface 
 
@@ -939,9 +939,9 @@ end subroutine assess_surface
 ! get max. curvature at the end of polyline (= TE)
 !-------------------------------------------------------------------------
 
-function get_max_te_curvature (x,y)
+function get_max_te_curvature (x,y) 
 
-  use math_deps,        only: curvature
+  use math_deps,        only: derivation2
 
   double precision   :: get_max_te_curvature 
 
@@ -951,10 +951,10 @@ function get_max_te_curvature (x,y)
   integer            :: npt, ite
   
   npt    = size(x)
-  ite    = npt - 10                !  "te" begins at index
+  ite    = npt - 3                !  "te" begins at index
 
   allocate (curv (npt))
-  curv  = curvature(npt, x, y) 
+  curv  = derivation2(npt, x, y) 
   get_max_te_curvature =  maxval (abs(curv(ite: npt)))
 
 end function get_max_te_curvature

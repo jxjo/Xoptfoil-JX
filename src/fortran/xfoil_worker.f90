@@ -196,7 +196,7 @@ subroutine set_geometry_value (input_file, outname_auto, output_prefix, seed_foi
 
   use vardef,             only: airfoil_type
   use os_util
-  use xfoil_driver,       only : xfoil_set_thickness_camber
+  use xfoil_driver,       only : xfoil_set_thickness_camber, xfoil_set_te_gap
   use xfoil_driver,       only : xfoil_geom_options_type
   use airfoil_operations, only : airfoil_write
   use airfoil_operations, only : repanel_and_normalize_airfoil   
@@ -212,8 +212,9 @@ subroutine set_geometry_value (input_file, outname_auto, output_prefix, seed_foi
   character (20)      :: value_str
   character (2)       :: value_type
   character (255)     :: outname
+  double precision    :: value_number
 
-  write (*,*) 'Max thickness or camber' 
+  write (*,*) 'Max thickness, camber or trailing edge gap ' 
   write (*,*) 
 
   call read_xfoil_paneling_inputs  (input_file, 0, geom_options)
@@ -252,13 +253,17 @@ subroutine set_geometry_value (input_file, outname_auto, output_prefix, seed_foi
       call xfoil_set_thickness_camber (foil_smoothed, 0d0, 0d0, 0d0, (value_number / 100d0), foil)
       call smooth_foil (.false., 0.1d0, foil)
 
+    case ('te') 
+      write (*,'(" - ",A)') 'Setting trailing edge gap to '//trim(adjustl(value_str))
+      call xfoil_set_te_gap (seed_foil, (value_number / 100d0), 0.8d0, foil)
+
     case default
       call my_stop ('Unknown type for setting geometry')
 
   end select
 
   if (outname_auto) then 
-    outname = trim(output_prefix) // '-' // (trim(value_type)) // trim(adjustl(value_str))
+    outname = trim(output_prefix) // '_' // (trim(value_type)) // "=" //trim(adjustl(value_str))
   else
     outname = trim(output_prefix)
   end if
@@ -857,8 +862,12 @@ subroutine print_worker_usage()
   write(*,'(A)') "  -w smooth         Repanel, normalize, smooth 'airfoil_file'"
   write(*,'(A)') "  -w flap           Set flap of 'airfoil_file'"
   write(*,'(A)') "  -w check          Check the quality of surface curvature'"
-  write(*,'(A)') "  -w set [arg]      Set max thickness or max camber or their locations"
-  write(*,'(A)') "                      where [arg]:  't=zz' or 'c=zz' or 'xt=zz' or 'xc='zz' in percent"
+  write(*,'(A)') "  -w set [arg]      Set geometry parameters where [arg]:"
+  write(*,'(A)') "                       't=zz'  max. thickness in % chord"
+  write(*,'(A)') "                       'xt=zz' max. thickness location in % chord"
+  write(*,'(A)') "                       'c=zz'  max. camber in % chord"
+  write(*,'(A)') "                       'xt=zz' max. camber location in % chord"
+  write(*,'(A)') "                       'te=y'  trailing edge gap in % chord (80% blending)"
   write(*,'(A)') "  -w blend xx       Blend 'airfoil_file' with 'second_airfoil_file' by xx%"
   write(*,'(A)')
   write(*,'(A)') "Options:"

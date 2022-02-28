@@ -139,7 +139,7 @@ subroutine check_inputs(global_search, pso_options)
   if ((trim(shape_functions) /= 'hicks-henne') .and. & 
       (trim(global_search) == 'particle_swarm')) then 
     if (pso_options%max_retries >= 0) then 
-      call print_note ('Particle retry swiched off (meaningful only for Hicks-Henne shape_type)')
+      call print_note ('Particle retry switched off (meaningful only for Hicks-Henne shape_type)')
       pso_options%max_retries = 0
       pso_options%auto_retry = .false.
     end if 
@@ -172,7 +172,7 @@ subroutine check_seed()
   use math_deps,          only : interp_point, derivation_at_point, smooth_it
   use xfoil_driver,       only : run_op_points, op_point_result_type
   use xfoil_driver,       only : xfoil_geometry_amax, xfoil_set_airfoil, &
-                                 xfoil_get_geometry_info
+                                 xfoil_get_geometry_info, get_te_gap
   use airfoil_evaluation, only : xfoil_options, xfoil_geom_options
   use airfoil_operations, only : assess_surface,  rebuild_airfoil
   use airfoil_operations, only : show_reversals_highlows
@@ -752,7 +752,7 @@ subroutine check_and_smooth_surface (show_details, do_smoothing, foil, overall_q
 
   if (top_quality >= Q_BAD .or. do_smoothing) then 
 
-    call smooth_it (.false., spike_threshold, foil%xt, foil%zt)
+    call smooth_it (show_details, spike_threshold, foil%xt, foil%zt)
     top_quality     = 0 
     done_smoothing  = .true.
     call assess_surface (show_details, 'smoothed', &
@@ -776,7 +776,7 @@ subroutine check_and_smooth_surface (show_details, do_smoothing, foil, overall_q
     
     if (bot_quality >= Q_BAD .or. do_smoothing) then 
 
-      call smooth_it (.false., spike_threshold, foil%xb, foil%zb)
+      call smooth_it (show_details, spike_threshold, foil%xb, foil%zb)
       bot_quality     = 0 
       done_smoothing  = .true.
       call assess_surface (show_details, 'smoothed', &
@@ -973,10 +973,14 @@ subroutine auto_spike_threshold_polyline (show_details, x,y , c_spec)
   istart = size(x) - NSKIP_TE
   iend   = size(x)  
   if (count_spikes (istart, iend, x, y, spike_threshold)  > 0) then 
-    c_spec%nskip_TE_spikes = NSKIP_TE
+! jx-test - deactivate skipping of te because of improved 3. derivative calculation 
+!    c_spec%nskip_TE_spikes = NSKIP_TE
+!    if (show_details) & 
+!      call print_note ('Found spike close to trailing edge. ' //&
+!     'TE will be ignored for bump detection.', 9)
+    c_spec%nskip_TE_spikes = 0
     if (show_details) & 
-      call print_note ('Found spike close to trailing edge. ' //&
-     'TE will be ignored for bump detection.', 9)
+      call print_note ('Found spike close to trailing edge. ', 9)
   end if
 
 
@@ -991,12 +995,14 @@ subroutine auto_spike_threshold_polyline (show_details, x,y , c_spec)
                     min_threshold, max_threshold, nspikes)
 
 ! ... and give a little more threshold to breeze
-  c_spec%spike_threshold = spike_threshold * 1.1d0 
+  c_spec%spike_threshold = max (spike_threshold * 1.1d0, spike_threshold + 0.03)
 
 ! Max Spikes - allow at least max_curv_reverse or seed spikes as max number of spikes 
 
   if (c_spec%max_spikes == 0 )  then 
-    c_spec%max_spikes = max (nspikes, c_spec%max_curv_reverse)
+! jx-test do not take no of reversals as minimum number of spikes
+!    c_spec%max_spikes = max (nspikes, c_spec%max_curv_reverse)
+    c_spec%max_spikes = nspikes
     text_who = 'Auto:'
   else
   ! ... overwrite from input file by user? 
@@ -1007,7 +1013,7 @@ subroutine auto_spike_threshold_polyline (show_details, x,y , c_spec)
 ! Print it all 
 
   if (show_details) then 
-    quality_threshold  = r_quality (c_spec%spike_threshold, (min_threshold * 1.2d0), OK_THRESHOLD, 0.8d0)
+    quality_threshold  = r_quality (c_spec%spike_threshold, (min_threshold + 0.035d0), OK_THRESHOLD, 0.8d0)
     label = 'spike_threshold'
     call print_colored (COLOR_PALE, '         '//label//' =') 
     call print_colored_r (5,'(F5.2)', quality_threshold, c_spec%spike_threshold) 

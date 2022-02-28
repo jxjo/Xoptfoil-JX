@@ -659,7 +659,7 @@ subroutine smooth_it (show_details, spike_threshold, x, y)
 
   integer :: max_iterations, nspikes_target, i_range_start, i_range_end
   integer :: nspikes, istart, iend, nspikes_initial
-  integer :: i, n_Chaikin_iter, n_no_improve, nspikes_best, n_no_imp_max
+  integer :: i, n_Chaikin_iter, n_no_improve, nspikes_best, n_no_imp_max, n_min
   double precision :: tension, sum_y_before, sum_y_after, delta_y
   character (size(x)) :: result_info
   character (100)     :: text_change
@@ -695,13 +695,16 @@ subroutine smooth_it (show_details, spike_threshold, x, y)
   nspikes_best = nspikes          ! init with current to check if there is improvement of nspikes over iterations
   n_no_improve = 0                ! iterate only until iteration with no improvements of nspikes 
   n_no_imp_max = 3                !  ... within  n_no_imp_max
+
+  n_min = 1                       ! Minimum number of iterations
   
 ! Now do iteration 
 
-  i = 1
+  i = 0
 
-  do while ((i <= max_iterations) .and. (nspikes > nspikes_target) .and. (n_no_improve < n_no_imp_max))
-
+  do while (((i < max_iterations) .and. (nspikes > nspikes_target) .and. &
+            (n_no_improve < n_no_imp_max)) .or.(i < n_min))
+    
     call smooth_it_Chaikin (i_range_start, i_range_end, tension, n_Chaikin_iter, x_cos, y)
 
     result_info    = repeat ('-', size(x) ) 
@@ -729,7 +732,7 @@ subroutine smooth_it (show_details, spike_threshold, x, y)
 
     if ( nspikes_initial == 0) then 
       write (*,'(1x, A,F4.1,A)') "No spikes found based on spike_threshold =", &
-                                   spike_threshold," - Nothing done"
+                                  spike_threshold,". "//trim(text_change)
 
     elseif (nspikes == 0) then 
       write (*,'(1x, A)') " All spikes removed. "//trim(text_change)
@@ -738,13 +741,13 @@ subroutine smooth_it (show_details, spike_threshold, x, y)
       write (*,'(1x,A,I3,A)') "Number of spikes reduced by factor", nspikes_initial/nspikes, &
             ". "//trim(text_change)
 
-    elseif (i > max_iterations) then 
+    elseif (i >= max_iterations) then 
       write (*,'(1x,A,I2,A)') "Reached maximum iterations = ", max_iterations, &
             ". "//trim(text_change)
 
     elseif (n_no_improve >= n_no_imp_max) then 
-      write (*,'(1x,A,I2,A)') "No further improvement with ",n_no_imp_max, &
-             " iteration. " // trim(text_change)
+      write (*,'(1x,A,I2,A)') "No further improvement within ",n_no_imp_max, &
+             " iterations. " // trim(text_change)
 
     else 
       write (*,'(1x,A)') "Smoothing ended."          ! this shouldn't happen
@@ -813,7 +816,7 @@ Subroutine getSmootherChaikin(x, y, cuttingDist, x_smooth, y_smooth)
   integer :: i, is, np_smooth, npt
   
   npt       = size(x)
-  np_smooth = (npt-1)*2+1
+  np_smooth = (npt)*2
 
   allocate (x_smooth(np_smooth))
   allocate (y_smooth(np_smooth))
@@ -834,7 +837,6 @@ Subroutine getSmootherChaikin(x, y, cuttingDist, x_smooth, y_smooth)
     y_smooth(is) = cuttingDist * y(i) + (1-cuttingDist) * y(i+1)
 
   end do
-
   ! always add the last point so it never will be changed
   x_smooth(np_smooth) = x(npt)
   y_smooth(np_smooth) = y(npt)
@@ -866,8 +868,8 @@ subroutine find_curv_reversals(istart, iend, curve_threshold, &
   nreversals = 0
 
   npt = size(x)
-  is = max (istart, 1)        
-  ie = min (iend, npt-1)             ! --> don't take last spike value as reversal 
+  is = max (istart, 1)  
+  ie = min (iend, npt)            
 
   deriv2 = derivation2(npt, x, y)   ! get 2nd derivation 
 
@@ -1026,7 +1028,7 @@ subroutine find_curv_spikes(istart, iend, spike_threshold, &
   npt = size(x)
 
   is = max (istart, 1)            
-  ie = min (iend, (npt-1))          ! ignore last point of polyline
+  ie = min (iend, npt)         
 
   prev_deriv3 = 0.d0
   deriv3 = derivation3(npt, x, y)
@@ -1068,11 +1070,26 @@ function derivation2(npt, x, y)
   integer, intent(in) :: npt
   double precision, dimension(npt), intent(in) :: x, y
   double precision, dimension(npt) :: derivation2
+  double precision, parameter ::EPSILON = 1d-10   ! ... when TE will be 1.0,y 
 
-  ! --> use Dans original function 
+  ! --> Xoptfoils original function 
   derivation2 = curvature(npt, x, y)
 
+  ! jx-mod
+  ! The curvature algorithm has a problem at TE when the panel size changes quickly
+  !  (cterat > 0.05) --> adjust y'' at TE so that y'''(1) = y'''(2)
+  
+  if ((abs(x(1)) - 1d0) < EPSILON) then          ! is it 1.0,y ? 
+    derivation2(1)   = derivation2(2) - (derivation2(3)-derivation2(2)) &
+                                      * (x(2)-x(1))/(x(3)-x(2))
+  end if 
+  if ((abs(x(npt)) - 1d0) < EPSILON) then        ! ! is it 1.0,y ? 
+    derivation2(npt) = derivation2(npt-1) - (derivation2(npt-2)-derivation2(npt-1)) &
+                                          * (x(npt-1)-x(npt))/(x(npt-2)-x(npt-1))
+  end if 
+  
 end function derivation2
+
 
 !------------------------------------------------------------------------------
 ! get first derivative of polyline (x,y)

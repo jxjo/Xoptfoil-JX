@@ -373,25 +373,11 @@ subroutine run_op_points (foil, geom_options, xfoil_options,         &
       exit
     end if 
 
-
-  end do 
-  !call print_colored (COLOR_WARNING, '3')
-
-
-! Print warnings about unconverged points
-!        Update statistics
-
-  if(show_details) write (*,*) 
-
-  do i = 1, noppoint
-
-    op_spec = op_points_spec(i)
-    op      = op_points_result(i)   
-
+!   Print warnings about unconverged points
+!   Update statistics
     if (op%converged) then 
 
-    ! Update cd outlier statistics
-      call update_statistic (i, op%cd)
+      call update_statistic (i, op%cd)      ! Update cd outlier statistics
 
     ! Support Type 1 and 2 re numbers - cl may not be negative  
       if ((op_spec%re%type == 2) .and. (op%cl <= 0d0)) then 
@@ -400,8 +386,10 @@ subroutine run_op_points (foil, geom_options, xfoil_options,         &
         " op",i," - cl:",op%cl
       end if 
     end if 
-
-  end do
+ 
+  end do 
+ 
+  if(show_details) write (*,*) 
   
 end subroutine run_op_points
 
@@ -731,11 +719,16 @@ subroutine smooth_paneling(foilin, npoint, foilout, opt_geom_options)
     geom_options%npan = npoint
     geom_options%cvpar = 1.d0
 
-  ! if set to normal value 0.15d0, the curvature at TE panel
-  !   tends to flip away and have tripple value (bug in xfoil) 
-  !   This value equals to the curvature at TE in xfoil PANGEN
-  !   --> see JX-mod in PANGEN
-    geom_options%cterat = 0.05d0     
+    ! Now set again to the xfoil standard value of 0.15
+    !  after patching curvature() which 
+    !  is able to handle a short last TE panel 
+    ! (old: if set to normal value 0.15d0, the curvature at TE panel
+    !   tends to flip away and have tripple value (bug in xfoil) 
+    !   tends to flip away and have tripple value (bug in xfoil) 
+    !   tends to flip away and have tripple value (bug in xfoil) 
+    !   This value equals to the curvature at TE in xfoil PANGEN
+    !   --> see JX-mod in PANGEN) 
+    geom_options%cterat = 0.15d0     
 
     geom_options%ctrrat = 0.2d0
     geom_options%xsref1 = 1.d0
@@ -1063,6 +1056,7 @@ end subroutine xfoil_init_BL
 ! XFOIL>HIPNT (moving thickness highpoint) is very sensible and behaves badly
 ! if the LE curvature does not fit to the spline algorithm
 !------------------------------------------------------------------------------
+
 subroutine xfoil_scale_thickness_camber (infoil, f_thick, d_xthick, f_camb, d_xcamb, outfoil)
 
   use xfoil_inc, only : AIJ
@@ -1124,7 +1118,7 @@ subroutine xfoil_set_thickness_camber (infoil, maxt, xmaxt, maxc, xmaxc, outfoil
   type(airfoil_type), intent(out) :: outfoil
 
   double precision, intent(in) :: maxt, xmaxt, maxc, xmaxc
-  double precision :: CFAC,TFAC, thick, xthick, camb, xcamb
+  double precision :: CFAC,TFAC, thick, xthick, camb, xcamb, old_te_gap
 
 ! Check to make sure xfoil is initialized
   if (.not. allocated(AIJ)) then
@@ -1166,9 +1160,12 @@ subroutine xfoil_set_thickness_camber (infoil, maxt, xmaxt, maxc, xmaxc, outfoil
     end if 
   end if  
 
+  old_te_gap = get_te_gap (infoil)
+
 ! Set xfoil airfoil and prepare globals, get current thickness
   call xfoil_set_airfoil (infoil)
   call xfoil_get_geometry_info  (thick, xthick, camb, xcamb) 
+
 ! Run xfoil to change thickness and camber 
   CFAC = 1.0
   TFAC = 1.0
@@ -1190,6 +1187,14 @@ subroutine xfoil_set_thickness_camber (infoil, maxt, xmaxt, maxc, xmaxc, outfoil
     call HIPNT (xmaxc, xthick)
   elseif((xmaxc == 0d0) .and. (xmaxt > 0d0)) then
     call HIPNT (xcamb, xmaxt)
+  end if 
+
+! THKCAM may have changed te gap 
+
+  if (old_te_gap /= xfoil_te_gap()) then 
+  ! Run xfoil to set TE gap 
+    call TGAP(old_te_gap,0.8d0)
+    ! write (*,*) "te old", old_te_gap, "   te new", xfoil_te_gap()
   end if 
 
 ! Recalc values ...
@@ -1248,25 +1253,103 @@ subroutine xfoil_scale_LE_radius (infoil, f_radius, x_blend, outfoil)
 end subroutine xfoil_scale_LE_radius
 
 
+
+!------------------------------------------------------------------------------
+! Set trailing edge TE gap using xfoil TGAP  
+!        
+! In:
+!   infoil      - foil to set gap 
+!   te_gap      - new te gap in y coordinates
+!   x_blend     - blending distance/c from LE 0...1
+! Out:
+!   outfoil     = modified foil
+! 
+!------------------------------------------------------------------------------
+subroutine xfoil_set_te_gap (infoil, te_gap, x_blend, outfoil)
+
+  use xfoil_inc, only : AIJ
+  use vardef,    only : airfoil_type
+
+  type(airfoil_type), intent(in)  :: infoil
+  double precision, intent(in) :: te_gap, x_blend
+  type(airfoil_type), intent(out) :: outfoil
+
+! Check to make sure xfoil is initialized
+  if (.not. allocated(AIJ)) then
+    write(*,*) "Error: xfoil is not initialized!  Call xfoil_init() first."
+    stop
+  end if
+
+! Set xfoil airfoil and prepare globals, get current thickness
+  call xfoil_set_airfoil (infoil)
+
+  if (te_gap < 0d0 .or. te_gap > 0.05d0) then
+    call print_error ("TE gap must be between 0.0 and 0.05")
+  elseif (x_blend < 0d0 .or. x_blend > 1d0) then
+    call print_error ("TE gap blending range must be between 0.0 and 1.0")
+  else
+
+  ! Run xfoil to set TE gap 
+    call TGAP(te_gap,x_blend)
+
+  end if 
+
+  call xfoil_reload_airfoil(outfoil)
+
+end subroutine xfoil_set_te_gap
+
+
+function get_te_gap (foil)
+
+  use vardef,    only : airfoil_type
+  type(airfoil_type), intent(in)  :: foil
+  double precision :: get_te_gap
+
+  get_te_gap = sqrt ((foil%x(1) - foil%x(size(foil%x)))**2 + &
+                     (foil%z(1) - foil%z(size(foil%z)))**2)
+end function 
+
+!------------------------------------------------------------------------------
+! calculat te gap of xfoil buffer airfoil 
+!------------------------------------------------------------------------------
+
+function xfoil_te_gap ()
+
+  use xfoil_inc, only : XB, YB, NB
+  double precision :: xfoil_te_gap
+
+  xfoil_te_gap = sqrt ((XB(1) - XB(NB))**2 + &
+                     (YB(1) - YB(NB))**2)
+
+end function xfoil_te_gap
+
+
 !-------------------------------------------------------------------------
 ! gets buffer airfoil thickness, camber .. positions
 !-------------------------------------------------------------------------
 subroutine xfoil_get_geometry_info (maxt, xmaxt, maxc, xmaxc) 
  
   use xfoil_inc
-  Real*8, intent(out) :: maxt, xmaxt, maxc, xmaxc
+  double precision, intent(out) :: maxt, xmaxt, maxc, xmaxc
+
+  Real*8 :: rmaxt, rxmaxt, rmaxc, rxmaxc
   Real*8 :: TYMAX
   
-!--- find the current buffer airfoil camber and thickness
+! find the current buffer airfoil camber and thickness
+
   CALL GETCAM(XCM,YCM,NCM,XTK,YTK,NTK,                  &
               XB,XBP,YB,YBP,SB,NB )
-  CALL GETMAX(XCM,YCM,YCMP,NCM,xmaxc,maxc)
-  CALL GETMAX(XTK,YTK,YTKP,NTK,xmaxt,TYMAX)
+  CALL GETMAX(XCM,YCM,YCMP,NCM,rxmaxc,rmaxc)
+  CALL GETMAX(XTK,YTK,YTKP,NTK,rxmaxt,TYMAX)
 
-  maxt = 2.0 * TYMAX
+  maxt  =  2d0 * DBLE (TYMAX)
+  xmaxt = DBLE (rxmaxt)
+  maxc  = DBLE (rmaxc)
+  xmaxc = DBLE (rxmaxc)
 
-!---- correct max camber position for camber = 0 as it would be xfoil "random"
-  if (maxc < 0.0001) xmaxc = 0d0
+! correct max camber position for camber = 0 as it would be xfoil "random"
+
+  if (maxc < 0.0001d0) xmaxc = 0d0
 
 end subroutine xfoil_get_geometry_info
 
@@ -1393,7 +1476,7 @@ function is_out_lier (iop, check_value)
   integer, intent (in)         :: iop
   logical :: is_out_lier 
 
-  doubleprecision ::  dev_from_mean
+  doubleprecision ::  dev_from_mean, max_meanval
 
   is_out_lier = .false. 
 
@@ -1409,10 +1492,24 @@ function is_out_lier (iop, check_value)
 
     !  call show_out_lier (iop, check_value) 
     
+    end if
+
+! In case of polar generation we have no values for iop  (every op is unique) 
+!  -> is check_value greater than 8 times (cd) value of other op_points? (empirical)    
+
+  elseif (drag_stats(iop)%nvalue == 0 ) then        
+
+    max_meanval = maxval (drag_stats%meanval)
+    if (max_meanval > 0d0) then
+      if  (check_value > (8d0 * max_meanval)) then 
+        is_out_lier = .true.
+      end if 
     end if 
+
   end if 
 
 end function is_out_lier
+
 
 !------------------------------------------------------------------------------
 subroutine show_out_lier (iop, check_value)

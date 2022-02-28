@@ -26,8 +26,10 @@ program main
 !      airfoil_operations   polar_operations
 !                    memory_util
 !                  parametrization
+!                    math_deps
 !                   xfoil_driver
-!        xfoil   math_deps  os_util  vardef
+!             xfoil   os_util  vardef
+!
 
   use omp_lib             ! to switch off multi threading
   use os_util
@@ -38,6 +40,7 @@ program main
   use genetic_algorithm,   only : ga_options_type
   use simplex_search,      only : ds_options_type
   use airfoil_evaluation,  only : xfoil_geom_options, match_foils, preset_airfoil_to_targets
+  use airfoil_evaluation,  only : preset_airfoil_te_gap, airfoil_te_gap
   use airfoil_operations,  only : get_seed_airfoil
   use airfoil_operations,  only : repanel_and_normalize_airfoil
   use memory_util,         only : deallocate_airfoil, allocate_airfoil_data,   &
@@ -162,11 +165,12 @@ program main
 
 ! Make sure seed airfoil passes constraints
 !  - preset airfoil to constraints and/or targets
+!  - preset airfoil trailing edge te gap 
 !  - smooth foil if requested
 !  - get scaling factors for operating points, 
 
   call preset_airfoil_to_targets (show_details, seed_foil) 
-
+  call preset_airfoil_te_gap     (show_details, seed_foil, airfoil_te_gap) 
   call check_seed()
 
   ! Optimize
