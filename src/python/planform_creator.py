@@ -158,32 +158,108 @@ PLanformDict =	{
                                  ".\\airfoil_library\\Scale_Glider\\SD\\SD-80.dat"]
             }
 
+# derivative function
+def deriv(f,x):
+     h = 0.000000001                 #step-size
+     return (f(x+h) - f(x))/h        #definition of derivative
 
-# define the true objective function for curve fitting
-##def objective(x, a, b, c, d, e, f):
-##	return (a * x) + (b * x**2) + (c * x**3) + (d * x**4) + (e * x**5) + f
 
-def objective(x, a, b, c):
-	return (a * x) + (b * x**2) + c
+
+def plot_Line(x, y):
+    plt.plot(x, y, color='blue', linewidth = lw_planform, solid_capstyle="round")
+
+    # maximize window
+    figManager = plt.get_current_fig_manager()
+    try:
+        figManager.window.Maximize(True)
+    except:
+        try:
+            figManager.window.state('zoomed')
+        except:
+            pass
+
+    # show diagram
+    plt.show()
+
+
 
 def objective_elliptical_wrapper(values, normalizedTipChord, tipSharpness,
-                                 leadingEdgeCorrection):
+                                 leadingEdgeCorrection, normalizedRootChord):
     result = []
 
     for x in values:
         y = objective_elliptical(x, normalizedTipChord, tipSharpness,
-                         leadingEdgeCorrection)
+                         leadingEdgeCorrection, normalizedRootChord)
 
         result.append(y)
 
     return (result)
 
 
+def calculate_tipRoundingDistance(root_tip_slope, normalizedTipChord, tipSharpness):
+        # for very small slope use complete quarter ellipse
+        if abs(root_tip_slope) < 0.0001: #FIXME parameter?
+            return normalizedTipChord * tipSharpness
+
+        x = []
+        y = []
+
+
+        if root_tip_slope > 0:
+            bNegative = True
+            root_tip_slope = -1.0 * root_tip_slope
+        else:
+            bNegative = False
+
+        a = normalizedTipChord * tipSharpness
+        result = a
+        #x1 = a-distanceToTip
+        b = normalizedTipChord
+
+        y_n1 = normalizedTipChord
+        x_n1 = 0.0
+
+        for i in range(1,1000):
+            x1 =(i*a)/1000
+            x.append(x1)
+            radicand = (a*a)-(x1*x1)
+
+            if radicand > 0:
+                # quarter ellipse formula
+                y1 = (b/a) * np.sqrt(radicand)
+                #y.append(y1)
+                slope = (y1 - y_n1)/(x1 - x_n1)
+                y.append(slope)
+                y_n1 = y1
+                x_n1 = x1
+
+                if (slope <= root_tip_slope):
+                    result = x1
+
+                    if bNegative:
+                        result = result + a
+                    break
+
+        #plot_Line(x,y);
+        return result
+
+
 def objective_elliptical(x, normalizedTipChord, tipSharpness,
-                         leadingEdgeCorrection):
+                         leadingEdgeCorrection, normalizedRootChord):
+
+    #if (normalizedTipChord < 0) or (normalizedRootChord < 0) or (tipSharpness < 0):
+     #   return 0
+
+    #if (normalizedTipChord > normalizedRootChord):
+     #   return 0
+
+    root_tip_delta = normalizedRootChord - normalizedTipChord
+    root_tip_slope = -1.0 * root_tip_delta
 
     # calculate distance to tip, where rounding starts
-    tipRoundingDistance = normalizedTipChord * tipSharpness
+    #tipRoundingDistance = normalizedTipChord * tipSharpness
+    tipRoundingDistance = calculate_tipRoundingDistance(root_tip_slope,
+                                      normalizedTipChord, tipSharpness)
 
     # calculate actual distance to tip
     distanceToTip = 1.0 - x
@@ -191,7 +267,8 @@ def objective_elliptical(x, normalizedTipChord, tipSharpness,
    # calculate delta that will be added to pure ellipse
     if (distanceToTip > tipRoundingDistance):
         # add constant value, as we are far away from the tip
-        delta = normalizedTipChord
+        #delta = normalizedTipChord
+        delta = interpolate(0.0, root_tip_delta, tipRoundingDistance, 0.0, x) + normalizedTipChord
     else:
         # add decreasing value according to quarter ellipse
         a = tipRoundingDistance
@@ -206,13 +283,53 @@ def objective_elliptical(x, normalizedTipChord, tipSharpness,
             delta = 0
 
     # elliptical shaping of the wing plus additonal delta
-    y = (1.0-delta) * np.sqrt(1.0-(x*x)) + delta
+    y_elliptical = (1.0-delta) * np.sqrt(1.0-(x*x)) + delta
+
+##    if blendingEndPoint > 0.0:
+##        blending_factor = interpolate(0.0, blendingEndPoint, 1.0, 0.0, x)
+##
+##    if (x < blendingEndPoint):
+##        y = (blending_factor * 1.0) + (1.0 - blending_factor) * y_elliptical
+##    else:
+##        y = y_elliptical
+    y = y_elliptical
 
     # correct chord with leading edge correction
     y = y - leadingEdgeCorrection * sin(interpolate(0.0, 1.0, 0.0, pi, x))
 
     return y
 
+
+def objective_bezier_wrapper(values, b1_x, b1_y, b2_x, b2_y):
+    result = []
+
+    for x in values:
+        y = objective_bezier(x, b1_x, b1_y, b2_x, b2_y)
+
+        result.append(y)
+
+    return (result)
+
+
+def objective_bezier(x, b1_x, b1_y, b2_x, b2_y):
+    #b1_y = 1.0
+    #b2_x = 1.0
+    nodes = np.asfortranarray([
+    [0.0, b1_x, b2_x, 1.0],
+    [1.0, b1_y, b2_y, 0.0],
+    ])
+
+##    nodes = np.asfortranarray([
+##    [0.0, b1_x, 1.0],
+##    [1.0, b1_y, 0.0],
+##    ])
+
+    deg = len(nodes[0])-1
+
+    curve = bezier.Curve(nodes, degree=deg)
+    result = curve.evaluate(x)
+    y = result[1][0]
+    return y
 
 ################################################################################
 #
@@ -253,6 +370,7 @@ class normalizedGrid:
         self.y = 0.0
         self.chord = 0.0
         self.referenceChord = 0.0
+        self.hinge = 0.0
 
 ################################################################################
 #
@@ -270,6 +388,7 @@ class wingGrid:
         self.hingeDepth = 0.0
         self.hingeLine = 0.0
         self.quarterChordLine = 0.0
+        self.LE_derivative = 0.0
         self.areaCenterLine = 0.0
 
 ################################################################################
@@ -301,6 +420,7 @@ class wing:
         self.tipDepthPercent = 8.0
         self.tipDepth = 0
         self.tipSharpness = 0.5
+        self.blendingEndPoint = 0.5
         self.hingeInnerPoint = 0
         self.hingeOuterPoint = 0
         self.hingeLineAngle = 0.0
@@ -648,23 +768,21 @@ class wing:
    # calculates a chord-distribution, which is normalized to root_chord = 1.0
    # half wingspan = 1
     def calculate_normalizedChordDistribution(self):
-        # In case of curve fitting, determine the optimum parameters
-        # automatically
-        if self.planformShape == 'curve_fitting':
-            # curve fitting with objective function
-            popt, _ = curve_fit(objective_elliptical_wrapper, self.planform_chord, self.planform_y)
-
-            # summarize the parameter values
-            normalizedTipChord, tipSharpness, leadingEdgeCorrection = popt
-
-            # write back the optimum parameters
-            self.leadingEdgeCorrection = leadingEdgeCorrection
-            self.tipSharpness = tipSharpness
-            self.tipDepthPercent = normalizedTipChord * 100
-
         # calculate interval for setting up the grid
         grid_delta_y = 1 / (self.numberOfGridChords-1)
         normalizedTipChord = self.tipDepthPercent / 100
+        normalizedRootChord = normalizedTipChord
+
+        # In case of curve fitting, determine the optimum parameters
+        # automatically
+        if self.planformShape == 'curve_fitting':
+            popt, _ = curve_fit(objective_elliptical_wrapper, self.planform_chord, self.planform_y)
+            normalizedTipChord, self.tipSharpness, self.leadingEdgeCorrection, normalizedRootChord = popt
+            # curve fitting with objective function
+            #popt, _ = curve_fit(objective_bezier_wrapper, self.planform_chord, self.planform_y)
+
+            # summarize the parameter values
+            #b1_x, b1_y, b2_x, b2_y = popt
 
         # calculate all Grid-chords
         for i in range(1, (self.numberOfGridChords + 1)):
@@ -680,16 +798,28 @@ class wing:
              #   print("%1.5f\n" % grid.referenceChord)
 
             # normalized chord-length
-            if ((self.planformShape == 'elliptical') or
-               (self.planformShape == 'curve_fitting')):
+            if (self.planformShape == 'elliptical'):
                 # elliptical shaping of the wing
                 grid.chord = objective_elliptical(grid.y, normalizedTipChord,
-                                 self.tipSharpness, self.leadingEdgeCorrection)
+                                self.tipSharpness, self.leadingEdgeCorrection, normalizedRootChord)
+
+            elif(self.planformShape == 'curve_fitting'):
+                # curve fitting algorithm with bezier
+                #grid.chord = objective_bezier(grid.y, b1_x, b1_y, b2_x, b2_y)
+                grid.chord = objective_elliptical(grid.y, normalizedTipChord,
+                                self.tipSharpness, self.leadingEdgeCorrection, normalizedRootChord)
 
             elif self.planformShape == 'trapezoidal':
                 # trapezoidal shaping of the wing
                 grid.chord = (1.0-grid.y) \
                             + normalizedTipChord * (grid.y)
+
+##            # calculate hinge line
+##            grid.hinge = interpolate(0.0 , 1.0, (self.hingeDepthRoot/100),
+##                   ((self.hingeDepthTip/100) * normalizedTipChord), grid.y)
+##
+##            # calculate leadingEdge, trailingedge
+##            grid.leadingEdge = grid.hingeLine -(grid.chord-grid.hingeDepth
 
             # append section to section-list of wing
             self.normalizedGrid.append(grid)
@@ -737,6 +867,11 @@ class wing:
         # init areaCenter
         area_Center = 0.0
 
+        # track maximum value of leading edge derivative
+        LE_derivative_max = 0.0
+
+        # track maximum value of hingeDepth
+        hingeDepthPercent_max = 0.0
 
         # calculate all Grid-chords
         for i in range(1, (self.numberOfGridChords + 1)):
@@ -760,9 +895,9 @@ class wing:
                                        grid.y)
 
             # correction of leading edge for elliptical planform, avoid swept forward part of the wing
-            delta = self.leadingEdgeCorrection * sin(interpolate(0.0, self.halfwingspan, 0.0, pi, grid.y))
+            #delta = self.leadingEdgeCorrection * sin(interpolate(0.0, self.halfwingspan, 0.0, pi, grid.y))#FIXME
 
-            grid.hingeDepth = (hingeDepth_y/100)*grid.chord + delta
+            grid.hingeDepth = (hingeDepth_y/100)*grid.chord #+ delta FIXME
             grid.hingeLine = (self.hingeOuterPoint-self.hingeInnerPoint)/(self.halfwingspan) * (grid.y) + self.hingeInnerPoint
             grid.leadingEdge = grid.hingeLine -(grid.chord-grid.hingeDepth)
 
@@ -773,6 +908,24 @@ class wing:
             # calculate centerLine, quarterChordLine
             grid.centerLine = grid.leadingEdge + (grid.chord/2)
             grid.quarterChordLine = grid.leadingEdge + (grid.trailingEdge-grid.leadingEdge)/4
+
+            # Calculate derivative of Leading edge
+            if (i>3):
+                grid.LE_derivative = -1.0*(self.grid[i-2].leadingEdge - self.grid[i-3].leadingEdge) / (self.grid[i-2].y - self.grid[i-3].y)
+            else:
+                grid.LE_derivative = 0.0
+
+            # Tracking of LE-derative Maximum-value
+            if (grid.LE_derivative < LE_derivative_max):
+                LE_derivative_max = grid.LE_derivative
+
+            # calculate percentual hingeDepth
+            grid.hingeDepthPercent = ((grid.trailingEdge - grid.hingeLine) / grid.chord) * 100.0
+
+            # Tracking of hingeDepth maximum value
+            if (grid.hingeDepthPercent > hingeDepthPercent_max):
+                hingeDepthPercent_max = grid.hingeDepthPercent
+
 
             # append section to section-list of wing
             self.grid.append(grid)
@@ -787,6 +940,10 @@ class wing:
         for element in self.grid:
             element.y = element.y + self.fuselageWidth/2
             element.areaCenterLine = self.area_Center
+
+        self.draw_LE_derivative()
+
+        return (LE_derivative_max, hingeDepthPercent_max)
 
 
     def calculate_wingArea(self):
@@ -1416,6 +1573,7 @@ class wing:
         # customize grid
         ax.grid(True, color='dimgrey',  linestyle='dotted', linewidth=0.4)
 
+
     def draw_NormalizedChordDistribution(self):
         # set background style
         plt.style.use(cl_background)
@@ -1426,11 +1584,13 @@ class wing:
         normalizedHalfwingspan = []
         normalizedChord = []
         referenceChord = []
+        hinge = []
 
         for element in self.normalizedGrid:
             normalizedHalfwingspan.append(element.y)
             normalizedChord.append(element.chord)
             referenceChord.append(element.referenceChord)
+            #hinge.append(element.hinge)
 
         # set axes and labels
         #self.set_AxesAndLabels(ax, "Half-wing planform")
@@ -1444,12 +1604,52 @@ class wing:
                 linewidth = lw_planform, solid_capstyle="round",
                 label = "pure ellipse")
 
+##        plt.plot(normalizedHalfwingspan, hinge, color=cl_hingeLine,
+##                linewidth = lw_planform, solid_capstyle="round",
+##                label = "hinge line")
+
         if self.planformShape =='curve_fitting':
             plt.scatter(self.planform_chord, self.planform_y, color=cl_normalizedChord,
             label = "control points")
 
         plt.title("Normalized chord distribution")
         plt.legend(loc='lower right', fontsize = fs_legend)
+
+        # maximize window
+        figManager = plt.get_current_fig_manager()
+        try:
+            figManager.window.Maximize(True)
+        except:
+            try:
+                figManager.window.state('zoomed')
+            except:
+                pass
+
+        # show diagram
+        plt.show()
+
+
+    def draw_LE_derivative(self):
+        # set background style
+        plt.style.use(cl_background)
+
+        # customize grid
+        plt.grid(True, color='dimgrey',  linestyle='dotted', linewidth=0.4)
+
+        x = []
+        y = []
+
+        for element in self.grid:
+            x.append(element.y)
+            if (element.LE_derivative > 0.0):
+                y.append(element.LE_derivative)
+            else:
+                y.append(0.0)
+
+
+        plt.plot(x, y, color=cl_normalizedChord,
+                linewidth = lw_planform, solid_capstyle="round",
+                label = "LE derivative")
 
         # maximize window
         figManager = plt.get_current_fig_manager()
