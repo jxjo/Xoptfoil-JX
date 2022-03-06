@@ -293,7 +293,7 @@ end function objective_function_nopenalty
 function geo_penalty_function(foil, actual_flap_degrees)
 
   use math_deps,          only : interp_vector, curvature, derv1f1, derv1b1
-  use math_deps,          only : count_reversals, count_spikes
+  use math_deps,          only : count_reversals, derivative2, derivative3
   use airfoil_operations, only : get_max_te_curvature
   use xfoil_driver,       only : xfoil_geometry_amax, xfoil_set_airfoil, &
                                  xfoil_get_geometry_info
@@ -339,7 +339,7 @@ function geo_penalty_function(foil, actual_flap_degrees)
     istart = c%nskip_LE
     iend   = size(foil%xt) - c%nskip_TE_revers
 
-    nreverse = count_reversals (istart, iend, foil%xt, foil%zt, c%curv_threshold)  
+    nreverse = count_reversals (istart, iend, derivative2(foil%xt, foil%zt), c%curv_threshold)  
     nreverse_violations  = max(0,(nreverse - c%max_curv_reverse))
 
     if (nreverse_violations > 0 ) then 
@@ -351,7 +351,7 @@ function geo_penalty_function(foil, actual_flap_degrees)
 
     if (c%check_curvature_bumps) then 
       iend   = size(foil%xt) - c%nskip_TE_spikes
-      nspikes = count_spikes (istart, iend, foil%xt, foil%zt, c%spike_threshold)
+      nspikes = count_reversals (istart, iend, derivative3(foil%xt, foil%zt), c%spike_threshold)
       nspike_violations  = max(0,(nspikes - c%max_spikes))
     else
       nspike_violations  = 0
@@ -384,7 +384,7 @@ function geo_penalty_function(foil, actual_flap_degrees)
       istart = c%nskip_LE
       iend   = size(foil%xb) - c%nskip_TE_revers
     
-      nreverse = count_reversals (istart, iend, foil%xb, foil%zb, c%curv_threshold)  
+      nreverse = count_reversals (istart, iend, derivative2(foil%xb, foil%zb), c%curv_threshold)  
       nreverse_violations  = max(0,(nreverse - c%max_curv_reverse))
       if (nreverse_violations > 0 ) then 
         penaltyval = penaltyval + nreverse_violations
@@ -394,7 +394,7 @@ function geo_penalty_function(foil, actual_flap_degrees)
     ! How many spikes = Rversals of 3rd derivation = Bumps of curvature
       if (c%check_curvature_bumps) then 
         iend   = size(foil%xb) - c%nskip_TE_spikes
-        nspikes = count_spikes (istart, iend, foil%xb, foil%zb, c%spike_threshold)
+        nspikes = count_reversals (istart, iend, derivative3(foil%xb, foil%zb), c%spike_threshold)
         nspike_violations  = max(0,(nspikes - c%max_spikes))
       else
         nspike_violations  = 0
@@ -1364,7 +1364,7 @@ end subroutine preset_airfoil_te_gap
 !=============================================================================80
 function write_airfoil_optimization_progress(designvars, designcounter)
 
-  use math_deps,          only : interp_vector, min_threshold_for_spikes
+  use math_deps,          only : interp_vector, min_threshold_for_reversals, derivative3
   use airfoil_operations, only : airfoil_write_to_unit, assess_surface
   use xfoil_driver,       only : run_op_points, op_point_result_type
   use xfoil_driver,       only : xfoil_get_geometry_info, xfoil_set_airfoil
@@ -1581,26 +1581,34 @@ function write_airfoil_optimization_progress(designvars, designcounter)
     call show_optimization_progress  (op_points_result, geo_result, dynamic_done) 
   end if
 
+! jx-test Write op points deviation to file
+
+  call write_op_results (designcounter, op_points_result, geo_result) 
+
+
 ! jx-test print spikes for testing purposes 
   if (.false.) then 
-
     c = curv_top_spec
+    write (*,'(8x)',advance ='no') 
     call assess_surface (show_details, '- Top side ', &
                         1, size(foil%xt), size(foil%xt), &
                         c%curv_threshold, c%spike_threshold, foil%xt, foil%zt, idum)
-    spike_threshold = min_threshold_for_spikes (1, size(foil%xt), foil%xt, foil%zt, &
-                                                0.1d0, c%spike_threshold, c%max_spikes)
+
+    spike_threshold = min_threshold_for_reversals (1, size(foil%xt), &
+                      derivative3(foil%xt, foil%zt), 0.1d0, c%spike_threshold, c%max_spikes)
     call print_note_only ('Min threshold for '//stri(c%max_spikes)//' spikes '&
                           //strf('(F4.2)', spike_threshold), 18)
 
     c = curv_bot_spec
+    write (*,'(8x)',advance ='no') 
     call assess_surface (show_details, '- Bot side ', &
                         1, size(foil%xb), size(foil%xb), &
                         c%curv_threshold, c%spike_threshold, foil%xb, foil%zb, idum)
-    spike_threshold = min_threshold_for_spikes (1, size(foil%xb), foil%xb, foil%zb, &
-                                                0.1d0, c%spike_threshold, c%max_spikes)
+
+    spike_threshold = min_threshold_for_reversals (1, size(foil%xb), &
+                      derivative3( foil%xb, foil%zb), 0.1d0, c%spike_threshold, c%max_spikes)
     call print_note_only ('Min threshold for '//stri(c%max_spikes)//' spikes '&
-                          //strf('(F4.2)', spike_threshold), 18)
+                         //strf('(F4.2)', spike_threshold), 18)
     write (*,*)
   end if 
 
@@ -2630,6 +2638,137 @@ function write_matchfoil_optimization_progress(designvars, designcounter)
   return
 
 end function write_matchfoil_optimization_progress
+
+
+
+!------------------------------------------------------------------------------
+!
+!  Write results (cd) of all op_points to file for further analysis
+!
+!------------------------------------------------------------------------------
+subroutine write_op_results (designcounter, op_points_result, geo_result) 
+
+  use xfoil_driver,       only : op_point_result_type, op_point_specification_type
+  use math_deps,          only : median
+
+  integer, intent(in) :: designcounter
+  type(op_point_result_type), dimension(:), intent(in)    :: op_points_result
+  type(geo_result_type),  intent(in)                      :: geo_result
+
+  type(op_point_result_type)        :: op
+  type(op_point_specification_type) :: op_spec
+  type(geo_target_type)             :: geo_target
+
+  integer             :: i, nop, ngeo_targets
+  character(255)      :: resultfile
+  integer             :: resultunit
+  double precision    :: dev, dist
+
+  nop    = size(op_points_spec)
+  ngeo_targets = size(geo_targets)
+
+
+! Initial design: Open file and write header
+
+  resultfile = trim(design_subdir)//'target_result_history.csv'
+  resultunit = 13
+
+  if (designcounter == 0) then
+
+    open(unit=resultunit, file=resultfile, status='replace')
+
+    write(resultunit,'(1x,A4,1x,A1)', advance='no') 'i',';'
+
+    do i = 1, nop
+      write(resultunit,'(2x,A4)', advance='no') 'op' // stri(i)
+      if ((i < nop) .or. (ngeo_targets > 0)) then 
+        write(resultunit,'(A1)', advance='no') ';'
+      else
+          write(resultunit, *) 
+      end if 
+    end do
+
+    do i = 1, ngeo_targets
+      write(resultunit,'(1x,A5)', advance='no') 'geo' // stri(i)
+      if (i < ngeo_targets) then 
+        write(resultunit,'(A1)', advance='no') ';'
+      else
+          write(resultunit, *) 
+      end if 
+    end do
+
+  else
+
+    open(unit=resultunit, file=resultfile, status='old', position='append', err=910)
+  
+  end if 
+
+! Next designs: Open file and write data
+
+  write(resultunit,'(1x,I4,1x,A1)', advance='no') designcounter,';'
+
+  do i = 1, nop
+
+    op      = op_points_result(i)
+    op_spec = op_points_spec(i)
+
+    if (trim(op_spec%optimization_type (1:6)) == 'target') then
+      select case  (op_spec%optimization_type)
+        case ('target-drag')
+          dist  = op_spec%target_value - op%cd                ! negative is worse
+          dev   = dist / op_spec%target_value * 100d0
+        case ('target-glide')
+          dist  = op%cl /op%cd - op_spec%target_value         ! negative is worse
+          dev   = dist / op_spec%target_value * 100d0
+        case ('target-lift')  
+          dist = op%cl - op_spec%target_value                 ! negative is worse
+          dev  = dist / (1d0 + op_spec%target_value) * 100d0
+        case ('target-moment')
+          dist = op%cm - op_spec%target_value                 ! negative is worse
+          dev  = dist / (op_spec%target_value + 0.05d0) * 100d0 ! cm could be 0
+      end select
+    else
+      dev = 0d0
+    end if 
+
+    write(resultunit,'(F6.2)', advance='no') dev
+    if  ((i < nop) .or. (ngeo_targets > 0)) then 
+      write(resultunit,'(A1)', advance='no') ';'
+    else
+      write(resultunit, *) 
+    end if 
+  end do
+
+  do i = 1, ngeo_targets
+    geo_target = geo_targets(i)
+
+    select case  (trim(geo_target%type))
+      case ('Thickness')
+        dist = geo_result%maxt - geo_target%target_value       ! positive is worse
+        dev  = dist / geo_target%target_value * 100d0
+      case ('Camber')
+        dist = geo_result%maxc - geo_target%target_value       ! positive is worse
+        dev  = dist / geo_target%target_value * 100d0
+    end select
+
+    write(resultunit,'(F6.2)', advance='no') dev
+    if (i < ngeo_targets) then 
+      write(resultunit,'(A1)', advance='no') ';'
+    else
+      write(resultunit, *) 
+    end if 
+  end do
+
+  close(resultunit)
+
+  return 
+
+! Warning if there was an error opening design_coordinates file
+
+910 write(*,*) "Warning: unable to open "//trim(resultfile)//". Skipping ..."
+    return
+
+end subroutine write_op_results
 
 
 end module airfoil_evaluation

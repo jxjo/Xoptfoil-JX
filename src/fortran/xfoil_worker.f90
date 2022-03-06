@@ -892,7 +892,7 @@ end subroutine print_worker_usage
 !-----------------------------------------------------------------------------
 subroutine write_polyline (info, npoints, x, y)
 
-  use math_deps,       only : derivation2, derivation3 
+  use math_deps,       only : derivative2, derivative3 
 
 
   integer, intent(in) :: npoints
@@ -903,8 +903,8 @@ subroutine write_polyline (info, npoints, x, y)
   integer :: iunit, i
   character(100) :: smoothfile
 
-  deriv2 = derivation2 (size(x), x, y)
-  deriv3 = derivation3 (size(x), x, y)
+  deriv2 = derivative2 (x, y)
+  deriv3 = derivative3 (x, y)
 
 
   iunit = 21 

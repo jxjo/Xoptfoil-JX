@@ -166,8 +166,6 @@ subroutine run_op_points (foil, geom_options, xfoil_options,         &
   op_points_result%cm        = 0d0             
   op_points_result%xtrt      = 0d0               
   op_points_result%xtrb      = 0d0              
-
-  ! write (*,'(A)',advance ='no') "1"
   
   prev_op_delta   = 0d0
   prev_op_spec_cl = op_points_spec(1)%spec_cl

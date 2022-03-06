@@ -774,7 +774,7 @@ end subroutine airfoil_write
 subroutine airfoil_write_to_unit (iunit, title, foil, write_derivatives)
 
   use vardef,          only : airfoil_type
-  use math_deps,       only : derivation2, derivation3 
+  use math_deps,       only : derivative2, derivative3 
 
   integer, intent(in) :: iunit
   character(*), intent(in) :: title
@@ -787,8 +787,8 @@ subroutine airfoil_write_to_unit (iunit, title, foil, write_derivatives)
 ! Add 2nd and 3rd derivative to
 !        ...design_coordinates.dat to show it in visualizer
   if (write_derivatives) then
-    deriv2 = derivation2 (foil%npoint, foil%x, foil%z)
-    deriv3 = derivation3 (foil%npoint, foil%x, foil%z)
+    deriv2 = derivative2 (foil%x, foil%z)
+    deriv3 = derivative3 (foil%x, foil%z)
   end if
 
 ! Write label to file
@@ -941,7 +941,7 @@ end subroutine assess_surface
 
 function get_max_te_curvature (x,y) 
 
-  use math_deps,        only: derivation2
+  use math_deps,        only: derivative2
 
   double precision   :: get_max_te_curvature 
 
@@ -954,7 +954,7 @@ function get_max_te_curvature (x,y)
   ite    = npt - 3                !  "te" begins at index
 
   allocate (curv (npt))
-  curv  = derivation2(npt, x, y) 
+  curv  = derivative2(x, y) 
   get_max_te_curvature =  maxval (abs(curv(ite: npt)))
 
 end function get_max_te_curvature

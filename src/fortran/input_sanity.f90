@@ -867,7 +867,7 @@ end subroutine auto_curvature_constraints
 subroutine auto_curvature_threshold_polyline (info, show_details, x,y , c_spec)
 
   use math_deps,          only: min_threshold_for_reversals, count_reversals
-  use math_deps,          only: count_spikes
+  use math_deps,          only: derivative2, derivative3
   use airfoil_evaluation, only: curvature_polyline_specification_type, NSKIP_TE
 
   character(*),     intent(in) :: info
@@ -891,7 +891,7 @@ subroutine auto_curvature_threshold_polyline (info, show_details, x,y , c_spec)
   
   istart = size(x) - NSKIP_TE
   iend   = size(x)  
-  if (count_reversals (istart, iend, x, y, curv_threshold)  > 0) then 
+  if (count_reversals (istart, iend, derivative2(x,y), curv_threshold)  > 0) then 
     c_spec%nskip_TE_Revers = NSKIP_TE
     if (show_details) &
       call print_note ('Found reversal close to trailing edge. ' //&
@@ -902,7 +902,7 @@ subroutine auto_curvature_threshold_polyline (info, show_details, x,y , c_spec)
 
   istart = c_spec%nskip_LE
   iend   = size(x) - c_spec%nskip_TE_revers
-  nreversals = count_reversals (istart, iend, x, y, curv_threshold)
+  nreversals = count_reversals (istart, iend, derivative2(x,y), curv_threshold)
 
   if (nreversals > max_curv_reverse) then
     call print_warning ( &
@@ -917,7 +917,7 @@ subroutine auto_curvature_threshold_polyline (info, show_details, x,y , c_spec)
 
 ! now get smallest threshold for max_reversals defined by user 
 
-  curv_threshold = min_threshold_for_reversals (istart, iend, x, y, &
+  curv_threshold = min_threshold_for_reversals (istart, iend, derivative2(x,y) , &
                              min_threshold, max_threshold, max_curv_reverse)
   
 ! ... and give a little more threshold to breeze
@@ -949,7 +949,7 @@ end subroutine auto_curvature_threshold_polyline
 
 subroutine auto_spike_threshold_polyline (show_details, x,y , c_spec)
 
-  use math_deps,          only: min_threshold_for_spikes, count_spikes
+  use math_deps,          only: count_reversals, derivative3, min_threshold_for_reversals
   use airfoil_evaluation, only: curvature_polyline_specification_type, NSKIP_TE
 
   logical, intent (in)         :: show_details
@@ -957,22 +957,21 @@ subroutine auto_spike_threshold_polyline (show_details, x,y , c_spec)
   type (curvature_polyline_specification_type), intent (inout)  :: c_spec
 
   double precision    :: spike_threshold
-  double precision    :: min_threshold, max_threshold
   integer             :: istart, iend, nspikes, quality_threshold
   character (16)      :: label
   character (5)       :: text_who
 
   double precision, parameter    :: OK_THRESHOLD  = 0.4d0
+  double precision, parameter    :: MIN_THRESHOLD = 0.1d0
+  double precision, parameter    :: MAX_THRESHOLD = 1.0d0
 
-  min_threshold = 0.1d0
-  max_threshold = 1.0d0
   spike_threshold = c_spec%spike_threshold
 
 ! Is there a spike close to TE? - which is quite often ...If yes, skip TE for ever
 
   istart = size(x) - NSKIP_TE
   iend   = size(x)  
-  if (count_spikes (istart, iend, x, y, spike_threshold)  > 0) then 
+  if (count_reversals (istart, iend, derivative3(x,y), spike_threshold)  > 0) then 
 ! jx-test - deactivate skipping of te because of improved 3. derivative calculation 
 !    c_spec%nskip_TE_spikes = NSKIP_TE
 !    if (show_details) & 
@@ -987,11 +986,11 @@ subroutine auto_spike_threshold_polyline (show_details, x,y , c_spec)
 ! How many Spikes do we have with current threshold defined by user / default?
   istart = c_spec%nskip_LE
   iend   = size(x) - c_spec%nskip_TE_spikes
-  nspikes = count_spikes (istart, iend, x, y, spike_threshold)
+  nspikes = count_reversals (istart, iend, derivative3(x,y), spike_threshold)
   ! write (*,*) '------ ', istart, iend , spike_threshold, nspikes
 
 ! now get smallest threshold to achieve this number of spikes
-  spike_threshold = min_threshold_for_spikes (istart, iend, x, y, &
+  spike_threshold = min_threshold_for_reversals (istart, iend, derivative3(x,y), &
                     min_threshold, max_threshold, nspikes)
 
 ! ... and give a little more threshold to breeze
@@ -1013,7 +1012,7 @@ subroutine auto_spike_threshold_polyline (show_details, x,y , c_spec)
 ! Print it all 
 
   if (show_details) then 
-    quality_threshold  = r_quality (c_spec%spike_threshold, (min_threshold + 0.035d0), OK_THRESHOLD, 0.8d0)
+    quality_threshold  = r_quality (c_spec%spike_threshold, (MIN_THRESHOLD + 0.035d0), OK_THRESHOLD, 0.8d0)
     label = 'spike_threshold'
     call print_colored (COLOR_PALE, '         '//label//' =') 
     call print_colored_r (5,'(F5.2)', quality_threshold, c_spec%spike_threshold) 
@@ -1162,7 +1161,7 @@ subroutine  info_check_curvature (info, x, y, c_spec)
 
   use airfoil_evaluation, only : curvature_polyline_specification_type
   use airfoil_operations, only : show_reversals_highlows
-  use math_deps,          only : count_reversals, count_spikes
+  use math_deps,          only : count_reversals, derivative3
 
 
   character(*),                   intent(in) :: info
@@ -1180,7 +1179,7 @@ subroutine  info_check_curvature (info, x, y, c_spec)
   iend   = size(x) - c_spec%nskip_TE_revers
 
 ! How many spikes = Rversals of 3rd derivation = Bumps of curvature
-  nspikes = count_spikes (istart, iend, x, y, c_spec%spike_threshold)
+  nspikes = count_reversals (istart, iend, derivative3(x,y), c_spec%spike_threshold)
 
 ! activate bump detection (reversal of 3rd derivative) if values are ok
 
@@ -1218,7 +1217,7 @@ subroutine  check_handle_curve_violations (info, x, y, c)
 
   use airfoil_evaluation, only : curvature_polyline_specification_type
   use airfoil_operations, only : show_reversals_highlows
-  use math_deps,          only : count_reversals, count_spikes
+  use math_deps,          only : count_reversals, derivative2, derivative3
 
 
   character(*),                   intent(in) :: info
@@ -1232,12 +1231,12 @@ subroutine  check_handle_curve_violations (info, x, y, c)
   iend   = size(x) - c%nskip_TE_revers
 
 ! How many reversals?  ... 
-  nreverse = count_reversals (istart, iend, x, y, c%curv_threshold)  
+  nreverse = count_reversals (istart, iend, derivative2(x,y), c%curv_threshold)  
   nreverse_violations  = max(0,(nreverse - c%max_curv_reverse))
 
 ! How many spikes = Rversals of 3rd derivation = Bumps of curvature
   if (c%check_curvature_bumps) then 
-    nspikes = count_spikes (istart, iend, x, y, c%spike_threshold)
+    nspikes = count_reversals (istart, iend, derivative3(x,y), c%spike_threshold)
     nspike_violations  = max(0,(nspikes - c%max_spikes))
   else
     nspike_violations  = 0
