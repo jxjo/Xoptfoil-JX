@@ -107,9 +107,9 @@ subroutine particleswarm(xopt, fmin, step, fevals, objfunc, x0, xmin, xmax,    &
 
   optional :: converterfunc
   interface
-    integer function converterfunc(x, designcounter)
+    integer function converterfunc(x, designcounter_dummy)
       double precision, dimension(:), intent(in) :: x
-      integer, intent(in) :: designcounter
+      integer, intent(in) :: designcounter_dummy
     end function
   end interface
 
@@ -856,15 +856,9 @@ end subroutine show_particles_info
 
 subroutine  show_particles_progress (nparticles, ndone)
 
-
   integer, intent(in)  :: nparticles, ndone
-  doubleprecision      :: div 
 
-  div = float (nparticles/10)
-
-  if (mod(float(ndone),div) < 0.1d0) then 
-    call print_colored (COLOR_NOTE, '.') 
-  end if 
+  if (mod(ndone,(nparticles/10)) == 0) call print_colored (COLOR_NOTE, '.') 
   
 end subroutine show_particles_progress
 

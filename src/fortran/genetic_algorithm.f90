@@ -110,9 +110,9 @@ subroutine geneticalgorithm(xopt, fmin, step, fevals, objfunc, x0, xmin, xmax, &
 
   optional :: converterfunc
   interface
-    integer function converterfunc(x, designcounter)
+    integer function converterfunc(x, designcnt)
       double precision, dimension(:), intent(in) :: x
-      integer, intent(in) :: designcounter
+      integer, intent(in) :: designcnt
     end function
   end interface
 

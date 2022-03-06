@@ -872,10 +872,6 @@ C---- solve for smoothed curvature array W5
        I = IBLE+1
        CALL TRISOL(W2(I),W1(I),W3(I),W5(I),NB-IBLE)
       ENDIF
-C jx-mod Force curvature at last panel to value of panel before
-C         ... otherwise last curvature flips away
-      W5(1)  = W5(2)
-      W5(NB) = W5(NB-1)
 C
 C---- find max curvature
       CVMAX = 0.
@@ -897,10 +893,7 @@ C     temporarily used  for more reliable convergence.
       NN = IPFAC*(N-1)+1
 C
 C---- ratio of lengths of panel at TE to one away from the TE
-C     jx-mod The original ration leads to a curvature jump at TE
-C            With 1.0 it's fine. Hopefully no side effects!  
-C      RDSTE = 0.667
-      RDSTE = 1.0
+      RDSTE = 0.667
       RTF = (RDSTE-1.0)*2.0 + 1.0
 C
       IF(IBLE.EQ.0) THEN
@@ -2693,8 +2686,7 @@ C
       ENDDO
 C
 C--- JX-mod do not change LE (0,0) and TE coordinates 
-C     DO I=1, NB
-      DO I=2, (NB-1)
+      DO I=1, NB
         if (I /= iLE) then
           XB(I) = W1(I)
           YB(I) = W2(I)
@@ -2885,9 +2877,6 @@ C
 C
 C---- for each orig. airfoil point setup new YB from camber and thickness
 
-C---- JX-mod do not change LE (0,0) and TE coordinates 
-C     jx-test do change TE coordinates
-C     DO 40 I=2, (NB-1)
       DO 40 I=1, NB
         if (i /= iLE) then
 
@@ -2991,6 +2980,109 @@ C
       RETURN
       END ! GETCAM
 
+
+
+C======================================================
+C JX-mod - copied from xfoil sources 
+C
+C     Set buffer airfoil trailing edge gap 
+C     In: 
+C           GAPNEW - new TE gap            (in y-units) 
+C           DOC  - blending distance/c from LE  (0...1)
+C
+C======================================================
+C      SUBROUTINE TGAP(RINPUT,NINPUT)
+      SUBROUTINE TGAP(GAPNEW,DOC)
+
+      use xfoil_inc
+
+C      DIMENSION RINPUT(*)
+      LOGICAL LGSAME
+
+C
+      CALL LEFIND(SBLE,XB,XBP,YB,YBP,SB,NB, SILENT_MODE)
+      XBLE = SEVAL(SBLE,XB,XBP,SB,NB)
+      YBLE = SEVAL(SBLE,YB,YBP,SB,NB)
+      XBTE = 0.5*(XB(1)+XB(NB))
+      YBTE = 0.5*(YB(1)+YB(NB))
+      CHBSQ = (XBTE-XBLE)**2 + (YBTE-YBLE)**2
+C
+      DXN = XB(1) - XB(NB)
+      DYN = YB(1) - YB(NB)
+      GAP = SQRT(DXN**2 + DYN**2)
+C
+C---- components of unit vector parallel to TE gap
+      IF(GAP.GT.0.0) THEN
+       DXU = DXN / GAP
+       DYU = DYN / GAP
+      ELSE
+       DXU = -.5*(YBP(NB) - YBP(1))
+       DYU = 0.5*(XBP(NB) - XBP(1))
+      ENDIF
+C
+C      IF    (NINPUT .GE. 2) THEN
+C       GAPNEW = RINPUT(1)
+C       DOC    = RINPUT(2)
+C      ELSEIF(NINPUT .GE. 1) THEN
+C       GAPNEW = RINPUT(1)
+C       DOC = 1.0
+C       CALL ASKR('Enter blending distance/c (0..1)^',DOC)
+C      ELSE
+C       WRITE(*,1000) GAP
+C 1000  FORMAT(/' Current gap =',F9.5)
+C       GAPNEW = 0.0
+C       CALL ASKR('Enter new gap^',GAPNEW)
+C       DOC = 1.0
+C       CALL ASKR('Enter blending distance/c (0..1)^',DOC)
+C      ENDIF
+C
+      DOC = MIN( MAX( DOC , 0.0 ) , 1.0 )
+C
+      DGAP = GAPNEW - GAP
+C
+C---- go over each point, changing the y-thickness appropriately
+      DO 30 I=1, NB
+C
+C------ chord-based x/c
+        XOC = (  (XB(I)-XBLE)*(XBTE-XBLE)
+     &         + (YB(I)-YBLE)*(YBTE-YBLE) ) / CHBSQ
+C
+C------ thickness factor tails off exponentially away from trailing edge
+        IF(DOC .EQ. 0.0) THEN
+          TFAC = 0.0
+          IF(I.EQ.1 .OR. I.EQ.NB) TFAC = 1.0
+        ELSE
+          ARG = MIN( (1.0-XOC)*(1.0/DOC-1.0) , 15.0 )
+          TFAC = EXP(-ARG)
+        ENDIF
+C
+        IF(SB(I).LE.SBLE) THEN
+         XB(I) = XB(I) + 0.5*DGAP*XOC*TFAC*DXU
+         YB(I) = YB(I) + 0.5*DGAP*XOC*TFAC*DYU
+        ELSE
+         XB(I) = XB(I) - 0.5*DGAP*XOC*TFAC*DXU
+         YB(I) = YB(I) - 0.5*DGAP*XOC*TFAC*DYU
+        ENDIF
+   30 CONTINUE
+      LGSAME = .FALSE.
+C
+      CALL SCALC(XB,YB,SB,NB)
+      CALL SEGSPL(XB,XBP,SB,NB)
+      CALL SEGSPL(YB,YBP,SB,NB)
+C
+C      CALL GEOPAR(XB,XBP,YB,YBP,SB,NB,W1,
+C     &            SBLE,CHORDB,AREAB,RADBLE,ANGBTE,
+C     &            EI11BA,EI22BA,APX1BA,APX2BA,
+C     &            EI11BT,EI22BT,APX1BT,APX2BT,
+C     &            THICKB,CAMBRB )
+C
+C      CALL PLTAIR(XB,XBP,YB,YBP,SB,NB, XOFF,XSF,YOFF,YSF,'magenta')
+C      CALL PLNEWP('magenta')
+C
+C      LGEOPL = .FALSE.
+C
+      RETURN
+      END ! TGAP
 
 
 C======================================================

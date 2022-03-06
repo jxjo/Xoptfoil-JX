@@ -308,10 +308,10 @@ subroutine le_find(x, z, le, xle, zle, addpoint_loc)
   double precision :: sle, dist1, dist2, dot
 
   interface
-    double precision function SEVAL(SS, X, XS, S, N)
+    double precision function SEVAL(SS, X_dum, XS, S_dum, N)
       integer, intent(in) :: N
       double precision, intent(in) :: SS
-      double precision, dimension(N), intent(in) :: X, XS, S
+      double precision, dimension(N), intent(in) :: X_dum, XS, S_dum
     end function SEVAL
   end interface 
 
@@ -774,7 +774,7 @@ end subroutine airfoil_write
 subroutine airfoil_write_to_unit (iunit, title, foil, write_derivatives)
 
   use vardef,          only : airfoil_type
-  use math_deps,       only : derivation2, derivation3 
+  use math_deps,       only : derivative2, derivative3 
 
   integer, intent(in) :: iunit
   character(*), intent(in) :: title
@@ -787,8 +787,8 @@ subroutine airfoil_write_to_unit (iunit, title, foil, write_derivatives)
 ! Add 2nd and 3rd derivative to
 !        ...design_coordinates.dat to show it in visualizer
   if (write_derivatives) then
-    deriv2 = derivation2 (foil%npoint, foil%x, foil%z)
-    deriv3 = derivation3 (foil%npoint, foil%x, foil%z)
+    deriv2 = derivative2 (foil%x, foil%z)
+    deriv3 = derivative3 (foil%x, foil%z)
   end if
 
 ! Write label to file
@@ -939,9 +939,9 @@ end subroutine assess_surface
 ! get max. curvature at the end of polyline (= TE)
 !-------------------------------------------------------------------------
 
-function get_max_te_curvature (x,y)
+function get_max_te_curvature (x,y) 
 
-  use math_deps,        only: curvature
+  use math_deps,        only: derivative2
 
   double precision   :: get_max_te_curvature 
 
@@ -951,10 +951,10 @@ function get_max_te_curvature (x,y)
   integer            :: npt, ite
   
   npt    = size(x)
-  ite    = npt - 10                !  "te" begins at index
+  ite    = npt - 3                !  "te" begins at index
 
   allocate (curv (npt))
-  curv  = curvature(npt, x, y) 
+  curv  = derivative2(x, y) 
   get_max_te_curvature =  maxval (abs(curv(ite: npt)))
 
 end function get_max_te_curvature

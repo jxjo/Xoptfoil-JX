@@ -1,5 +1,25 @@
 Change Log for Xoptfoil-JX
 
+## [1.71.4 beta] - 2022-03
+
+This is a minor maintenance release with a few enhancements. 
+Have a look in the version 1.70 and 1.71 feature list to get all enhancements of version 1.70. 
+
+Features
+- New parameter `airfoil_te_gap` in `optimization_options` allows to set the trailing edge gap of the (seed) airfoil to a certain value in % of chord (=1.0). A trailing edge gap of at least 0.02% will smooth the results of xfoil viscous calculation.
+
+Fixes:
+- misbehaviour of the internal curvature routine when the panel length at trailing edge changes quickly which is controlled by the xfoil option `cterat`. Now the curvature and the 3. derivative of the airfoil surface polyline looks much "better" close to trailing edge. The default value of `cterat` is now again 0.15 which is also the typical default value of xfoil.
+- curvature artefact at trailing edge when thickness and/or camber was changed.
+- improved xfoil outlier detection for polar generation
+- auto_curvature adapted to improved curvature calculation at trailing edge
+- added glide ratio values to `show_details` during optimization.
+
+
+### Xfoil_worker
+- New option `-w set te=x` sets the trailing edge gap to the defined vaue in % of chord (=1) 
+
+
 ## [1.71.3] - 2022-01
 
 This is bugfix release.  

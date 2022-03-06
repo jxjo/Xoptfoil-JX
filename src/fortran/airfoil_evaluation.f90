@@ -124,7 +124,9 @@ module airfoil_evaluation
   type(geo_target_type), dimension (:), allocatable  :: geo_targets
 
   logical            :: preset_seed_airfoil       ! .. to geo targets and constraints
-                        
+  double precision   :: airfoil_te_gap            ! trailing edge gap of (seed) airfoil
+                                                  ! = -1 : noc hange will be done
+  
 ! Parms for operating point specification
   integer :: noppoint
   type (op_point_specification_type), dimension (:), allocatable :: op_points_spec 
@@ -291,7 +293,7 @@ end function objective_function_nopenalty
 function geo_penalty_function(foil, actual_flap_degrees)
 
   use math_deps,          only : interp_vector, curvature, derv1f1, derv1b1
-  use math_deps,          only : count_reversals, count_spikes
+  use math_deps,          only : count_reversals, derivative2, derivative3
   use airfoil_operations, only : get_max_te_curvature
   use xfoil_driver,       only : xfoil_geometry_amax, xfoil_set_airfoil, &
                                  xfoil_get_geometry_info
@@ -337,7 +339,7 @@ function geo_penalty_function(foil, actual_flap_degrees)
     istart = c%nskip_LE
     iend   = size(foil%xt) - c%nskip_TE_revers
 
-    nreverse = count_reversals (istart, iend, foil%xt, foil%zt, c%curv_threshold)  
+    nreverse = count_reversals (istart, iend, derivative2(foil%xt, foil%zt), c%curv_threshold)  
     nreverse_violations  = max(0,(nreverse - c%max_curv_reverse))
 
     if (nreverse_violations > 0 ) then 
@@ -349,7 +351,7 @@ function geo_penalty_function(foil, actual_flap_degrees)
 
     if (c%check_curvature_bumps) then 
       iend   = size(foil%xt) - c%nskip_TE_spikes
-      nspikes = count_spikes (istart, iend, foil%xt, foil%zt, c%spike_threshold)
+      nspikes = count_reversals (istart, iend, derivative3(foil%xt, foil%zt), c%spike_threshold)
       nspike_violations  = max(0,(nspikes - c%max_spikes))
     else
       nspike_violations  = 0
@@ -382,7 +384,7 @@ function geo_penalty_function(foil, actual_flap_degrees)
       istart = c%nskip_LE
       iend   = size(foil%xb) - c%nskip_TE_revers
     
-      nreverse = count_reversals (istart, iend, foil%xb, foil%zb, c%curv_threshold)  
+      nreverse = count_reversals (istart, iend, derivative2(foil%xb, foil%zb), c%curv_threshold)  
       nreverse_violations  = max(0,(nreverse - c%max_curv_reverse))
       if (nreverse_violations > 0 ) then 
         penaltyval = penaltyval + nreverse_violations
@@ -392,7 +394,7 @@ function geo_penalty_function(foil, actual_flap_degrees)
     ! How many spikes = Rversals of 3rd derivation = Bumps of curvature
       if (c%check_curvature_bumps) then 
         iend   = size(foil%xb) - c%nskip_TE_spikes
-        nspikes = count_spikes (istart, iend, foil%xb, foil%zb, c%spike_threshold)
+        nspikes = count_reversals (istart, iend, derivative3(foil%xb, foil%zb), c%spike_threshold)
         nspike_violations  = max(0,(nspikes - c%max_spikes))
       else
         nspike_violations  = 0
@@ -1162,13 +1164,12 @@ end subroutine get_flap_degrees_from_design
 !   and/or thickness/camber constraints (in airfoil evaluation commons)
 !-----------------------------------------------------------------------------
 
-subroutine preset_airfoil_to_targets (show_details, foil) 
+subroutine preset_airfoil_to_targets (show_detail, foil) 
 
-  use vardef,             only: airfoil_type
   use xfoil_driver,       only: xfoil_set_thickness_camber, xfoil_set_airfoil
   use xfoil_driver,       only: xfoil_get_geometry_info
 
-  logical, intent (in)           :: show_details 
+  logical, intent (in)           :: show_detail
   type (airfoil_type), intent (inout)  :: foil
 
   type (airfoil_type) :: new_foil
@@ -1201,7 +1202,7 @@ subroutine preset_airfoil_to_targets (show_details, foil)
           new_thick = geo_targets(i)%target_value
           foil_changed = .true.
 
-          if (show_details) then
+          if (show_detail) then
             write (cvalue,'(F6.2)')  (new_thick * 100)
             call print_note_only ('- Scaling thickness to target value '// trim(adjustl(cvalue))//'%')
           end if
@@ -1211,7 +1212,7 @@ subroutine preset_airfoil_to_targets (show_details, foil)
           new_camber = geo_targets(i)%target_value
           foil_changed = .true.
 
-          if (show_details) then
+          if (show_detail) then
             write (cvalue,'(F6.2)')  (new_camber * 100)
             call print_note_only ('- Scaling camber to target value '// trim(adjustl(cvalue))//'%')
           end if
@@ -1234,7 +1235,7 @@ subroutine preset_airfoil_to_targets (show_details, foil)
       call xfoil_set_thickness_camber (foil, new_thick, 0d0, 0d0, 0d0, new_foil)
       foil_changed = .true.
 
-      if (show_details) then
+      if (show_detail) then
         write (cvalue,'(F6.2)')  (new_thick * 100)
         call print_note_only ('- Scaling thickness according constraint to '// trim(adjustl(cvalue))//'%')
       end if 
@@ -1245,7 +1246,7 @@ subroutine preset_airfoil_to_targets (show_details, foil)
       call xfoil_set_thickness_camber (foil, new_thick, 0d0, 0d0, 0d0, new_foil)
       foil_changed = .true.
 
-      if (show_details) then
+      if (show_detail) then
         write (cvalue,'(F6.2)')  (new_thick * 100)
         call print_note_only ('- Scaling thickness according constraint to '// trim(adjustl(cvalue))//'%')
       end if 
@@ -1258,7 +1259,7 @@ subroutine preset_airfoil_to_targets (show_details, foil)
       call xfoil_set_thickness_camber (foil, 0d0, new_camber, 0d0, 0d0, new_foil)
       foil_changed = .true.
 
-      if (show_details) then
+      if (show_detail) then
         write (cvalue,'(F6.2)')  (new_camber * 100)
         call print_note_only ('- Scaling camber according constraint to '// trim(adjustl(cvalue))//'%')
       end if
@@ -1269,7 +1270,7 @@ subroutine preset_airfoil_to_targets (show_details, foil)
       call xfoil_set_thickness_camber (foil, 0d0, new_camber, 0d0, 0d0, new_foil)
       foil_changed = .true.
 
-      if (show_details) then
+      if (show_detail) then
         write (cvalue,'(F6.2)')  (new_camber * 100)
         call print_note_only ('- Scaling camber according constraint to '// trim(adjustl(cvalue))//'%')
       end if
@@ -1302,6 +1303,60 @@ subroutine preset_airfoil_to_targets (show_details, foil)
 end subroutine preset_airfoil_to_targets
 
 
+!-----------------------------------------------------------------------------
+! Set airfoil trailing edge gap to new gap value in % of c
+!   A standard blending value x/c = 0.8 will be used 
+!-----------------------------------------------------------------------------
+
+subroutine preset_airfoil_te_gap (show_detail, foil, new_te_gap) 
+
+  use xfoil_driver,       only: xfoil_set_te_gap, get_te_gap
+
+  logical, intent (in)           :: show_detail
+  type (airfoil_type), intent (inout)  :: foil
+  double precision, intent(in) :: new_te_gap
+
+  type (airfoil_type) :: new_foil
+  integer             :: i, nptt, nptb
+
+  doubleprecision, parameter  :: X_BLEND = 0.8d0
+
+! Is there a trailing edge te gap? There should be ...
+
+  if ((get_te_gap (seed_foil) == 0d0) .and. (new_te_gap == -1d0) .and. show_detail) then 
+    write(*,*)    
+    call print_note ("The seed airfoil has no trailing edge gap." //&
+                      " Set a gap of at least 0.03% "//&
+                      "to improve xfoil viscous results.")
+  end if 
+
+! Should te gap changed? If no, return ... 
+  if ((new_te_gap == -1d0) .or. ((new_te_gap / 100) == get_te_gap (foil))) return 
+
+! Set te gap with xfoils TGAP
+
+  if(show_detail) &
+    call print_note_only ('- Setting trailing edge gap to '// strf('(F4.2)', new_te_gap)//'%')
+
+  call xfoil_set_te_gap (foil , (new_te_gap / 100), X_BLEND, new_foil)
+
+! Now rebuild foil out of new coordinates  ----------------------
+
+  foil%z = new_foil%z
+  nptt = size(foil%zt,1)
+  nptb = size(foil%zb,1)
+
+! get new upper and lower z-coordinates from modified airfoil 
+  do i = 1, nptt
+    foil%zt(i) = new_foil%z(nptt-i+1)      ! start from LE - top reverse - to LE
+  end do
+  do i = 1, nptb 
+    foil%zb(i) = new_foil%z(nptt+i-1)      ! start from LE - bottom - to TE
+  end do
+  
+end subroutine preset_airfoil_te_gap
+
+
 !=============================================================================80
 !
 ! Writes airfoil coordinates and polars to files during optimization
@@ -1309,8 +1364,8 @@ end subroutine preset_airfoil_to_targets
 !=============================================================================80
 function write_airfoil_optimization_progress(designvars, designcounter)
 
-  use math_deps,          only : interp_vector 
-  use airfoil_operations, only : airfoil_write_to_unit
+  use math_deps,          only : interp_vector, min_threshold_for_reversals, derivative3
+  use airfoil_operations, only : airfoil_write_to_unit, assess_surface
   use xfoil_driver,       only : run_op_points, op_point_result_type
   use xfoil_driver,       only : xfoil_get_geometry_info, xfoil_set_airfoil
   use polar_operations,   only : generate_polar_files, set_polar_info
@@ -1326,6 +1381,10 @@ function write_airfoil_optimization_progress(designvars, designcounter)
   type(op_point_result_type), dimension(:), allocatable :: op_points_result
   type(xfoil_options_type)          :: local_xfoil_options
   type(geo_result_type)             :: geo_result
+  type(curvature_polyline_specification_type) :: c
+  integer :: idum
+  double precision :: spike_threshold
+
 
   double precision, dimension(noppoint) :: actual_flap_degrees
   double precision :: maxt, xmaxt, maxc, xmaxc
@@ -1522,6 +1581,37 @@ function write_airfoil_optimization_progress(designvars, designcounter)
     call show_optimization_progress  (op_points_result, geo_result, dynamic_done) 
   end if
 
+! jx-test Write op points deviation to file
+
+  call write_op_results (designcounter, op_points_result, geo_result) 
+
+
+! jx-test print spikes for testing purposes 
+  if (.false.) then 
+    c = curv_top_spec
+    write (*,'(8x)',advance ='no') 
+    call assess_surface (show_details, '- Top side ', &
+                        1, size(foil%xt), size(foil%xt), &
+                        c%curv_threshold, c%spike_threshold, foil%xt, foil%zt, idum)
+
+    spike_threshold = min_threshold_for_reversals (1, size(foil%xt), &
+                      derivative3(foil%xt, foil%zt), 0.1d0, c%spike_threshold, c%max_spikes)
+    call print_note_only ('Min threshold for '//stri(c%max_spikes)//' spikes '&
+                          //strf('(F4.2)', spike_threshold), 18)
+
+    c = curv_bot_spec
+    write (*,'(8x)',advance ='no') 
+    call assess_surface (show_details, '- Bot side ', &
+                        1, size(foil%xb), size(foil%xb), &
+                        c%curv_threshold, c%spike_threshold, foil%xb, foil%zb, idum)
+
+    spike_threshold = min_threshold_for_reversals (1, size(foil%xb), &
+                      derivative3( foil%xb, foil%zb), 0.1d0, c%spike_threshold, c%max_spikes)
+    call print_note_only ('Min threshold for '//stri(c%max_spikes)//' spikes '&
+                         //strf('(F4.2)', spike_threshold), 18)
+    write (*,*)
+  end if 
+
 ! Set return value (needed for compiler)
 
   write_airfoil_optimization_progress = 0
@@ -1567,7 +1657,7 @@ subroutine do_dynamic_weighting (designcounter, dyn_weight_spec, &
   type(dynamic_variable_type), dimension(:), allocatable :: dyn_ops, dyn_geos
   doubleprecision, dimension(:), allocatable             :: dyn_devs
 
-  integer                           :: i, ndyn, j, noppoint, ngeo_targets
+  integer                           :: i, ndyn, j, nop, ngeo_targets
   doubleprecision                   :: avg_dev, sum_weighting_user, median_dev, weighting_diff
   doubleprecision                   :: new_dyn_obj_fun, cur_dyn_obj_fun, scale_dyn_obj_fun
   doubleprecision                   :: min_new_weighting,max_new_weighting, min_weighting, max_weighting
@@ -1578,10 +1668,10 @@ subroutine do_dynamic_weighting (designcounter, dyn_weight_spec, &
   doubleprecision, parameter        :: SUPER_PUNCH_THRESHOLD = 3.0d0
   doubleprecision, parameter        :: REDUCTION = 1.3d0
 
-  noppoint    = size(op_points_spec)
+  nop    = size(op_points_spec)
   ngeo_targets = size(geo_targets)
 
-  allocate (dyn_ops(noppoint))
+  allocate (dyn_ops(nop))
   allocate (dyn_geos(ngeo_targets))
 
   dynamic_done = .false. 
@@ -1606,7 +1696,7 @@ subroutine do_dynamic_weighting (designcounter, dyn_weight_spec, &
   allocate (dyn_devs(ndyn))
 
   j = 0
-  do i= 1, noppoint
+  do i= 1, nop
     if (op_points_spec(i)%dynamic_weighting) then
       j = j + 1
       dyn_devs(j) = abs( dyn_ops(i)%dev)
@@ -1646,7 +1736,7 @@ subroutine do_dynamic_weighting (designcounter, dyn_weight_spec, &
   ! 1. first guess of new weighting of relevant op_points and new objective function
   !    weighting is proportional to the deviation to target compared to average deviation
 
-    do i= 1, noppoint
+    do i= 1, nop
       if (op_points_spec(i)%dynamic_weighting) then
 
         dyn_ops(i)%new_weighting = abs(dyn_ops(i)%dev) / (avg_dev) 
@@ -1686,7 +1776,7 @@ subroutine do_dynamic_weighting (designcounter, dyn_weight_spec, &
   
   ! 2. Scale weighting of each op point to defined weighting range 
 
-    do i= 1, noppoint
+    do i= 1, nop
       if (op_points_spec(i)%dynamic_weighting) then
 
         dyn_ops(i)%new_weighting = min_weighting + &
@@ -1765,7 +1855,7 @@ subroutine do_dynamic_weighting (designcounter, dyn_weight_spec, &
 
   ! 4. Multiply weighting by user defined weighting - default = 1 but user may overwrite  
 
-    do i= 1, noppoint
+    do i= 1, nop
       if (op_points_spec(i)%dynamic_weighting) &
         dyn_ops(i)%new_weighting = dyn_ops(i)%new_weighting * op_points_spec(i)%weighting_user 
     end do 
@@ -1792,7 +1882,7 @@ subroutine do_dynamic_weighting (designcounter, dyn_weight_spec, &
 
     scale_dyn_obj_fun = cur_dyn_obj_fun / new_dyn_obj_fun
 
-    do i= 1, noppoint
+    do i= 1, nop
       if (op_points_spec(i)%dynamic_weighting) &
         op_points_spec(i)%weighting = dyn_ops(i)%new_weighting * scale_dyn_obj_fun
     end do
@@ -1970,7 +2060,8 @@ subroutine show_optimization_progress (op_points_result, geo_result, &
   call print_colored (COLOR_PALE, 'spec')
   call print_colored (COLOR_PALE, ' cl  '//'  ')
   call print_colored (COLOR_PALE, ' al  '//'  ')
-  call print_colored (COLOR_PALE, ' cd   '//'      ')
+  call print_colored (COLOR_PALE, ' cd   '//'  ')
+  call print_colored (COLOR_PALE, 'glide'//'    ')
   call print_improvement_info (0, 'Type Base  deviat/improv')
   if (dynamic_done) then
     call print_dynamic_weighting_info (5, 'Dynamic Weighting')
@@ -1996,7 +2087,7 @@ subroutine show_optimization_progress (op_points_result, geo_result, &
     else
       s = 'al' 
     end if 
-    call print_colored (COLOR_PALE, trim(s) //'  ')
+    call print_colored (COLOR_PALE, trim(s)//'  ')
   ! --
     write (s,'(F5.2)') op%cl
     call print_colored (COLOR_PALE, trim(s)//'  ')
@@ -2005,7 +2096,18 @@ subroutine show_optimization_progress (op_points_result, geo_result, &
     call print_colored (COLOR_PALE, trim(s)//'  ')
   ! --
     write (s,'(F6.5)') op%cd
-    call print_colored (COLOR_PALE, trim(s)//'      ')
+    call print_colored (COLOR_PALE, trim(s)//'  ')
+  ! --
+    if (op%cl > 0.05d0) then 
+      if ((op%cl/op%cd) > 99.9d0) then 
+        write (s,'(F5.1)') op%cl/op%cd
+      else
+        write (s,'(F5.2)') op%cl/op%cd
+      end if 
+      call print_colored (COLOR_PALE, trim(s)//'    ')
+    else 
+      call print_colored (COLOR_PALE, '   - '//'    ')
+    end if
   ! --
     call print_improvement_info (0, '', op_spec, op)
   ! --
@@ -2042,7 +2144,7 @@ subroutine show_optimization_progress (op_points_result, geo_result, &
     end if 
     write (s,'(F7.5)') val 
     call print_colored (COLOR_PALE, trim(s))
-    call print_colored (COLOR_PALE, '           ')
+    call print_colored (COLOR_PALE, '                ')
   ! --
     call print_geo_improvement_info (0, '', geo_spec, geo_result)
   ! --
@@ -2536,6 +2638,137 @@ function write_matchfoil_optimization_progress(designvars, designcounter)
   return
 
 end function write_matchfoil_optimization_progress
+
+
+
+!------------------------------------------------------------------------------
+!
+!  Write results (cd) of all op_points to file for further analysis
+!
+!------------------------------------------------------------------------------
+subroutine write_op_results (designcounter, op_points_result, geo_result) 
+
+  use xfoil_driver,       only : op_point_result_type, op_point_specification_type
+  use math_deps,          only : median
+
+  integer, intent(in) :: designcounter
+  type(op_point_result_type), dimension(:), intent(in)    :: op_points_result
+  type(geo_result_type),  intent(in)                      :: geo_result
+
+  type(op_point_result_type)        :: op
+  type(op_point_specification_type) :: op_spec
+  type(geo_target_type)             :: geo_target
+
+  integer             :: i, nop, ngeo_targets
+  character(255)      :: resultfile
+  integer             :: resultunit
+  double precision    :: dev, dist
+
+  nop    = size(op_points_spec)
+  ngeo_targets = size(geo_targets)
+
+
+! Initial design: Open file and write header
+
+  resultfile = trim(design_subdir)//'target_result_history.csv'
+  resultunit = 13
+
+  if (designcounter == 0) then
+
+    open(unit=resultunit, file=resultfile, status='replace')
+
+    write(resultunit,'(1x,A4,1x,A1)', advance='no') 'i',';'
+
+    do i = 1, nop
+      write(resultunit,'(2x,A4)', advance='no') 'op' // stri(i)
+      if ((i < nop) .or. (ngeo_targets > 0)) then 
+        write(resultunit,'(A1)', advance='no') ';'
+      else
+          write(resultunit, *) 
+      end if 
+    end do
+
+    do i = 1, ngeo_targets
+      write(resultunit,'(1x,A5)', advance='no') 'geo' // stri(i)
+      if (i < ngeo_targets) then 
+        write(resultunit,'(A1)', advance='no') ';'
+      else
+          write(resultunit, *) 
+      end if 
+    end do
+
+  else
+
+    open(unit=resultunit, file=resultfile, status='old', position='append', err=910)
+  
+  end if 
+
+! Next designs: Open file and write data
+
+  write(resultunit,'(1x,I4,1x,A1)', advance='no') designcounter,';'
+
+  do i = 1, nop
+
+    op      = op_points_result(i)
+    op_spec = op_points_spec(i)
+
+    if (trim(op_spec%optimization_type (1:6)) == 'target') then
+      select case  (op_spec%optimization_type)
+        case ('target-drag')
+          dist  = op_spec%target_value - op%cd                ! negative is worse
+          dev   = dist / op_spec%target_value * 100d0
+        case ('target-glide')
+          dist  = op%cl /op%cd - op_spec%target_value         ! negative is worse
+          dev   = dist / op_spec%target_value * 100d0
+        case ('target-lift')  
+          dist = op%cl - op_spec%target_value                 ! negative is worse
+          dev  = dist / (1d0 + op_spec%target_value) * 100d0
+        case ('target-moment')
+          dist = op%cm - op_spec%target_value                 ! negative is worse
+          dev  = dist / (op_spec%target_value + 0.05d0) * 100d0 ! cm could be 0
+      end select
+    else
+      dev = 0d0
+    end if 
+
+    write(resultunit,'(F6.2)', advance='no') dev
+    if  ((i < nop) .or. (ngeo_targets > 0)) then 
+      write(resultunit,'(A1)', advance='no') ';'
+    else
+      write(resultunit, *) 
+    end if 
+  end do
+
+  do i = 1, ngeo_targets
+    geo_target = geo_targets(i)
+
+    select case  (trim(geo_target%type))
+      case ('Thickness')
+        dist = geo_result%maxt - geo_target%target_value       ! positive is worse
+        dev  = dist / geo_target%target_value * 100d0
+      case ('Camber')
+        dist = geo_result%maxc - geo_target%target_value       ! positive is worse
+        dev  = dist / geo_target%target_value * 100d0
+    end select
+
+    write(resultunit,'(F6.2)', advance='no') dev
+    if (i < ngeo_targets) then 
+      write(resultunit,'(A1)', advance='no') ';'
+    else
+      write(resultunit, *) 
+    end if 
+  end do
+
+  close(resultunit)
+
+  return 
+
+! Warning if there was an error opening design_coordinates file
+
+910 write(*,*) "Warning: unable to open "//trim(resultfile)//". Skipping ..."
+    return
+
+end subroutine write_op_results
 
 
 end module airfoil_evaluation

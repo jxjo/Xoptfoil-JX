@@ -60,7 +60,7 @@ PURE FUNCTION EvaluateCubic(u) RESULT(fu)
 END Function EvaluateCubic   ! -------------------------------------------------
 
 !+
-PURE SUBROUTINE EvaluateCubicAndDerivs(a,fa,fpa, b,fb,fpb, u, f,fp,fpp,fppp)
+PURE SUBROUTINE EvaluateCubicAndDerivs(a_,fa_,fpa_, b_,fb_,fpb_, u, f,fp,fpp,fppp)
 ! ------------------------------------------------------------------------------
 ! PURPOSE - Evaluate a cubic polynomial and its 1st, 2nd, and 3rd
 !   derivatives at a specified point. The cubic is defined by the function
@@ -68,8 +68,8 @@ PURE SUBROUTINE EvaluateCubicAndDerivs(a,fa,fpa, b,fb,fpb, u, f,fp,fpp,fppp)
 !   for some savings in computation. If no derivatives are wanted, it is
 !   probably preferable to use functions EvaluateCubic above.
 
-  REAL,INTENT(IN):: a,fa,fpa   ! a, f(a), f'(a)  at first point
-  REAL,INTENT(IN):: b,fb,fpb   ! b, f(b), f'(b)  at second point
+  REAL,INTENT(IN):: a_,fa_,fpa_   ! a, f(a), f'(a)  at first point
+  REAL,INTENT(IN):: b_,fb_,fpb_   ! b, f(b), f'(b)  at second point
   REAL,INTENT(IN):: u   ! point where function is to be evaluated
 
   REAL,INTENT(OUT),OPTIONAL:: f,fp,fpp,fppp   ! f(u),f'(u),f''(u),f'''(u)
@@ -82,18 +82,18 @@ PURE SUBROUTINE EvaluateCubicAndDerivs(a,fa,fpa, b,fb,fpb, u, f,fp,fpp,fppp)
   REAL,DIMENSION(4)::coef,rhs
   REAL:: h,t
 ! ------------------------------------------------------------------------------
-  rhs(1)=fa
-  rhs(2)=fb
-  rhs(3)=fpa*(b-a)
-  rhs(4)=fpb*(b-a)
+  rhs(1)=fa_
+  rhs(2)=fb_
+  rhs(3)=fpa_*(b_-a_)
+  rhs(4)=fpb_*(b_-a_)
   coef=MATMUL(MAGIC,rhs)
 
 ! CAUTION - these are not the coefficients of the cubic in the original 
 ! coordinates. This is the cubic on [0,1] from the mapping t=(x-a)/(b-a). 
 ! That is why the h terms appear in the derivatives.       
 
-  h=ONE/(b-a)
-  t=(u-a)*h
+  h=ONE/(b_-a_)
+  t=(u-a_)*h
   IF (Present(f)) THEN
     f=             coef(4) +     t*(coef(3) + t*(coef(2)   + t*coef(1)))
   END IF
@@ -263,18 +263,18 @@ SUBROUTINE PClookup(x,y,yp, u, f,fp,fpp,fppp)
   REAL,INTENT(IN):: u   ! point where spline is to be evaluated
   REAL,INTENT(OUT),OPTIONAL:: f,fp,fpp,fppp   ! f(u),f'(u), f''(u), f'''(u)
 
-  REAL:: ud, a,fa,fpa, b,fb,fpb
+  REAL:: ud, a_,fa_,fpa_, b_,fb_,fpb_  ! jx-mod now with underline - also global var 
   REAL:: z,zp,zpp,zppp
   INTEGER:: k
 !-------------------------------------------------------------------------------
   k=LookUp(x,u)
   k=MAX(1, MIN(SIZE(x)-1,k) )
-  a=x(k)
-  fa=y(k)
-  fpa=yp(k)
-  b=x(k+1)
-  fb=y(k+1)
-  fpb=yp(k+1)
+  a_=x(k)
+  fa_=y(k)
+  fpa_=yp(k)
+  b_=x(k+1)
+  fb_=y(k+1)
+  fpb_=yp(k+1)
   ud=u
   CALL EvaluateCubicAndDerivs(a,fa,fpa, b,fb,fpb, ud, z,zp,zpp,zppp)
   IF(Present(f)) f=z
@@ -383,7 +383,7 @@ END Function TableLookup   ! ---------------------------------------------------
       REAL:: z
 
       INTERFACE
-        FUNCTION F(x) RESULT(g)
+        FUNCTION f(x) RESULT(g)
           IMPLICIT NONE
           REAL,INTENT(IN):: x
           REAL:: g

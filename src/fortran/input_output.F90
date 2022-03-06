@@ -99,7 +99,7 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
   
   namelist /optimization_options/ search_type, global_search, local_search,    &
             seed_airfoil, airfoil_file, shape_functions, nfunctions_top,       &
-            preset_seed_airfoil,                                               &
+            preset_seed_airfoil, airfoil_te_gap,                               &
             nfunctions_bot, initial_perturb, min_bump_width, restart,          &
             restart_write_freq, write_designs,                                 &
             show_details, echo_input_parms
@@ -146,6 +146,7 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
   local_search = 'simplex'
   seed_airfoil = 'from_file'
   preset_seed_airfoil = .true.        ! default: presetting to geo targets active
+  airfoil_te_gap = -1d0               ! = default: no changes of te gap 
   airfoil_file = ''
   shape_functions = 'hicks-henne'
   min_bump_width = 0.1d0
@@ -555,7 +556,6 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
 
 ! Echo namelist options for checking purposes
 
-  ! Test - always echo op points 
   if (.not. match_foils) call echo_op_points_spec  (op_points_spec, xfoil_options) 
 
 
@@ -1092,7 +1092,8 @@ subroutine read_op_points_spec  (input_file, or_iunit, noppoint, re_def, &
         op_points_spec(i)%dynamic_weighting = .false.
         op_points_spec(i)%weighting_user = - op_points_spec(i)%weighting_user
       else
-        op_points_spec(i)%dynamic_weighting = .true.
+        if (dynamic_weighting_spec%active) &
+          op_points_spec(i)%dynamic_weighting = .true.
       end if 
     end if
   end do
@@ -1490,10 +1491,13 @@ subroutine read_xfoil_paneling_inputs  (input_file, or_iunit, geom_options)
   end if             
 
   cvpar  = 1.d0
-  cterat = 0.05d0           ! if set to normal value 0.15d0, the curvature at TE panel
+  cterat = 0.15d0           ! Now set again to the xfoil standard value of 0.15
+                            !  after patching curvature() which 
+                            !  is able to handle a short last TE panel 
+                            ! (old: if set to normal value 0.15d0, the curvature at TE panel
                             !   tends to flip away and have tripple value (bug in xfoil) 
                             !   This value equals to the curvature at TE in xfoil PANGEN
-                            !   --> see JX-mod in PANGEN
+                            !   --> see JX-mod in PANGEN) 
   ctrrat = 0.2d0
   xsref1 = 1.d0
   xsref2 = 1.d0
