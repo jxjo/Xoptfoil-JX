@@ -65,7 +65,6 @@ import bezier
 ################################################################################
 # some global variables
 
-
 # folder containing the output / result-files
 outputFolder = buildPath + bs +'planforms'
 
@@ -91,6 +90,7 @@ cl_infotext = 'aqua'
 cl_chordlengths = 'darkgray'
 cl_referenceChord = 'gray'
 cl_normalizedChord = 'blue'
+cl_controlPoints = 'red'
 
 ls_quarterChordLine = 'solid'
 lw_quarterChordLine  = 0.8
@@ -312,6 +312,27 @@ def objective_bezier(x, b1_x, b1_y, b2_x, b2_y, b3_x, b3_y, b4_x, b4_y, b5_x, b5
     deg = len(nodes[0])-1
 
     curve = bezier.Curve(nodes, degree=deg)
+
+    result = curve.evaluate(b1_x)
+    if b1_y < result[1][0] :
+        return -1
+
+    result = curve.evaluate(b2_x)
+    if b2_y < result[1][0] :
+        return -1
+
+    result = curve.evaluate(b3_x)
+    if b3_y < result[1][0] :
+        return -1
+
+    result = curve.evaluate(b4_x)
+    if b4_y < result[1][0] :
+        return -1
+
+    result = curve.evaluate(b5_x)
+    if b5_y < result[1][0] :
+        return -1
+
     result = curve.evaluate(x)
     y = result[1][0]
     return y
@@ -376,6 +397,7 @@ class wingGrid:
         self.LE_derivative = 0.0
         self.areaCenterLine = 0.0
 
+
 ################################################################################
 #
 # Wing class
@@ -425,6 +447,9 @@ class wing:
         self.showTipLine = False
         self.showHingeLine = True
         self.smoothUserAirfoils = True
+        self.use_bezier = True
+        self.bezier_x = []
+        self.bezier_y = []
 
 
     def set_colours(self):
@@ -439,6 +464,7 @@ class wing:
         global cl_userAirfoil
         global cl_optAirfoil
         global cl_infotext
+        global cl_controlPoints
 
         #self.theme = ' '
         if self.theme == 'black_white':
@@ -457,6 +483,7 @@ class wing:
             cl_chordlengths = 'lightgray'
             cl_referenceChord = 'gray'
             cl_normalizedChord = 'black'
+            cl_controlPoints = 'red'
         else:
             # dark theme
             cl_background = 'dark_background'
@@ -473,6 +500,7 @@ class wing:
             cl_chordlengths = 'darkgray'
             cl_referenceChord = 'gray'
             cl_normalizedChord = 'blue'
+            cl_controlPoints = 'red'
 
 
     # compose a name from the airfoil basic name and the Re-number
@@ -761,13 +789,18 @@ class wing:
         # In case of curve fitting, determine the optimum parameters
         # automatically
         if self.planformShape == 'curve_fitting':
-            popt, _ = curve_fit(objective_elliptical_wrapper, self.planform_chord, self.planform_y)
-            normalizedTipChord, self.tipSharpness, self.leadingEdgeCorrection, normalizedRootChord = popt
-            # curve fitting with objective function
-            #popt, _ = curve_fit(objective_bezier_wrapper, self.planform_chord, self.planform_y)
+            if self.use_bezier:
+                # curve fitting with objective function
+                guess = (0.6,1.0,  0.5,1.0,  0.7,0.8,  0.9,0.5,  0.95,0.4)
+                popt, _ = curve_fit(objective_bezier_wrapper, self.planform_chord, self.planform_y, p0=guess)
+                b1_x, b1_y, b2_x, b2_y, b3_x, b3_y, b4_x, b4_y, b5_x, b5_y = popt
 
-            # summarize the parameter values
-            #b1_x, b1_y, b2_x, b2_y = popt
+                # store bezier control points
+                self.bezier_x = (b1_x, b2_x, b3_x, b4_x, b5_x)
+                self.bezier_y = (b1_y, b2_y, b3_y, b4_y, b5_y)
+            else:
+                popt, _ = curve_fit(objective_elliptical_wrapper, self.planform_chord, self.planform_y)
+                normalizedTipChord, self.tipSharpness, self.leadingEdgeCorrection, normalizedRootChord = popt
 
         # calculate all Grid-chords
         for i in range(1, (self.numberOfGridChords + 1)):
@@ -789,9 +822,11 @@ class wing:
                                 self.tipSharpness, self.leadingEdgeCorrection, normalizedRootChord)
 
             elif(self.planformShape == 'curve_fitting'):
-                # curve fitting algorithm with bezier
-                #grid.chord = objective_bezier(grid.y, b1_x, b1_y, b2_x, b2_y)
-                grid.chord = objective_elliptical(grid.y, normalizedTipChord,
+                if self.use_bezier:
+                    # curve fitting algorithm with bezier
+                    grid.chord = objective_bezier(grid.y, b1_x, b1_y, b2_x, b2_y, b3_x, b3_y, b4_x, b4_y, b5_x, b5_y)
+                else:
+                    grid.chord = objective_elliptical(grid.y, normalizedTipChord,
                                 self.tipSharpness, self.leadingEdgeCorrection, normalizedRootChord)
 
             elif self.planformShape == 'trapezoidal':
@@ -1595,7 +1630,11 @@ class wing:
 
         if self.planformShape =='curve_fitting':
             plt.scatter(self.planform_chord, self.planform_y, color=cl_normalizedChord,
-            label = "control points")
+            label = "planform points points")
+
+            if self.use_bezier:
+                 plt.scatter(self.bezier_x, self.bezier_y, color=cl_controlPoints,
+                 label = "control points")
 
         plt.title("Normalized chord distribution")
         plt.legend(loc='lower right', fontsize = fs_legend)
