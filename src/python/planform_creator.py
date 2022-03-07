@@ -201,9 +201,9 @@ def calculate_tipRoundingDistance(root_tip_slope, normalizedTipChord, tipSharpne
         if abs(root_tip_slope) < 0.0001: #FIXME parameter?
             return normalizedTipChord * tipSharpness
 
+    #tipRoundingDistance = normalizedTipChord * tipSharpness
         x = []
         y = []
-
 
         if root_tip_slope > 0:
             bNegative = True
@@ -257,7 +257,6 @@ def objective_elliptical(x, normalizedTipChord, tipSharpness,
     root_tip_slope = -1.0 * root_tip_delta
 
     # calculate distance to tip, where rounding starts
-    #tipRoundingDistance = normalizedTipChord * tipSharpness
     tipRoundingDistance = calculate_tipRoundingDistance(root_tip_slope,
                                       normalizedTipChord, tipSharpness)
 
@@ -283,16 +282,7 @@ def objective_elliptical(x, normalizedTipChord, tipSharpness,
             delta = 0
 
     # elliptical shaping of the wing plus additonal delta
-    y_elliptical = (1.0-delta) * np.sqrt(1.0-(x*x)) + delta
-
-##    if blendingEndPoint > 0.0:
-##        blending_factor = interpolate(0.0, blendingEndPoint, 1.0, 0.0, x)
-##
-##    if (x < blendingEndPoint):
-##        y = (blending_factor * 1.0) + (1.0 - blending_factor) * y_elliptical
-##    else:
-##        y = y_elliptical
-    y = y_elliptical
+    y = (1.0-delta) * np.sqrt(1.0-(x*x)) + delta
 
     # correct chord with leading edge correction
     y = y - leadingEdgeCorrection * sin(interpolate(0.0, 1.0, 0.0, pi, x))
@@ -300,29 +290,24 @@ def objective_elliptical(x, normalizedTipChord, tipSharpness,
     return y
 
 
-def objective_bezier_wrapper(values, b1_x, b1_y, b2_x, b2_y):
+def objective_bezier_wrapper(values, b1_x, b1_y, b2_x, b2_y, b3_x, b3_y, b4_x, b4_y, b5_x, b5_y):
     result = []
 
     for x in values:
-        y = objective_bezier(x, b1_x, b1_y, b2_x, b2_y)
+        y = objective_bezier(x, b1_x, b1_y, b2_x, b2_y, b3_x, b3_y, b4_x, b4_y, b5_x, b5_y)
 
         result.append(y)
 
     return (result)
 
 
-def objective_bezier(x, b1_x, b1_y, b2_x, b2_y):
-    #b1_y = 1.0
-    #b2_x = 1.0
+def objective_bezier(x, b1_x, b1_y, b2_x, b2_y, b3_x, b3_y, b4_x, b4_y, b5_x, b5_y):
+
     nodes = np.asfortranarray([
-    [0.0, b1_x, b2_x, 1.0],
-    [1.0, b1_y, b2_y, 0.0],
+    [0.0, b1_x, b2_x, b3_x, b4_x, b5_x, 1.0],
+    [1.0, b1_y, b2_y, b3_y, b4_y, b5_y, 0.0],
     ])
 
-##    nodes = np.asfortranarray([
-##    [0.0, b1_x, 1.0],
-##    [1.0, b1_y, 0.0],
-##    ])
 
     deg = len(nodes[0])-1
 
