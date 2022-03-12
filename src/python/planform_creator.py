@@ -184,81 +184,23 @@ def plot_Line(x, y):
 
 
 def objective_elliptical_wrapper(values, normalizedTipChord, tipSharpness,
-                                 leadingEdgeCorrection, normalizedRootChord):
+                                 leadingEdgeCorrection):
     result = []
 
     for x in values:
         y = objective_elliptical(x, normalizedTipChord, tipSharpness,
-                         leadingEdgeCorrection, normalizedRootChord)
+                         leadingEdgeCorrection)
 
         result.append(y)
 
     return (result)
 
 
-def calculate_tipRoundingDistance(root_tip_slope, normalizedTipChord, tipSharpness):
-        # for very small slope use complete quarter ellipse
-        if abs(root_tip_slope) < 0.0001: #FIXME parameter?
-            return normalizedTipChord * tipSharpness
-
-    #tipRoundingDistance = normalizedTipChord * tipSharpness
-        x = []
-        y = []
-
-        if root_tip_slope > 0:
-            bNegative = True
-            root_tip_slope = -1.0 * root_tip_slope
-        else:
-            bNegative = False
-
-        a = normalizedTipChord * tipSharpness
-        result = a
-        #x1 = a-distanceToTip
-        b = normalizedTipChord
-
-        y_n1 = normalizedTipChord
-        x_n1 = 0.0
-
-        for i in range(1,1000):
-            x1 =(i*a)/1000
-            x.append(x1)
-            radicand = (a*a)-(x1*x1)
-
-            if radicand > 0:
-                # quarter ellipse formula
-                y1 = (b/a) * np.sqrt(radicand)
-                #y.append(y1)
-                slope = (y1 - y_n1)/(x1 - x_n1)
-                y.append(slope)
-                y_n1 = y1
-                x_n1 = x1
-
-                if (slope <= root_tip_slope):
-                    result = x1
-
-                    if bNegative:
-                        result = result + a
-                    break
-
-        #plot_Line(x,y);
-        return result
-
-
 def objective_elliptical(x, normalizedTipChord, tipSharpness,
-                         leadingEdgeCorrection, normalizedRootChord):
-
-    #if (normalizedTipChord < 0) or (normalizedRootChord < 0) or (tipSharpness < 0):
-     #   return 0
-
-    #if (normalizedTipChord > normalizedRootChord):
-     #   return 0
-
-    root_tip_delta = normalizedRootChord - normalizedTipChord
-    root_tip_slope = -1.0 * root_tip_delta
+                         leadingEdgeCorrection):
 
     # calculate distance to tip, where rounding starts
-    tipRoundingDistance = calculate_tipRoundingDistance(root_tip_slope,
-                                      normalizedTipChord, tipSharpness)
+    tipRoundingDistance = normalizedTipChord * tipSharpness
 
     # calculate actual distance to tip
     distanceToTip = 1.0 - x
@@ -266,8 +208,7 @@ def objective_elliptical(x, normalizedTipChord, tipSharpness,
    # calculate delta that will be added to pure ellipse
     if (distanceToTip > tipRoundingDistance):
         # add constant value, as we are far away from the tip
-        #delta = normalizedTipChord
-        delta = interpolate(0.0, root_tip_delta, tipRoundingDistance, 0.0, x) + normalizedTipChord
+        delta = normalizedTipChord
     else:
         # add decreasing value according to quarter ellipse
         a = tipRoundingDistance
@@ -447,7 +388,7 @@ class wing:
         self.showTipLine = False
         self.showHingeLine = True
         self.smoothUserAirfoils = True
-        self.use_bezier = True
+        self.use_bezier = False
         self.bezier_x = []
         self.bezier_y = []
 
@@ -799,8 +740,9 @@ class wing:
                 self.bezier_x = (b1_x, b2_x, b3_x, b4_x, b5_x)
                 self.bezier_y = (b1_y, b2_y, b3_y, b4_y, b5_y)
             else:
-                popt, _ = curve_fit(objective_elliptical_wrapper, self.planform_chord, self.planform_y)
-                normalizedTipChord, self.tipSharpness, self.leadingEdgeCorrection, normalizedRootChord = popt
+                guess = (0.18, 0.1, 0.005)
+                popt, _ = curve_fit(objective_elliptical_wrapper, self.planform_chord, self.planform_y, p0=guess, bounds=(0.0, 100.0))
+                normalizedTipChord, self.tipSharpness, self.leadingEdgeCorrection = popt
 
         # calculate all Grid-chords
         for i in range(1, (self.numberOfGridChords + 1)):
@@ -819,7 +761,7 @@ class wing:
             if (self.planformShape == 'elliptical'):
                 # elliptical shaping of the wing
                 grid.chord = objective_elliptical(grid.y, normalizedTipChord,
-                                self.tipSharpness, self.leadingEdgeCorrection, normalizedRootChord)
+                                self.tipSharpness, self.leadingEdgeCorrection)
 
             elif(self.planformShape == 'curve_fitting'):
                 if self.use_bezier:
@@ -827,7 +769,7 @@ class wing:
                     grid.chord = objective_bezier(grid.y, b1_x, b1_y, b2_x, b2_y, b3_x, b3_y, b4_x, b4_y, b5_x, b5_y)
                 else:
                     grid.chord = objective_elliptical(grid.y, normalizedTipChord,
-                                self.tipSharpness, self.leadingEdgeCorrection, normalizedRootChord)
+                                self.tipSharpness, self.leadingEdgeCorrection)
 
             elif self.planformShape == 'trapezoidal':
                 # trapezoidal shaping of the wing
