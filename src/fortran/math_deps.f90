@@ -973,48 +973,6 @@ end function min_threshold_for_reversals
 
 
 !------------------------------------------------------------------------------
-! Evaluates the min possible threshold that no more than nreversals will be
-!    detected on the polyline 
-!------------------------------------------------------------------------------
-function min_threshold_for_spikes (istart, iend, x, y, min_threshold, max_threshold, &
-  nspikes_to_detect)
-
-  integer, intent(in)             :: istart, iend, nspikes_to_detect
-  double precision, intent(in)    :: min_threshold, max_threshold
-  double precision, dimension(:), intent(in) :: x, y
-  double precision       :: min_threshold_for_spikes, threshold, decrease
-  integer                :: nspikes
-
-  double precision, dimension(size(x)) :: derv3
-
-  if (min_threshold == 0d0) then
-    write (*,*) 'Error: min_threshold must be > 0 in min_threshold_for_reversals'
-    stop
-  end if 
-
-  threshold     = max_threshold
-  decrease      = 0.9d0                     ! decrease threshold by 
-  derv3         = derivative3(x,y)
-  nspikes       = count_reversals (istart, iend, derv3, threshold)
-
-  do while ((threshold >= min_threshold) .and.  &
-            (nspikes <= nspikes_to_detect))
-
-    threshold = threshold * decrease
-    nspikes       = count_reversals (istart, iend, derv3, threshold)
-
-  end do 
-
-  if (nspikes > nspikes_to_detect) then
-    min_threshold_for_spikes = threshold / decrease  ! to many - go delta back
-  else
-    min_threshold_for_spikes = threshold             ! exact match 
-  end if
-
-end function min_threshold_for_spikes
-
-
-!------------------------------------------------------------------------------
 ! counts der curvature spikes of polyline (x,y)
 !     which a reversals of the third derivation 
 !------------------------------------------------------------------------------
@@ -1053,7 +1011,7 @@ function derivative2(x, y)
 
   double precision, dimension(:), intent(in) :: x, y
   double precision, dimension(size(x)) :: derivative2
-  double precision, parameter ::EPSILON = 1d-10   ! ... when TE will be 1.0,y 
+  double precision, parameter ::EPSILON = 1d-5   ! ... when TE will be 1.0,y 
 
   integer :: npt
 

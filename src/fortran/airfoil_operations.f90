@@ -416,7 +416,7 @@ subroutine repanel_and_normalize_airfoil (in_foil, xfoil_geom_options, symmetric
 
   ! iteration thresholds
   double precision, parameter    :: EPSILON = 1.d-12          ! distance xfoil LE to 0,0
-  double precision, parameter    :: LE_PANEL_FACTOR = 0.2d0   ! lenght LE panel / length prev panel
+  double precision, parameter    :: LE_PANEL_FACTOR = 0.4   ! lenght LE panel / length prev panel
 
   tmp_foil%npoint = xfoil_geom_options%npan
   allocate (tmp_foil%x(tmp_foil%npoint))  
@@ -1000,10 +1000,38 @@ end function get_max_te_curvature
   write (*,'(11x,A,1x,3(I2,A),A)') info//' ', nreversals, 'R ', &
             nspikes, 'S ','  '// result_info
 
-  end subroutine show_reversals_highlows
+end subroutine show_reversals_highlows
 
 
+!------------------------------------------------------------------------------
+! For testing 
+!   Make sinus y-coordinate in foil 
+!------------------------------------------------------------------------------
+
+subroutine test_make_circle_foil (foil)
+
+  use vardef,          only : airfoil_type
+
+  type(airfoil_type), intent(inout) :: foil
+  double precision  :: pi, last_x
+  integer           :: i 
+
+  pi = acos(-1.d0)
+
+  last_x = 100d0
+
+  do i = 1, size(foil%x) 
+
+    if (foil%x(i) < last_x) then 
+      foil%z(i) =   0.1d0 * (0.5d0 ** 2 - (foil%x(i) -0.5d0)**2) **0.5d0
+    else 
+      foil%z(i) = - 0.1d0 * (0.5d0 ** 2 - (foil%x(i) -0.5d0)**2) **0.5d0
+    end if 
+
+    last_x = foil%x(i)
+  end do 
 
 
+end subroutine test_make_circle_foil
 
 end module airfoil_operations

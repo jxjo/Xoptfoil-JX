@@ -3057,10 +3057,12 @@ C------ thickness factor tails off exponentially away from trailing edge
         ENDIF
 C
         IF(SB(I).LE.SBLE) THEN
-         XB(I) = XB(I) + 0.5*DGAP*XOC*TFAC*DXU
+C JX-mod - do not change x
+C        XB(I) = XB(I) + 0.5*DGAP*XOC*TFAC*DXU
          YB(I) = YB(I) + 0.5*DGAP*XOC*TFAC*DYU
         ELSE
-         XB(I) = XB(I) - 0.5*DGAP*XOC*TFAC*DXU
+C JX-mod - do not change 
+C        XB(I) = XB(I) - 0.5*DGAP*XOC*TFAC*DXU
          YB(I) = YB(I) - 0.5*DGAP*XOC*TFAC*DYU
         ENDIF
    30 CONTINUE

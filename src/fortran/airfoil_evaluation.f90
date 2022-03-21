@@ -1583,8 +1583,9 @@ function write_airfoil_optimization_progress(designvars, designcounter)
 
 ! jx-test Write op points deviation to file
 
-  call write_op_results (designcounter, op_points_result, geo_result) 
-
+!  call write_op_results (designcounter, op_points_result, geo_result) 
+!  call write_designvars (designcounter, designvars) 
+!  call print_designvars (designcounter, designvars) 
 
 ! jx-test print spikes for testing purposes 
   if (.false.) then 
@@ -2642,7 +2643,7 @@ end function write_matchfoil_optimization_progress
 
 
 !------------------------------------------------------------------------------
-!
+!  
 !  Write results (cd) of all op_points to file for further analysis
 !
 !------------------------------------------------------------------------------
@@ -2770,5 +2771,189 @@ subroutine write_op_results (designcounter, op_points_result, geo_result)
 
 end subroutine write_op_results
 
+
+
+!------------------------------------------------------------------------------
+!  For analysis...
+!     Write variables of actual design to file for further analysis
+!------------------------------------------------------------------------------
+subroutine write_designvars (designcounter, designvars) 
+
+  use vardef,             only: shape_functions
+  use vardef,             only: initial_perturb, min_bump_width
+
+  integer, intent(in) :: designcounter
+  double precision, dimension(:), intent(in) :: designvars
+
+  integer             :: i, nop, ngeo_targets
+  character(255)      :: filename
+  integer             :: iunit, nvars
+  integer             :: nmodes, counter1
+  double precision    :: st, t1, t2, t1fact, t2fact
+
+  nvars = size(designvars,1)
+
+! Initial design: Open file and write header
+
+  filename = trim(design_subdir)//'particleswarm_designs.csv'
+  iunit = 13
+  if (designcounter == 0) then 
+    open(unit=iunit, file=filename, status='replace')
+!    write(iunit,'(A)') 'Number of variables: '//stri(nvars)
+    write(iunit,'(A)') 'location  width  strength'
+    close (iunit)
+    return
+  else
+    open(unit=iunit, file=filename, status='old', position='append')
+  end if
+
+! Write iteration number and the design variables to file
+
+  write(iunit,'(I4,A)', advance ='no') designcounter, ';'
+
+  if (trim(shape_functions) == 'hicks-henne') then
+
+    nmodes = size(designvars,1)/3
+    t1fact = initial_perturb/(1.d0 - 0.001d0)
+    t2fact = initial_perturb/(10.d0 - min_bump_width)
+
+    do i = 1, nmodes
+
+!     Extract strength, bump location, and width
+
+      counter1 = 3*(i-1)
+      st = designvars(counter1+1)
+      t1 = designvars(counter1+2)/t1fact       ! location
+      t2 = designvars(counter1+3)/t2fact       ! width
+
+!     Check for problems with bump location and width parameters
+
+      if (t1 <= 0.d0) t1 = 0.001d0      
+      if (t1 >= 1.d0) t1 = 0.999d0
+      if (t2 <= 0.d0) t2 = 0.001d0
+
+!        power1 = log10(0.5d0)/log10(t1)
+!        do j = 2, npt-1
+!          xs = (x(j)-xle)/chord
+!          shape_function(i,j) = st*sin(pi*xs**power1)**t2  
+!        end do
+
+!      write(iunit,'(3(F10.6,A))', advance ='no') 0.5d0** (log10(t1)/log10(0.5d0)), ";", (10d0-t2)/10d0, ";", st
+      write(iunit,'(3(F10.6,A))', advance ='no') t1, ";", (10d0-t2)/10d0, ";", st
+      if (i < nmodes) then 
+        write(iunit,'(A)', advance ='no') ";  "
+      else
+        write(iunit, *) 
+      end if 
+
+!      write(iunit,'(3(F10.7,A))', advance ='no') designvars(counter1+2), ";", designvars(counter1+3), ";", designvars(counter1+1)
+!      if (i < nmodes) then 
+!        write(iunit,'(A)', advance ='no') ";  "
+!      else
+!        write(iunit, *) 
+!      end if 
+
+    end do 
+
+  else
+    do i = 1, nvars
+      write(iunit,'(es13.5)', advance ='no') designvars(i)
+      if (i < nvars) then 
+        write(iunit,'(A)', advance ='no') ";"
+      else
+        write(iunit, *) 
+      end if 
+    end do
+  end if 
+
+! Close the file 
+
+  close(iunit)
+
+! Next designs: Open file and write data
+
+
+
+  return 
+
+! Warning if there was an error opening design_coordinates file
+
+910 write(*,*) "Warning: unable to open "//trim(filename)//". Skipping ..."
+    return
+
+end subroutine write_designvars
+
+!------------------------------------------------------------------------------
+!  For analysis...
+!     Write variables of actual design to file for further analysis
+!------------------------------------------------------------------------------
+subroutine print_designvars (designcounter, designvars) 
+
+  use vardef,             only: shape_functions
+  use vardef,             only: initial_perturb, min_bump_width
+
+  integer, intent(in) :: designcounter
+  double precision, dimension(:), intent(in) :: designvars
+
+  integer             :: i, nop, ngeo_targets
+  integer             :: nvars
+  integer             :: nmodes, counter1
+  double precision    :: st, t1, t2, t1fact, t2fact
+
+  nvars = size(designvars,1)
+
+! Initial design: Open file and write header
+
+  write(*,'(10x,A)') 'Hicks-Henne (location  "width"  strength*100'
+  write(*,'(10x)', advance ='no') 
+
+  if (trim(shape_functions) == 'hicks-henne') then
+
+    nmodes = size(designvars,1)/3
+    t1fact = initial_perturb/(1.d0 - 0.001d0)
+    t2fact = initial_perturb/(10.d0 - min_bump_width)
+
+    do i = 1, nmodes
+
+!     Extract strength, bump location, and width
+
+      counter1 = 3*(i-1)
+      st = designvars(counter1+1)
+      t1 = designvars(counter1+2)/t1fact       ! location
+      t2 = designvars(counter1+3)/t2fact       ! width
+
+!     Check for problems with bump location and width parameters
+
+      if (t1 <= 0.d0) t1 = 0.001d0      
+      if (t1 >= 1.d0) t1 = 0.999d0
+      if (t2 <= 0.d0) t2 = 0.001d0
+
+!        power1 = log10(0.5d0)/log10(t1)
+!        do j = 2, npt-1
+!          xs = (x(j)-xle)/chord
+!          shape_function(i,j) = st*sin(pi*xs**power1)**t2  
+!        end do
+
+      write(*,'(F5.2,F5.2,F6.2)', advance ='no') t1, (10d0-t2)/10d0, st * 100d0
+      if (i < nmodes) then 
+        write(*,'(3x)', advance ='no')
+      else
+        write(*, *) 
+      end if 
+
+    end do 
+
+  else
+    do i = 1, nvars
+      write(*,'(es10.4)', advance ='no') designvars(i)
+      if (i < nvars) then 
+        write(*,'(3x)', advance ='no') 
+      else
+        write(*, *) 
+      end if 
+    end do
+  end if 
+
+end subroutine print_designvars
 
 end module airfoil_evaluation
