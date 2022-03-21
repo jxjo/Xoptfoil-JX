@@ -6,7 +6,7 @@ Hicks_Henne shape functions are extremely powerful when it comes to more sophist
 
 Optimization Task: 
 
-A new airfoil for the special flight task of F3F competitions shall be generated. "Polar by design" is used, whre all operating points are defined with a target cd value. The optimizer will try to find an airfoil which completly satisfies these targets.
+A new airfoil for the special flight task of F3F competitions shall be generated. "Polar by design" is used, where all operating points are defined with a target cd value. The optimizer will try to find an airfoil which completly satisfies these targets.
 The operating points are part of the Type 1 polar at Re = 600,000. An additional operating point is defined at Re = 300.000 to reduce the typical weakness at lower Reynolds numbers as a result of the laminar separation bubble on top side of the airfoi. 
 
 The dynamic weighting of the operating points during optimizations takes care that all operating points should reach their target in a balanced manner.
