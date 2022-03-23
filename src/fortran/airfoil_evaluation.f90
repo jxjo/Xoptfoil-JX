@@ -1581,13 +1581,13 @@ function write_airfoil_optimization_progress(designvars, designcounter)
     call show_optimization_progress  (op_points_result, geo_result, dynamic_done) 
   end if
 
-! jx-test Write op points deviation to file
+! Testing:  Write op points deviation to file
 
 !  call write_op_results (designcounter, op_points_result, geo_result) 
 !  call write_designvars (designcounter, designvars) 
 !  call print_designvars (designcounter, designvars) 
 
-! jx-test print spikes for testing purposes 
+! Testing: print spikes for testing purposes 
   if (.false.) then 
     c = curv_top_spec
     write (*,'(8x)',advance ='no') 
@@ -2904,7 +2904,7 @@ subroutine print_designvars (designcounter, designvars)
 
 ! Initial design: Open file and write header
 
-  write(*,'(10x,A)') 'Hicks-Henne (location  "width"  strength*100'
+  write(*,'(10x,A)') 'Hicks-Henne (location  "width"  strength*100)'
   write(*,'(10x)', advance ='no') 
 
   if (trim(shape_functions) == 'hicks-henne') then

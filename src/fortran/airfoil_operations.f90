@@ -690,6 +690,68 @@ subroutine split_foil(foil)
 
 end subroutine split_foil
 
+!-----------------------------------------------------------------------------
+! Split an airfoil into top (xt,zt) and bottom surface (xb,zb) polyline
+!   if there is already a leadng edge at 0,0 
+!-----------------------------------------------------------------------------
+
+subroutine split_foil_at_00(foil)
+
+  use vardef, only : airfoil_type
+
+  type(airfoil_type), intent(inout) :: foil
+  
+  integer i, boundst, boundsb, pointst, pointsb, ile
+
+  ile = minloc (foil%x, 1)
+  if (ile == 0 .or. foil%x(ile) /= 0d0) then 
+    call my_stop ("Split_foil: Leading edge isn't at 0,0")
+  end if  
+
+  pointst = ile
+  pointsb = size(foil%x) - ile + 1
+
+  boundst = ile - 1
+  boundsb = ile + 1
+
+! Copy points for the top surface
+
+  if (allocated(foil%xt)) deallocate(foil%xt)
+  if (allocated(foil%zt)) deallocate(foil%zt)
+  allocate(foil%xt(pointst))
+  allocate(foil%zt(pointst))
+
+  foil%xt(1) = foil%x(ile)
+  foil%zt(1) = foil%z(ile)
+  do i = 1, pointst - 1
+    foil%xt(i+1) = foil%x(boundst-i+1)
+    foil%zt(i+1) = foil%z(boundst-i+1)
+  end do
+
+! Copy points for the bottom surface
+
+  if (.not. foil%symmetrical) then
+    if (allocated(foil%xb)) deallocate(foil%xb)
+    if (allocated(foil%zb)) deallocate(foil%zb)
+    allocate(foil%xb(pointsb))
+    allocate(foil%zb(pointsb))
+    foil%xb(1) = foil%x(ile)
+    foil%zb(1) = foil%z(ile)
+    do i = 1, pointsb - 1
+      foil%xb(i+1) = foil%x(boundsb+i-1)
+      foil%zb(i+1) = foil%z(boundsb+i-1)
+    end do
+  else
+    if (allocated(foil%xb)) deallocate(foil%xb)
+    if (allocated(foil%zb)) deallocate(foil%zb)
+    allocate(foil%xb(pointst))
+    allocate(foil%zb(pointst))
+    foil%xb =  foil%xt
+    foil%zb = -foil%zt
+  end if
+
+end subroutine split_foil_at_00
+
 !------------------------------------------------------------------------------
 !
 ! Rebuild airfoil out of top and bottom surfaces

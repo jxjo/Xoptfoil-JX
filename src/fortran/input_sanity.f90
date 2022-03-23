@@ -150,10 +150,10 @@ subroutine check_inputs(global_search, pso_options)
   ! Switch off geometric checks 
   if (match_foils) then 
     check_geometry = .false.
-    curv_spec%check_curvature = .false. 
-    curv_spec%auto_curvature  = .false. 
+    ! curv_spec%check_curvature = .true. 
+    ! curv_spec%auto_curvature  = .true. 
     curv_spec%do_smoothing = .false. 
-    call print_note ("Smoothing, geometry and curvature checks switched off for match foil mode.")
+    call print_note ("Smoothing and geometry checks switched off for match foil mode.")
   endif 
 
   end subroutine check_inputs
@@ -264,12 +264,6 @@ subroutine check_seed()
   if (match_foils) then
     match_delta = norm_2(zt(2:nptt-1) - foil_to_match%zt(2:nptt-1)) + &
                   norm_2(zb(2:nptb-1) - foil_to_match%zb(2:nptb-1))
-    ! Playground: Match foil equals seed foil. Take a dummy objective value to start
-    if (match_delta < 1d-10) then 
-      call ask_stop('Match foil and seed foil are equal. A dummy initial value '// &
-                     'for the objective function will be taken for demo')
-      match_delta = 1d-1 
-    end if
     match_foils_scale_factor = 1.d0 / match_delta
     return        ! end here with checks as it becomes aero specific, calc scale
   end if 
@@ -972,7 +966,8 @@ subroutine auto_spike_threshold_polyline (show_details, x,y , c_spec)
   istart = size(x) - NSKIP_TE
   iend   = size(x)  
   if (count_reversals (istart, iend, derivative3(x,y), spike_threshold)  > 0) then 
-! jx-test - deactivate skipping of te because of improved 3. derivative calculation 
+
+! Deactivate skipping of te because of improved 3. derivative calculation 
 !    c_spec%nskip_TE_spikes = NSKIP_TE
 !    if (show_details) & 
 !      call print_note ('Found spike close to trailing edge. ' //&
@@ -999,7 +994,8 @@ subroutine auto_spike_threshold_polyline (show_details, x,y , c_spec)
 ! Max Spikes - allow at least max_curv_reverse or seed spikes as max number of spikes 
 
   if (c_spec%max_spikes == 0 )  then 
-! jx-test do not take no of reversals as minimum number of spikes
+    
+! Do not take no of reversals as minimum number of spikes
 !    c_spec%max_spikes = max (nspikes, c_spec%max_curv_reverse)
     c_spec%max_spikes = nspikes
     text_who = 'Auto:'

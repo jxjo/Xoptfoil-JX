@@ -13,8 +13,12 @@ Fixes:
 - curvature artefact at trailing edge when thickness and/or camber was changed.
 - improved xfoil outlier detection for polar generation
 - auto_curvature adapted to improved curvature calculation at trailing edge
-- added glide ratio values to `show_details` during optimization.
 
+Improvements: 
+- added glide ratio values to `show_details` during optimization.
+- all seed airfoils in `.\examples\JX Seed` do have now a trailing edge gap of 0.03%
+- new seed airfoils for reflexed airfoils and symmetric airfoils
+- more infos about results in match foil mode. 
 
 ### Xfoil_worker
 - New option `-w set te=x` sets the trailing edge gap to the defined vaue in % of chord (=1) 

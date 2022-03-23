@@ -151,12 +151,6 @@ program main
 
   call allocate_airfoil_data()
 
-! Set up for matching airfoils
-
-  if (match_foils) then
-    call matchfoils_preprocessing(matchfoil_file)
-  end if
-
 ! Create subdirectory for all the design files 
 
   design_subdir = trim(output_prefix) // DESIGN_SUBDIR_POSTFIX
@@ -169,8 +163,15 @@ program main
 !  - smooth foil if requested
 !  - get scaling factors for operating points, 
 
-  call preset_airfoil_to_targets (show_details, seed_foil) 
-  call preset_airfoil_te_gap     (show_details, seed_foil, airfoil_te_gap) 
+  if (match_foils) then
+  ! Set up for matching airfoils 
+    call matchfoils_preprocessing  (matchfoil_file)
+  else
+    call preset_airfoil_to_targets (show_details, seed_foil) 
+    call preset_airfoil_te_gap     (show_details, seed_foil, airfoil_te_gap) 
+  end if
+
+
   call check_seed()
 
   ! Optimize

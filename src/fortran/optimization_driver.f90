@@ -36,52 +36,69 @@ subroutine matchfoils_preprocessing(matchfoil_file)
   use vardef,             only : airfoil_type, seed_foil
   use airfoil_evaluation, only : foil_to_match, xfoil_geom_options
   use airfoil_operations, only : get_seed_airfoil,  rebuild_airfoil
-  use airfoil_operations, only : repanel_and_normalize_airfoil
+  use airfoil_operations, only : repanel_and_normalize_airfoil, split_foil_at_00
   use math_deps,          only : interp_vector, transformed_arccos
   use naca,               only : naca_options_type
+  use xfoil_driver,       only : xfoil_set_thickness_camber, xfoil_get_geometry_info, xfoil_set_airfoil
   
   character(*), intent(in) :: matchfoil_file
 
-  type(airfoil_type) :: original_foil
+  type(airfoil_type) :: original_foil_to_match
   type(naca_options_type) :: dummy_naca_options
-  integer :: pointst, pointsb
+  integer :: pointst, pointsb, npan_sav, i, n
   double precision, dimension(:), allocatable :: zttmp, zbtmp, xmatcht, xmatchb, zmatcht, zmatchb
-
+  double precision :: maxt, xmaxt, maxc, xmaxc
 
 ! Load airfoil to match
 
-  call get_seed_airfoil('from_file', matchfoil_file, dummy_naca_options, original_foil)
+  call get_seed_airfoil('from_file', matchfoil_file, dummy_naca_options, original_foil_to_match)
 
-! Repanel to npan_fixed points and normalize to get LE at 0,0 and TE (1,0) and split
-
-  call repanel_and_normalize_airfoil (original_foil, xfoil_geom_options, .false., foil_to_match)
-
-  call print_note_only ('Preparing '//trim(original_foil%name)//' to be matched by '//&
+  call print_note_only ('Preparing '//trim(original_foil_to_match%name)//' to be matched by '//&
                         trim(seed_foil%name),3)
-  write (*,*)
 
-  xmatcht = foil_to_match%xt
-  xmatchb = foil_to_match%xb
-  zmatcht = foil_to_match%zt
-  zmatchb = foil_to_match%zb
+  if(trim(seed_foil%name) == trim(original_foil_to_match%name)) then
 
-! Interpolate x-vals of foil to match to seed airfoil points to x-vals 
-!    - so the z-values can later be compared
+  ! Seed and match foil are equal. Reduce thickness ... 
 
-  pointst = size(seed_foil%xt,1)
-  pointsb = size(seed_foil%xb,1)
-  allocate(zttmp(pointst))
-  allocate(zbtmp(pointsb))
-  zttmp(pointst) = zmatcht(size(zmatcht,1))
-  zbtmp(pointsb) = zmatchb(size(zmatchb,1))
-  call interp_vector(xmatcht, zmatcht, seed_foil%xt(1:pointst-1),                    &
-                     zttmp(1:pointst-1))
-  call interp_vector(xmatchb, zmatchb, seed_foil%xb(1:pointsb-1),                    &
-                     zbtmp(1:pointsb-1))
+    call print_note ('Match foil and seed foil are the same. '// &
+                     'The thickness of the match foil will be reduced bei 10%.', 3)
 
-! Re-set coordinates of foil to match from interpolated points
-                     
-  call rebuild_airfoil(seed_foil%xt, seed_foil%xb, zttmp, zbtmp, foil_to_match)
+    call xfoil_set_airfoil (seed_foil)        
+    call xfoil_get_geometry_info (maxt, xmaxt, maxc, xmaxc)
+    call xfoil_set_thickness_camber (seed_foil, maxt * 0.9d0 , 0d0, 0d0, 0d0, foil_to_match)
+    call split_foil_at_00(foil_to_match)
+    foil_to_match%name = seed_foil%name
+
+  else
+
+  ! Repanel to npan_fixed points and normalize to get LE at 0,0 and TE (1,0) and split
+
+    call repanel_and_normalize_airfoil (original_foil_to_match, xfoil_geom_options, .false., foil_to_match)
+
+  ! Interpolate x-vals of foil to match to seed airfoil points to x-vals 
+  !    - so the z-values can later be compared
+
+    xmatcht = foil_to_match%xt
+    xmatchb = foil_to_match%xb
+    zmatcht = foil_to_match%zt
+    zmatchb = foil_to_match%zb
+  
+    pointst = size(seed_foil%xt,1)
+    pointsb = size(seed_foil%xb,1)
+    allocate(zttmp(pointst))
+    allocate(zbtmp(pointsb))
+    zttmp(pointst) = zmatcht(size(zmatcht,1))
+    zbtmp(pointsb) = zmatchb(size(zmatchb,1))
+    call interp_vector(xmatcht, zmatcht, seed_foil%xt(1:pointst-1),                    &
+                      zttmp(1:pointst-1))
+    call interp_vector(xmatchb, zmatchb, seed_foil%xb(1:pointsb-1),                    &
+                      zbtmp(1:pointsb-1))
+
+  ! Re-set coordinates of foil to match from interpolated points
+                      
+    call rebuild_airfoil(seed_foil%xt, seed_foil%xb, zttmp, zbtmp, foil_to_match)
+  
+  end if 
 
 end subroutine matchfoils_preprocessing
 
@@ -477,31 +494,52 @@ subroutine write_matchfoil_summary (zt_new, zb_new)
 
   use vardef,             only : seed_foil
   use airfoil_evaluation, only : foil_to_match
+  use math_deps,          only : median
+  use xfoil_driver,       only : xfoil_set_airfoil, xfoil_get_geometry_info
   
   double precision, dimension(size(seed_foil%xt,1)), intent(in) :: zt_new
   double precision, dimension(size(seed_foil%xb,1)), intent(in) :: zb_new
-  double precision :: maxdeltat, maxdeltab, averaget, averageb, maxdt_rel, maxdb_rel
+  double precision :: max_dzt, max_dzb, avg_dzt, avg_dzb, max_dzt_rel, max_dzb_rel
+  double precision :: xmax_dzt, xmax_dzb, median_dzt, median_dzb
+  double precision :: maxt, xmaxt, maxc, xmaxc
+  integer          :: imax_dzt, imax_dzb
 
-  maxdeltat = maxval(abs (zt_new - foil_to_match%zt))
-  maxdeltab = maxval(abs (zb_new - foil_to_match%zb))
+! Max Delta and position on top and bot 
 
-  maxdt_rel = (maxdeltat / maxval(abs (foil_to_match%zt))) * 100.d0
-  maxdb_rel = (maxdeltab / maxval(abs (foil_to_match%zb))) * 100.d0
+  max_dzt  = maxval(abs (zt_new - foil_to_match%zt))
+  max_dzb  = maxval(abs (zb_new - foil_to_match%zb))
+  imax_dzt = maxloc(abs (zt_new - foil_to_match%zt),1)
+  imax_dzb = maxloc(abs (zb_new - foil_to_match%zb),1)
+  xmax_dzt = seed_foil%xt(imax_dzt)
+  xmax_dzb = seed_foil%xb(imax_dzb)
+
+! rel. deviation  
+
+  call xfoil_set_airfoil (foil_to_match)        
+  call xfoil_get_geometry_info (maxt, xmaxt, maxc, xmaxc)
+
+  max_dzt_rel = (max_dzt / maxt) * 100.d0
+  max_dzb_rel = (max_dzb / maxt) * 100.d0
  
-  averaget  = sum (zt_new - foil_to_match%zt) / size(seed_foil%xt,1)
-  averageb  = sum (zb_new - foil_to_match%zb) / size(seed_foil%xb,1)
+! absolute average and median of deltas  
+
+  avg_dzt  = sum (abs(zt_new - foil_to_match%zt)) / size(seed_foil%xt,1)
+  avg_dzb  = sum (abs(zb_new - foil_to_match%zb)) / size(seed_foil%xb,1)
+
+  median_dzt  = median (zt_new - foil_to_match%zt)
+  median_dzb  = median (zb_new - foil_to_match%zb)
 
   write(*,*)
   write(*,'(A)') " Match airfoil deviation summary"
   write(*,*)
-  write(*,'(A)') "      Delta of y-coordinate between adjusted match and seed surface"
+  write(*,'(A)') "      Delta of y-coordinate between best design and match airfoil surface"
   write(*,*)
-  write(*,'(A)') "                average    max delta   to max y"
+  write(*,'(A)') "               average      median   max delta      at  of thickness"
 
   write (*,'(A10)', advance = 'no') "   top:"
-  write (*,'(1x, ES12.1, ES12.1, F10.3,A1)') averaget, maxdeltat, maxdt_rel,'%'
+  write (*,'(F12.7,F12.7,F12.7,F8.4,F10.3,A1)') avg_dzt, median_dzt, max_dzt, xmax_dzt, max_dzt_rel,'%'
   write (*,'(A10)', advance = 'no') "   bot:"
-  write (*,'(1x, ES12.1, ES12.1, F10.3,A1)') averageb, maxdeltab, maxdb_rel,'%'
+  write (*,'(F12.7,F12.7,F12.7,F8.4,F10.3,A1)') avg_dzb, median_dzb, max_dzb, xmax_dzb, max_dzb_rel,'%'
   write(*,*)
 
 end subroutine write_matchfoil_summary

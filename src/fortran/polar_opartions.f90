@@ -372,6 +372,7 @@ subroutine write_polar_data (out_unit, op_points_result)
   type (op_point_result_type) :: op
   integer              :: i 
   character (100)      :: text_out
+  logical              :: has_warned = .false.
 
 ! xflr5 example
 ! -
@@ -392,10 +393,13 @@ subroutine write_polar_data (out_unit, op_points_result)
     else
       write(text_out,'(A,F5.2,A)') "alpha =",op%alpha," not converged in polar generation. Skipping op point"
       call print_warning (trim(text_out),3)
+      has_warned = .true. 
     end if
 
   end do 
 
+  if (has_warned) write (*,*) 
+  
 end subroutine write_polar_data
 
 
