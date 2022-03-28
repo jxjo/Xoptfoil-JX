@@ -215,7 +215,7 @@ subroutine check_seed()
 
     write(*,'(/," - ",A)') "Check_curvature if it's suitable for Hicks-Henne shape type"
 
-    call check_and_smooth_surface (show_details, curv_spec%do_smoothing, seed_foil, overall_quality)
+    call check_and_smooth_surface (show_details, .false., curv_spec%do_smoothing, seed_foil, overall_quality)
 
   ! Get best values fur surface constraints 
     if (curv_spec%auto_curvature) then 
@@ -244,7 +244,7 @@ subroutine check_seed()
 
   ! In case of 'camb-thick' smoothing was activated 
 
-      call check_and_smooth_surface (show_details, curv_spec%do_smoothing, seed_foil, overall_quality)
+      call check_and_smooth_surface (show_details, .false., curv_spec%do_smoothing, seed_foil, overall_quality)
 
   end if
 
@@ -700,7 +700,7 @@ end subroutine check_seed
 !   prints summary of the quality 
 !-------------------------------------------------------------------------
 
-subroutine check_and_smooth_surface (show_details, do_smoothing, foil, overall_quality)
+subroutine check_and_smooth_surface (show_details, show_smooth_details, do_smoothing, foil, overall_quality)
 
   use vardef,             only: airfoil_type
   use math_deps,          only: smooth_it
@@ -708,7 +708,7 @@ subroutine check_and_smooth_surface (show_details, do_smoothing, foil, overall_q
   use airfoil_operations, only: assess_surface
   use airfoil_operations, only: get_max_te_curvature, rebuild_airfoil
 
-  logical, intent(in)       :: show_details, do_smoothing
+  logical, intent(in)       :: show_details, do_smoothing, show_smooth_details
   type (airfoil_type), intent (inout)  :: foil
   integer, intent(out)       :: overall_quality
 
@@ -746,10 +746,10 @@ subroutine check_and_smooth_surface (show_details, do_smoothing, foil, overall_q
 
   if (top_quality >= Q_BAD .or. do_smoothing) then 
 
-    call smooth_it (show_details, spike_threshold, foil%xt, foil%zt)
+    call smooth_it (show_smooth_details, spike_threshold, foil%xt, foil%zt)
     top_quality     = 0 
     done_smoothing  = .true.
-    call assess_surface (show_details, 'smoothed', &
+    call assess_surface (show_details, '  smoothed', &
                          istart, iend, iend_spikes, &
                          curv_threshold, spike_threshold, foil%xt, foil%zt, top_quality)
   end if
@@ -770,10 +770,10 @@ subroutine check_and_smooth_surface (show_details, do_smoothing, foil, overall_q
     
     if (bot_quality >= Q_BAD .or. do_smoothing) then 
 
-      call smooth_it (show_details, spike_threshold, foil%xb, foil%zb)
+      call smooth_it (show_smooth_details, spike_threshold, foil%xb, foil%zb)
       bot_quality     = 0 
       done_smoothing  = .true.
-      call assess_surface (show_details, 'smoothed', &
+      call assess_surface (show_details, '  smoothed', &
                           istart, iend, iend_spikes, &
                           curv_threshold, spike_threshold, foil%xb, foil%zb, bot_quality)
     end if
@@ -994,7 +994,7 @@ subroutine auto_spike_threshold_polyline (show_details, x,y , c_spec)
 ! Max Spikes - allow at least max_curv_reverse or seed spikes as max number of spikes 
 
   if (c_spec%max_spikes == 0 )  then 
-    
+
 ! Do not take no of reversals as minimum number of spikes
 !    c_spec%max_spikes = max (nspikes, c_spec%max_curv_reverse)
     c_spec%max_spikes = nspikes

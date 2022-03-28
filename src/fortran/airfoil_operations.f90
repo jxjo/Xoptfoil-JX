@@ -976,7 +976,7 @@ subroutine assess_surface (show_details, info, &
     end if 
 
     write (*,'(3x)', advance ='no') 
-    write (label,'(A)') adjustl(trim(info)) 
+    write (label,'(A)') trim(info) 
     call print_colored (COLOR_NOTE, label)
     write (*,'(x,A)') result_out
 

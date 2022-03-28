@@ -301,7 +301,7 @@ subroutine check_foil_curvature (input_file, output_prefix, seed_foil, visualize
   type (xfoil_geom_options_type)  :: geom_options
   logical, intent(in)          :: visualizer
 
-  type (airfoil_type)          :: foil, tmp_foil
+  type (airfoil_type)          :: foil, tmp_foil, norm_foil, smooth_foil
   integer                      :: overall_quality
 
   write (*,*) 'Surface curvature with reversals and spikes'
@@ -320,21 +320,27 @@ subroutine check_foil_curvature (input_file, output_prefix, seed_foil, visualize
 !  ------------ analyze & smooth  -----
 
   ! do checks on repanel foil - also needed for LE point handling (!)
-  call repanel_and_normalize_airfoil (tmp_foil, geom_options, .false., foil)
+  call repanel_and_normalize_airfoil (tmp_foil, geom_options, .false., norm_foil)
 
   write(*,'(" - ",A)') "Check_curvature and smooth"
-  call check_and_smooth_surface (.true., .true., foil, overall_quality)
+  smooth_foil = norm_foil
+  call check_and_smooth_surface (.true., .false., .true., smooth_foil, overall_quality)
 
 
 !  ------------ set best values  -----
 
   write (*,*) 
-  call auto_curvature_constraints ('Top side', .true., foil%xt, foil%zt, curv_top_spec)
-  call auto_curvature_constraints ('Bot side', .true., foil%xb, foil%zb, curv_bot_spec)
+  write(*,'(" - ",A)') "Auto_curvature contraints for normalized airfoil"
+
+  curv_top_spec%max_curv_reverse = 100        ! supress reversal warning
+  curv_bot_spec%max_curv_reverse = 100        ! supress reversal warning
+  call auto_curvature_constraints ('Top side', .true., norm_foil%xt, norm_foil%zt, curv_top_spec)
+  call auto_curvature_constraints ('Bot side', .true., norm_foil%xb, norm_foil%zb, curv_bot_spec)
 
   if (visualizer) then
     call write_design_coordinates (output_prefix, 0, seed_foil)
-    call write_design_coordinates (output_prefix, 1, foil)
+    call write_design_coordinates (output_prefix, 1, norm_foil)
+    call write_design_coordinates (output_prefix, 1, smooth_foil)
   end if 
 
 end subroutine check_foil_curvature
@@ -399,7 +405,7 @@ subroutine repanel_smooth (input_file, outname_auto, output_prefix, seed_foil, v
     foil_smoothed%name = trim(outname)
 
     write(*,'(" - ",A)') "Smoothing..."
-    call check_and_smooth_surface (.true., .true., foil_smoothed, overall_quality)
+    call check_and_smooth_surface (.true., .true., .true., foil_smoothed, overall_quality)
   
     call airfoil_write   (trim(outname)//'.dat', trim(foil_smoothed%name), foil_smoothed)
 
