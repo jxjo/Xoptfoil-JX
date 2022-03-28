@@ -1491,13 +1491,8 @@ subroutine read_xfoil_paneling_inputs  (input_file, or_iunit, geom_options)
   end if             
 
   cvpar  = 1.d0
-  cterat = 0.15d0           ! Now set again to the xfoil standard value of 0.15
-                            !  after patching curvature() which 
-                            !  is able to handle a short last TE panel 
-                            ! (old: if set to normal value 0.15d0, the curvature at TE panel
+  cterat = 0.0d0            ! if set to normal value 0.15d0, the curvature calc at TE panel
                             !   tends to flip away and have tripple value (bug in xfoil) 
-                            !   This value equals to the curvature at TE in xfoil PANGEN
-                            !   --> see JX-mod in PANGEN) 
   ctrrat = 0.2d0
   xsref1 = 1.d0
   xsref2 = 1.d0
