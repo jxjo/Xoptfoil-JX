@@ -294,6 +294,9 @@ subroutine check_foil_curvature (input_file, output_prefix, seed_foil, visualize
   use input_sanity,       only: check_and_smooth_surface, auto_curvature_constraints
   use input_output,       only: read_xfoil_paneling_inputs, read_curvature_constraints_inputs
   use xfoil_driver,       only: xfoil_defaults, xfoil_options_type, xfoil_geom_options_type
+  use xfoil_driver,       only: xfoil_set_airfoil, xfoil_get_geometry_info, get_te_gap
+  use math_deps,          only: count_reversals, derivative2
+  use os_util
 
   character(*), intent(in)     :: input_file
   character(*), intent(in)     :: output_prefix
@@ -302,7 +305,8 @@ subroutine check_foil_curvature (input_file, output_prefix, seed_foil, visualize
   logical, intent(in)          :: visualizer
 
   type (airfoil_type)          :: foil, tmp_foil, norm_foil, smooth_foil
-  integer                      :: overall_quality
+  integer                      :: overall_quality, is, ie, nreversals
+  double precision             :: curv_threshold, maxt, xmaxt, maxc, xmaxc
 
   write (*,*) 'Surface curvature with reversals and spikes'
 
@@ -317,30 +321,60 @@ subroutine check_foil_curvature (input_file, output_prefix, seed_foil, visualize
 
   call read_curvature_constraints_inputs (input_file, 0, curv_spec, curv_top_spec, curv_bot_spec)
 
+!  ------------ seed airfoil data -----
+
+  call xfoil_set_airfoil (seed_foil)        
+  call xfoil_get_geometry_info (maxt, xmaxt, maxc, xmaxc)
+
+  write (*,*)
+  call print_colored (COLOR_NOTE,'   ')
+  call print_colored (COLOR_NOTE,&
+      "Thickness "//strf('(F5.2)',maxt*100)//"% at "//strf('(F5.2)',xmaxt*100)//'%   |   ')
+  call print_colored (COLOR_NOTE, &
+         "Camber "//strf('(F5.2)',maxc*100)//"% at "//strf('(F5.2)',xmaxc*100)//'%   |   ')
+  call print_colored (COLOR_NOTE, &
+         "TE gap "//strf('(F5.2)',get_te_gap (seed_foil)*100)//"%")
+  write (*,*)
+
 !  ------------ analyze & smooth  -----
 
   ! do checks on repanel foil - also needed for LE point handling (!)
   call repanel_and_normalize_airfoil (tmp_foil, geom_options, .false., norm_foil)
 
-  write(*,'(" - ",A)') "Check_curvature and smooth"
+  write(*,'(" - ",A)', advance='no') "Check_curvature and smooth."
   smooth_foil = norm_foil
   call check_and_smooth_surface (.true., .false., .true., smooth_foil, overall_quality)
 
-
-!  ------------ set best values  -----
+!  ------------ Find best values  -----
 
   write (*,*) 
   write(*,'(" - ",A)') "Auto_curvature contraints for normalized airfoil"
 
-  curv_top_spec%max_curv_reverse = 100        ! supress reversal warning
-  curv_bot_spec%max_curv_reverse = 100        ! supress reversal warning
+  ! supress reversal warning in auto_curvature_constraints
+  is = curv_top_spec%nskip_LE
+  ie = size(norm_foil%zt) 
+  curv_threshold = curv_top_spec%curv_threshold
+  nreversals = count_reversals (is, ie, derivative2(norm_foil%xt, norm_foil%zt), curv_threshold) 
+
+  curv_top_spec%max_curv_reverse = nreversals     
   call auto_curvature_constraints ('Top side', .true., norm_foil%xt, norm_foil%zt, curv_top_spec)
+
+  is = curv_bot_spec%nskip_LE
+  ie = size(norm_foil%zb) 
+  curv_threshold = curv_bot_spec%curv_threshold
+  nreversals = count_reversals (is, ie, derivative2(norm_foil%xb, norm_foil%zb), curv_threshold) 
+
+  curv_bot_spec%max_curv_reverse = nreversals 
   call auto_curvature_constraints ('Bot side', .true., norm_foil%xb, norm_foil%zb, curv_bot_spec)
+
+!  ------------ Write coordinates for visualizer  -----
 
   if (visualizer) then
     call write_design_coordinates (output_prefix, 0, seed_foil)
+    norm_foil%name   = 'Normalized'
     call write_design_coordinates (output_prefix, 1, norm_foil)
-    call write_design_coordinates (output_prefix, 1, smooth_foil)
+    smooth_foil%name = 'Smoothed'
+    call write_design_coordinates (output_prefix, 2, smooth_foil)
   end if 
 
 end subroutine check_foil_curvature

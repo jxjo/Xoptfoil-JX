@@ -882,15 +882,15 @@ subroutine auto_curvature_threshold_polyline (info, show_details, x,y , c_spec)
   curv_threshold   = c_spec%curv_threshold
 
 ! Is there a reversal close to TE? - which is quite often ...If yes, skip TE for ever
-  
-  istart = size(x) - NSKIP_TE
-  iend   = size(x)  
-  if (count_reversals (istart, iend, derivative2(x,y), curv_threshold)  > 0) then 
-    c_spec%nskip_TE_Revers = NSKIP_TE
-    if (show_details) &
-      call print_note ('Found reversal close to trailing edge. ' //&
-                       'TE will be ignored for reversal detection.', 9)
-  end if
+!  
+!  istart = size(x) - NSKIP_TE
+!  iend   = size(x)  
+!  if (count_reversals (istart, iend, derivative2(x,y), curv_threshold)  > 0) then 
+!    c_spec%nskip_TE_Revers = NSKIP_TE
+!    if (show_details) &
+!      call print_note ('Found reversal close to trailing edge. ' //&
+!                       'TE will be ignored for reversal detection.', 9)
+!  end if
 
 ! How many reversals do we have now? more than user specified as a constraint?
 
@@ -962,20 +962,20 @@ subroutine auto_spike_threshold_polyline (show_details, x,y , c_spec)
   spike_threshold = c_spec%spike_threshold
 
 ! Is there a spike close to TE? - which is quite often ...If yes, skip TE for ever
-
-  istart = size(x) - NSKIP_TE
-  iend   = size(x)  
-  if (count_reversals (istart, iend, derivative3(x,y), spike_threshold)  > 0) then 
-
+!
+!  istart = size(x) - NSKIP_TE
+!  iend   = size(x)  
+!  if (count_reversals (istart, iend, derivative3(x,y), spike_threshold)  > 0) then 
+!
 ! Deactivate skipping of te because of improved 3. derivative calculation 
 !    c_spec%nskip_TE_spikes = NSKIP_TE
 !    if (show_details) & 
 !      call print_note ('Found spike close to trailing edge. ' //&
 !     'TE will be ignored for bump detection.', 9)
-    c_spec%nskip_TE_spikes = 0
-    if (show_details) & 
-      call print_note ('Found spike close to trailing edge. ', 9)
-  end if
+!    c_spec%nskip_TE_spikes = 0
+!    if (show_details) & 
+!      call print_note ('Found spike close to trailing edge. ', 9)
+!  end if
 
 
 ! How many Spikes do we have with current threshold defined by user / default?

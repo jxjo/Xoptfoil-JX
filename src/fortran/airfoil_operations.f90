@@ -502,9 +502,9 @@ subroutine repanel_and_normalize_airfoil (in_foil, xfoil_geom_options, symmetric
   write (*,'(/," - ",A)', advance = 'no') 'Repaneling and normalizing.'
 
   if (foil%addpoint_loc /= 0) then 
-    call print_colored (COLOR_NOTE, ' Leading edge added.')
+    call print_colored (COLOR_NOTE, '   Leading edge added.')
   end if
-  call print_colored (COLOR_NOTE, ' Airfoil will have '//stri(foil%npoint) //' Points')
+  call print_colored (COLOR_NOTE, '   Airfoil will have '//stri(foil%npoint) //' Points')
   write (*,*) 
 
 

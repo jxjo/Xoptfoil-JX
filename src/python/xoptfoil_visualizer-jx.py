@@ -21,7 +21,7 @@ import argparse
 from matplotlib import pyplot as plt
 from matplotlib import rcParams
 import numpy as np
-from math import log10, floor
+from math import log10, floor, sqrt
 from sys import version_info
 import time
 import os
@@ -141,6 +141,11 @@ class Airfoil:
       if cl[i] > 0.0:
         self.full_polar_climb[i] = (cl[i]**1.5)/cd[i]
 
+  def teGap (self):
+
+    teGap = sqrt( (self.x[0]-self.x[-1])**2 + (self.y[0]-self.y[-1])**2)
+
+    return teGap 
 
 ################################################################################
 # Reads airfoil coordinates from file
@@ -721,11 +726,12 @@ def plot_airfoil_coordinates(seedfoil, matchfoil, designfoils, plotnum, firsttim
 
   if show_info:
     if plot_seedfoil:
-      mytext = "Thickness: " + '{:.2%}'.format(seedfoil.maxt) + "  at: " + '{:.1%}'.format(seedfoil.xmaxt) +  '\n' 
+      mytext = "Thickness: " + '{:.2%}'.format(seedfoil.maxt) + "  at: " + '{:.1%}'.format(seedfoil.xmaxt) + '\n' 
       if (seedfoil.maxc > 0):
-        mytext = mytext + "Camber:    " + '{:.2%}'.format(seedfoil.maxc) + "  at: " + '{:.1%}'.format(seedfoil.xmaxc)
+        mytext = mytext + "Camber:    " + '{:.2%}'.format(seedfoil.maxc) + "  at: " + '{:.1%}'.format(seedfoil.xmaxc) + '\n' 
       else: 
-        mytext = mytext + "symmetric"
+        mytext = mytext + "symmetric" + '\n' 
+      mytext = mytext + "TE gap:      " + '{:.2%}'.format(seedfoil.teGap())  
 
       ax.text(0.02, 0.90, mytext, color=sc, verticalalignment='center', horizontalalignment='left',
               transform=ax.transAxes, fontsize=8)
@@ -787,13 +793,13 @@ def plot_airfoil_coordinates(seedfoil, matchfoil, designfoils, plotnum, firsttim
 
   if plot_2nd_deriv:
     ax2.set_ylabel('curvature', color='grey')
-    ax2.set_ylim(0.8, -0.8)
+    ax2.set_ylim(1.0, -1.0)
     if plot_seedfoil:   ax2.plot(seedfoil.x, seedfoil.deriv2, color=sc, linewidth=0.5) 
     if plot_foil:       ax2.plot(foil.x,     foil.deriv2,     color=nc, linewidth=1.0)
 
   if plot_3rd_deriv:
     mirrorax2.set_ylabel('3rd derivative', color='grey')
-    mirrorax2.set_ylim(-8, 8)
+    mirrorax2.set_ylim(-10, 10)
     if plot_seedfoil:   mirrorax2.plot(seedfoil.x, seedfoil.deriv3, color=sc, linewidth=0.8, linestyle=':')
     if plot_foil:       mirrorax2.plot(foil.x,     foil.deriv3,     color=nc, linewidth=0.5, linestyle='--')
 
@@ -1901,8 +1907,8 @@ if __name__ == "__main__":
 
   if (ioerror == 1):
     print("You will not be able to create plots until coordinate data is read.")
-  elif (ioerror < 0):
-    print("Only airfoils are available for plotting (no polars).")
+  # elif (ioerror < 0):
+    # print("Only airfoils are available for plotting (no polars).")
   else: 
     # Is there a complete xfoil polar for reference info 
     seedfoil, designfoils = load_full_polar (prefix, seedfoil, designfoils)
