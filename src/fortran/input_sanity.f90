@@ -631,8 +631,10 @@ subroutine check_seed()
 
       cur_value = op%cm
 
-      if (op_spec%target_value < 0.d0) &          ! negative? - value is factor to seed
-          op_spec%target_value = cur_value * abs(op_spec%target_value) 
+      ! note - the "trick" with negative target is not possible with moments
+      !        as the cm-target-value may be negative... 
+      ! if (op_spec%target_value < 0.d0) &          ! negative? - value is factor to seed
+      !     op_spec%target_value = cur_value * abs(op_spec%target_value) 
 
       if (op_spec%allow_improved_target) then
         dist = max (0d0, (op_spec%target_value - cur_value))

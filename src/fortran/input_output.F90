@@ -819,7 +819,7 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
   do i = 1, noppoint
     if (trim(moment_constraint_type(i)) /=  'none')                               &
       call my_stop("Moment constraints are no more supported in Xoptfoil-JX. "//  &
-                    "Please use target_moment instead")
+                    "Please use target-moment instead")
   end do
   if (min_te_angle < 0.d0) call my_stop("min_te_angle must be >= 0.")
   if (symmetrical)                                                             &

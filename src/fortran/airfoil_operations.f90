@@ -959,8 +959,15 @@ subroutine assess_surface (show_details, info, &
   overall_quality   = ior(quality_spikes, quality_reversals)
 
 ! check te curvature 
+  
   cur_te_curvature = get_max_te_curvature (x,y )
-  quality_te      = r_quality (cur_te_curvature, 0.2d0, 1d0, 10d0)
+
+  ! in case of a reversal, allow a little more curvature e.g. reflexed airfoil
+  if (nreversals == 1) then 
+    quality_te      = r_quality (cur_te_curvature, 0.4d0, 2d0, 10d0)
+  else
+    quality_te      = r_quality (cur_te_curvature, 0.2d0, 1d0, 10d0)
+  end if 
   ! te quality counts only half as too often it is bad ... 
   overall_quality = ior(overall_quality, (quality_te / 2))
 
