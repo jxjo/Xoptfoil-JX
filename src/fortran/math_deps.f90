@@ -686,11 +686,13 @@ subroutine smooth_it (show_details, spike_threshold, x, y)
 
   call find_curv_spikes (istart, iend, spike_threshold, x, y, nspikes, result_info)
   nspikes_target  = int(nspikes/10) ! how many curve spikes should be at the end?
-  nspikes_initial = nspikes
-                                  !   Reduce by factor 5 --> not too much as smoothing become critical for surface
+  nspikes_initial = nspikes       !   Reduce by factor 5 --> not too much as smoothing become critical for surface
+                                 
   tension        = 0.5d0          ! = 0.5 equals to the original Chaikin cutting distance of 0.25 
-  n_Chaikin_iter = 4              ! number of iterations within Chaikin
-  max_iterations = 10             ! max iterations over n_Chaikin_iter 
+                                  !   tension will be reduced at TE
+
+  n_Chaikin_iter = 5              ! number of iterations within Chaikin
+  max_iterations = 8              ! max iterations over n_Chaikin_iter 
 
   nspikes_best = nspikes          ! init with current to check if there is improvement of nspikes over iterations
   n_no_improve = 0                ! iterate only until iteration with no improvements of nspikes 
@@ -814,6 +816,7 @@ Subroutine getSmootherChaikin(x, y, cuttingDist, x_smooth, y_smooth)
   double precision, intent(in) :: cuttingDist
 
   integer :: i, is, np_smooth, npt
+  double precision :: cut
   
   npt       = size(x)
   np_smooth = (npt)*2
@@ -825,21 +828,30 @@ Subroutine getSmootherChaikin(x, y, cuttingDist, x_smooth, y_smooth)
   x_smooth(1) = x(1)
   y_smooth(1) = y(1)
 
+  cut = cuttingDist
+
   is = 1
   do i = 1, (npt-1)
 
-    is = is + 1
-    x_smooth(is) = (1-cuttingDist) * x(i) + cuttingDist * x(i+1)
-    y_smooth(is) = (1-cuttingDist) * y(i) + cuttingDist * y(i+1)
+  ! Reduce cutting distance close to trailing edge to avoid "cutting" 
+  !   of curvature at TE eg at relexed airfoil 
+  ! Note: shape_tpye "camb-thick" does smoothing during optimization... 
+    if (i > (npt-7)) cut = cut * 0.80d0
 
     is = is + 1
-    x_smooth(is) = cuttingDist * x(i) + (1-cuttingDist) * x(i+1)
-    y_smooth(is) = cuttingDist * y(i) + (1-cuttingDist) * y(i+1)
+    x_smooth(is) = (1-cut) * x(i) + cut * x(i+1)
+    y_smooth(is) = (1-cut) * y(i) + cut * y(i+1)
+
+    is = is + 1
+    x_smooth(is) = cut * x(i) + (1-cut) * x(i+1)
+    y_smooth(is) = cut * y(i) + (1-cut) * y(i+1)
 
   end do
-  ! always add the last point so it never will be changed
-  x_smooth(np_smooth) = x(npt)
-  y_smooth(np_smooth) = y(npt)
+
+! always add the last point so it never will be changed
+  is = is + 1
+  x_smooth(is) = x(npt)
+  y_smooth(is) = y(npt)
 
 end subroutine
 
