@@ -114,12 +114,16 @@ subroutine check_inputs(global_search, pso_options)
     nscaled = 0 
 
     do i= 1, size(geo_targets)
-      if (geo_targets(i)%dynamic_weighting)     ndyn = ndyn + 1
-      if (geo_targets(i)%weighting_user /= 1d0) nscaled = nscaled + 1
+      if (geo_targets(i)%dynamic_weighting) then
+         ndyn = ndyn + 1
+         if (geo_targets(i)%weighting_user /= 1d0) nscaled = nscaled + 1
+      end if 
     end do
     do i = 1, size(op_points_spec)
-      if (op_points_spec(i)%dynamic_weighting)     ndyn = ndyn + 1
-      if (op_points_spec(i)%weighting_user /= 1d0) nscaled = nscaled + 1
+      if (op_points_spec(i)%dynamic_weighting) then 
+        ndyn = ndyn + 1
+        if (op_points_spec(i)%weighting_user /= 1d0) nscaled = nscaled + 1
+      end if
     end do
 
     if (ndyn < 3) &
@@ -177,6 +181,7 @@ subroutine check_seed()
   use airfoil_operations, only : assess_surface,  rebuild_airfoil
   use airfoil_operations, only : show_reversals_highlows
   use airfoil_operations, only : get_max_te_curvature
+  use parametrization,    only : smooth_foil
 
   type(op_point_specification_type) :: op_spec
   type(op_point_result_type)        :: op
@@ -243,12 +248,11 @@ subroutine check_seed()
   elseif (curv_spec%do_smoothing) then
 
   ! In case of 'camb-thick' smoothing was activated 
-
-      call check_and_smooth_surface (show_details, .false., curv_spec%do_smoothing, seed_foil, overall_quality)
+    call print_note_only ('- Smoothing airfoil to prepare for Camb-Thick shape type')
+    call smooth_foil (.false., 0.05d0, seed_foil)
 
   end if
 
-  
 
 
 ! Check geometry ------------------------------------------------------------------

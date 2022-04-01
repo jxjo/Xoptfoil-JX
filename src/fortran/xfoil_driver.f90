@@ -1265,6 +1265,10 @@ subroutine xfoil_set_te_gap (infoil, te_gap, x_blend, outfoil)
   double precision, intent(in) :: te_gap, x_blend
   type(airfoil_type), intent(out) :: outfoil
 
+  integer         :: ile
+
+  outfoil = infoil 
+
 ! Check to make sure xfoil is initialized
   if (.not. allocated(AIJ)) then
     write(*,*) "Error: xfoil is not initialized!  Call xfoil_init() first."
@@ -1280,12 +1284,21 @@ subroutine xfoil_set_te_gap (infoil, te_gap, x_blend, outfoil)
     call print_error ("TE gap blending range must be between 0.0 and 1.0")
   else
 
+    ile = minloc (infoil%x, 1)
+    if (ile == 0 .or. infoil%x(ile) /= 0d0) then 
+      call my_stop ("set_te_gap: Leading edge isn't at 0,0")
+    end if  
+
   ! Run xfoil to set TE gap 
     call TGAP(te_gap,x_blend)
+    call xfoil_reload_airfoil(outfoil)
+
+  ! TGAP could have changed leading edge a very little ...
+
+    outfoil%x(ile) = 0d0
+    outfoil%z(ile) = 0d0
 
   end if 
-
-  call xfoil_reload_airfoil(outfoil)
 
 end subroutine xfoil_set_te_gap
 

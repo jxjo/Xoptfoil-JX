@@ -9,6 +9,7 @@
 
 &optimization_options
   airfoil_file     = 'MH32.dat'
+  airfoil_te_gap   = 0.03                       ! Set a minimum trailing edge gap of 0.03%
   shape_functions  = 'camb-thick'				! just optimize thickness & camber and their highpoints 
   
   show_details = .true. 						! understand more details during optimization 
@@ -23,18 +24,19 @@
   noppoint         = 3
 
   op_mode(1) = 'spec-cl'						! Specifiy operating point based on cl-value						
-  op_point(1) = 0.2
-  optimization_type(1) = 'target-drag'			! try to reach cd = 0.0084
-  target_value(1) = 0.0083							 
+  op_point(1) = 0.15
+  optimization_type(1) = 'target-drag'			! try to reach target cd = 0.0083
+  target_value(1) = 0.00739							 
 
   op_mode(2) = 'spec-cl'
   op_point(2) = 0.4								 
-  optimization_type(2) = 'target-drag'          ! try to reach cd = 0.0098
-  target_value(2) = 0.0098							 
+  optimization_type(2) = 'target-drag'          ! try to reach target cd = 0.0099
+  target_value(2) = 0.00953							 
 
   op_mode(3) = 'spec-cl'
   op_point(3) = 0.7								! optimize glide ratio at cl= 0.7
-  optimization_type(3) = 'max-glide '               
+  optimization_type(3) = 'max-glide ' 
+  weighting(3) = 0.5  							! ... but this is half important to cd-targets
 /
 
 
@@ -53,5 +55,7 @@
   pso_tol        = 1D-3							! earlier stop when particle swarm hasn't got really better ideas
 /
 
-
+&xfoil_run_options
+   ncrit = 8									! a little more turbulent than default (ncrit=9)
+/
 
