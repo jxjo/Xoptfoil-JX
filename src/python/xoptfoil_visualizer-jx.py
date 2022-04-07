@@ -151,15 +151,17 @@ class Airfoil:
 # returns max y value of y array which could be coordinates, 2nd or 3rd derivative
 #    startfrom - x/c of chord to look at (backend part of airfoil)
 # 
-  def maxAbsyVal (self, y, startFrom):
+  def maxAbsyVal (self, y, startFrom, endAt):
     
     iLE = np.argmin(self.x)
 
-    iEndTop   = iLE - np.searchsorted(np.sort(self.x[0:iLE]), startFrom)
-    iStartBot = iLE + np.searchsorted(self.x[iLE:],  startFrom)
+    iEndTop     = iLE - np.searchsorted(np.sort(self.x[0:iLE]), startFrom)
+    iStartTop   = iLE - np.searchsorted(np.sort(self.x[0:iLE]), endAt)
+    iStartBot   = iLE + np.searchsorted(self.x[iLE:],  startFrom)
+    iEndBot     = iLE + np.searchsorted(self.x[iLE:],  endAt)
 
-    maxTop = np.abs(y[0:iEndTop]).max()
-    maxBot = np.abs(y[iStartBot:]).max()
+    maxTop = np.abs(y[iStartTop:iEndTop]).max()
+    maxBot = np.abs(y[iStartBot:iEndBot]).max()
 
     maxy = max( maxTop, maxBot) 
 
@@ -814,9 +816,9 @@ def plot_airfoil_coordinates(seedfoil, matchfoil, designfoils, plotnum, firsttim
 
     # get max value of the backend part of airfoil and round it to pretty numbers
     if plot_foil:
-      ymax =     foil.maxAbsyVal (    foil.deriv2, 0.15)
+      ymax =     foil.maxAbsyVal (    foil.deriv2, 0.15, 0.995)
     else:
-      ymax = seedfoil.maxAbsyVal (seedfoil.deriv2, 0.15)
+      ymax = seedfoil.maxAbsyVal (seedfoil.deriv2, 0.15, 0.995)
     ymax = round (0.5 + ymax ,0) 
     ymax = max (min (ymax, 10), 1) 
     ax2.set_ylim(ymax, -ymax)
@@ -829,9 +831,9 @@ def plot_airfoil_coordinates(seedfoil, matchfoil, designfoils, plotnum, firsttim
 
     # get max value of the backend part of airfoil and round it to pretty numbers
     if plot_foil:
-      ymax =     foil.maxAbsyVal (    foil.deriv3, 0.15) 
+      ymax =     foil.maxAbsyVal (    foil.deriv3, 0.15,0.995) 
     else:
-      ymax = seedfoil.maxAbsyVal (seedfoil.deriv3, 0.15) 
+      ymax = seedfoil.maxAbsyVal (seedfoil.deriv3, 0.15, 0.995) 
     ymax = round (0.5 + (ymax / 10),0) * 10
     ymax = max (min (ymax, 100), 10) 
     mirrorax2.set_ylim(-ymax, ymax)
