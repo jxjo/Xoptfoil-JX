@@ -63,7 +63,7 @@ subroutine check_inputs(global_search, pso_options)
   elseif (trim(shape_functions) == 'hicks-henne' ) then
     if (.not. curv_spec%check_curvature .and. (.not. match_foils)) then 
       call print_warning ("When using shape function 'hicks-henne', curvature ckecking "// &
-                       "should be switched to avoid bumps.")
+                       "should be switched on to avoid bumps.")
     end if 
   end if 
 
