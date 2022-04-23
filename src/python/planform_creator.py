@@ -903,7 +903,7 @@ class wing:
             element.y = element.y + self.fuselageWidth/2
             element.areaCenterLine = self.area_Center
 
-        self.draw_LE_derivative()
+        #self.draw_LE_derivative() #FIXME Debug-plot
 
         return (LE_derivative_max, hingeDepthPercent_max)
 
@@ -1904,7 +1904,7 @@ def create_blendedArifoils(wingData):
                 # compose XFOIL-worker-call
                 worker_call = xfoilWorkerCall + " -w blend %d -a %s -a2 %s -o %s"\
                         % (blend, leftFoilName, rightFoilName, blendFoilName)
-                #print(worker_call) Debug
+                print(worker_call) #Debug
 
                 # call worker now by system call
                 os.system(worker_call)
