@@ -22,11 +22,7 @@ copy ..\src\python\show_status.py .\Strakmachine_pure\scripts\
 copy ..\src\python\FLZ_Vortex_export.py .\Strakmachine_pure\scripts\
 
 rem copy xoptfoil and xfoil-worker to bin-folder
-del ..\build\xfoil_worker.exe rem probleme mit neuem worker
-copy ..\build\xfoil_worker_old.exe ..\build\xfoil_worker.exe
-copy ..\build\*.exe .\Strakmachine_pure\bin\
-del .\Strakmachine_pure\bin\xfoil_worker_old.exe
-
+copy .\bin\*.exe .\Strakmachine_pure\bin\
 
 rem copy short instruction
 copy ..\doc\Strak_Machine_Short_instruction.pdf .\Strakmachine_pure\
