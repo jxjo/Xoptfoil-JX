@@ -2470,6 +2470,9 @@ class polarData:
 
         # determine actual resoultion of alpha
         actualResolution = round((self.alpha[1] - self.alpha[0]), 10)
+        if (actualResolution < 0.0):
+            ErrorMsg("set_alphaResolution: negative value was determinded for actual resolution")
+            return
 
         # number of increments must be an integer
         num_increments = int(round(actualResolution / newResolution, 0))
@@ -2477,7 +2480,8 @@ class polarData:
         # check number of increments, must be > 1
         if (num_increments <= 1):
             # Error-message and return
-            ErrorMsg("set_alphaResolution: newResolution is less than or equal actual resolution")
+            NoteMsg("set_alphaResolution: newResolution is less than or equal actual resolution")
+            NoteMsg("actual resolution: %f, new resolution: %f" % (actualResolution, newResolution) )
             return
 
         # determine size of an increment
