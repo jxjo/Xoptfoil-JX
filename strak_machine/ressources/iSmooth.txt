@@ -1,0 +1,11 @@
+! Inputs for xfoil-worker  -w smooth
+
+&constraints
+  curv_threshold    = 0.01
+  highlow_threshold = 0.1							 
+/
+
+&smoothing_options
+ do_smoothing 	   = .true.
+ spike_threshold   = 1							 
+/

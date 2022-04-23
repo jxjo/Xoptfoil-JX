@@ -1,0 +1,223 @@
+<explane version="1.0">
+    <Units>
+        <length_unit_to_meter>1</length_unit_to_meter>
+        <mass_unit_to_kg>1</mass_unit_to_kg>
+    </Units>
+    <Plane>
+        <Name>First_F3F</Name>
+        <Description />
+        <Inertia>
+            <Point_Mass>
+                <Tag />
+                <Mass>  0.850</Mass>
+                <coordinates>      0.005,           0,           0</coordinates>
+            </Point_Mass>
+        </Inertia>
+        <has_body>false</has_body>
+        <wing>
+            <Name>Main Wing</Name>
+            <Type>MAINWING</Type>
+            <Color>
+                <red>255</red>
+                <green>255</green>
+                <blue>127</blue>
+                <alpha>255</alpha>
+            </Color>
+            <Description />
+            <Position>          0,           0,           0</Position>
+            <Tilt_angle>  0.100</Tilt_angle>
+            <Symetric>true</Symetric>
+            <isFin>false</isFin>
+            <isDoubleFin>false</isDoubleFin>
+            <isSymFin>false</isSymFin>
+            <Inertia>
+                <Volume_Mass>  1.400</Volume_Mass>
+            </Inertia>
+            <Sections>
+                <Section>
+                    <y_position>0</y_position>
+                    <Chord>0.219</Chord>
+                    <xOffset>0.0</xOffset>
+                    <Dihedral>3.0</Dihedral>
+                    <Twist>  0.000</Twist>
+                    <x_number_of_panels>13</x_number_of_panels>
+                    <x_panel_distribution>COSINE</x_panel_distribution>
+                    <y_number_of_panels>5</y_number_of_panels>
+                    <y_panel_distribution>UNIFORM</y_panel_distribution>
+                    <Left_Side_FoilName>JX-GS-139k.dat</Left_Side_FoilName>
+                    <Right_Side_FoilName>JX-GS-139k.dat</Right_Side_FoilName>
+                </Section>
+            </Sections>
+        <Sections>
+                <Section>
+                    <y_position>0.0175</y_position>
+                    <Chord>0.219</Chord>
+                    <xOffset>0.0</xOffset>
+                    <Dihedral>3.0</Dihedral>
+                    <Twist>  0.000</Twist>
+                    <x_number_of_panels>13</x_number_of_panels>
+                    <x_panel_distribution>COSINE</x_panel_distribution>
+                    <y_number_of_panels>5</y_number_of_panels>
+                    <y_panel_distribution>UNIFORM</y_panel_distribution>
+                    <Left_Side_FoilName>JX-GS-139k.dat</Left_Side_FoilName>
+                    <Right_Side_FoilName>JX-GS-139k.dat</Right_Side_FoilName>
+                </Section>
+            </Sections>
+        <Sections>
+                <Section>
+                    <y_position>0.27215445889031314</y_position>
+                    <Chord>0.21536056578441076</Chord>
+                    <xOffset>0.00029387895781116113</xOffset>
+                    <Dihedral>3.0</Dihedral>
+                    <Twist>  0.000</Twist>
+                    <x_number_of_panels>13</x_number_of_panels>
+                    <x_panel_distribution>COSINE</x_panel_distribution>
+                    <y_number_of_panels>5</y_number_of_panels>
+                    <y_panel_distribution>UNIFORM</y_panel_distribution>
+                    <Left_Side_FoilName>JX-GS-137k.dat</Left_Side_FoilName>
+                    <Right_Side_FoilName>JX-GS-137k.dat</Right_Side_FoilName>
+                </Section>
+            </Sections>
+        <Sections>
+                <Section>
+                    <y_position>0.5241099615455045</y_position>
+                    <Chord>0.2041489885531083</Chord>
+                    <xOffset>0.0046427568044316025</xOffset>
+                    <Dihedral>3.0</Dihedral>
+                    <Twist>  0.000</Twist>
+                    <x_number_of_panels>13</x_number_of_panels>
+                    <x_panel_distribution>COSINE</x_panel_distribution>
+                    <y_number_of_panels>5</y_number_of_panels>
+                    <y_panel_distribution>UNIFORM</y_panel_distribution>
+                    <Left_Side_FoilName>JX-GS-130k.dat</Left_Side_FoilName>
+                    <Right_Side_FoilName>JX-GS-130k.dat</Right_Side_FoilName>
+                </Section>
+            </Sections>
+        <Sections>
+                <Section>
+                    <y_position>0.7700325032045413</y_position>
+                    <Chord>0.18432847090152868</Chord>
+                    <xOffset>0.013247316148330107</xOffset>
+                    <Dihedral>3.0</Dihedral>
+                    <Twist>  0.000</Twist>
+                    <x_number_of_panels>13</x_number_of_panels>
+                    <x_panel_distribution>COSINE</x_panel_distribution>
+                    <y_number_of_panels>5</y_number_of_panels>
+                    <y_panel_distribution>UNIFORM</y_panel_distribution>
+                    <Left_Side_FoilName>JX-GS-117k.dat</Left_Side_FoilName>
+                    <Right_Side_FoilName>JX-GS-117k.dat</Right_Side_FoilName>
+                </Section>
+            </Sections>
+        <Sections>
+                <Section>
+                    <y_position>0.9792809924922176</y_position>
+                    <Chord>0.15754370626483288</Chord>
+                    <xOffset>0.026812898555396397</xOffset>
+                    <Dihedral>3.0</Dihedral>
+                    <Twist>  0.000</Twist>
+                    <x_number_of_panels>13</x_number_of_panels>
+                    <x_panel_distribution>COSINE</x_panel_distribution>
+                    <y_number_of_panels>5</y_number_of_panels>
+                    <y_panel_distribution>UNIFORM</y_panel_distribution>
+                    <Left_Side_FoilName>JX-GS-100k.dat</Left_Side_FoilName>
+                    <Right_Side_FoilName>JX-GS-100k.dat</Right_Side_FoilName>
+                </Section>
+            </Sections>
+        <Sections>
+                <Section>
+                    <y_position>1.1396307452847465</y_position>
+                    <Chord>0.1260278938363935</Chord>
+                    <xOffset>0.04593018402543905</xOffset>
+                    <Dihedral>3.0</Dihedral>
+                    <Twist>  0.000</Twist>
+                    <x_number_of_panels>13</x_number_of_panels>
+                    <x_panel_distribution>COSINE</x_panel_distribution>
+                    <y_number_of_panels>5</y_number_of_panels>
+                    <y_panel_distribution>UNIFORM</y_panel_distribution>
+                    <Left_Side_FoilName>JX-GS-080k.dat</Left_Side_FoilName>
+                    <Right_Side_FoilName>JX-GS-080k.dat</Right_Side_FoilName>
+                </Section>
+            </Sections>
+        <Sections>
+                <Section>
+                    <y_position>1.2415560336934628</y_position>
+                    <Chord>0.09450553896433662</Chord>
+                    <xOffset>0.06810145418309464</xOffset>
+                    <Dihedral>3.0</Dihedral>
+                    <Twist>  0.000</Twist>
+                    <x_number_of_panels>13</x_number_of_panels>
+                    <x_panel_distribution>COSINE</x_panel_distribution>
+                    <y_number_of_panels>5</y_number_of_panels>
+                    <y_panel_distribution>UNIFORM</y_panel_distribution>
+                    <Left_Side_FoilName>JX-GS-060k.dat</Left_Side_FoilName>
+                    <Right_Side_FoilName>JX-GS-060k.dat</Right_Side_FoilName>
+                </Section>
+            </Sections>
+        <Sections>
+                <Section>
+                    <y_position>1.2990279252884087</y_position>
+                    <Chord>0.06300688956115992</Chord>
+                    <xOffset>0.09271545376400432</xOffset>
+                    <Dihedral>3.0</Dihedral>
+                    <Twist>  0.000</Twist>
+                    <x_number_of_panels>13</x_number_of_panels>
+                    <x_panel_distribution>COSINE</x_panel_distribution>
+                    <y_number_of_panels>5</y_number_of_panels>
+                    <y_panel_distribution>UNIFORM</y_panel_distribution>
+                    <Left_Side_FoilName>JX-GS-040k.dat</Left_Side_FoilName>
+                    <Right_Side_FoilName>JX-GS-040k.dat</Right_Side_FoilName>
+                </Section>
+            </Sections>
+        <Sections>
+                <Section>
+                    <y_position>1.3158567112250505</y_position>
+                    <Chord>0.030490768348275105</Chord>
+                    <xOffset>0.12024454319525271</xOffset>
+                    <Dihedral>3.0</Dihedral>
+                    <Twist>  0.000</Twist>
+                    <x_number_of_panels>13</x_number_of_panels>
+                    <x_panel_distribution>COSINE</x_panel_distribution>
+                    <y_number_of_panels>5</y_number_of_panels>
+                    <y_panel_distribution>UNIFORM</y_panel_distribution>
+                    <Left_Side_FoilName>JX-GS-040k.dat</Left_Side_FoilName>
+                    <Right_Side_FoilName>JX-GS-040k.dat</Right_Side_FoilName>
+                </Section>
+            </Sections>
+        </wing>
+        <wing>
+            <Name>Fin</Name>
+            <Type>FIN</Type>
+            <Color>
+                <red>172</red>
+                <green>133</green>
+                <blue>225</blue>
+                <alpha>255</alpha>
+            </Color>
+            <Description />
+            <Position>      0.885,           0,           0</Position>
+            <Tilt_angle>  0.000</Tilt_angle>
+            <Symetric>true</Symetric>
+            <isFin>true</isFin>
+            <isDoubleFin>true</isDoubleFin>
+            <isSymFin>false</isSymFin>
+            <Inertia>
+                <Volume_Mass>  0.085</Volume_Mass>
+            </Inertia>
+            <Sections>
+                <Section>
+                    <y_position>  0.000000</y_position>
+                    <Chord>  0.110000</Chord>
+                    <xOffset>  0.000000</xOffset>
+                    <Dihedral>  40.000000</Dihedral>
+                    <Twist>  0.000</Twist>
+                    <x_number_of_panels>13</x_number_of_panels>
+                    <x_panel_distribution>COSINE</x_panel_distribution>
+                    <y_number_of_panels>5</y_number_of_panels>
+                    <y_panel_distribution>UNIFORM</y_panel_distribution>
+                    <Left_Side_FoilName>Fin_1</Left_Side_FoilName>
+                    <Right_Side_FoilName>Fin_1</Right_Side_FoilName>
+                </Section>
+            </Sections>
+        </wing>
+    </Plane>
+</explane>
