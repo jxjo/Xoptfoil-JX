@@ -63,10 +63,10 @@ progressFileName = "progress.txt"
 csfont = {'fontname':'Segoe Print'}
 
 # number of decimals in the generated input-files
-CL_decimals = 4 # lift
+CL_decimals = 5 # lift
 CD_decimals = 6 # drag
 CL_CD_decimals = 2 # lift/drag
-AL_decimals = 4 # alpha
+AL_decimals = 5 # alpha
 PER_decimals = 6
 
 # fontsizes
@@ -225,6 +225,9 @@ class inputFile:
         operatingConditions = self.values["operating_conditions"]
         operatingConditionsBackup = operatingConditions.copy()
         del(operatingConditions['name'])
+        #FIXME Xoptfoil does not accept dynamic weighting in combination with certain sonstant weighting values anymore (!) --> talk to Jochen
+        del(operatingConditions['weighting'])
+
         self.values["operating_conditions"] = operatingConditions
 
         # write to file
@@ -746,6 +749,7 @@ class inputFile:
     # Set weighting of all op-points according to the parameters
     # 'weightingMode', 'minWeight' and 'maxWeight'
     def set_Weightings(self, params):
+
         # get operating-conditions
         operatingConditions = self.values["operating_conditions"]
         opPoints = operatingConditions["op_point"]
@@ -2315,16 +2319,23 @@ class polarData:
             else:
                 # get all Data-points from this line
                 if parseInDataPoints == 1:
-                    splittedLine = line.split("  ")
-                    self.alpha.append(float(splittedLine[1]))
-                    self.CL.append(float(splittedLine[2]))
-                    self.CD.append(float(splittedLine[3]))
-                    CL_CD = float(splittedLine[2])/float(splittedLine[3])
+                    # split up line detecting white-spaces
+                    splittedLine = line.split(" ")
+                    # remove white-space-elements, build up list of data-points
+                    dataPoints = []
+                    for element in splittedLine:
+                        if element != '':
+                            dataPoints.append(element)
+
+                    self.alpha.append(float(dataPoints[0]))
+                    self.CL.append(float(dataPoints[1]))
+                    self.CD.append(float(dataPoints[2]))
+                    CL_CD = float(dataPoints[1])/float(dataPoints[2])
                     self.CL_CD.append(CL_CD)
-                    self.CDp.append(float(splittedLine[4]))
-                    self.Cm.append(float(splittedLine[5]))
-                    self.Top_Xtr.append(float(splittedLine[6]))
-                    self.Bot_Xtr.append(float(splittedLine[7]))
+                    self.CDp.append(float(dataPoints[3]))
+                    self.Cm.append(float(dataPoints[4]))
+                    self.Top_Xtr.append(float(dataPoints[5]))
+                    self.Bot_Xtr.append(float(dataPoints[6]))
 
         fileHandle.close()
         DoneMsg()
@@ -3996,7 +4007,8 @@ def generate_Polars(params, rootfoilName):
     print("Generating polars for airfoil %s..." % rootfoilName)
 
     # compose polar-dir
-    polarDir = '.' + bs + rootfoilName + '_polars'
+#    polarDir = '.' + bs + rootfoilName + '_polars' #FIXME why did this not work anymore and had to be changed?
+    polarDir = '..' + bs + buildPath + bs + rootfoilName + '_polars'
 
     # create polars, polar-file-Names and input-file-names from Re-Numbers
     for ReIdx in range(len(params.ReNumbers)):
