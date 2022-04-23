@@ -35,7 +35,7 @@ rem copy full reference
 copy ..\doc\Strak_Machine_Reference.pdf .\Strakmachine_pure\doc
 
 rem copy all ressource-files
-xcopy ..\src\python\ressources\*.* .\Strakmachine_pure\ressources\ /Y /E /H /C /I
+xcopy .\ressources\*.* .\Strakmachine_pure\ressources\ /Y /E /H /C /I
 
 rem copy airfoil-library
 xcopy .\airfoil_library\*.* .\Strakmachine_pure\airfoil_library\ /Y /E /H /C /I
