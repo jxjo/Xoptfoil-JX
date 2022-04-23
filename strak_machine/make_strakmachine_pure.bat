@@ -22,7 +22,11 @@ copy ..\src\python\show_status.py .\Strakmachine_pure\scripts\
 copy ..\src\python\FLZ_Vortex_export.py .\Strakmachine_pure\scripts\
 
 rem copy xoptfoil and xfoil-worker to bin-folder
+del ..\build\xfoil_worker.exe rem probleme mit neuem worker
+copy ..\build\xfoil_worker_old.exe ..\build\xfoil_worker.exe
 copy ..\build\*.exe .\Strakmachine_pure\bin\
+del .\Strakmachine_pure\bin\xfoil_worker_old.exe
+
 
 rem copy short instruction
 copy ..\doc\Strak_Machine_Short_instruction.pdf .\Strakmachine_pure\
@@ -36,30 +40,13 @@ xcopy ..\src\python\ressources\*.* .\Strakmachine_pure\ressources\ /Y /E /H /C /
 rem copy airfoil-library
 xcopy .\airfoil_library\*.* .\Strakmachine_pure\airfoil_library\ /Y /E /H /C /I
 
-rem create program calls
+rem delete all batch files
 del .\Strakmachine_pure\*.bat
-echo python .\scripts\strak_machineV2.py >>.\Strakmachine_pure\start_strakmachine.bat
-echo pause >>.\Strakmachine_pure\start_strakmachine.bat
 
-echo python scripts\planform_creator.py -p ressources/planformdata_wing >>.\Strakmachine_pure\create_all_planforms.bat
-echo copy build\planforms\XFLR5_wing.xml ressources\XFLR5_wing.xml >>.\Strakmachine_pure\create_all_planforms.bat
-echo copy build\planforms\FLZ_wing.flz ressources\FLZ_wing.flz >>.\Strakmachine_pure\create_all_planforms.bat
-echo python scripts\planform_creator.py -p ressources/planformdata_tail >>.\Strakmachine_pure\create_all_planforms.bat
-echo pause >>.\Strakmachine_pure\create_all_planforms.bat
-
-echo python scripts/planform_creator.py -p ressources/planformdata_root >>.\Strakmachine_pure\create_root_airfoil.bat
-echo copy build\airfoils\JX-GS-139k.dat airfoil_library\F3F\JX\JX-GS\JX-GS-14.dat >>.\Strakmachine_pure\create_root_airfoil.bat
-echo pause >>.\Strakmachine_pure\create_root_airfoil.bat
-
-echo python scripts\planform_creator.py -p ressources/planformdata_tail>>.\Strakmachine_pure\create_tail_planform.bat
-echo pause >>.\Strakmachine_pure\create_tail_planform.bat
-
-echo python scripts\planform_creator.py -p ressources/planformdata_wing >>.\Strakmachine_pure\create_wing_planform.bat
-echo copy build\planforms\XFLR5_wing.xml ressources\XFLR5_wing.xml >>.\Strakmachine_pure\create_wing_planform.bat
-echo copy build\planforms\FLZ_wing.flz ressources\FLZ_wing.flz >>.\Strakmachine_pure\create_wing_planform.bat
-echo pause >>.\Strakmachine_pure\create_wing_planform.bat
-
-echo pythonw  .\scripts\show_status.py >>.\Strakmachine_pure\show_status.bat
+rem copy batch files
+xcopy .\batch_files\*.* .\Strakmachine_pure\ /Y /E /H /C /I
 
 rem create zip-archive
 rem 7z a .\Strakmachine_pure\ Strakmachine_pure_1_1.zip
+
+pause
