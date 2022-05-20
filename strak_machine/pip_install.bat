@@ -1,6 +1,8 @@
-pip install bezier
-pip install colorama
-pip install termcolor
-pip install f90nml
-pip install scipy
+rem pip3 install bezier
+pip3 install colorama
+pip3 install termcolor
+pip3 install f90nml
+pip3 install scipy
+pip3 install matplotlib
+pip3 install customtkinter
 pause
