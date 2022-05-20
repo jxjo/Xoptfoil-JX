@@ -56,7 +56,7 @@ from strak_machineV2 import (copyAndSmooth_Airfoil, get_ReString,
 from colorama import init
 from termcolor import colored
 from FLZ_Vortex_export import export_toFLZ
-import bezier
+#import bezier FIXME BEZIER
 
 
 
@@ -231,52 +231,52 @@ def objective_elliptical(x, normalizedTipChord, tipSharpness,
     return y
 
 
-def objective_bezier_wrapper(values, b1_x, b1_y, b2_x, b2_y, b3_x, b3_y, b4_x, b4_y, b5_x, b5_y):
-    result = []
-
-    for x in values:
-        y = objective_bezier(x, b1_x, b1_y, b2_x, b2_y, b3_x, b3_y, b4_x, b4_y, b5_x, b5_y)
-
-        result.append(y)
-
-    return (result)
-
-
-def objective_bezier(x, b1_x, b1_y, b2_x, b2_y, b3_x, b3_y, b4_x, b4_y, b5_x, b5_y):
-
-    nodes = np.asfortranarray([
-    [0.0, b1_x, b2_x, b3_x, b4_x, b5_x, 1.0],
-    [1.0, b1_y, b2_y, b3_y, b4_y, b5_y, 0.0],
-    ])
-
-
-    deg = len(nodes[0])-1
-
-    curve = bezier.Curve(nodes, degree=deg)
-
-    result = curve.evaluate(b1_x)
-    if b1_y < result[1][0] :
-        return -1
-
-    result = curve.evaluate(b2_x)
-    if b2_y < result[1][0] :
-        return -1
-
-    result = curve.evaluate(b3_x)
-    if b3_y < result[1][0] :
-        return -1
-
-    result = curve.evaluate(b4_x)
-    if b4_y < result[1][0] :
-        return -1
-
-    result = curve.evaluate(b5_x)
-    if b5_y < result[1][0] :
-        return -1
-
-    result = curve.evaluate(x)
-    y = result[1][0]
-    return y
+##def objective_bezier_wrapper(values, b1_x, b1_y, b2_x, b2_y, b3_x, b3_y, b4_x, b4_y, b5_x, b5_y):
+##    result = []
+##
+##    for x in values:
+##        y = objective_bezier(x, b1_x, b1_y, b2_x, b2_y, b3_x, b3_y, b4_x, b4_y, b5_x, b5_y)
+##
+##        result.append(y)
+##
+##    return (result)
+##
+##
+##def objective_bezier(x, b1_x, b1_y, b2_x, b2_y, b3_x, b3_y, b4_x, b4_y, b5_x, b5_y):
+##
+##    nodes = np.asfortranarray([
+##    [0.0, b1_x, b2_x, b3_x, b4_x, b5_x, 1.0],
+##    [1.0, b1_y, b2_y, b3_y, b4_y, b5_y, 0.0],
+##    ])
+##
+##
+##    deg = len(nodes[0])-1
+##
+##    curve = bezier.Curve(nodes, degree=deg)
+##
+##    result = curve.evaluate(b1_x)
+##    if b1_y < result[1][0] :
+##        return -1
+##
+##    result = curve.evaluate(b2_x)
+##    if b2_y < result[1][0] :
+##        return -1
+##
+##    result = curve.evaluate(b3_x)
+##    if b3_y < result[1][0] :
+##        return -1
+##
+##    result = curve.evaluate(b4_x)
+##    if b4_y < result[1][0] :
+##        return -1
+##
+##    result = curve.evaluate(b5_x)
+##    if b5_y < result[1][0] :
+##        return -1
+##
+##    result = curve.evaluate(x)
+##    y = result[1][0]
+##    return y
 
 ################################################################################
 #
@@ -730,19 +730,19 @@ class wing:
         # In case of curve fitting, determine the optimum parameters
         # automatically
         if self.planformShape == 'curve_fitting':
-            if self.use_bezier:
-                # curve fitting with objective function
-                guess = (0.6,1.0,  0.5,1.0,  0.7,0.8,  0.9,0.5,  0.95,0.4)
-                popt, _ = curve_fit(objective_bezier_wrapper, self.planform_chord, self.planform_y, p0=guess)
-                b1_x, b1_y, b2_x, b2_y, b3_x, b3_y, b4_x, b4_y, b5_x, b5_y = popt
-
-                # store bezier control points
-                self.bezier_x = (b1_x, b2_x, b3_x, b4_x, b5_x)
-                self.bezier_y = (b1_y, b2_y, b3_y, b4_y, b5_y)
-            else:
-                guess = (0.18, 0.1, 0.005)
-                popt, _ = curve_fit(objective_elliptical_wrapper, self.planform_chord, self.planform_y, p0=guess, bounds=(0.0, 100.0))
-                normalizedTipChord, self.tipSharpness, self.leadingEdgeCorrection = popt
+##            if self.use_bezier: FIXME BEZIER
+##                # curve fitting with objective function
+##                guess = (0.6,1.0,  0.5,1.0,  0.7,0.8,  0.9,0.5,  0.95,0.4)
+##                popt, _ = curve_fit(objective_bezier_wrapper, self.planform_chord, self.planform_y, p0=guess)
+##                b1_x, b1_y, b2_x, b2_y, b3_x, b3_y, b4_x, b4_y, b5_x, b5_y = popt
+##
+##                # store bezier control points
+##                self.bezier_x = (b1_x, b2_x, b3_x, b4_x, b5_x)
+##                self.bezier_y = (b1_y, b2_y, b3_y, b4_y, b5_y)
+            #else:
+            guess = (0.18, 0.1, 0.005)
+            popt, _ = curve_fit(objective_elliptical_wrapper, self.planform_chord, self.planform_y, p0=guess, bounds=(0.0, 100.0))
+            normalizedTipChord, self.tipSharpness, self.leadingEdgeCorrection = popt
 
         # calculate all Grid-chords
         for i in range(1, (self.numberOfGridChords + 1)):
@@ -764,11 +764,11 @@ class wing:
                                 self.tipSharpness, self.leadingEdgeCorrection)
 
             elif(self.planformShape == 'curve_fitting'):
-                if self.use_bezier:
-                    # curve fitting algorithm with bezier
-                    grid.chord = objective_bezier(grid.y, b1_x, b1_y, b2_x, b2_y, b3_x, b3_y, b4_x, b4_y, b5_x, b5_y)
-                else:
-                    grid.chord = objective_elliptical(grid.y, normalizedTipChord,
+##                if self.use_bezier: FIXME BEZIER
+##                    # curve fitting algorithm with bezier
+##                    grid.chord = objective_bezier(grid.y, b1_x, b1_y, b2_x, b2_y, b3_x, b3_y, b4_x, b4_y, b5_x, b5_y)
+##                else:
+                grid.chord = objective_elliptical(grid.y, normalizedTipChord,
                                 self.tipSharpness, self.leadingEdgeCorrection)
 
             elif self.planformShape == 'trapezoidal':
@@ -1574,9 +1574,9 @@ class wing:
             plt.scatter(self.planform_chord, self.planform_y, color=cl_normalizedChord,
             label = "planform points points")
 
-            if self.use_bezier:
-                 plt.scatter(self.bezier_x, self.bezier_y, color=cl_controlPoints,
-                 label = "control points")
+##            if self.use_bezier:FIXME BEZIER
+##                 plt.scatter(self.bezier_x, self.bezier_y, color=cl_controlPoints,
+##                 label = "control points")
 
         plt.title("Normalized chord distribution")
         plt.legend(loc='lower right', fontsize = fs_legend)
