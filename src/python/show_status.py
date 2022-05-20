@@ -17,6 +17,7 @@ import winsound
 
 # importing tkinter module
 import tkinter as tk
+import customtkinter as ctk
 
 from tkinter import Tk
 from tkinter.ttk import Progressbar, Style, Button
@@ -75,8 +76,11 @@ class show_status():
         # set name of the progressFile
         self.progressFileName = progressFileName
 
+        ctk.set_appearance_mode("Dark")  # Modes: "System" (standard), "Dark", "Light"
+        ctk.set_default_color_theme("blue")  # Themes: "blue" (standard), "green", "dark-blue"
+
         # creating tkinter window
-        self.root = Tk()
+        self.root = ctk.CTk()
         self.root.title('The Strak Machine V1.1')
 
         # Same size will be defined in variable for center screen in Tk_Width and Tk_height
@@ -142,8 +146,8 @@ class show_status():
 
         # change the text of the progressbar,
         # the trailing spaces are here to properly center the text
-        self.s_main.configure("MainProgressbar", text="0 %      ", background = 'green2')
-        self.s_sub.configure("SubProgressbar", text="0 %      ", background = 'green2')
+        self.s_main.configure("MainProgressbar", text="0 %      ", background = "DeepSkyBlue")
+        self.s_sub.configure("SubProgressbar", text="0 %      ", background = 'DeepSkyBlue')
 
         # create a scrollbar
         scrollbar = tk.Scrollbar(self.root)
@@ -155,7 +159,7 @@ class show_status():
         scrollbar.config( command = self.progressLog.yview )
 
         # This button will start the visualizer
-        Button(self.root, text = 'Start Visualizer', command = self.start_visualizer).pack(pady = 10)
+        ctk.CTkButton(self.root, text = 'Start Visualizer', command = self.start_visualizer).pack(pady = 10)
 
         # This button will Quit the application
         #Button(self.root, text = 'Quit', command = self.quit).pack(pady = 10)

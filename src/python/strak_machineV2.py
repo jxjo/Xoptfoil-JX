@@ -74,7 +74,7 @@ fs_infotext = 9
 fs_legend = 8
 
 # colours
-cl_infotext = 'aqua'
+cl_infotext = 'DeepSkyBlue'
 cl_polar_change = 'orange'
 cl_T1_polar = 'g'
 cl_T2_polar = 'b'
