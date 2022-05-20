@@ -87,7 +87,8 @@ lw_targetPolar = 0.6
 ls_strakPolar = 'dashdot'
 lw_strakPolar  = 0.4
 
-
+# global variables for gui-interface
+gGraph = None
 ################################################################################
 #
 # helper functions to put colored messages
@@ -1240,6 +1241,7 @@ class strakData:
         self.alpha_Resolution = 0.001
         self.optimizationPasses = 3
         self.allGraphs = True
+        self.activeSubplot = 0
         self.scriptsAsExe = False
         self.generateBatch = True
         self.xmlFileName = None
@@ -1358,7 +1360,7 @@ class strakData:
         self.xfoilWorkerCall = exeCallString + xfoilWorkerName + '.exe'
         self.xoptfoilCall = exeCallString + xoptfoilName + '.exe'
 
-        if (params.scriptsAsExe):
+        if (self.scriptsAsExe):
             self.strakMachineCall = exeCallString + strakMachineName + '.exe'
             self.xoptfoilVisualizerCall = exeCallString + xoptfoilVisualizerName + '.exe'
             self.airfoilComparisonCall = exeCallString + airfoilComparisonName + '.exe'
@@ -1427,7 +1429,7 @@ class strakData:
         for idx in range(num):
             # get polar
             polar = self.merged_polars[idx]
-            shifted_root_polar = params.shifted_rootPolars[idx]
+            shifted_root_polar = self.shifted_rootPolars[idx]
 
             # get gain and loss values
             if (polar == rootPolar):
@@ -2118,29 +2120,29 @@ class polarGraph:
                 ax.plot(x, y, style, linestyle = ls_targetPolar,
                         linewidth = linewidth, label = label)
 
-        # plot strak-polars
-        if params.plotStrakPolars:
-            strakPolars = params.strak_polars
-            numPolars = len(strakPolars)
-
-            for i in range(numPolars):
-                # set style
-                style = "r-"
-
-                x = strakPolars[i].CL
-                y = strakPolars[i].CL_CD
-
-                # set label only for one of the strak-polars tp avoid multiple
-                # labels that are all the same
-                if (i == 0):
-                    label = 'polar of previous strak-airfoil'
-                else:
-                    label = None
-
-                ax.plot(x, y, style, linestyle = ls_strakPolar,
-                                linewidth = lw_strakPolar, label = label)
-
-                ax.legend(loc='upper left', fontsize = fs_legend)
+##        # plot strak-polars #FIXME commented out for testing purposes
+##        if params.plotStrakPolars:
+##            strakPolars = params.strak_polars
+##            numPolars = len(strakPolars)
+##
+##            for i in range(numPolars):
+##                # set style
+##                style = "r-"
+##
+##                x = strakPolars[i].CL
+##                y = strakPolars[i].CL_CD
+##
+##                # set label only for one of the strak-polars tp avoid multiple
+##                # labels that are all the same
+##                if (i == 0):
+##                    label = 'polar of previous strak-airfoil'
+##                else:
+##                    label = None
+##
+##                ax.plot(x, y, style, linestyle = ls_strakPolar,
+##                                linewidth = lw_strakPolar, label = label)
+##
+##                ax.legend(loc='upper left', fontsize = fs_legend)
 
 
     # draw the graph
@@ -2170,7 +2172,7 @@ class polarGraph:
         if (params.allGraphs == True):
             fig, (upper,lower) = plt.subplots(2,2)
         else:
-            fig, upper = plt.subplots(1)
+            fig, upper = plt.subplots(params.activeSubplot)
 
         # compose diagram-title
         text = ("Analysis of airfoil \"%s\"\n" % airfoilName)
@@ -4293,6 +4295,88 @@ def merge_Polars(polarFile_1, polarFile_2 , mergedPolarFile, mergeCL):
     except:
         ErrorMsg("polarfile \'%s\' could not be generated" % mergedPolarFile)
         sys.exit(-1)
+
+class strak_machine:
+    def __init__(self, strakDataFileName):
+        self.graph = None
+        # try to open .json-file
+        try:
+            strakDataFile = open(strakDataFileName)
+        except:
+            ErrorMsg('failed to open file %s' % strakDataFileName)
+            sys.exit(-1)
+
+        # load dictionary from .json-file
+        try:
+            strakdata = load(strakDataFile)
+            strakDataFile.close()
+        except:
+            ErrorMsg('failed to read data from file %s' % strakDataFileName)
+            strakDataFile.close()
+            sys.exit(-1)
+
+        # get strak-machine-parameters from dictionary
+        self.params = get_Parameters(strakdata)
+
+          # calculate further values like max Re-numbers etc., also setup
+        # calls of further tools like xoptfoil
+        self.params.calculate_DependendValues()
+
+        # get current working dir
+        self.params.workingDir = getcwd()
+
+        # check if output-folder exists. If not, create folder.
+        if not path.exists(buildPath):
+            makedirs(buildPath)
+
+        # check if airfoil-folder exists. If not, create folder.
+        if not path.exists(buildPath + bs + airfoilPath):
+            makedirs(buildPath + bs + airfoilPath)
+
+        # change working-directory to output-directory
+        chdir(self.params.workingDir + bs + buildPath)
+
+        # get current working dir again
+        self.params.buildDir = getcwd()
+
+        rootfoilName = generate_rootfoil(self.params)
+        # copy root-foil to airfoil-folder, as it can be used
+        # as the root airfoil without optimization
+        systemString = ("copy %s %s" + bs + "%s\n\n") % \
+        (rootfoilName +'.dat', airfoilPath, rootfoilName + '.dat')
+        system(systemString)
+
+        # generate polars of root-airfoil, also analyze
+        generate_Polars(self.params, rootfoilName)
+
+        # import polars of strak-airfoils, if they exist
+        import_strakPolars(self.params)
+
+        # calculate target-values for the main op-points
+        self.params.calculate_MainTargetValues()
+
+        # generate input-Files
+        generate_InputFiles(self.params)
+
+        # generate target polars and write to file
+        generate_TargetPolars(self.params)
+
+        # generate Xoptfoil command-lines
+        commandlines = generate_Commandlines(self.params)
+
+        # change working-directory
+        chdir(".." + bs)
+
+        # create an instance of polar graph
+        self.graph = polarGraph()
+
+    def show_diagram(self, diagramType):
+        # set subplot
+        self.params.allGraphs = False
+        self.params.activeSubplot = diagramType
+
+        # draw the graph
+        self.graph.draw(self.params)
 
 ################################################################################
 # Main program

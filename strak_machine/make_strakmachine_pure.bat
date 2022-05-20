@@ -15,6 +15,7 @@ rem copy all script-files to strakmachine pure
 rem use copy to create exe-files
 copy ..\src\python\planform_creator.py .\Strakmachine_pure\scripts\
 copy ..\src\python\strak_machineV2.py .\Strakmachine_pure\scripts\
+copy ..\src\python\strak_machine_gui.py .\Strakmachine_pure\scripts\
 copy ..\src\python\xoptfoil_visualizer-jx.py .\Strakmachine_pure\scripts\
 copy ..\src\python\best_airfoil.py .\Strakmachine_pure\scripts\
 copy ..\src\python\change_airfoilname.py .\Strakmachine_pure\scripts\

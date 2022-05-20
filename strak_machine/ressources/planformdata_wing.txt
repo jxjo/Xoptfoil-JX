@@ -1,5 +1,5 @@
 {
- "theme": "black_white",
+ "theme": "default",
  "XFLR5_inFileName": "plane_template.xml",
  "XFLR5_outFileName": "XFLR5_wing.xml",
  "FLZVortex_inFileName" : "plane_template.flz",
