@@ -2326,16 +2326,31 @@ class polarData:
                     for element in splittedLine:
                         if element != '':
                             dataPoints.append(element)
+                    # get data points
+                    alpha = (float(dataPoints[0]))
+                    CL = float(dataPoints[1])
+                    CD = float(dataPoints[2])
+                    CDp = float(dataPoints[3])
+                    Cm = float(dataPoints[4])
+                    Top_Xtr = float(dataPoints[5])
+                    Bot_Xtr = float(dataPoints[6])
 
-                    self.alpha.append(float(dataPoints[0]))
-                    self.CL.append(float(dataPoints[1]))
-                    self.CD.append(float(dataPoints[2]))
-                    CL_CD = float(dataPoints[1])/float(dataPoints[2])
-                    self.CL_CD.append(CL_CD)
-                    self.CDp.append(float(dataPoints[3]))
-                    self.Cm.append(float(dataPoints[4]))
-                    self.Top_Xtr.append(float(dataPoints[5]))
-                    self.Bot_Xtr.append(float(dataPoints[6]))
+                    # determine index where to insert new data points
+                    idx = 0
+                    for element in self.alpha:
+                        if alpha < element:
+                            break
+                        else:
+                            idx = idx + 1
+
+                    self.alpha.insert(idx, alpha)
+                    self.CL.insert(idx, CL)
+                    self.CD.insert(idx, CD)
+                    self.CL_CD.insert(idx, CL/CD)
+                    self.CDp.insert(idx, CDp)
+                    self.Cm.insert(idx, Cm)
+                    self.Top_Xtr.insert(idx, Top_Xtr)
+                    self.Bot_Xtr.insert(idx, Bot_Xtr)
 
         fileHandle.close()
         DoneMsg()
