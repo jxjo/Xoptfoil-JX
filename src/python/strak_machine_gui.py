@@ -1,10 +1,19 @@
-import tkinter
+import tkinter as tk
 import tkinter.messagebox
 import customtkinter
 import strak_machineV2
+from colorama import init
 
-customtkinter.set_appearance_mode("dark")      # Modes: "System" (standard), "Dark", "Light"
-customtkinter.set_default_color_theme("blue")  # Themes: "blue" (standard), "green", "dark-blue"
+# imports to use matplotlib together with tkinter
+import matplotlib.pyplot as plt
+from matplotlib.backends.backend_tkagg import (
+    FigureCanvasTkAgg, NavigationToolbar2Tk)
+from matplotlib.figure import Figure
+
+# some global variables
+num_linearFactors = 5
+num_shiftValues = 2
+num_gainValues = 6
 
 class linearFactor():
     def __init__(self, idx):
@@ -14,6 +23,9 @@ class linearFactor():
     def set(self, value):
         self.linearFactor = value
         print("LinearFactor %d: %f\n" %(self.idx, self.linearFactor))
+
+    def init(self, initDict):
+        self.set(0.2) #FIXME get value from dictionary
 
 class shift():
     def __init__(self, idx):
@@ -36,143 +48,187 @@ class gain():
         self.gain = value
         print("gain %d: %f\n" %(self.idx, self.gain))
 
+
+# class control frame, change the input-variables / parameters of the
+# strak machine
+class control_frame():
+    def __init__(self, master, side, buttonCommands, sliderCommands):
+        self.frame = customtkinter.CTkFrame(master=master, width=180,
+                                            corner_radius=0)
+        # init nextRow (where to place next widget)
+        self.nextRow = 1
+
+        # add different widgets
+        self.add_label()
+        self.add_buttons(buttonCommands)
+        self.add_sliders(sliderCommands)
+
+        # show frame
+        self.frame.pack(side = side, fill=tk.BOTH, expand=1)
+
+    def place_widget(self, widget):
+        widget.grid(row=self.nextRow, column=0, pady=10, padx=10)
+        self.nextRow = self.nextRow + 1
+
+    def add_label(self):
+        # Label
+        label = customtkinter.CTkLabel(master=self.frame,
+                                              text="Select diagram",
+                                              text_font=("Roboto Medium", -16))
+        self.place_widget(label)
+
+    def add_buttons(self, buttonCommands):
+        for element in buttonCommands:
+            text = element["txt"]
+            command = element["cmd"]
+
+            # create new button
+            button = customtkinter.CTkButton(master=self.frame,
+                                                text=text,
+                                                fg_color=("gray75", "gray30"),
+                                                command=command)
+            # place button
+            self.place_widget(button)
+
+    def add_sliders(self, sliderCommands):
+        for element in sliderCommands:
+            command = element #FIXME
+
+            # create new slider
+            slider = customtkinter.CTkSlider(master=self.frame,
+                                                command=command)
+
+            # place slider
+            self.place_widget(slider)
+
+    def add_blankRow(self):
+        self.nextRow = self.nextRow + 1
+
+
+# class diagram frame, shows the graphical output of the strak machine
+class diagram_frame():
+    def __init__(self, master, side, strak_machine):
+        # store strak machine instance locally
+        self.strak_machine = strak_machine
+
+        # create new frame
+        self.frame = customtkinter.CTkFrame(master=master, width=180,
+                                            corner_radius=0)
+        # show up frame
+        self.frame.pack(side = side, fill=tk.BOTH, expand=1)
+
+        # set 'dark' style
+        plt.style.use('dark_background')
+
+        # new figure
+        fig = Figure(figsize=(12, 4), dpi=100)
+        self.ax = fig.add_subplot()
+
+        # initial diagram
+        self.strak_machine.plot_diagram(1, self.ax)
+
+        # canvas
+        self.canvas = FigureCanvasTkAgg(fig, self.frame)
+        self.canvas._tkcanvas.pack(fill=tk.BOTH, expand=1)
+
+        # Toolbar of Matplotlib
+        self.toolbar = NavigationToolbar2Tk(self.canvas, self.frame)
+        self.toolbar.update()
+
+    def update(self, diagramType):
+        self.ax.clear()
+        self.strak_machine.plot_diagram(diagramType, self.ax)
+        self.canvas.draw()
+
 class App(customtkinter.CTk):
-
-    WIDTH = 1366
-    HEIGHT = 768
-
-    def __init__(self):
+    def __init__(self, strak_machine):
         super().__init__()
 
-        self.title("The Strak machine")
-        self.geometry(f"{App.WIDTH}x{App.HEIGHT}")
+        # configure customtkinter
+        customtkinter.set_appearance_mode("dark")     # Modes: "System" (standard), "Dark", "Light"
+        customtkinter.set_default_color_theme("blue") # Themes: "blue" (standard), "green", "dark-blue"
 
-        # Maximize the window using state property
+        # store strak_machine instance locally
+        self.strak_machine = strak_machine
+
+        # set window title
+        self.title("The Strak machine")
+
+        # maximize the window using state property
         self.state('zoomed')
 
         # call .on_closing() when app gets closed
         self.protocol("WM_DELETE_WINDOW", self.on_closing)
 
-        customtkinter.set_appearance_mode("dark")
-        # ============ create two frames ============
+        # create Variables and commands
+        self.create_inputVariables()
+        self.init_inputVariables(None)#FIXME dictionary
+        self.create_ButtonCommands()
+        self.create_SliderCommands()
 
-        # configure grid layout (2x1)
-        self.grid_columnconfigure(1, weight=1)
-        self.grid_rowconfigure(0, weight=1)
+        # create two frames
+        self.frame_left = control_frame(self.master, tk.LEFT,
+                                   self.buttonCommands, self.sliderCommands)
 
-        self.frame_left = customtkinter.CTkFrame(master=self,
-                                                 width=180,
-                                                 corner_radius=0)
-        self.frame_left.grid(row=0, column=0, sticky="nswe")
+        self.frame_right = diagram_frame(self.master, tk.RIGHT, self.strak_machine)
+
+
+    def create_ButtonCommands(self):
+        self.buttonCommands = []
+        self.buttonCommands.append({"txt": "x=CD, y=CL", "cmd" : self.set_CL_CD_diagram})
+        self.buttonCommands.append({"txt": "x=alpha, y=CL", "cmd" : self.set_CL_alpha_diagram})
+        self.buttonCommands.append({"txt": "x=CL, y=CL/CD", "cmd" : self.set_CLCD_CL_diagram})
+
+    def create_SliderCommands(self):
+        global num_linearFactors
+        global num_shiftValues
+        global num_gainValues
+
+        self.sliderCommands = []
+
+        for idx in range(num_linearFactors):
+            variable = self.linearFactors[idx]
+            self.sliderCommands.append(variable.set)
+
+        for idx in range(num_shiftValues):
+            variable = self.shiftValues[idx]
+            self.sliderCommands.append(variable.set)
+
+        for idx in range(num_gainValues):
+            variable = self.gainValues[idx]
+            self.sliderCommands.append(variable.set)
+
+    def create_inputVariables(self):
+        global num_linearFactors
+        global num_shiftValues
+        global num_gainValues
 
         # add some input-variables
-        self.linearFactor_1 = linearFactor(1) # slider 1
-        self.linearFactor_2 = linearFactor(2) # slider 2
-        self.linearFactor_3 = linearFactor(3) # slider 3
-        self.linearFactor_4 = linearFactor(4) # slider 4
-        self.linearFactor_5 = linearFactor(5) # slider 5
-        self.gain_1 = gain(1)                 # slider 6
-        self.gain_2 = gain(2)                 # slider 7
-        self.gain_3 = gain(3)                 # slider 8
-        self.gain_4 = gain(4)                 # slider 9
-        self.gain_5 = gain(5)                 # slider 10
-        self.gain_6 = gain(6)                 # slider 11
-        self.shift_1 = shift(1)               # slider 12
-        self.shift_2 = shift(2)               # slider 13
+        self.linearFactors = []
+        for idx in range(num_linearFactors):
+            self.linearFactors.append(linearFactor(idx))
 
+        self.shiftValues = []
+        for idx in range(num_shiftValues):
+            self.shiftValues.append(shift(idx))
 
-        self.frame_right = customtkinter.CTkFrame(master=self)
-        self.frame_right.grid(row=0, column=1, sticky="nswe", padx=20, pady=20)
+        self.gainValues = []
+        for idx in range(num_gainValues):
+            self.gainValues.append(gain(idx))
 
-        # ============ frame_left ============
-        # Label
-        self.label_1 = customtkinter.CTkLabel(master=self.frame_left,
-                                              text="Select diagram",
-                                              text_font=("Roboto Medium", -16))
-
-##        self.label_2 = customtkinter.CTkLabel(master=self.frame_left,
-##                                            text="Change polar shape",
-##                                            text_font=("Roboto Medium", -16))
-
-        # Buttons to select diagram
-        self.button_1 = customtkinter.CTkButton(master=self.frame_left,
-                                                text="x=CD  y=CL",
-                                                fg_color=("gray75", "gray30"),
-                                                command=self.set_CL_CD_diagram)
-        self.button_2 = customtkinter.CTkButton(master=self.frame_left,
-                                                text="x=alpha  y=CL",
-                                                fg_color=("gray75", "gray30"),
-                                                command=self.set_CL_alpha_diagram)
-        self.button_3 = customtkinter.CTkButton(master=self.frame_left,
-                                                text="x=CL  y=CL/CD",
-                                                fg_color=("gray75", "gray30"),
-                                                command=self.set_CLCD_CL_diagram)
-
-       # Sliders to change target polar shape
-        self.slider_1 = customtkinter.CTkSlider(master=self.frame_left,
-                                                command=self.linearFactor_1.set)
-        self.slider_2 = customtkinter.CTkSlider(master=self.frame_left,
-                                                command=self.linearFactor_2.set)
-        self.slider_3 = customtkinter.CTkSlider(master=self.frame_left,
-                                                command=self.linearFactor_3.set)
-        self.slider_4 = customtkinter.CTkSlider(master=self.frame_left,
-                                                command=self.linearFactor_4.set)
-        self.slider_5 = customtkinter.CTkSlider(master=self.frame_left,
-                                                command=self.linearFactor_5.set)
-        self.slider_6 = customtkinter.CTkSlider(master=self.frame_left,
-                                                command=self.gain_1.set)
-        self.slider_7 = customtkinter.CTkSlider(master=self.frame_left,
-                                                command=self.gain_2.set)
-        self.slider_8 = customtkinter.CTkSlider(master=self.frame_left,
-                                                command=self.gain_3.set)
-        self.slider_9 = customtkinter.CTkSlider(master=self.frame_left,
-                                                command=self.gain_4.set)
-        self.slider_10 = customtkinter.CTkSlider(master=self.frame_left,
-                                                command=self.gain_5.set)
-        self.slider_11 = customtkinter.CTkSlider(master=self.frame_left,
-                                                command=self.gain_6.set)
-        self.slider_12 = customtkinter.CTkSlider(master=self.frame_left,
-                                                command=self.shift_1.set)
-        self.slider_13 = customtkinter.CTkSlider(master=self.frame_left,
-                                                command=self.shift_2.set)
-
-
-
-        # Place the elements in he frame
-        self.label_1.grid(row=1, column=0, pady=10, padx=10)
-        self.button_1.grid(row=2, column=0, pady=10, padx=20)
-        self.button_2.grid(row=3, column=0, pady=10, padx=20)
-        self.button_3.grid(row=4, column=0, pady=10, padx=20)
-##        self.label_2.grid(row=1, column=0, pady=10, padx=10)
-        self.slider_1.grid(row=5, column=0, pady=10, padx=20, sticky="we")
-        self.slider_2.grid(row=6, column=0, pady=10, padx=20, sticky="we")
-        self.slider_3.grid(row=7, column=0, pady=10, padx=20, sticky="we")
-        self.slider_4.grid(row=8, column=0, pady=10, padx=20, sticky="we")
-        self.slider_5.grid(row=9, column=0, pady=10, padx=20, sticky="we")
-        self.slider_6.grid(row=10, column=0, pady=10, padx=20, sticky="we")
-        self.slider_7.grid(row=11, column=0, pady=10, padx=20, sticky="we")
-        self.slider_8.grid(row=12, column=0, pady=10, padx=20, sticky="we")
-        self.slider_9.grid(row=13, column=0, pady=10, padx=20, sticky="we")
-        self.slider_10.grid(row=14, column=0, pady=10, padx=20, sticky="we")
-        self.slider_11.grid(row=15, column=0, pady=10, padx=20, sticky="we")
-        self.slider_12.grid(row=16, column=0, pady=10, padx=20, sticky="we")
-        self.slider_13.grid(row=17, column=0, pady=10, padx=20, sticky="we")
-
-        # ============ frame_right ============
-        self.slider_1.set(0.2)
-
-        # init strakmachine
-        self.myStrakmachine = strak_machineV2.strak_machine("ressources//strakdata.txt")
-
+    def init_inputVariables(self, init_dict):
+        # init variables from dictionary
+        for variable in self.linearFactors:
+            variable.init(init_dict)
 
     def set_CL_CD_diagram(self):
-        self.myStrakmachine.show_diagram(1)
+        self.frame_right.update(1)
 
     def set_CL_alpha_diagram(self):
-        self.myStrakmachine.show_diagram(2)
+        self.frame_right.update(2)
 
     def set_CLCD_CL_diagram(self):
-        self.myStrakmachine.show_diagram(3)
+        self.frame_right.update(3)
 
     def on_closing(self, event=0):
         self.destroy()
@@ -182,5 +238,17 @@ class App(customtkinter.CTk):
 
 
 if __name__ == "__main__":
-    app = App()
+    # init colorama
+    init()
+
+     # init strakmachine
+    strak_machineV2.NoteMsg("Starting Strak Machine...")
+    try:
+        myStrakmachine = strak_machineV2.strak_machine("ressources//strakdata.txt")
+    except:
+        strak_machineV2.ErrorMsg("Strak Machine could not be started")
+        myStrakmachine = None
+
+    strak_machineV2.NoteMsg("Starting Graphical User Interface...")
+    app = App(myStrakmachine)
     app.start()
