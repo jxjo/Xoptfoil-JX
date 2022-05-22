@@ -1443,14 +1443,14 @@ class strakData:
                 maxGlideShift = 0.0
                 maxLiftGain = 0.0
             else:
-                minCLGain = params.minCLGain[idx]
-                CL0Gain = params.CL0Gain[idx]
-                maxSpeedGain = params.maxSpeedGain[idx]
-                maxSpeedShift = params.maxSpeedShift[idx]
-                preMaxSpeedGain = params.preMaxSpeedGain[idx]
-                maxGlideGain = params.maxGlideGain[idx]
-                maxGlideShift = params.maxGlideShift[idx]
-                maxLiftGain = params.maxLiftGain[idx]
+                minCLGain = self.minCLGain[idx]#params
+                CL0Gain = self.CL0Gain[idx]
+                maxSpeedGain = self.maxSpeedGain[idx]
+                maxSpeedShift = self.maxSpeedShift[idx]
+                preMaxSpeedGain = self.preMaxSpeedGain[idx]
+                maxGlideGain = self.maxGlideGain[idx]
+                maxGlideShift = self.maxGlideShift[idx]
+                maxLiftGain = self.maxLiftGain[idx]
 
             #---------------------- CL_min-targets ----------------------------
             target_CL_min = rootPolar.CL_min
@@ -1686,7 +1686,7 @@ class polarGraph:
 
 
     # plots lift/drag-polars (Xfoil-worker-polars and target-polars)
-    def plot_LiftDragPolars(self, ax, polars, targetPolars):
+    def plot_LiftDragPolars(self, ax, polars, targetPolars, params):
         # set axes and labels
         self.set_AxesAndLabels(ax, 'CL, CD', 'CD', 'CL')
 
@@ -1834,33 +1834,33 @@ class polarGraph:
 
             ax.legend(loc='upper left', fontsize = fs_legend)
 
-##        # plot strak-polars #FIXME commented out for testing purposes
-##        if params.plotStrakPolars:
-##            strakPolars = params.strak_polars
-##            numPolars = len(strakPolars)
-##
-##            for i in range(numPolars):
-##                # set style
-##                style = "r-"
-##                linewidth = lw_strakPolar
-##                x = strakPolars[i].CD
-##                y = strakPolars[i].CL
-##
-##                # set label only for one of the strak-polars tp avoid multiple
-##                # labels that are all the same
-##                if (i == 0):
-##                    label = 'polar of previous strak-airfoil'
-##                else:
-##                    label = None
-##
-##                ax.plot(x, y, style, linestyle = ls_strakPolar,
-##                                linewidth = lw_strakPolar, label = label)
-##
-##                ax.legend(loc='upper left', fontsize = fs_legend)
+        # plot strak-polars
+        if params.plotStrakPolars:
+            strakPolars = params.strak_polars
+            numPolars = len(strakPolars)
+
+            for i in range(numPolars):
+                # set style
+                style = "r-"
+                linewidth = lw_strakPolar
+                x = strakPolars[i].CD
+                y = strakPolars[i].CL
+
+                # set label only for one of the strak-polars tp avoid multiple
+                # labels that are all the same
+                if (i == 0):
+                    label = 'polar of previous strak-airfoil'
+                else:
+                    label = None
+
+                ax.plot(x, y, style, linestyle = ls_strakPolar,
+                                linewidth = lw_strakPolar, label = label)
+
+                ax.legend(loc='upper left', fontsize = fs_legend)
 
 
     # plots lift/alpha-polars (Xfoil-worker-polars and target-polars)
-    def plot_LiftAlphaPolars(self, ax, polars, targetPolars):
+    def plot_LiftAlphaPolars(self, ax, polars, targetPolars, params):
         # set axes and labels
         self.set_AxesAndLabels(ax, 'CL, alpha', 'alpha', 'CL')
 
@@ -1980,7 +1980,7 @@ class polarGraph:
 
 
     # plots glide-polars (Xfoil-worker-polars and target-polars)
-    def plot_GlidePolars(self, ax, polars, targetPolars, allGraphs):
+    def plot_GlidePolars(self, ax, polars, targetPolars, params):
         # set axes and labels
         self.set_AxesAndLabels(ax, 'CL/CD, CL', 'CL', 'CL/CD')
 
@@ -1996,7 +1996,7 @@ class polarGraph:
         numPolars = len(polars)
 
         # set y-axis manually
-        if (allGraphs == True):
+        if (params.allGraphs == True):
             ax.set_ylim(min(rootPolar.CL_CD) - 10, max(rootPolar.CL_CD) + 10)
         else:
             ax.set_ylim(-5, max(rootPolar.CL_CD) + 5)
@@ -2120,29 +2120,29 @@ class polarGraph:
                 ax.plot(x, y, style, linestyle = ls_targetPolar,
                         linewidth = linewidth, label = label)
 
-##        # plot strak-polars #FIXME commented out for testing purposes
-##        if params.plotStrakPolars:
-##            strakPolars = params.strak_polars
-##            numPolars = len(strakPolars)
-##
-##            for i in range(numPolars):
-##                # set style
-##                style = "r-"
-##
-##                x = strakPolars[i].CL
-##                y = strakPolars[i].CL_CD
-##
-##                # set label only for one of the strak-polars tp avoid multiple
-##                # labels that are all the same
-##                if (i == 0):
-##                    label = 'polar of previous strak-airfoil'
-##                else:
-##                    label = None
-##
-##                ax.plot(x, y, style, linestyle = ls_strakPolar,
-##                                linewidth = lw_strakPolar, label = label)
-##
-##                ax.legend(loc='upper left', fontsize = fs_legend)
+        # plot strak-polars
+        if params.plotStrakPolars:
+            strakPolars = params.strak_polars
+            numPolars = len(strakPolars)
+
+            for i in range(numPolars):
+                # set style
+                style = "r-"
+
+                x = strakPolars[i].CL
+                y = strakPolars[i].CL_CD
+
+                # set label only for one of the strak-polars tp avoid multiple
+                # labels that are all the same
+                if (i == 0):
+                    label = 'polar of previous strak-airfoil'
+                else:
+                    label = None
+
+                ax.plot(x, y, style, linestyle = ls_strakPolar,
+                                linewidth = lw_strakPolar, label = label)
+
+                ax.legend(loc='upper left', fontsize = fs_legend)
 
     def draw_diagram(self, params, diagramType, ax):
         # get polars
@@ -2151,13 +2151,13 @@ class polarGraph:
 
         if diagramType == 1:
             # plot Glide polar
-            self.plot_LiftDragPolars(ax, polars, targetPolars)
+            self.plot_LiftDragPolars(ax, polars, targetPolars, params)
         elif diagramType == 2:
             # plot Glide polar
-            self.plot_LiftAlphaPolars(ax, polars, targetPolars)
+            self.plot_LiftAlphaPolars(ax, polars, targetPolars, params)
         elif diagramType == 3:
             # plot Glide polar
-            self.plot_GlidePolars(ax, polars, targetPolars, False)
+            self.plot_GlidePolars(ax, polars, targetPolars, params)
         else:
             ErrorMsg("undefined diagramtype %d" % diagramType)
 
@@ -2220,16 +2220,16 @@ class polarGraph:
             self.plot_Logo(upper[0], params)
 
             # second figure, display the Lift / Drag-Polar
-            self.plot_LiftDragPolars(lower[0], polars, targetPolars)
+            self.plot_LiftDragPolars(lower[0], polars, targetPolars, params)
 
             # third figure, display the Lift / alpha-Polar
-            self.plot_LiftAlphaPolars(upper[1], polars, targetPolars)
+            self.plot_LiftAlphaPolars(upper[1], polars, targetPolars, params)
 
             # fourth figure, display the Glide polar
-            self.plot_GlidePolars(lower[1], polars, targetPolars, params.allGraphs)
+            self.plot_GlidePolars(lower[1], polars, targetPolars, params)
         else:
             # plot only Glide polar
-            self.plot_GlidePolars(upper, polars, targetPolars, params.allGraphs)
+            self.plot_GlidePolars(upper, polars, targetPolars, params)
 
         # maximize window
         figManager = plt.get_current_fig_manager()
