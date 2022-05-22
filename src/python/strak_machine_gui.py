@@ -11,63 +11,125 @@ from matplotlib.backends.backend_tkagg import (
 from matplotlib.figure import Figure
 
 # some global variables
-num_linearFactors = 5
-num_shiftValues = 2
-num_gainValues = 6
+numParameters = 14
 
-class linearFactor():
-    def __init__(self, idx):
-        self.linearFactor = 0.0
+# Defines limits for shaping parameter raw values
+limits = [
+          { "min" : -0.5, "max" : 0.0}, # 0:  minCLGain
+          { "min" : -0.3, "max" : 0.0}, # 1:  CL0Gain
+          { "min" :  0.0, "max" : 0.5}, # 2:  maxSpeedGain
+          { "min" :  0.0, "max" : 0.5}, # 3:  preMaxSpeedGain
+          { "min" : -2.0, "max" : 1.0}, # 4:  maxGlideGain
+          { "min" : -0.3, "max" : 0.3}, # 5:  maxLiftGain
+          { "min" : -0.1, "max" : 0.1}, # 6:  maxGlideShift
+          { "min" : -0.1, "max" : 0.0}, # 7:  maxSpeedShift
+          { "min" :  0.0, "max" : 1.0}, # 8:  linearFactor_0
+          { "min" :  0.0, "max" : 1.0}, # 9:  linearFactor_1
+          { "min" :  0.0, "max" : 4.0}, # 10: linearFactor_2
+          { "min" :  1.5, "max" : 0.2}, # 11: linearFactor_3
+          { "min" :  0.5, "max" : 0.1}, # 12: linearFactor_4
+          { "min" :  1.0, "max" : 1.02},# 13: maxGlideFactor
+         ]
+
+# Definition of slider labels
+sliderLabels = [
+          "minCLGain",       # 0
+          "CL0Gain",         # 1
+          "maxSpeedGain",    # 2
+          "preMaxSpeedGain", # 3
+          "maxGlideGain",    # 4
+          "maxLiftGain",     # 5
+          "maxGlideShift",   # 6
+          "maxSpeedShift",   # 7
+          "linearFactor_0",  # 8
+          "linearFactor_1",  # 9
+          "linearFactor_2",  # 10
+          "linearFactor_3",  # 11
+          "linearFactor_4",  # 12
+          "maxGlideFactor"   # 13
+           ]
+
+# class shaping parameter, which is used to exchange parameters for shaping
+# target polars between gui and strak machine
+class shapingParameter():
+    def __init__(self, idx, getter, setter, limits):
         self.idx = idx
+        self.min = limits["min"]
+        self.max = limits["max"]
+        self.getter = getter
+        self.setter = setter
 
-    def set(self, value):
-        self.linearFactor = value
-        print("LinearFactor %d: %f\n" %(self.idx, self.linearFactor))
+        # get initial value
+        self.value = self.get()
 
-    def init(self, initDict):
-        self.set(0.2) #FIXME get value from dictionary
+    def get(self):
+        # call getter function (airfoilIdx, paramIdx)
+        rawValue = self.getter(1, self.idx)
+        # scale parameter
+        sliderValue = self.scale_rawToSlider(rawValue)
+        #print("get: raw value: %f, slider value: %f" % (rawValue, sliderValue))# FIXME Debug
+        return sliderValue
 
-class shift():
-    def __init__(self, idx):
-        self.shift = 0.0
-        self.idx = idx
+    def set(self, sliderValue):
+        # scale parameter
+        rawValue = self.scale_rawToSlider(sliderValue)
+        # call setter function
+        self.setter(1, self.idx, rawValue)
+        #print("set: raw value: %f, slider value: %f" % (rawValue, sliderValue))# FIXME Debug
 
-    def set(self, value):
-        self.shift = value
-        print("shift %d: %f\n" %(self.idx, self.shift))
+    def scale_rawToSlider(self, rawValue):
+        sliderValue = self.interpolate_2(self.min, self.max, 0.0, 1.0, rawValue)
+        #print("rawToSlider: min: %f, max: %f" % (self.min, self.max))# FIXME Debug
+        return sliderValue
 
-    def writeToDict(self):
-        print("written")
+    def scale_sliderToRaw(self, sliderValue):
+        rawValue = self.interpolate(self.min, self.max, 0.0, 1.0, sliderValue)
+        #print("sliderToRaw: min: %f, max: %f" % (self.min, self.max))# FIXME Debug
+        return rawValue
 
-class gain():
-    def __init__(self, idx):
-        self.gain = 0.0
-        self.idx = idx
+    def interpolate(self, x1, x2, y1, y2, x):
+        try:
+            y = ((y2-y1)/(x2-x1)) * (x-x1) + y1
+        except:
+            ErrorMsg("Division by zero, x1:%f, x2:%f", (x1, x2))
+            y = 0.0
+        return y
 
-    def set(self, value):
-        self.gain = value
-        print("gain %d: %f\n" %(self.idx, self.gain))
-
+    def interpolate_2(self, x1, x2, y1, y2, y):
+        try:
+            x = (y - y1)/((y2-y1)/(x2-x1)) + x1
+        except:
+            ErrorMsg("Division by zero!")
+            x = 0.0
+        return x
 
 # class control frame, change the input-variables / parameters of the
 # strak machine
 class control_frame():
-    def __init__(self, master, side, buttonCommands, sliderCommands):
+    def __init__(self, master, side, upperButtons, shapingParameters, lowerButtons):
         self.frame = customtkinter.CTkFrame(master=master, width=180,
                                             corner_radius=0)
+        #self.frame.grid_columnconfigure(1, weight=1)
+
         # init nextRow (where to place next widget)
         self.nextRow = 1
 
         # add different widgets
         self.add_label()
-        self.add_buttons(buttonCommands)
-        self.add_sliders(sliderCommands)
+        self.add_buttons(upperButtons)
+        self.add_sliders(shapingParameters)
+        self.add_buttons(lowerButtons)
 
         # show frame
         self.frame.pack(side = side, fill=tk.BOTH, expand=1)
 
-    def place_widget(self, widget):
-        widget.grid(row=self.nextRow, column=0, pady=10, padx=10)
+    def place_widgets(self, widget1, widget2):
+        if widget1 != None:
+            widget1.grid(row=self.nextRow, column=0, pady=10, padx=10)
+
+        if widget2 != None:
+            widget2.grid(row=self.nextRow, column=1, pady=0, padx=10)
+
         self.nextRow = self.nextRow + 1
 
     def add_label(self):
@@ -75,12 +137,12 @@ class control_frame():
         label = customtkinter.CTkLabel(master=self.frame,
                                               text="Select diagram",
                                               text_font=("Roboto Medium", -16))
-        self.place_widget(label)
+        self.place_widgets(label, None)
 
-    def add_buttons(self, buttonCommands):
-        for element in buttonCommands:
-            text = element["txt"]
-            command = element["cmd"]
+    def add_buttons(self, buttons):
+        for button in buttons:
+            text = button["txt"]
+            command = button["cmd"]
 
             # create new button
             button = customtkinter.CTkButton(master=self.frame,
@@ -88,18 +150,39 @@ class control_frame():
                                                 fg_color=("gray75", "gray30"),
                                                 command=command)
             # place button
-            self.place_widget(button)
+            self.place_widgets(button, None)
 
-    def add_sliders(self, sliderCommands):
-        for element in sliderCommands:
-            command = element #FIXME
+    def add_sliders(self, shapingParameters):
+        idx = 0
+
+        # create slider for each of the shaping parameters
+        for parameter in shapingParameters:
+            command = parameter.set
+            init_value = parameter.get()
+
+            name = sliderLabels[idx]
 
             # create new slider
-            slider = customtkinter.CTkSlider(master=self.frame,
-                                                command=command)
+            slider = customtkinter.CTkSlider(master=self.frame, command=command)
 
-            # place slider
-            self.place_widget(slider)
+            # init slider
+            slider.set(init_value)
+
+            label = customtkinter.CTkLabel(master=self.frame,
+                                                   text=name ,
+                                                   height=10,
+                                                   fg_color=("white", "gray38"),
+                                                   justify=tkinter.LEFT)
+
+            #entry = customtkinter.CTkEntry(master=self.frame, width=20)
+
+            # init entry
+            #entry.set(init_value)
+
+            # place slider and entry
+            self.place_widgets(slider, label)
+            idx = idx +1
+
 
     def add_blankRow(self):
         self.nextRow = self.nextRow + 1
@@ -121,7 +204,7 @@ class diagram_frame():
         plt.style.use('dark_background')
 
         # new figure
-        fig = Figure(figsize=(12, 4), dpi=100)
+        fig = Figure(figsize=(20, 4))#, dpi=100)
         self.ax = fig.add_subplot()
 
         # initial diagram
@@ -138,8 +221,11 @@ class diagram_frame():
     def update(self, diagramType):
         self.ax.clear()
         self.strak_machine.plot_diagram(diagramType, self.ax)
-        self.canvas.draw()
+        self.canvas.draw_idle()
+        #self.frame.update()
 
+
+# main application
 class App(customtkinter.CTk):
     def __init__(self, strak_machine):
         super().__init__()
@@ -160,78 +246,78 @@ class App(customtkinter.CTk):
         # call .on_closing() when app gets closed
         self.protocol("WM_DELETE_WINDOW", self.on_closing)
 
-        # create Variables and commands
+        # create Variables for polar shaping
         self.create_inputVariables()
-        self.init_inputVariables(None)#FIXME dictionary
-        self.create_ButtonCommands()
-        self.create_SliderCommands()
 
-        # create two frames
+        # set aktive Diagram initially (will be controlled by the buttons later)
+        self.aktiveDiagram = 1
+
+        # create control frame, which is on the left
         self.frame_left = control_frame(self.master, tk.LEFT,
-                                   self.buttonCommands, self.sliderCommands)
+         self.upperButtons(), self.shapingParameters, self.lowerButtons())
 
+        # create diagram frame, which is on the right
         self.frame_right = diagram_frame(self.master, tk.RIGHT, self.strak_machine)
 
+    def upperButtons(self):
+        commands = []
+        commands.append({"txt": "x=CD, y=CL", "cmd" : self.set_CL_CD_diagram})
+        commands.append({"txt": "x=alpha, y=CL", "cmd" : self.set_CL_alpha_diagram})
+        commands.append({"txt": "x=CL, y=CL/CD", "cmd" : self.set_CLCD_CL_diagram})
 
-    def create_ButtonCommands(self):
-        self.buttonCommands = []
-        self.buttonCommands.append({"txt": "x=CD, y=CL", "cmd" : self.set_CL_CD_diagram})
-        self.buttonCommands.append({"txt": "x=alpha, y=CL", "cmd" : self.set_CL_alpha_diagram})
-        self.buttonCommands.append({"txt": "x=CL, y=CL/CD", "cmd" : self.set_CLCD_CL_diagram})
+        return commands
 
-    def create_SliderCommands(self):
-        global num_linearFactors
-        global num_shiftValues
-        global num_gainValues
+    def lowerButtons(self):
+        commands = []
+        commands.append({"txt": "Load", "cmd" : self.load_strakdata})
+        commands.append({"txt": "Save", "cmd" : self.save_strakdata})
+        commands.append({"txt": "Update", "cmd" : self.update_diagram})
 
-        self.sliderCommands = []
-
-        for idx in range(num_linearFactors):
-            variable = self.linearFactors[idx]
-            self.sliderCommands.append(variable.set)
-
-        for idx in range(num_shiftValues):
-            variable = self.shiftValues[idx]
-            self.sliderCommands.append(variable.set)
-
-        for idx in range(num_gainValues):
-            variable = self.gainValues[idx]
-            self.sliderCommands.append(variable.set)
+        return commands
 
     def create_inputVariables(self):
-        global num_linearFactors
-        global num_shiftValues
-        global num_gainValues
+        global numTotal
 
-        # add some input-variables
-        self.linearFactors = []
-        for idx in range(num_linearFactors):
-            self.linearFactors.append(linearFactor(idx))
+        # configure getter and setter function
+        getter_function = self.strak_machine.get_Param
+        setter_function = self.strak_machine.set_Param
 
-        self.shiftValues = []
-        for idx in range(num_shiftValues):
-            self.shiftValues.append(shift(idx))
-
-        self.gainValues = []
-        for idx in range(num_gainValues):
-            self.gainValues.append(gain(idx))
-
-    def init_inputVariables(self, init_dict):
-        # init variables from dictionary
-        for variable in self.linearFactors:
-            variable.init(init_dict)
+        # add input-variables
+        self.shapingParameters = []
+        for idx in range(numParameters):
+            self.shapingParameters.append(shapingParameter(idx, getter_function,
+            setter_function, limits[idx]))
 
     def set_CL_CD_diagram(self):
-        self.frame_right.update(1)
+        self.aktiveDiagram = 1
+        self.frame_right.update(self.aktiveDiagram)
 
     def set_CL_alpha_diagram(self):
-        self.frame_right.update(2)
+        self.aktiveDiagram = 2
+        self.frame_right.update(self.aktiveDiagram)
 
     def set_CLCD_CL_diagram(self):
-        self.frame_right.update(3)
+        self.aktiveDiagram = 3
+        self.frame_right.update(self.aktiveDiagram)
 
     def on_closing(self, event=0):
         self.destroy()
+
+    def load_strakdata(self):
+        print("Load strakdata")
+        return
+
+    def save_strakdata(self):
+        print("Save strakdata")
+        return
+
+    def update_diagram(self):
+        # perform update of the target polars first
+        self.strak_machine.update_targetPolars()
+
+        # redraw the aktive diagram
+        self.frame_right.update(self.aktiveDiagram)
+
 
     def start(self):
         self.mainloop()

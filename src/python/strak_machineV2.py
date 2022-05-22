@@ -1444,6 +1444,7 @@ class strakData:
                 maxLiftGain = 0.0
             else:
                 minCLGain = self.minCLGain[idx]#params
+                print(self.minCLGain)# FIXME Debug
                 CL0Gain = self.CL0Gain[idx]
                 maxSpeedGain = self.maxSpeedGain[idx]
                 maxSpeedShift = self.maxSpeedShift[idx]
@@ -3929,6 +3930,9 @@ def createAdjustedInputFile(params, i):
 def generate_InputFiles(params):
     print("Generating inputfiles...")
 
+    # clear are previsously generated inputfiles
+    params.inputFiles.clear()
+
     # calculate number of files to be created
     num_files = len(params.ReNumbers)
 
@@ -4236,8 +4240,10 @@ def set_PolarDataFromInputFile(polarData, rootPolar, inputFile,
 
 
 def generate_TargetPolars(params):
-    # local variable
-    targetPolars = params.target_polars
+     # clear all previsously generated target polars
+    params.target_polars.clear()
+
+    # local variables
     inputFiles = params.inputFiles
     Re = params.ReNumbers
     numTargetPolars = len(Re)
@@ -4387,9 +4393,104 @@ class strak_machine:
         self.graph = polarGraph()
 
 
-    def plot_diagram(self, diagramType, frame):
+    def plot_diagram(self, diagramType, ax):
         # draw the graph
-        self.graph.draw_diagram(self.params, diagramType, frame)
+        self.graph.draw_diagram(self.params, diagramType, ax)
+
+    def get_Param(self, airfoilIdx, paramIdx):
+        if airfoilIdx > 10:
+            ErrorMsg("get_Param: invalid airfoilIdx :%d" % airfoilIdx)
+            return None
+
+        if paramIdx == 0:
+            value = self.params.minCLGain[airfoilIdx]
+        elif paramIdx == 1:
+            value = self.params.CL0Gain[airfoilIdx]
+        elif paramIdx == 2:
+            value = self.params.maxSpeedGain[airfoilIdx]
+        elif paramIdx == 3:
+            value = self.params.preMaxSpeedGain[airfoilIdx]
+        elif paramIdx == 4:
+            value = self.params.maxGlideGain[airfoilIdx]
+        elif paramIdx == 5:
+            value = self.params.maxLiftGain[airfoilIdx]
+        elif paramIdx == 6:
+            value = self.params.maxGlideShift[airfoilIdx]
+        elif paramIdx == 7:
+            value = self.params.maxSpeedShift[airfoilIdx]
+        elif paramIdx == 8:
+            value = self.params.linearFactor_0[airfoilIdx]
+        elif paramIdx == 9:
+            value = self.params.linearFactor_1[airfoilIdx]
+        elif paramIdx == 10:
+            value = self.params.linearFactor_2[airfoilIdx]
+        elif paramIdx == 11:
+            value = self.params.linearFactor_3[airfoilIdx]
+        elif paramIdx == 12:
+            value = self.params.linearFactor_4[airfoilIdx]
+        elif paramIdx == 13:
+            value = self.params.maxGlideFactor[airfoilIdx]
+        else:
+           ErrorMsg("get_Param: invalid paramIdx :%d" % paramIdx)
+           value = None
+
+        NoteMsg("get_Param, airfoilIdx: %d, paramIdx: %d, value: %f" % (airfoilIdx, paramIdx, value))#FIXME Debug
+        return value
+
+    def set_Param(self, airfoilIdx, paramIdx, value):
+
+        # check if airfoilIdx exceeds number of airfoils handled by parameters
+        if airfoilIdx > len(self.params.ReNumbers):
+            ErrorMsg("get_Param: invalid airfoilIdx :%d" % airfoilIdx)
+            return None
+
+        if paramIdx == 0:
+            self.params.minCLGain[airfoilIdx] = value
+        elif paramIdx == 1:
+            self.params.CL0Gain[airfoilIdx] = value
+        elif paramIdx == 2:
+            self.params.maxSpeedGain[airfoilIdx] = value
+        elif paramIdx == 3:
+            self.params.preMaxSpeedGain[airfoilIdx] = value
+        elif paramIdx == 4:
+            self.params.maxGlideGain[airfoilIdx] = value
+        elif paramIdx == 5:
+            self.params.maxLiftGain[airfoilIdx] = value
+        elif paramIdx == 6:
+            self.params.maxGlideShift[airfoilIdx] = value
+        elif paramIdx == 7:
+            self.params.maxSpeedShift[airfoilIdx] = value
+        elif paramIdx == 8:
+            self.params.linearFactor_0[airfoilIdx] = value
+        elif paramIdx == 9:
+            self.params.linearFactor_1[airfoilIdx] = value
+        elif paramIdx == 10:
+            self.params.linearFactor_2[airfoilIdx] = value
+        elif paramIdx == 11:
+            self.params.linearFactor_3[airfoilIdx] = value
+        elif paramIdx == 12:
+            self.params.linearFactor_4[airfoilIdx] = value
+        elif paramIdx == 13:
+            self.params.maxGlideFactor[airfoilIdx] = value
+        else:
+           ErrorMsg("get_Param: invalid paramIdx :%d" % paramIdx)
+
+        NoteMsg("set_Param, airfoilIdx: %d, paramIdx: %d, value: %f" % (airfoilIdx, paramIdx, value))#FIXME Debug
+
+    def update_targetPolars(self):
+        NoteMsg("Update target polars")
+         # calculate target-values for the main op-points
+        self.params.calculate_MainTargetValues()
+
+        try:
+            # generate input-Files
+            generate_InputFiles(self.params)
+        except:
+            ErrorMsg("Unable to generate input files")
+
+        # generate target polars and write to file
+        generate_TargetPolars(self.params)
+
 
 ################################################################################
 # Main program

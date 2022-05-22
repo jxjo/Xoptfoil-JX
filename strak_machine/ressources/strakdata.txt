@@ -5,17 +5,26 @@
     "useAlwaysRootfoil": "True", 
     "weighting": "constant", 
     "reynolds": [
-        138000
+        138000, 
+        100000
     ], 
     "airfoilNames": [
-        "JX-GS-138k"
+        "JX-GS-138k", 
+        "JX-GS-100k"
     ], 
     "additionalOpPoints": [
         0.014, 
         0.024, 
         0.042, 
         0.78
-    ], 
+    ],
+    "linearFactor_0": [
+        0.0, 
+        0.0, 
+        0.0, 
+        0.0, 
+        0.0
+    ],  
     "linearFactor_1": [
         0.0, 
         0.2, 
