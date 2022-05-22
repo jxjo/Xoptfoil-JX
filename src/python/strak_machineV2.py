@@ -1420,11 +1420,35 @@ class strakData:
 
         return round(target, CD_decimals)
 
+    def clear_MainTargetValues(self):
+        # clear all the targets
+        self.targets["CL_min"].clear()
+        self.targets["CD_min"].clear()
+        self.targets["alpha_min"].clear()
+        self.targets["CL_maxSpeed"].clear()
+        self.targets["CD_maxSpeed"].clear()
+        self.targets["alpha_maxSpeed"].clear()
+        self.targets["CL_preMaxSpeed"].clear()
+        self.targets["CD_preMaxSpeed"].clear()
+        self.targets["alpha_preMaxSpeed"].clear()
+        self.targets["CL_maxGlide"].clear()
+        self.targets["CD_maxGlide"].clear()
+        self.targets["CL_CD_maxGlide"].clear()
+        self.targets["alpha_maxGlide"].clear()
+        self.targets["CL_pre_maxLift"].clear()
+        self.targets["CD_pre_maxLift"].clear()
+        self.targets["alpha_pre_maxLift"].clear()
+        self.targets["CL0"].clear()
+        self.targets["CD0"].clear()
+        self.targets["alpha0"].clear()
 
     def calculate_MainTargetValues(self):
         # get root-polar
         rootPolar = self.merged_polars[0]
         num = len(self.merged_polars)
+
+        # clear all targets
+        self.clear_MainTargetValues()
 
         for idx in range(num):
             # get polar
@@ -1443,8 +1467,7 @@ class strakData:
                 maxGlideShift = 0.0
                 maxLiftGain = 0.0
             else:
-                minCLGain = self.minCLGain[idx]#params
-                print(self.minCLGain)# FIXME Debug
+                minCLGain = self.minCLGain[idx]
                 CL0Gain = self.CL0Gain[idx]
                 maxSpeedGain = self.maxSpeedGain[idx]
                 maxSpeedShift = self.maxSpeedShift[idx]
@@ -4340,7 +4363,7 @@ class strak_machine:
         # get strak-machine-parameters from dictionary
         self.params = get_Parameters(strakdata)
 
-          # calculate further values like max Re-numbers etc., also setup
+         # calculate further values like max Re-numbers etc., also setup
         # calls of further tools like xoptfoil
         self.params.calculate_DependendValues()
 
@@ -4389,8 +4412,20 @@ class strak_machine:
         # change working-directory
         chdir(".." + bs)
 
+        if (self.params.generateBatch == True):
+            print ('generating batchfile \'%s\'' % self.params.batchfileName)
+            generate_Batchfile(self.params.batchfileName, commandlines)
+
+            print ('generating batchfiles for each single airfoil of the strak')
+            generate_StrakBatchfiles(self.params, commandlines)
+
+        # change working-directory to output-directory
+        chdir(self.params.workingDir + bs + buildPath)
+
         # create an instance of polar graph
         self.graph = polarGraph()
+
+        DoneMsg()
 
 
     def plot_diagram(self, diagramType, ax):
@@ -4434,7 +4469,6 @@ class strak_machine:
            ErrorMsg("get_Param: invalid paramIdx :%d" % paramIdx)
            value = None
 
-        NoteMsg("get_Param, airfoilIdx: %d, paramIdx: %d, value: %f" % (airfoilIdx, paramIdx, value))#FIXME Debug
         return value
 
     def set_Param(self, airfoilIdx, paramIdx, value):
@@ -4475,21 +4509,27 @@ class strak_machine:
         else:
            ErrorMsg("get_Param: invalid paramIdx :%d" % paramIdx)
 
-        NoteMsg("set_Param, airfoilIdx: %d, paramIdx: %d, value: %f" % (airfoilIdx, paramIdx, value))#FIXME Debug
 
     def update_targetPolars(self):
-        NoteMsg("Update target polars")
-         # calculate target-values for the main op-points
-        self.params.calculate_MainTargetValues()
+        try:
+             # calculate target-values for the main op-points
+            self.params.calculate_MainTargetValues()
+        except:
+            ErrorMsg("Unable to calculate main target values")
+            return
 
         try:
             # generate input-Files
             generate_InputFiles(self.params)
         except:
             ErrorMsg("Unable to generate input files")
+            return
 
-        # generate target polars and write to file
-        generate_TargetPolars(self.params)
+        try:
+            # generate target polars and write to file
+            generate_TargetPolars(self.params)
+        except:
+            ErrorMsg("Unable to generate target polars")
 
 
 ################################################################################

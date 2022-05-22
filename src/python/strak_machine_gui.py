@@ -20,14 +20,14 @@ limits = [
           { "min" :  0.0, "max" : 0.5}, # 2:  maxSpeedGain
           { "min" :  0.0, "max" : 0.5}, # 3:  preMaxSpeedGain
           { "min" : -2.0, "max" : 1.0}, # 4:  maxGlideGain
-          { "min" : -0.3, "max" : 0.3}, # 5:  maxLiftGain
+          { "min" : -0.3, "max" : 1.0}, # 5:  maxLiftGain
           { "min" : -0.1, "max" : 0.1}, # 6:  maxGlideShift
           { "min" : -0.1, "max" : 0.0}, # 7:  maxSpeedShift
           { "min" :  0.0, "max" : 1.0}, # 8:  linearFactor_0
           { "min" :  0.0, "max" : 1.0}, # 9:  linearFactor_1
           { "min" :  0.0, "max" : 4.0}, # 10: linearFactor_2
-          { "min" :  1.5, "max" : 0.2}, # 11: linearFactor_3
-          { "min" :  0.5, "max" : 0.1}, # 12: linearFactor_4
+          { "min" :  0.0, "max" : 0.3}, # 11: linearFactor_3
+          { "min" :  0.0, "max" : 0.3}, # 12: linearFactor_4
           { "min" :  1.0, "max" : 1.02},# 13: maxGlideFactor
          ]
 
@@ -72,28 +72,20 @@ class shapingParameter():
 
     def set(self, sliderValue):
         # scale parameter
-        rawValue = self.scale_rawToSlider(sliderValue)
+        rawValue = self.scale_sliderToRaw(sliderValue)
         # call setter function
         self.setter(1, self.idx, rawValue)
         #print("set: raw value: %f, slider value: %f" % (rawValue, sliderValue))# FIXME Debug
 
     def scale_rawToSlider(self, rawValue):
-        sliderValue = self.interpolate_2(self.min, self.max, 0.0, 1.0, rawValue)
+        sliderValue = self.interpolate_2(0.0, 1.0, self.min, self.max, rawValue)
         #print("rawToSlider: min: %f, max: %f" % (self.min, self.max))# FIXME Debug
         return sliderValue
 
     def scale_sliderToRaw(self, sliderValue):
-        rawValue = self.interpolate(self.min, self.max, 0.0, 1.0, sliderValue)
+        rawValue = self.interpolate_2(self.min, self.max, 0.0, 1.0, sliderValue)
         #print("sliderToRaw: min: %f, max: %f" % (self.min, self.max))# FIXME Debug
         return rawValue
-
-    def interpolate(self, x1, x2, y1, y2, x):
-        try:
-            y = ((y2-y1)/(x2-x1)) * (x-x1) + y1
-        except:
-            ErrorMsg("Division by zero, x1:%f, x2:%f", (x1, x2))
-            y = 0.0
-        return y
 
     def interpolate_2(self, x1, x2, y1, y2, y):
         try:
@@ -204,7 +196,7 @@ class diagram_frame():
         plt.style.use('dark_background')
 
         # new figure
-        fig = Figure(figsize=(20, 4))#, dpi=100)
+        fig = Figure(figsize=(18, 10))#, dpi=100)
         self.ax = fig.add_subplot()
 
         # initial diagram
@@ -241,7 +233,7 @@ class App(customtkinter.CTk):
         self.title("The Strak machine")
 
         # maximize the window using state property
-        self.state('zoomed')
+        #self.state('zoomed')
 
         # call .on_closing() when app gets closed
         self.protocol("WM_DELETE_WINDOW", self.on_closing)
@@ -333,7 +325,7 @@ if __name__ == "__main__":
         myStrakmachine = strak_machineV2.strak_machine("ressources//strakdata.txt")
     except:
         strak_machineV2.ErrorMsg("Strak Machine could not be started")
-        myStrakmachine = None
+        exit(-1)
 
     strak_machineV2.NoteMsg("Starting Graphical User Interface...")
     app = App(myStrakmachine)
