@@ -87,24 +87,38 @@ lw_targetPolar = 0.6
 ls_strakPolar = 'dashdot'
 lw_strakPolar  = 0.4
 
+# types of diagrams
+diagTypes = "CL_CD_diagram", "CL_alpha_diagram", "CLCD_CL_diagram"
+
 # global variables for gui-interface
 gGraph = None
+
+# disables all print output to console
+print_disabled = False
+
+def my_print(message):
+    if print_disabled:
+        return
+    else:
+       print(message)
+
+
 ################################################################################
 #
 # helper functions to put colored messages
 #
 ################################################################################
 def ErrorMsg(message):
-    print(colored(' Error: ', 'red') + message)
+    my_print(colored(' Error: ', 'red') + message)
 
 def WarningMsg(message):
-    print(colored(' Warning: ', 'yellow') + message)
+    my_print(colored(' Warning: ', 'yellow') + message)
 
 def NoteMsg(message):
-    print(colored(' Note: ', 'cyan') + message)
+    my_print(colored(' Note: ', 'cyan') + message)
 
 def DoneMsg():
-    print("Done.\n")
+    my_print("Done.\n")
 
 
 ################################################################################
@@ -196,7 +210,7 @@ class inputFile:
         # read input-file as a Fortan namelist
         self.values = f90nml.read(self.presetInputFileName)
         #operatingConditions = self.values["operating_conditions"]#Debug
-        #print (operatingConditions)#Debug
+        #my_print (operatingConditions)#Debug
 
         # clean-up file
         #self.remove_DeactivatedOpPoints() #TODO remove
@@ -204,20 +218,20 @@ class inputFile:
 
     def __del__(self):
         class_name = self.__class__.__name__
-        #print (class_name, "destroyed")#Debug
+        #my_print (class_name, "destroyed")#Debug
 
 
-    # prints all op-points for debugging-purposes
-    def print_OpPoints(self):
+    # my_prints all op-points for debugging-purposes
+    def my_print_OpPoints(self):
         # get operating-conditions
         operatingConditions = self.values["operating_conditions"]
         opPointNames = operatingConditions["name"]
         opPoints = operatingConditions["op_point"]
         targetValues = operatingConditions["target_value"]
 
-        print(opPointNames)
-        print(opPoints)
-        print(targetValues)
+        my_print(opPointNames)
+        my_print(opPoints)
+        my_print(targetValues)
 
 
     # writes contents to file, using f90nnml-parser
@@ -232,7 +246,7 @@ class inputFile:
         self.values["operating_conditions"] = operatingConditions
 
         # write to file
-        print("writing input-file %s..." % fileName)
+        my_print("writing input-file %s..." % fileName)
         f90nml.write(self.values, fileName, True)
 
         # restore 'name'
@@ -473,7 +487,7 @@ class inputFile:
         for idx in range(start, end):
             # get opPoint
             opPoint = opPoints[idx]
-            #print(opPointNames[idx])#Debug
+            #my_print(opPointNames[idx])#Debug
 
             # find CD value of root-polar
             CD = rootPolar.find_CD_From_CL(opPoint)
@@ -503,7 +517,7 @@ class inputFile:
         y2 = opPoints[end]
 
         for idx in range(start+1, end):
-            #print ("changing opPoint: %s" % opPointNames[idx]) #Debug
+            #my_print ("changing opPoint: %s" % opPointNames[idx]) #Debug
 
             # get opPoint
             opPoint = opPoints[idx]
@@ -722,7 +736,7 @@ class inputFile:
             weight = round(startWeight + (interval*diff), 2)
             self.change_Weighting(idx, weight)
             interval = interval + 1
-            print (idx)
+            my_print (idx)
 
 
     def set_sinusWeighting(self, opPoints, minWeight, maxWeight, start, end, y1, y2):
@@ -794,9 +808,9 @@ class inputFile:
         # set weighting of CL_min to maxWeight
         #self.change_Weighting(0, maxWeight)
 
-        #print(operatingConditions["weighting"])#Debug
-        #print(operatingConditions["op_point"])
-        #print("Done.")#Debug
+        #my_print(operatingConditions["weighting"])#Debug
+        #my_print(operatingConditions["op_point"])
+        #my_print("Done.")#Debug
 
 
     # adapts 'reynolds'-value of all op-points, that are below a certain
@@ -824,7 +838,7 @@ class inputFile:
                 if (CL <= polarData.CL_switchpoint_Type2_Type1_polar):
                     # yes, adapt maxRe --> Type 1 oppoint
                     reynolds[idx] = int(polarData.maxRe)
-                    print("adapted oppoint @ Cl = %0.3f, Type 1, Re = %d\n" % \
+                    my_print("adapted oppoint @ Cl = %0.3f, Type 1, Re = %d\n" % \
                           (CL, int(polarData.maxRe)))
 
 
@@ -961,7 +975,7 @@ class inputFile:
             return
 
         num = 0
-        #self.print_OpPoints()#Debug
+        #self.my_print_OpPoints()#Debug
 
         for opPoint in opPoints:
 
@@ -992,7 +1006,7 @@ class inputFile:
             self.idx_additionalOpPoints.append(idx)
             num = num + 1
 
-        #self.print_OpPoints()#Debug
+        #self.my_print_OpPoints()#Debug
 
     def insert_alpha0_oppoint(self, params, strakPolar, i):
         # get maxRe
@@ -1014,7 +1028,7 @@ class inputFile:
         idx = self.insert_OpPoint('alpha0', 'spec-al', alpha, 'target-lift',
                                      0.0, weighting, reynolds)
 
-            #print (idx)#Debug
+            #my_print (idx)#Debug
 
     def insert_alphaMaxGlide_oppoint(self, params, i):
         # get maxRe
@@ -1068,7 +1082,7 @@ class inputFile:
             return
 
         Cl_interval = (Cl_end - Cl_start) / num_intervals
-        #print(Cl_start, Cl_end, Cl_interval, num_intervals) Debug
+        #my_print(Cl_start, Cl_end, Cl_interval, num_intervals) Debug
 
         num = 1
         for idx in range(start+1, end):
@@ -1163,10 +1177,10 @@ class inputFile:
             ErrorMsg("idx_CL0 > idx_maxSpeed")
             Exit(-1)
 
-        #print (opPointNames)
-        #print (opPoints)
-        #print(operatingConditions['target_value'])
-        #print ("Ready.")#Debug
+        #my_print (opPointNames)
+        #my_print (opPoints)
+        #my_print(operatingConditions['target_value'])
+        #my_print ("Ready.")#Debug
 
 
     # Distribute all intermediate-oppoints
@@ -1190,7 +1204,7 @@ class inputFile:
 
         # now sort the list again
         fixed_opPoints.sort()
-        #print (fixed_opPoints) Debug
+        #my_print (fixed_opPoints) Debug
 
         # now distribute the intermediate opPoints between the fixed opPoints
         # equally. Therefore set up an interval from one fixed op-point to the
@@ -1568,7 +1582,7 @@ class strakData:
 
             idx = idx + 1
 
-        #print(self.targets)#Debug
+        #my_print(self.targets)#Debug
         #DoneMsg()#Debug
 
 
@@ -2173,17 +2187,17 @@ class polarGraph:
         polars = params.merged_polars
         targetPolars = params.target_polars
 
-        if diagramType == 1:
+        if diagramType == "CL_CD_diagram":
             # plot Glide polar
             self.plot_LiftDragPolars(ax, polars, targetPolars, params)
-        elif diagramType == 2:
+        elif diagramType == "CL_alpha_diagram":
             # plot Glide polar
             self.plot_LiftAlphaPolars(ax, polars, targetPolars, params)
-        elif diagramType == 3:
+        elif diagramType == "CLCD_CL_diagram":
             # plot Glide polar
             self.plot_GlidePolars(ax, polars, targetPolars, params)
         else:
-            ErrorMsg("undefined diagramtype %d" % diagramType)
+            ErrorMsg("undefined diagramtype")
 
     # draw the graph
     def draw(self, params):
@@ -2203,7 +2217,7 @@ class polarGraph:
         else:
             airfoilName = params.seedFoilName
 
-        print("plotting polars of airfoil %s..." % (airfoilName))
+        my_print("plotting polars of airfoil %s..." % (airfoilName))
 
         # set 'dark' style
         plt.style.use('dark_background')
@@ -2330,7 +2344,7 @@ class polarData:
         airfoilNameTag = "Calculated polar for:"
         ReTag = "Re ="
         parseInDataPoints = 0
-        print("importing polar %s..." %fileName)
+        my_print("importing polar %s..." %fileName)
 
         # open file
         fileHandle = open(fileName)
@@ -2417,7 +2431,7 @@ class polarData:
             ReString = 'fixed / ~ 1/sqrt(CL)'
             MachString = 'fixed / ~ 1/sqrt(CL)'
 
-        print("writing polar to file %s..." %fileName)
+        my_print("writing polar to file %s..." %fileName)
 
         # open file
         fileHandle = open(fileName, 'w+')
@@ -2455,7 +2469,7 @@ class polarData:
 
     # analyses a polar
     def analyze(self, params):
-        print("analysing polar \'%s\'..." % self.polarName)
+        my_print("analysing polar \'%s\'..." % self.polarName)
 
         self.determine_MaxSpeed()
         self.determine_CLmin(params)
@@ -2471,7 +2485,7 @@ class polarData:
     # minimum CL up to the CL-value where the merge happens.
     # "self" will be the upper part of the merged-polar
     def merge(self, mergePolar_1, switching_CL, maxRe):
-        print ("merging polars at CL = %s" % switching_CL)
+        my_print ("merging polars at CL = %s" % switching_CL)
 
         # create a new, empty polar
         mergedPolar = polarData()
@@ -2592,7 +2606,7 @@ class polarData:
 
         # correct the switching-idx between T1 / T2-polar
         self.T2_T1_switchIdx = self.find_index_From_CL(self.CL_switchpoint_Type2_Type1_polar)
-        #print("Ready")#Debug
+        #my_print("Ready")#Debug
 
 
 
@@ -2621,7 +2635,7 @@ class polarData:
             # calculate new drag-value
             CD_old = shiftedPolar.CD[i]
             shiftedPolar.CD[i] = shiftedPolar.CL[i] / shiftedPolar.CL_CD[i]
-            #print(CD_old, shiftedPolar.CD[i])#Debug
+            #my_print(CD_old, shiftedPolar.CD[i])#Debug
 
         # analyze streched-polar, determine max-lift
         shiftedPolar.analyze(params)
@@ -2677,7 +2691,7 @@ class polarData:
         self.alpha_maxSpeed = self.alpha[self.maxSpeed_idx]
         self.CL_CD_maxSpeed = self.CL_maxSpeed / self.CD_maxSpeed
 
-        print("max Speed, CD = %f @ CL = %f" %\
+        my_print("max Speed, CD = %f @ CL = %f" %\
                                   (self.CD_maxSpeed, self.CL_maxSpeed))
 
 
@@ -2687,7 +2701,7 @@ class polarData:
         self.CD_preMaxSpeed = self.CD[self.preMaxSpeed_idx]
         self.alpha_preMaxSpeed = self.alpha[self.preMaxSpeed_idx]
         self.CL_CD_preMaxSpeed = self.CL_preMaxSpeed / self.CD_preMaxSpeed
-        print("pre max Speed, CD = %f @ CL = %f" %\
+        my_print("pre max Speed, CD = %f @ CL = %f" %\
                                   (self.CD_preMaxSpeed, self.CL_preMaxSpeed))
 
 
@@ -2700,7 +2714,7 @@ class polarData:
         self.CD_maxGlide = self.CD[self.maxGlide_idx]
         self.alpha_maxGlide = self.alpha[self.maxGlide_idx]
 
-        print("max Glide, CL/CD = %f @ CL = %f" %
+        my_print("max Glide, CL/CD = %f @ CL = %f" %
                                   (self.CL_CD_maxGlide, self.CL_maxGlide))
 
     def determine_CLmin(self, params):
@@ -2725,9 +2739,9 @@ class polarData:
         self.CD_pre_maxLift = self.CD[self.pre_maxLift_idx]
         self.alpha_pre_maxLift = self.alpha[self.pre_maxLift_idx]
 
-        print("max Lift, CL = %f @ alpha = %f" %
+        my_print("max Lift, CL = %f @ alpha = %f" %
                                   (self.CL_maxLift, self.alpha_maxLift))
-        print("last op-point before max Lift will be set to CL = %f @ alpha"\
+        my_print("last op-point before max Lift will be set to CL = %f @ alpha"\
               " = %f, keeping a CL-distance of %f" %\
           (self.CL_pre_maxLift, self.alpha_pre_maxLift, params.maxLiftDistance))
 
@@ -2745,7 +2759,7 @@ class polarData:
         # also determine CD @ CL = 0
         self.CD_CL0 = self.find_CD_From_CL(0.0)
 
-        print("alpha_CL0 = %f" % self.alpha_CL0)
+        my_print("alpha_CL0 = %f" % self.alpha_CL0)
 
     # local helper-functions
     def find_index_From_CL(self, CL):
@@ -2908,7 +2922,7 @@ def read_planeDataFile(fileName):
         data.append(wingDict)
 
     # debug output
-    #print data
+    #my_print data
     return data
 
 
@@ -3103,7 +3117,7 @@ def progressfile_preamble(commandLines, progressFileName):
 # function that generates commandlines to run Xoptfoil, create and merge polars
 # etc.
 def generate_Commandlines(params):
-    print("Generating commandlines...")
+    my_print("Generating commandlines...")
 
     # create an empty list of commandlines
     commandLines = []
@@ -3386,7 +3400,7 @@ def get_InFileName(args):
         # use Default-name
         inFileName = '.' + bs + ressourcesPath + bs + strakMachineInputFileName
 
-    print("filename for strak-machine input-data is: %s\n" % inFileName)
+    my_print("filename for strak-machine input-data is: %s\n" % inFileName)
     return inFileName
 
 
@@ -3621,7 +3635,7 @@ def get_Parameters(dict):
     # create new instance of parameters
     params = strakData()
 
-    print("getting parameters..\n")
+    my_print("getting parameters..\n")
 
     # get program-call from arguments
     call = sys.argv[0]
@@ -3751,7 +3765,7 @@ def get_Parameters(dict):
     DoneMsg()
 
     # perform parameter-checks now
-    print("checking validity of all parameters..")
+    my_print("checking validity of all parameters..")
     check_operatingMode(params, dict)
     check_WeightingMode(params)
     check_NumOpPoints(params)
@@ -3950,8 +3964,8 @@ def createAdjustedInputFile(params, i):
     return newFile
 
 
-def generate_InputFiles(params):
-    print("Generating inputfiles...")
+def generate_InputFiles(params, writeToDisk):
+    my_print("Generating inputfiles...")
 
     # clear are previsously generated inputfiles
     params.inputFiles.clear()
@@ -4046,8 +4060,9 @@ def generate_InputFiles(params):
             # set shape_functions
             newFile.set_shape_functions (params.shape_functions[n])
 
-            # physically create the file
-            newFile.write_ToFile(iFile)
+            if writeToDisk:
+                # physically create the file
+                newFile.write_ToFile(iFile)
 
             # reduce initial perturb for the next pass
             initialPerturb = initialPerturb*0.5
@@ -4068,7 +4083,7 @@ def compose_Polarfilename_T2(ReSqrt_Cl, NCrit):
 
 def generate_Polars(params, rootfoilName):
     # generate polars of seedfoil / root-airfoil:
-    print("Generating polars for airfoil %s..." % rootfoilName)
+    my_print("Generating polars for airfoil %s..." % rootfoilName)
 
     # compose polar-dir
 #    polarDir = '.' + bs + rootfoilName + '_polars' #FIXME why did this not work anymore and had to be changed?
@@ -4120,7 +4135,7 @@ def generate_Polars(params, rootfoilName):
             newPolar_T1.import_FromFile(polarFileNameAndPath_T1)
         except:
             # execute xfoil-worker / create T1 polar-file
-            print("Generating polar %s" % polarFileName_T1)
+            my_print("Generating polar %s" % polarFileName_T1)
             system(systemString_T1)
             newPolar_T1.import_FromFile(polarFileNameAndPath_T1)
 
@@ -4132,7 +4147,7 @@ def generate_Polars(params, rootfoilName):
             newPolar_T2.import_FromFile(polarFileNameAndPath_T2)
         except:
             # execute xfoil-worker / create T2 polar-file
-            print("Generating polar %s" % polarFileName_T2)
+            my_print("Generating polar %s" % polarFileName_T2)
             system(systemString_T2)
             newPolar_T2.import_FromFile(polarFileNameAndPath_T2)
 
@@ -4262,7 +4277,7 @@ def set_PolarDataFromInputFile(polarData, rootPolar, inputFile,
     polarData.Bot_Xtr.append(0.0)
 
 
-def generate_TargetPolars(params):
+def generate_TargetPolars(params, writeToDisk):
      # clear all previsously generated target polars
     params.target_polars.clear()
 
@@ -4275,7 +4290,7 @@ def generate_TargetPolars(params):
     # get name of the root-airfoil
     airfoilName = get_FoilName(params, 0)
     airfoilName = remove_suffix(airfoilName, '.dat')
-    print("Generating target polars for airfoil %s..." % airfoilName)
+    my_print("Generating target polars for airfoil %s..." % airfoilName)
 
     for i in range(numTargetPolars):
 
@@ -4295,19 +4310,20 @@ def generate_TargetPolars(params):
         # append the new target polar to list of target_polars
         params.target_polars.append(targetPolar)
 
-        # compose polar-dir
-        polarDir = params.buildDir + bs + airfoilName + '_polars'
+        if writeToDisk:
+            # compose polar-dir
+            polarDir = params.buildDir + bs + airfoilName + '_polars'
 
-        # check if output-folder exists. If not, create folder.
-        if not path.exists(polarDir):
-            makedirs(polarDir)
+            # check if output-folder exists. If not, create folder.
+            if not path.exists(polarDir):
+                makedirs(polarDir)
 
-        # compose filename and path
-        polarFileNameAndPath = polarDir + bs + ('target_polar_%s.txt' %\
-                               get_ReString(Re[i]))
+            # compose filename and path
+            polarFileNameAndPath = polarDir + bs + ('target_polar_%s.txt' %\
+                                   get_ReString(Re[i]))
 
-        # write polar to file
-        targetPolar.write_ToFile(polarFileNameAndPath)
+            # write polar to file
+            targetPolar.write_ToFile(polarFileNameAndPath)
 
     DoneMsg()
 
@@ -4343,6 +4359,8 @@ def merge_Polars(polarFile_1, polarFile_2 , mergedPolarFile, mergeCL):
 
 class strak_machine:
     def __init__(self, strakDataFileName):
+        global print_disabled
+
         self.graph = None
         # try to open .json-file
         try:
@@ -4401,10 +4419,10 @@ class strak_machine:
         self.params.calculate_MainTargetValues()
 
         # generate input-Files
-        generate_InputFiles(self.params)
+        generate_InputFiles(self.params, True)
 
         # generate target polars and write to file
-        generate_TargetPolars(self.params)
+        generate_TargetPolars(self.params, True)
 
         # generate Xoptfoil command-lines
         commandlines = generate_Commandlines(self.params)
@@ -4413,10 +4431,10 @@ class strak_machine:
         chdir(".." + bs)
 
         if (self.params.generateBatch == True):
-            print ('generating batchfile \'%s\'' % self.params.batchfileName)
+            my_print ('generating batchfile \'%s\'' % self.params.batchfileName)
             generate_Batchfile(self.params.batchfileName, commandlines)
 
-            print ('generating batchfiles for each single airfoil of the strak')
+            my_print ('generating batchfiles for each single airfoil of the strak')
             generate_StrakBatchfiles(self.params, commandlines)
 
         # change working-directory to output-directory
@@ -4426,6 +4444,9 @@ class strak_machine:
         self.graph = polarGraph()
 
         DoneMsg()
+
+        # disable further console print output
+        print_disabled = True
 
 
     def plot_diagram(self, diagramType, ax):
@@ -4520,14 +4541,32 @@ class strak_machine:
 
         try:
             # generate input-Files
-            generate_InputFiles(self.params)
+            generate_InputFiles(self.params, False)
         except:
             ErrorMsg("Unable to generate input files")
             return
 
         try:
             # generate target polars and write to file
-            generate_TargetPolars(self.params)
+            generate_TargetPolars(self.params, False)
+        except:
+            ErrorMsg("Unable to generate target polars")
+
+    def load(self):
+        return #FIXME load parameters from strakdata.txt
+
+    def save(self):
+        # FIXME save parameters to strakdata.txt
+        try:
+            # generate input-Files
+            generate_InputFiles(self.params, True)
+        except:
+            ErrorMsg("Unable to generate input files")
+            return
+
+        try:
+            # generate target polars and write to file
+            generate_TargetPolars(self.params, True)
         except:
             ErrorMsg("Unable to generate target polars")
 
@@ -4627,10 +4666,10 @@ if __name__ == "__main__":
         #params.calculate_AdditionalOpPoints()#TODO remove
 
         # generate input-Files
-        generate_InputFiles(params)
+        generate_InputFiles(params, True)
 
         # generate target polars and write to file
-        generate_TargetPolars(params)
+        generate_TargetPolars(params, True)
 
     # generate Xoptfoil command-lines
     commandlines = generate_Commandlines(params)
@@ -4639,12 +4678,12 @@ if __name__ == "__main__":
     chdir(".." + bs)
 
     # generate batchfile
-    print("Generating batchfiles...")
+    my_print("Generating batchfiles...")
     if (params.generateBatch == True):
-        print ('generating batchfile \'%s\'' % params.batchfileName)
+        my_print ('generating batchfile \'%s\'' % params.batchfileName)
         generate_Batchfile(params.batchfileName, commandlines)
 
-        print ('generating batchfiles for each single airfoil of the strak')
+        my_print ('generating batchfiles for each single airfoil of the strak')
         generate_StrakBatchfiles(params, commandlines)
     DoneMsg()
 
@@ -4654,4 +4693,4 @@ if __name__ == "__main__":
     # show graph
     graph.draw(params)
 
-    print("Ready.")
+    my_print("Ready.")
