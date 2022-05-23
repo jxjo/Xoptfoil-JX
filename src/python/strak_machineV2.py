@@ -1869,8 +1869,8 @@ class polarGraph:
 
             ax.plot(x, y, style, linestyle = ls_targetPolar,
                             linewidth = linewidth, label = label)
-
-            ax.legend(loc='upper left', fontsize = fs_legend)
+            if T1_label != None:
+                ax.legend(loc='upper left', fontsize = fs_legend)
 
         # plot strak-polars
         if params.plotStrakPolars:
@@ -1893,8 +1893,8 @@ class polarGraph:
 
                 ax.plot(x, y, style, linestyle = ls_strakPolar,
                                 linewidth = lw_strakPolar, label = label)
-
-                ax.legend(loc='upper left', fontsize = fs_legend)
+                if (label != None):
+                    ax.legend(loc='upper left', fontsize = fs_legend)
 
 
     # plots lift/alpha-polars (Xfoil-worker-polars and target-polars)
@@ -1943,7 +1943,9 @@ class polarGraph:
             y = polar.CL[switchIdx:len(polar.CL)]
             # plot CL, CD
             ax.plot(x, y, (cl_T2_polar+'-'), label=T2_label)
-            ax.legend(loc='upper left', fontsize = fs_legend)
+
+            if (T1_label != None):
+                ax.legend(loc='upper left', fontsize = fs_legend)
 
             # plot alpha @CL = 0
             x = polar.alpha_CL0
@@ -2068,7 +2070,9 @@ class polarGraph:
 
             # plot CL, CD
             ax.plot(x, y, (cl_T2_polar+'-'), label=T2_label)
-            ax.legend(loc='upper left', fontsize = fs_legend)
+
+            if (T1_label != None):
+                ax.legend(loc='upper left', fontsize = fs_legend)
 
             # plot Cl/CD @CL = 0
             x = 0.0
@@ -2179,8 +2183,8 @@ class polarGraph:
 
                 ax.plot(x, y, style, linestyle = ls_strakPolar,
                                 linewidth = lw_strakPolar, label = label)
-
-                ax.legend(loc='upper left', fontsize = fs_legend)
+                if (label != None):
+                    ax.legend(loc='upper left', fontsize = fs_legend)
 
     def draw_diagram(self, params, diagramType, ax):
         # get polars
@@ -4513,6 +4517,7 @@ class strak_machine:
             self.params.maxLiftGain[airfoilIdx] = value
         elif paramIdx == 6:
             self.params.maxGlideShift[airfoilIdx] = value
+            print("max glide shift: %f" % value)
         elif paramIdx == 7:
             self.params.maxSpeedShift[airfoilIdx] = value
         elif paramIdx == 8:
