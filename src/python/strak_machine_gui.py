@@ -2,10 +2,12 @@ import tkinter as tk
 import tkinter.messagebox
 import customtkinter
 import strak_machineV2
-from strak_machineV2 import diagTypes
-from strak_machineV2 import NoteMsg
-from strak_machineV2 import ErrorMsg
-from strak_machineV2 import strak_machine
+import os
+from PIL import ImageTk, Image
+from strak_machineV3 import diagTypes
+from strak_machineV3 import NoteMsg
+from strak_machineV3 import ErrorMsg
+from strak_machineV3 import strak_machine
 from colorama import init
 
 # imports to use matplotlib together with tkinter
@@ -16,115 +18,236 @@ from matplotlib.figure import Figure
 import matplotlib.animation as animation
 
 # some global variables
-num_parameters = 14
 num_diagrams = 3
 polarsHaveChanged = 0
 
-# Defines limits for shaping parameter raw values
-limits = [
-          { "min" : -0.5, "max" : 0.0}, # 0:  minCLGain
-          { "min" : -0.3, "max" : 0.0}, # 1:  CL0Gain
-          { "min" :  0.0, "max" : 0.5}, # 2:  maxSpeedGain
-          { "min" :  0.0, "max" : 0.5}, # 3:  preMaxSpeedGain
-          { "min" : -2.0, "max" : 1.0}, # 4:  maxGlideGain
-          { "min" : -0.3, "max" : 1.0}, # 5:  maxLiftGain
-          { "min" : -0.1, "max" : 0.1}, # 6:  maxGlideShift
-          { "min" : -0.1, "max" : 0.0}, # 7:  maxSpeedShift
-          { "min" :  0.0, "max" : 1.0}, # 8:  linearFactor_0
-          { "min" :  0.0, "max" : 1.0}, # 9:  linearFactor_1
-          { "min" :  0.0, "max" : 4.0}, # 10: linearFactor_2
-          { "min" :  0.0, "max" : 0.3}, # 11: linearFactor_3
-          { "min" :  0.0, "max" : 0.3}, # 12: linearFactor_4
-          { "min" :  1.0, "max" : 1.02},# 13: maxGlideFactor
-         ]
+# paths and separators
+bs = "\\"
+ressourcesPath = 'ressources'
 
-# Definition of slider labels
-sliderLabels = [
-          "minCLGain",       # 0
-          "CL0Gain",         # 1
-          "maxSpeedGain",    # 2
-          "preMaxSpeedGain", # 3
-          "maxGlideGain",    # 4
-          "maxLiftGain",     # 5
-          "maxGlideShift",   # 6
-          "maxSpeedShift",   # 7
-          "linearFactor_0",  # 8
-          "linearFactor_1",  # 9
-          "linearFactor_2",  # 10
-          "linearFactor_3",  # 11
-          "linearFactor_4",  # 12
-          "maxGlideFactor"   # 13
-           ]
+# number of decimals in the generated input-files
+CL_decimals = 5 # lift
+CD_decimals = 6 # drag
+CL_CD_decimals = 2 # lift/drag
+AL_decimals = 5 # alpha
 
-
-# class shaping parameter, which is used to exchange parameters for shaping
-# target polars between gui and strak machine
-class shapingParameter():
-    def __init__(self, idx, getter, setter, limits):
-        self.idx = idx
-        self.min = limits["min"]
-        self.max = limits["max"]
-        self.getter = getter
-        self.setter = setter
-
-        # get initial value
-        self.value = self.get()
-
-    def get(self):
-        # call getter function (airfoilIdx, paramIdx)
-        rawValue = self.getter(1, self.idx)
-        # scale parameter
-        sliderValue = self.scale_rawToSlider(rawValue)
-        #print("get: raw value: %f, slider value: %f" % (rawValue, sliderValue))# FIXME Debug
-        return sliderValue
-
-    def set(self, sliderValue):
-        global polarsHaveChanged
-        # scale parameter
-        rawValue = self.scale_sliderToRaw(sliderValue)
-        # call setter function
-        self.setter(1, self.idx, rawValue)
-        #print("set: raw value: %f, slider value: %f" % (rawValue, sliderValue))# FIXME Debug
-        # notify gui about the change
-        polarsHaveChanged = 1
-
-
-    def scale_rawToSlider(self, rawValue):
-        sliderValue = self.interpolate_2(0.0, 1.0, self.min, self.max, rawValue)
-        #print("rawToSlider: min: %f, max: %f" % (self.min, self.max))# FIXME Debug
-        return sliderValue
-
-    def scale_sliderToRaw(self, sliderValue):
-        rawValue = self.interpolate_2(self.min, self.max, 0.0, 1.0, sliderValue)
-        #print("sliderToRaw: min: %f, max: %f" % (self.min, self.max))# FIXME Debug
-        return rawValue
-
-    def interpolate_2(self, x1, x2, y1, y2, y):
-        try:
-            x = (y - y1)/((y2-y1)/(x2-x1)) + x1
-        except:
-            ErrorMsg("Division by zero!")
-            x = 0.0
-        return x
+# name of logo-image
+logoName = 'strakmachine.jpg'
 
 # class control frame, change the input-variables / parameters of the
 # strak machine
 class control_frame():
-    def __init__(self, master, side, left_Buttons, right_Buttons, shapingParameters):
+    def __init__(self, master, side, left_Buttons, right_Buttons, strak_machine):
+        self.strak_machine = strak_machine
         self.frame = customtkinter.CTkFrame(master=master, width=180,
                                             corner_radius=0)
         #self.frame.grid_columnconfigure(1, weight=1)
-
         # init nextRow (where to place next widget)
-        self.nextRow = 1
+        self.nextRow = 0
+
+        # add the strak machine logo
+        self.add_logo()
 
         # add different widgets
         self.add_label()
         self.add_buttons(left_Buttons, right_Buttons)
-        self.add_sliders(shapingParameters)
+        self.add_entries()
 
         # show frame
         self.frame.pack(side = side, fill=tk.BOTH, expand=1)
+
+    def add_logo(self):
+        path = ".." + bs + ressourcesPath + bs + logoName
+        try:
+            img = Image.open(path)
+        except:
+            ErrorMsg("strak-machine-image was not found in path %s" % path)
+            return
+
+        # Resize the image in the given (width, height)
+        sized_img = img.resize((333, 87), Image.LANCZOS)
+
+        # Convert the image in TkImage
+        self.my_img = ImageTk.PhotoImage(sized_img)
+
+         # Create a Label Widget to display the text or Image
+        self.logo = customtkinter.CTkLabel(master=self.frame, image = self.my_img)
+
+        # place the label
+        self.logo.grid(row=self.nextRow, columnspan=2, pady=0, padx=0)
+        self.nextRow = self.nextRow + 1
+
+
+    def get_valuesFromDict(self, targetValue):
+        # type of oppoint
+        mode = targetValue["type"]
+
+        if (mode == 'spec-cl'):
+            # oppoint is lift (CL)
+            #oppoint = targetValue["oppoint"] #FIXME Debug
+            #varType = type(oppoint)
+            oppoint = round(targetValue["oppoint"], CL_decimals)
+            # target is drag (CD)
+            target = round(targetValue["target"], CD_decimals)
+        elif (mode == 'spec-al'):
+            # oppoint is angle of attack (alpha)
+            oppoint = round(targetValue["oppoint"], AL_decimals)
+            # target is lift (CL)
+            target = round(targetValue["target"], CL_decimals)
+        else:
+            ErrorMsg("undefined oppoint type %s" % mode)
+            return (None, None, None)
+
+        return (mode, oppoint, target)
+
+    def write_valuesToDict(self, idx, mode, oppoint, target):
+        targetValue = self.targetValues[idx]
+
+        if (mode == 'spec-cl'):
+            # oppoint is lift (CL)
+            oppoint = round(oppoint, CL_decimals)
+
+            # target is drag (CD)
+            target = round(target, CD_decimals)
+        elif (mode == 'spec-al'):
+            # oppoint is angle of attack (alpha)
+            oppoint = round(oppoint, AL_decimals)
+            # target is lift (CL)
+            target = round(target, CL_decimals)
+        else:
+            ErrorMsg("undefined oppoint type %s" % mode)
+
+        targetValue["oppoint"] = oppoint
+        targetValue["target"] = target
+        #targetValue["type"] = mode # FIXME We do not support chaning mode at the moment
+
+        self.targetValues[idx] = targetValue
+
+
+
+    def add_entries(self):
+        # get initial target values
+        self.targetValues = self.strak_machine.get_targetValues(1)# FIXME select airfoil
+
+        # init some strucures to store data locally
+        self.entries = []
+        self.textVars = []
+
+        # determine number of entries
+        num_entries = len(self.targetValues)
+
+        # local variable to place spec-al entries in the frame
+        spec_al_entries = []
+
+        # Add Label
+        oppoint_label = customtkinter.CTkLabel(master=self.frame,
+                                              text="CL",
+                                              text_font=("Roboto Medium", -16))
+        target_label = customtkinter.CTkLabel(master=self.frame,
+                                              text="CD",
+                                              text_font=("Roboto Medium", -16))
+        self.place_widgets(oppoint_label, target_label)
+
+        # create entries and assign values
+        for i in range(num_entries):
+            # get dictionary containing oppoint / type / target value
+            targetValue = self.targetValues[i]
+
+            # get values from dictinory
+            (mode, oppoint, target) = self.get_valuesFromDict(targetValue)
+            if (mode == None):
+                # error, continue with next entry
+                continue
+
+            # create text-Vars to interact with entries
+            type_txt = tk.StringVar(self.frame, value=mode)
+            oppoint_txt = tk.StringVar(self.frame, value=oppoint)
+            target_txt = tk.StringVar(self.frame, value=target)
+
+            self.textVars.append((type_txt, oppoint_txt, target_txt))
+
+            # create entry for oppoint
+            oppoint_entry = customtkinter.CTkEntry(self.frame, show=None,
+             textvariable = oppoint_txt, text_font=('Roboto Medium', 8),
+             width=80, height=16)
+
+             # bind to "Enter"-Message
+            oppoint_entry.bind('<Return>', self.update_Entries)
+
+            # create entry for target
+            target_entry = customtkinter.CTkEntry(self.frame, show=None,
+             textvariable = target_txt, text_font=('Roboto Medium', 8),
+             width=80, height=16)
+
+            # bind to "Enter"-Message
+            target_entry.bind('<Return>', self.update_Entries)
+
+            # append both entries to list
+            self.entries.append((oppoint_entry, target_entry))
+
+            # if oppoint is 'spec-cl' place widget now
+            if (mode == 'spec-cl'):
+                self.place_widgets(oppoint_entry, target_entry)
+            elif (mode == 'spec-al'):
+                # append to list of spec-al entries
+                spec_al_entries.append((oppoint_entry, target_entry))
+
+        # Add Label
+        oppoint_label = customtkinter.CTkLabel(master=self.frame,
+                                              text="Alpha",
+                                              text_font=("Roboto Medium", -16))
+        target_label = customtkinter.CTkLabel(master=self.frame,
+                                              text="CL",
+                                              text_font=("Roboto Medium", -16))
+
+        self.place_widgets(oppoint_label, target_label)
+        # now place spec-al entries
+        for entryTuple in spec_al_entries:
+            # unpack tuple
+            (oppoint_entry, target_entry) = entryTuple
+            self.place_widgets(oppoint_entry, target_entry)
+
+    def update_Entries(self, command):
+        global polarsHaveChanged
+
+        # local variable if writeback of target values to strak machine is needed
+        writeback_needed = False
+        idx = 0
+
+        for entryTuple in self.entries:
+            (oppoint_entry, target_entry) = entryTuple
+
+            # unpack tuple
+            oppoint_entry = oppoint_entry.get()
+            target_entry = target_entry.get()
+
+            # get dictionary containing oppoint / type / target value
+            targetValue = self.targetValues[idx]
+
+            # get values from dictinory
+            (mode, oppoint, target) = self.get_valuesFromDict(targetValue)
+
+            # compare if something has changed
+            if ((oppoint_entry != str(oppoint)) or (target_entry != str(target))):
+                # write values to dictionary
+                self.write_valuesToDict(idx, mode, float(oppoint_entry), float(target_entry))
+                # set notification variable
+                writeback_needed = True
+                print("writeback\n")
+
+            idx = idx + 1
+
+        if (writeback_needed):
+            # writeback dictionary to strakmachine
+            self.strak_machine.set_targetValues(1, self.targetValues)# FIXME only first airfoil supported at the moment
+
+            # perform update of the target polars
+            self.strak_machine.update_targetPolars()
+
+            # notify the diagram frame about the change
+            polarsHaveChanged = 1
+
+
 
     def place_widgets(self, widget1, widget2):
         if widget1 != None:
@@ -184,38 +307,6 @@ class control_frame():
         return button
 
 
-    def add_sliders(self, shapingParameters):
-        idx = 0
-
-        # create slider for each of the shaping parameters
-        for parameter in shapingParameters:
-            command = parameter.set
-            init_value = parameter.get()
-
-            name = sliderLabels[idx]
-
-            # create new slider
-            slider = customtkinter.CTkSlider(master=self.frame, command=command)
-
-            # init slider
-            slider.set(init_value)
-
-            label = customtkinter.CTkLabel(master=self.frame,
-                                                   text=name ,
-                                                   height=10,
-                                                   fg_color=("white", "gray38"),
-                                                   justify=tkinter.LEFT)
-
-            #entry = customtkinter.CTkEntry(master=self.frame, width=20)
-
-            # init entry
-            #entry.set(init_value)
-
-            # place slider and entry
-            self.place_widgets(slider, label)
-            idx = idx +1
-
-
     def add_blankRow(self):
         self.nextRow = self.nextRow + 1
 
@@ -234,6 +325,130 @@ class diagram(customtkinter.CTkFrame):
 
         canvas._tkcanvas.pack(fill=tk.BOTH, expand=1)
         canvas.draw()
+##
+##        #self.cid = self.add_callback(self.diagram_changed)
+##        self._ind = None  # the active vert
+##
+##        canvas.mpl_connect('draw_event', self.on_draw)
+##        canvas.mpl_connect('button_press_event', self.on_button_press)
+##        canvas.mpl_connect('key_press_event', self.on_key_press)
+##        canvas.mpl_connect('button_release_event', self.on_button_release)
+##        canvas.mpl_connect('motion_notify_event', self.on_mouse_move)
+##        self.canvas = canvas
+
+    def on_draw(self, event):
+        return
+##        self.background = self.canvas.copy_from_bbox(self.ax.bbox)
+##        self.ax.draw_artist(self.poly)
+##        self.ax.draw_artist(self.line)
+        # do not need to blit here, this will fire before the screen is
+        # updated
+
+    def diagram_changed(self, parent):
+        """This method is called whenever the pathpatch object is called."""
+        # only copy the artist props to the line (except visibility)
+##        vis = self.line.get_visible()
+##        Artist.update_from(self.line, poly)
+##        self.line.set_visible(vis)  # don't use the poly visibility state
+        return
+
+    def get_ind_under_point(self, event):
+        """
+        Return the index of the point closest to the event position or *None*
+        if no point is within ``self.epsilon`` to the event position.
+        """
+        # display coords
+##        xy = np.asarray(self.poly.xy)
+##        xyt = self.poly.get_transform().transform(xy)
+##        xt, yt = xyt[:, 0], xyt[:, 1]
+##        d = np.hypot(xt - event.x, yt - event.y)
+##        indseq, = np.nonzero(d == d.min())
+##        ind = indseq[0]
+##
+##        if d[ind] >= self.epsilon:
+##            ind = None
+##
+##        return ind
+        return
+
+    def on_button_press(self, event):
+##        """Callback for mouse button presses."""
+##        if not self.showverts:
+##            return
+##        if event.inaxes is None:
+##            return
+##        if event.button != 1:
+##            return
+##        self._ind = self.get_ind_under_point(event)
+        return
+
+    def on_button_release(self, event):
+        """Callback for mouse button releases."""
+##        if not self.showverts:
+##            return
+##        if event.button != 1:
+##            return
+##        self._ind = None
+        return
+
+    def on_key_press(self, event):
+        """Callback for key presses."""
+##        if not event.inaxes:
+##            return
+##        if event.key == 't':
+##            self.showverts = not self.showverts
+##            self.line.set_visible(self.showverts)
+##            if not self.showverts:
+##                self._ind = None
+##        elif event.key == 'd':
+##            ind = self.get_ind_under_point(event)
+##            if ind is not None:
+##                self.poly.xy = np.delete(self.poly.xy,
+##                                         ind, axis=0)
+##                self.line.set_data(zip(*self.poly.xy))
+##        elif event.key == 'i':
+##            xys = self.poly.get_transform().transform(self.poly.xy)
+##            p = event.x, event.y  # display coords
+##            for i in range(len(xys) - 1):
+##                s0 = xys[i]
+##                s1 = xys[i + 1]
+##                d = dist_point_to_segment(p, s0, s1)
+##                if d <= self.epsilon:
+##                    self.poly.xy = np.insert(
+##                        self.poly.xy, i+1,
+##                        [event.xdata, event.ydata],
+##                        axis=0)
+##                    self.line.set_data(zip(*self.poly.xy))
+##                    break
+##        if self.line.stale:
+##            self.canvas.draw_idle()
+        return
+
+    def on_mouse_move(self, event):
+        """Callback for mouse movements."""
+##        if not self.showverts:
+##            return
+##        if self._ind is None:
+##            return
+##        if event.inaxes is None:
+##            return
+##        if event.button != 1:
+##            return
+##        x, y = event.xdata, event.ydata
+##
+##        self.poly.xy[self._ind] = x, y
+##        if self._ind == 0:
+##            self.poly.xy[-1] = x, y
+##        elif self._ind == len(self.poly.xy) - 1:
+##            self.poly.xy[0] = x, y
+##        self.line.set_data(zip(*self.poly.xy))
+##
+##        self.canvas.restore_region(self.background)
+##        self.ax.draw_artist(self.poly)
+##        self.ax.draw_artist(self.line)
+##        self.canvas.blit(self.ax.bbox)
+        return
+
 
 
 # class diagram frame, shows the graphical output of the strak machine
@@ -329,8 +544,6 @@ class diagram_frame():
         # check if an update has to be carried out
         if polarsHaveChanged == 1:
             #print("Update\n") #FIXME debug
-            # perform update of the target polars first
-            self.strak_machine.update_targetPolars()
 
             # get buffer idx for modifing the frames that are currently not visible
             if self.activeBufferIdx == 0:
@@ -366,6 +579,8 @@ class diagram_frame():
             # show new diagram
             self.show_activeDiagram()
 
+
+
 # main application
 class App(customtkinter.CTk):
     def __init__(self, strak_machine):
@@ -387,15 +602,12 @@ class App(customtkinter.CTk):
         # call .on_closing() when app gets closed
         self.protocol("WM_DELETE_WINDOW", self.on_closing)
 
-        # create Variables for polar shaping
-        self.create_inputVariables()
-
         # create diagram frame, which is on the right
         self.frame_right = diagram_frame(self.master, tk.RIGHT, self.strak_machine)
 
         # create control frame, which is on the left
         self.frame_left = control_frame(self.master, tk.LEFT,
-         self.get_leftButtons(), self.get_rightButtons(), self.shapingParameters)
+         self.get_leftButtons(), self.get_rightButtons(), self.strak_machine)
 
 
     def get_leftButtons(self):
@@ -409,19 +621,13 @@ class App(customtkinter.CTk):
         buttons = []
         buttons.append({"txt": "Load", "cmd" : self.load_strakdata})
         buttons.append({"txt": "Save", "cmd" : self.save_strakdata})
+        buttons.append({"txt": "Reset", "cmd" : self.reset_strakdata})
         return buttons
 
-    def create_inputVariables(self):
-        # configure getter and setter function
-        getter_function = self.strak_machine.get_Param
-        setter_function = self.strak_machine.set_Param
-
-        # add input-variables
-        self.shapingParameters = []
-        for idx in range(num_parameters):
-            self.shapingParameters.append(shapingParameter(idx, getter_function,
-            setter_function, limits[idx]))
-
+##    def create_inputVariables(self):
+##        # configure getter and setter function
+##        getter_function = self.strak_machine.get_Param
+##        setter_function = self.strak_machine.set_Param
 
     def set_CL_CD_diagram(self):
         self.frame_right.change_diagram("CL_CD_diagram")
@@ -441,6 +647,10 @@ class App(customtkinter.CTk):
 
     def save_strakdata(self):
         print("Save strakdata")
+        return
+
+    def reset_strakdata(self):
+        print("Reset strakdata")
         return
 
     def start(self):
