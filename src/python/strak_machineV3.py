@@ -239,9 +239,12 @@ class inputFile:
         # delete 'name'
         operatingConditions = self.values["operating_conditions"]
         operatingConditionsBackup = operatingConditions.copy()
-        del(operatingConditions['name'])
-        #FIXME Xoptfoil does not accept dynamic weighting in combination with certain sonstant weighting values anymore (!) --> talk to Jochen
-        del(operatingConditions['weighting'])
+        try:
+            del(operatingConditions['name'])
+            #FIXME Xoptfoil does not accept dynamic weighting in combination with certain sonstant weighting values anymore (!) --> talk to Jochen
+            del(operatingConditions['weighting'])
+        except:
+            pass
 
         self.values["operating_conditions"] = operatingConditions
 
@@ -253,6 +256,11 @@ class inputFile:
         self.values["operating_conditions"] = operatingConditionsBackup.copy()
         DoneMsg()
 
+    # reads contents to file, using f90nnml-parser
+    def read_FromFile(self, fileName):
+        my_print("reading input-file %s..." % fileName)
+        self.values = f90nml.read(fileName)
+        DoneMsg()
 
     # deletes all existing op-points in operating-conditions, but keeps
     # the keys of the dictionary (empty lists)
@@ -3763,30 +3771,8 @@ def generate_InputFiles(params, writeToDisk):
     # create inputFile of root-airfoil
     newFile = create_new_inputFile(params, 0)
 
-##    # append input-file to params
-##    params.inputFiles.append(newFile)
-##
-##    # calculate the common intersectionPoint, so maxLiftGain can be adjusted
-##    # automatically
-##    params.intersectionPoint_CL = calculate_intersectionPoint(params, newFile)
-
-
     # generate files for all Re-numbers
     for i in range(0, num_files):
-##        if (i == 0):
-##            # create inputFile of root-airfoil
-##            newFile = create_new_inputFile(params, 0)
-##
-##            if (params.intersectionPoint_CL_CD != 99.0):
-##                # calculate the common intersectionPoint, so maxLiftGain can be adjusted
-##                # automatically
-##                params.intersectionPoint_CL = calculate_intersectionPoint(params, newFile)
-##
-##        else:
-##            # generate file that has an adjusted maxLift-Target
-##            if (params.intersectionPoint_CL_CD != 99.0):
-##                newFile = createAdjustedInputFile(params, i)
-##            else:
 
         newFile = create_new_inputFile(params, i)
 
@@ -4034,7 +4020,7 @@ def set_PolarDataFromInputFile(polarData, rootPolar, inputFile,
     target_values = operatingConditions["target_value"]
     op_points = operatingConditions["op_point"]
     op_modes =  operatingConditions["op_mode"]
-    names = operatingConditions["name"]
+    #names = operatingConditions["name"] #FIXME is this neccessary any more ?
 
     # get the number of op-points
     numOpPoints = len(op_points)
@@ -4256,6 +4242,21 @@ class strak_machine:
         # disable further console print output
         print_disabled = True
 
+    def exit_action(self, value):
+        global print_disabled
+        print_disabled = True
+
+        return value
+
+    def entry_action(self, airfoilIdx):
+        global print_disabled
+        print_disabled = False
+
+        # check if airfoilIdx exceeds number of airfoils handled by parameters
+        if airfoilIdx > len(self.params.ReNumbers):
+            ErrorMsg("set_targetValues: invalid airfoilIdx :%d" % airfoilIdx)
+            return self.exit_action(-1)
+
 
     def plot_diagram(self, diagramType, ax):
         # draw the graph
@@ -4263,10 +4264,7 @@ class strak_machine:
 
 
     def get_targetValues(self, airfoilIdx):
-         # check if airfoilIdx exceeds number of airfoils handled by parameters
-        if airfoilIdx > len(self.params.ReNumbers):
-            ErrorMsg("get_Param: invalid airfoilIdx :%d" % airfoilIdx)
-            return None
+        self.entry_action(airfoilIdx)
 
         targetValues = []
         inputFile = self.params.inputFiles[airfoilIdx]
@@ -4283,13 +4281,10 @@ class strak_machine:
 
             targetValues.append({"type": mode, "oppoint" : oppoint, "target" : target})
 
-        return targetValues
+        return self.exit_action(targetValues)
 
     def set_targetValues(self, airfoilIdx, targetValues):
-         # check if airfoilIdx exceeds number of airfoils handled by parameters
-        if airfoilIdx > len(self.params.ReNumbers):
-            ErrorMsg("get_Param: invalid airfoilIdx :%d" % airfoilIdx)
-            return -1
+        self.entry_action(airfoilIdx)
 
         inputFile = self.params.inputFiles[airfoilIdx]
         operatingConditions = inputFile.get_OperatingConditions()
@@ -4306,8 +4301,7 @@ class strak_machine:
 
         # writeback operating-conditions
         inputFile.set_OperatingConditions(operatingConditions)
-        return 0
-
+        return self.exit_action(0)
 
 
     def update_targetPolars(self):
@@ -4318,24 +4312,44 @@ class strak_machine:
         except:
             ErrorMsg("Unable to generate target polars")
 
-    def load(self):
-        return #FIXME load parameters from strakdata.txt
 
-    def save(self):
-        # FIXME save parameters to strakdata.txt
+    def get_inputfileName(self, airfoilIdx):
+        fileName = self.params.inputFileNames[airfoilIdx]
+        return fileName
+
+
+    def load(self, airfoilIdx):
+        self.entry_action(airfoilIdx)
         try:
-            # generate input-Files
-            generate_InputFiles(self.params, True)
+            # get input file from params
+            inputFile = self.params.inputFiles[airfoilIdx]
+            fileName = self.get_inputfileName(airfoilIdx)
+            inputFile.read_FromFile(fileName)
         except:
-            ErrorMsg("Unable to generate input files")
-            return
+            ErrorMsg("Unable to load input-file %s" % fileName)
+            return self.exit_action(-1)
+
+        return self.exit_action(0)
+
+
+    def save(self, airfoilIdx):
+        self.entry_action(airfoilIdx)
+        # get input file from params
+        inputFile = self.params.inputFiles[airfoilIdx]
+        fileName = self.get_inputfileName(airfoilIdx)
 
         try:
-            # generate target polars and write to file
-            generate_TargetPolars(self.params, True)
+            inputFile.write_ToFile(fileName)
         except:
-            ErrorMsg("Unable to generate target polars")
+            ErrorMsg("Unable to save input-file %s" % fileName)
+            return self.exit_action(-1)
 
+        return self.exit_action(0)
+
+    def reset(self, airfoilIdx):
+        self.entry_action(airfoilIdx)
+        ErrorMsg("command \"reset\" not implemented yet")
+        return self.exit_action(-1)
 
 ################################################################################
 # Main program

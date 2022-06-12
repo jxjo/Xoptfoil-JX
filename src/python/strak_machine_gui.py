@@ -100,6 +100,7 @@ class control_frame():
 
         return (mode, oppoint, target)
 
+
     def write_valuesToDict(self, idx, mode, oppoint, target):
         targetValue = self.targetValues[idx]
 
@@ -172,7 +173,7 @@ class control_frame():
              width=80, height=16)
 
              # bind to "Enter"-Message
-            oppoint_entry.bind('<Return>', self.update_Entries)
+            oppoint_entry.bind('<Return>', self.update_TargetValues)
 
             # create entry for target
             target_entry = customtkinter.CTkEntry(self.frame, show=None,
@@ -180,7 +181,7 @@ class control_frame():
              width=80, height=16)
 
             # bind to "Enter"-Message
-            target_entry.bind('<Return>', self.update_Entries)
+            target_entry.bind('<Return>', self.update_TargetValues)
 
             # append both entries to list
             self.entries.append((oppoint_entry, target_entry))
@@ -207,7 +208,28 @@ class control_frame():
             (oppoint_entry, target_entry) = entryTuple
             self.place_widgets(oppoint_entry, target_entry)
 
-    def update_Entries(self, command):
+
+    def update_Entries(self, airfoilIdx):
+        # get actual targetValues from strak machine
+        self.targetValues = self.strak_machine.get_targetValues(airfoilIdx)
+
+        idx = 0
+        for element in self.textVars:
+            # unpack tuple
+            (type_txt, oppoint_txt, target_txt) = element
+
+             # get values from dictinory
+            (mode, oppoint, target) = self.get_valuesFromDict(self.targetValues[idx])
+
+            # copy values to textvars
+            type_txt.set(str(mode))
+            oppoint_txt.set(str(oppoint))
+            target_txt.set(str(target))
+
+            idx = idx +1
+
+
+    def update_TargetValues(self, command):
         global polarsHaveChanged
 
         # local variable if writeback of target values to strak machine is needed
@@ -233,7 +255,6 @@ class control_frame():
                 self.write_valuesToDict(idx, mode, float(oppoint_entry), float(target_entry))
                 # set notification variable
                 writeback_needed = True
-                print("writeback\n")
 
             idx = idx + 1
 
@@ -619,15 +640,11 @@ class App(customtkinter.CTk):
 
     def get_rightButtons(self):
         buttons = []
-        buttons.append({"txt": "Load", "cmd" : self.load_strakdata})
-        buttons.append({"txt": "Save", "cmd" : self.save_strakdata})
-        buttons.append({"txt": "Reset", "cmd" : self.reset_strakdata})
+        buttons.append({"txt": "Load", "cmd" : self.load})
+        buttons.append({"txt": "Save", "cmd" : self.save})
+        buttons.append({"txt": "Reset", "cmd" : self.reset})
         return buttons
 
-##    def create_inputVariables(self):
-##        # configure getter and setter function
-##        getter_function = self.strak_machine.get_Param
-##        setter_function = self.strak_machine.set_Param
 
     def set_CL_CD_diagram(self):
         self.frame_right.change_diagram("CL_CD_diagram")
@@ -641,17 +658,19 @@ class App(customtkinter.CTk):
     def on_closing(self, event=0):
         self.destroy()
 
-    def load_strakdata(self):
-        print("Load strakdata")
-        return
+    def load(self):
+        global polarsHaveChanged
+        self.strak_machine.load(1)# FIXME airfoil-Index
+        self.targetValues = self.strak_machine.get_targetValues(1)# FIXME select airfoil
+        self.strak_machine.update_targetPolars()
+        self.frame_left.update_Entries(1)# FIXME select airfoil
+        polarsHaveChanged = 1
 
-    def save_strakdata(self):
-        print("Save strakdata")
-        return
+    def save(self):
+        self.strak_machine.save(1)# FIXME airfoil-Index
 
-    def reset_strakdata(self):
-        print("Reset strakdata")
-        return
+    def reset(self):
+        self.strak_machine.reset(1)# FIXME airfoil-Index
 
     def start(self):
         while True:
