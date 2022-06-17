@@ -1,4 +1,5 @@
 import tkinter as tk
+from tkinter import ttk
 import tkinter.messagebox
 import customtkinter
 import strak_machineV2
@@ -39,9 +40,25 @@ logoName = 'strakmachine.jpg'
 class control_frame():
     def __init__(self, master, side, left_Buttons, right_Buttons, strak_machine):
         self.strak_machine = strak_machine
+## Scrollable Frame
+##        self.container = customtkinter.CTkFrame(master=master, width=180,
+##                                            corner_radius=0)
+##        self.canvas = tk.Canvas(self.container)
+##        self.scrollbar = ttk.Scrollbar(self.container, orient="vertical", command=self.canvas.yview)
+##        self.frame = customtkinter.CTkFrame(self.canvas)
+##
+##        self.frame.bind("<Configure>", lambda e: self.canvas.configure(scrollregion=self.canvas.bbox("all"))
+##
+##        self.canvas.create_window((0, 0), window=self.frame, anchor="nw")
+##        self.canvas.configure(yscrollcommand=self.scrollbar.set)
+##
+##        self.container.pack()
+##        self.canvas.pack(side="left", fill="both", expand=True)
+##        self.scrollbar.pack(side="right", fill="y")
+
         self.frame = customtkinter.CTkFrame(master=master, width=180,
                                             corner_radius=0)
-        #self.frame.grid_columnconfigure(1, weight=1)
+
         # init nextRow (where to place next widget)
         self.nextRow = 0
 
@@ -618,17 +635,17 @@ class App(customtkinter.CTk):
         self.title("The Strak machine")
 
         # maximize the window using state property
-        #self.state('zoomed')
+        self.state('zoomed')
 
         # call .on_closing() when app gets closed
         self.protocol("WM_DELETE_WINDOW", self.on_closing)
 
-        # create diagram frame, which is on the right
-        self.frame_right = diagram_frame(self.master, tk.RIGHT, self.strak_machine)
-
         # create control frame, which is on the left
         self.frame_left = control_frame(self.master, tk.LEFT,
          self.get_leftButtons(), self.get_rightButtons(), self.strak_machine)
+
+        # create diagram frame, which is on the right
+        self.frame_right = diagram_frame(self.master, tk.RIGHT, self.strak_machine)
 
 
     def get_leftButtons(self):
