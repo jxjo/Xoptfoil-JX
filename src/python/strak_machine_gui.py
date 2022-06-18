@@ -27,14 +27,13 @@ bs = "\\"
 ressourcesPath = 'ressources'
 
 # number of decimals in the generated input-files
-CL_decimals = 5 # lift
-CD_decimals = 6 # drag
+CL_decimals = 5    # lift
+CD_decimals = 6    # drag
 CL_CD_decimals = 2 # lift/drag
-AL_decimals = 5 # alpha
+AL_decimals = 5    # alpha
 
 # name of logo-image
 logoName = 'strakmachine.jpg'
-
 
 # class control frame, change the input-variables / parameters of the
 # strak machine
@@ -119,8 +118,6 @@ class control_frame():
 
         if (mode == 'spec-cl'):
             # oppoint is lift (CL)
-            #oppoint = targetValue["oppoint"] #FIXME Debug
-            #varType = type(oppoint)
             oppoint = round(targetValue["oppoint"], CL_decimals)
             # target is drag (CD)
             target = round(targetValue["target"], CD_decimals)
@@ -156,7 +153,6 @@ class control_frame():
         targetValue["oppoint"] = oppoint
         targetValue["target"] = target
         #targetValue["type"] = mode # FIXME We do not support changing mode at the moment
-
         self.targetValues[idx] = targetValue
 
 
@@ -260,7 +256,6 @@ class control_frame():
             type_txt.set(str(mode))
             oppoint_txt.set(str(oppoint))
             target_txt.set(str(target))
-
             idx = idx +1
 
 
@@ -301,7 +296,7 @@ class control_frame():
             self.strak_machine.update_targetPolars()
 
             # notify the diagram frame about the change
-            polarsHaveChanged = 1
+            polarsHaveChanged = 2
 
 
 
@@ -439,7 +434,7 @@ class control_frame():
                 self.strak_machine.set_visiblePolars(newVisibleFlags)
 
                 # notify the diagram frame about the change
-                polarsHaveChanged = 1
+                polarsHaveChanged = 2
                 break
 
 
@@ -678,7 +673,7 @@ class diagram_frame():
         global polarsHaveChanged
 
         # check if an update has to be carried out
-        if polarsHaveChanged == 1:
+        if polarsHaveChanged > 0:
             # get buffer idx for modifing the frames that are currently not visible
             if self.activeBufferIdx == 0:
                 backgroundIdx = 1
@@ -697,14 +692,7 @@ class diagram_frame():
                 figure.canvas.draw()
 
             # clear notification variable
-            polarsHaveChanged = 0
-
-            # switch buffers
-            #self.activeBufferIdx = backgroundIdx
-            #print(self.activeBufferIdx)# FIXME Debug
-
-            # show the changes now
-            #self.show_activeDiagram()
+            polarsHaveChanged = polarsHaveChanged - 1
 
     def change_diagram(self, diagram):
         if (self.activeDiagram != diagram):
@@ -772,16 +760,13 @@ class App(customtkinter.CTk):
     def set_CLCD_CL_diagram(self):
         self.frame_right.change_diagram("CLCD_CL_diagram")
 
-    def on_closing(self, event=0):
-        self.destroy()
-
     def load(self):
         global polarsHaveChanged
         self.strak_machine.load(self.airfoilIdx)
         self.targetValues = self.strak_machine.get_targetValues(self.airfoilIdx)
         self.strak_machine.update_targetPolars()
         self.frame_left.update_Entries(self.airfoilIdx)
-        polarsHaveChanged = 1
+        polarsHaveChanged = 2
 
     def save(self):
         self.strak_machine.save(self.airfoilIdx)
