@@ -40,7 +40,9 @@ logoName = 'strakmachine.jpg'
 # strak machine
 class control_frame():
     def __init__(self, master, side, left_Buttons, right_Buttons, strak_machine):
+        # store some variables in own class data structure
         self.strak_machine = strak_machine
+        self.master = master
 
         self.frame_top = customtkinter.CTkFrame(master=master, width=180,
                                             corner_radius=0)
@@ -67,9 +69,14 @@ class control_frame():
         # add the strak machine logo
         self.add_logo(self.frame_top)
 
-        # add different widgets
+        # add different widgets to upper frame (not scrollable)
         self.add_label(self.frame_top)
         self.add_buttons(self.frame_top, left_Buttons, right_Buttons)
+        self.add_appearanceModeMenu(self.frame_top)
+        self.add_airfoilChoiceMenu(self.frame_top)
+        self.add_visiblePolarsCheckboxes(self.frame_top)
+
+        # add entries to lower frame (scrollable)
         self.add_entries(self.frame_bottom)
 
         # show upper frame
@@ -148,7 +155,7 @@ class control_frame():
 
         targetValue["oppoint"] = oppoint
         targetValue["target"] = target
-        #targetValue["type"] = mode # FIXME We do not support chaning mode at the moment
+        #targetValue["type"] = mode # FIXME We do not support changing mode at the moment
 
         self.targetValues[idx] = targetValue
 
@@ -300,10 +307,10 @@ class control_frame():
 
     def place_widgets(self, widget1, widget2):
         if widget1 != None:
-            widget1.grid(row=self.nextRow, column=0, pady=10, padx=10)
+            widget1.grid(row=self.nextRow, column=0, pady=5, padx=5, sticky="e")
 
         if widget2 != None:
-            widget2.grid(row=self.nextRow, column=1, pady=0, padx=10)
+            widget2.grid(row=self.nextRow, column=1, pady=5, padx=5, sticky="w")
 
         self.nextRow = self.nextRow + 1
 
@@ -355,10 +362,90 @@ class control_frame():
                                             command=command)
         return button
 
+    def add_appearanceModeMenu(self, frame):
+        self.label_mode = customtkinter.CTkLabel(master=frame, text="Appearance Mode:")
+        self.optionmenu_1 = customtkinter.CTkOptionMenu(master=frame,
+                                                        values=["Dark", "Light"],
+                                                        command=self.change_appearance_mode)
+        self.place_widgets(self.label_mode, self.optionmenu_1)
+
+
+    def add_airfoilChoiceMenu(self, frame):
+        self.label_airfoilChoice = customtkinter.CTkLabel(master=frame, text="Edit polar of:")
+        airfoilNames = self.strak_machine.get_airfoilNames()
+        self.optionmenu_2 = customtkinter.CTkOptionMenu(master=frame,
+                                                        values=airfoilNames[1:],
+                                                        command=self.change_airfoil)
+        self.place_widgets(self.label_airfoilChoice, self.optionmenu_2)
+
+
+    def add_visiblePolarsCheckboxes(self, frame):
+        self.checkBoxes = []
+        self.visibleFlags = []
+        self.lastVisibleFlags = []
+        self.label_visiblePolars = customtkinter.CTkLabel(master=frame, text="Visible polars:")
+        widget_1 = self.label_visiblePolars
+        airfoilNames = self.strak_machine.get_airfoilNames()
+        num = len(airfoilNames)
+        idx = 0
+
+        for airfoilName in airfoilNames:
+            # new visibleFlag
+            self.visibleFlags.append(tk.BooleanVar(value=True))
+            self.lastVisibleFlags.append(True)
+
+            # new checkbox
+            checkBox = customtkinter.CTkCheckBox(master=frame, text=airfoilName,
+              variable=self.visibleFlags[idx])
+            self.checkBoxes.append(checkBox)
+
+            # placing the widgets
+            self.place_widgets(widget_1, checkBox)
+            widget_1 = None
+            idx = idx + 1
 
     def add_blankRow(self):
         self.nextRow = self.nextRow + 1
 
+
+    def change_appearance_mode(self, new_appearance_mode):
+        customtkinter.set_appearance_mode(new_appearance_mode)
+
+         # maximize the window again using state property
+        self.master.state('zoomed')
+
+
+    def change_airfoil(self, airfoilName):
+        airfoilIdx = self.airfoilNames.index(airfoilName)
+        self.master.airfoilIdx = airfoilIdx
+
+
+    def update_visibleFlags(self):
+        global polarsHaveChanged
+        newVisibleFlags = []
+
+        # read actual values
+        num = len(self.visibleFlags)
+        for idx in reversed(range(num)):
+            newVisibleFlags.append(self.visibleFlags[idx].get())
+
+        for idx in range (num):
+            # check if something has changed
+            if (self.lastVisibleFlags[idx] != newVisibleFlags[idx]):
+                self.lastVisibleFlags.clear()
+                self.lastVisibleFlags = newVisibleFlags
+
+                # notify strak machine
+                self.strak_machine.set_visiblePolars(newVisibleFlags)
+
+                # notify the diagram frame about the change
+                polarsHaveChanged = 1
+                break
+
+
+
+    def on_closing(self, event=0):
+        self.destroy()
 
 class diagram(customtkinter.CTkFrame):
 
@@ -551,7 +638,7 @@ class diagram_frame():
 
         for diagType in diagTypes:
             # new figure
-            fig = Figure(figsize=(15, 10))
+            fig = Figure(figsize=(15, 16))
             ax = fig.add_subplot()
 
             # initial diagram
@@ -592,8 +679,6 @@ class diagram_frame():
 
         # check if an update has to be carried out
         if polarsHaveChanged == 1:
-            #print("Update\n") #FIXME debug
-
             # get buffer idx for modifing the frames that are currently not visible
             if self.activeBufferIdx == 0:
                 backgroundIdx = 1
@@ -636,11 +721,14 @@ class App(customtkinter.CTk):
         super().__init__()
 
         # configure customtkinter
-        customtkinter.set_appearance_mode("dark")     # Modes: "System" (standard), "Dark", "Light"
+        customtkinter.set_appearance_mode("Dark")    # Modes: "System" (standard), "Dark", "Light"
         customtkinter.set_default_color_theme("blue") # Themes: "blue" (standard), "green", "dark-blue"
 
         # store strak_machine instance locally
         self.strak_machine = strak_machine
+
+        # set Index of airfoil, whose polar shall be editable
+        self.airfoilIdx = 1
 
         # set window title
         self.title("The Strak machine")
@@ -652,12 +740,11 @@ class App(customtkinter.CTk):
         self.protocol("WM_DELETE_WINDOW", self.on_closing)
 
         # create diagram frame, which is on the right
-        self.frame_right = diagram_frame(self.master, tk.RIGHT, self.strak_machine)
+        self.frame_right = diagram_frame(self, tk.RIGHT, self.strak_machine)
 
         # create control frame, which is on the left
-        self.frame_left = control_frame(self.master, tk.LEFT,
+        self.frame_left = control_frame(self, tk.LEFT,
          self.get_leftButtons(), self.get_rightButtons(), self.strak_machine)
-
 
 
     def get_leftButtons(self):
@@ -666,6 +753,7 @@ class App(customtkinter.CTk):
         buttons.append({"txt": "x=alpha, y=CL", "cmd" : self.set_CL_alpha_diagram})
         buttons.append({"txt": "x=CL, y=CL/CD", "cmd" : self.set_CLCD_CL_diagram})
         return buttons
+
 
     def get_rightButtons(self):
         buttons = []
@@ -689,24 +777,27 @@ class App(customtkinter.CTk):
 
     def load(self):
         global polarsHaveChanged
-        self.strak_machine.load(1)# FIXME airfoil-Index
-        self.targetValues = self.strak_machine.get_targetValues(1)# FIXME select airfoil
+        self.strak_machine.load(self.airfoilIdx)
+        self.targetValues = self.strak_machine.get_targetValues(self.airfoilIdx)
         self.strak_machine.update_targetPolars()
-        self.frame_left.update_Entries(1)# FIXME select airfoil
+        self.frame_left.update_Entries(self.airfoilIdx)
         polarsHaveChanged = 1
 
     def save(self):
-        self.strak_machine.save(1)# FIXME airfoil-Index
+        self.strak_machine.save(self.airfoilIdx)
 
     def reset(self):
-        self.strak_machine.reset(1)# FIXME airfoil-Index
+        self.strak_machine.reset(self.airfoilIdx)
 
     def start(self):
         while True:
             self.update_idletasks()
             self.update()
-            #self.frame_right.show_activeDiagram()
+            self.frame_left.update_visibleFlags()
             self.frame_right.update_diagrams(self)
+
+    def on_closing(self, event=0):
+        self.destroy()
 
 if __name__ == "__main__":
     # init colorama

@@ -1069,6 +1069,7 @@ class strakData:
         self.strak_polars = []
         self.inputFiles = []
         self.airfoilNames = []
+        self.visibleFlags = [True, True, True, True, True, True, True, True, True, True, True, True]
         #self.maxIterations = [30,40,160], # multi-pass optimization
         self.numberOfCompetitors = [1, 3, 1], # multi-pass optimization
         #self.shape_functions = ['camb-thick-plus','hicks-henne','hicks-henne'],
@@ -1114,6 +1115,13 @@ class strakData:
     # function that returns a list of Re-numbers
     def get_ReList(params):
         return params.ReNumbers
+
+    def get_visibleFlags(self):
+        return self.visibleFlags
+
+    def set_visibleFlags(self, flags):
+        self.visibleFlags.clear()
+        self.visibleFlags = flags
 
 
     ############################################################################
@@ -1478,8 +1486,12 @@ class strakData:
 ################################################################################
 class polarGraph:
     def __init__(self):
+        self.visibleFlags = []
         return
 
+    def check_polarVisibility(self, params, polarIdx):
+        visibleFlags = params.get_visibleFlags()
+        return (visibleFlags[polarIdx])
 
     def set_AxesAndLabels(self, ax, title, xlabel, ylabel):
 
@@ -1560,6 +1572,10 @@ class polarGraph:
 
         # all polars
         for polarIdx in range(numPolars):
+            if (self.check_polarVisibility(params, polarIdx) == False):
+                # do not plot this polar
+                continue
+
             #  get polar and target-polar to plot
             polar = polars[polarIdx]
             targetPolar = targetPolars[polarIdx]
@@ -1718,6 +1734,10 @@ class polarGraph:
 
         # all polars
         for polarIdx in range(numPolars):
+            if (self.check_polarVisibility(params, polarIdx) == False):
+                # do not plot this polar
+                continue
+
             #  get polar and target-polar to plot
             polar = polars[polarIdx]
             targetPolar = targetPolars[polarIdx]
@@ -1844,6 +1864,10 @@ class polarGraph:
 
         # all polars
         for polarIdx in range(numPolars):
+            if (self.check_polarVisibility(params, polarIdx) == False):
+                # do not plot this polar
+                continue
+
             #  get polar and target-polar to plot
             polar = polars[polarIdx]
             targetPolar = targetPolars[polarIdx]
@@ -4282,6 +4306,13 @@ class strak_machine:
             targetValues.append({"type": mode, "oppoint" : oppoint, "target" : target})
 
         return self.exit_action(targetValues)
+
+
+    def get_airfoilNames(self):
+        return self.params.airfoilNames
+
+    def set_visiblePolars(self, visibleFlags):
+        self.params.set_visibleFlags(visibleFlags)
 
     def set_targetValues(self, airfoilIdx, targetValues):
         self.entry_action(airfoilIdx)
