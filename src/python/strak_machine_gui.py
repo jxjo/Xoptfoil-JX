@@ -35,45 +35,56 @@ AL_decimals = 5 # alpha
 # name of logo-image
 logoName = 'strakmachine.jpg'
 
+
 # class control frame, change the input-variables / parameters of the
 # strak machine
 class control_frame():
     def __init__(self, master, side, left_Buttons, right_Buttons, strak_machine):
         self.strak_machine = strak_machine
-## Scrollable Frame
-##        self.container = customtkinter.CTkFrame(master=master, width=180,
-##                                            corner_radius=0)
-##        self.canvas = tk.Canvas(self.container)
-##        self.scrollbar = ttk.Scrollbar(self.container, orient="vertical", command=self.canvas.yview)
-##        self.frame = customtkinter.CTkFrame(self.canvas)
-##
-##        self.frame.bind("<Configure>", lambda e: self.canvas.configure(scrollregion=self.canvas.bbox("all"))
-##
-##        self.canvas.create_window((0, 0), window=self.frame, anchor="nw")
-##        self.canvas.configure(yscrollcommand=self.scrollbar.set)
-##
-##        self.container.pack()
-##        self.canvas.pack(side="left", fill="both", expand=True)
-##        self.scrollbar.pack(side="right", fill="y")
 
-        self.frame = customtkinter.CTkFrame(master=master, width=180,
+        self.frame_top = customtkinter.CTkFrame(master=master, width=180,
                                             corner_radius=0)
+
+
+        # Scrollable Frame
+        self.container = customtkinter.CTkFrame(master=master, width=180,
+                                            corner_radius=0)
+
+        self.canvas = tk.Canvas(self.container, background="#000000")
+        self.scrollbar = ttk.Scrollbar(self.container, orient="vertical", command=self.canvas.yview)
+        #self.frame_bottom  = customtkinter.CTkFrame(self.canvas, width=180, corner_radius=0, background = "#000000")
+        self.frame_bottom  = tk.Frame(self.canvas, width=180, background = "#000000")
+        self.frame_bottom.bind("<Configure>", self.OnFrameConfigure)
+
+        self.canvas.create_window((10, 10), window=self.frame_bottom , anchor="nw")
+        self.canvas.configure(yscrollcommand=self.scrollbar.set)
+        self.canvas.pack(side="left", fill="both", expand=True)
+        self.scrollbar.pack(side="right", fill="y")
 
         # init nextRow (where to place next widget)
         self.nextRow = 0
 
         # add the strak machine logo
-        self.add_logo()
+        self.add_logo(self.frame_top)
 
         # add different widgets
-        self.add_label()
-        self.add_buttons(left_Buttons, right_Buttons)
-        self.add_entries()
+        self.add_label(self.frame_top)
+        self.add_buttons(self.frame_top, left_Buttons, right_Buttons)
+        self.add_entries(self.frame_bottom)
 
-        # show frame
-        self.frame.pack(side = side, fill=tk.BOTH, expand=1)
+        # show upper frame
+        self.frame_top.pack(side = 'top', fill=tk.BOTH, expand=1)
 
-    def add_logo(self):
+        # show lower frame
+        self.container.pack(side = 'bottom', fill=tk.BOTH, expand=1)
+
+
+    def OnFrameConfigure(self, event):
+        '''Reset the scroll region to encompass the inner frame'''
+        self.canvas.configure(scrollregion=self.canvas.bbox("all"))
+
+
+    def add_logo(self, frame):
         path = ".." + bs + ressourcesPath + bs + logoName
         try:
             img = Image.open(path)
@@ -88,7 +99,7 @@ class control_frame():
         self.my_img = ImageTk.PhotoImage(sized_img)
 
          # Create a Label Widget to display the text or Image
-        self.logo = customtkinter.CTkLabel(master=self.frame, image = self.my_img)
+        self.logo = customtkinter.CTkLabel(master=frame, image = self.my_img)
 
         # place the label
         self.logo.grid(row=self.nextRow, columnspan=2, pady=0, padx=0)
@@ -143,7 +154,7 @@ class control_frame():
 
 
 
-    def add_entries(self):
+    def add_entries(self, frame):
         # get initial target values
         self.targetValues = self.strak_machine.get_targetValues(1)# FIXME select airfoil
 
@@ -158,10 +169,10 @@ class control_frame():
         spec_al_entries = []
 
         # Add Label
-        oppoint_label = customtkinter.CTkLabel(master=self.frame,
+        oppoint_label = customtkinter.CTkLabel(master=frame,
                                               text="CL",
                                               text_font=("Roboto Medium", -16))
-        target_label = customtkinter.CTkLabel(master=self.frame,
+        target_label = customtkinter.CTkLabel(master=frame,
                                               text="CD",
                                               text_font=("Roboto Medium", -16))
         self.place_widgets(oppoint_label, target_label)
@@ -178,14 +189,14 @@ class control_frame():
                 continue
 
             # create text-Vars to interact with entries
-            type_txt = tk.StringVar(self.frame, value=mode)
-            oppoint_txt = tk.StringVar(self.frame, value=oppoint)
-            target_txt = tk.StringVar(self.frame, value=target)
+            type_txt = tk.StringVar(frame, value=mode)
+            oppoint_txt = tk.StringVar(frame, value=oppoint)
+            target_txt = tk.StringVar(frame, value=target)
 
             self.textVars.append((type_txt, oppoint_txt, target_txt))
 
             # create entry for oppoint
-            oppoint_entry = customtkinter.CTkEntry(self.frame, show=None,
+            oppoint_entry = customtkinter.CTkEntry(frame, show=None,
              textvariable = oppoint_txt, text_font=('Roboto Medium', 8),
              width=80, height=16)
 
@@ -193,7 +204,7 @@ class control_frame():
             oppoint_entry.bind('<Return>', self.update_TargetValues)
 
             # create entry for target
-            target_entry = customtkinter.CTkEntry(self.frame, show=None,
+            target_entry = customtkinter.CTkEntry(frame, show=None,
              textvariable = target_txt, text_font=('Roboto Medium', 8),
              width=80, height=16)
 
@@ -211,10 +222,10 @@ class control_frame():
                 spec_al_entries.append((oppoint_entry, target_entry))
 
         # Add Label
-        oppoint_label = customtkinter.CTkLabel(master=self.frame,
+        oppoint_label = customtkinter.CTkLabel(master=frame,
                                               text="Alpha",
                                               text_font=("Roboto Medium", -16))
-        target_label = customtkinter.CTkLabel(master=self.frame,
+        target_label = customtkinter.CTkLabel(master=frame,
                                               text="CL",
                                               text_font=("Roboto Medium", -16))
 
@@ -296,23 +307,23 @@ class control_frame():
 
         self.nextRow = self.nextRow + 1
 
-    def add_label(self):
+    def add_label(self, frame):
         # Label
-        label = customtkinter.CTkLabel(master=self.frame,
+        label = customtkinter.CTkLabel(master=frame,
                                               text="Select diagram",
                                               text_font=("Roboto Medium", -16))
         self.place_widgets(label, None)
 
-    def add_buttons(self, left_Buttons, right_Buttons):
+    def add_buttons(self, frame, left_Buttons, right_Buttons):
         buttonsLeft = []
         buttonsRight = []
 
         # create all buttons and add to list
         for button in left_Buttons:
-            buttonsLeft.append(self.create_button(button))
+            buttonsLeft.append(self.create_button(frame, button))
 
         for button in right_Buttons:
-            buttonsRight.append(self.create_button(button))
+            buttonsRight.append(self.create_button(frame, button))
 
 
         numButtonsLeft = len(buttonsLeft)
@@ -333,12 +344,12 @@ class control_frame():
 
             self.place_widgets(left, right)
 
-    def create_button(self, button):
+    def create_button(self, frame, button):
         text = button["txt"]
         command = button["cmd"]
 
         # create new button
-        button = customtkinter.CTkButton(master=self.frame,
+        button = customtkinter.CTkButton(master=frame,
                                             text=text,
                                             fg_color=("gray75", "gray30"),
                                             command=command)
@@ -540,7 +551,7 @@ class diagram_frame():
 
         for diagType in diagTypes:
             # new figure
-            fig = Figure(figsize=(18, 10))
+            fig = Figure(figsize=(15, 10))
             ax = fig.add_subplot()
 
             # initial diagram
@@ -640,12 +651,13 @@ class App(customtkinter.CTk):
         # call .on_closing() when app gets closed
         self.protocol("WM_DELETE_WINDOW", self.on_closing)
 
+        # create diagram frame, which is on the right
+        self.frame_right = diagram_frame(self.master, tk.RIGHT, self.strak_machine)
+
         # create control frame, which is on the left
         self.frame_left = control_frame(self.master, tk.LEFT,
          self.get_leftButtons(), self.get_rightButtons(), self.strak_machine)
 
-        # create diagram frame, which is on the right
-        self.frame_right = diagram_frame(self.master, tk.RIGHT, self.strak_machine)
 
 
     def get_leftButtons(self):
