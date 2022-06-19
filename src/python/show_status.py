@@ -92,7 +92,7 @@ class show_status():
         y_Top = int(self.root.winfo_screenheight()/2 - Tk_Height/2)
 
         # Write following format for center screen
-        self.root.geometry("+{}+{}".format(x_Left, y_Top))
+        #self.root.geometry("+{}+{}".format(x_Left, y_Top))
 
         # set background-colour
         self.root.configure(bg=bg_colour)
