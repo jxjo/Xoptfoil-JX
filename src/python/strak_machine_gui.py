@@ -47,11 +47,16 @@ class control_frame():
         self.strak_machine = strak_machine
         self.master = master
 
+        # determine screen size
+        self.width = self.master.winfo_screenwidth()
+        self.heigth = self.master.winfo_screenheight()
+        strak_machine.set_screenParams(self.width, self.heigth)
+
+        # create top frame
         self.frame_top = customtkinter.CTkFrame(master=master, width=180,
                                             corner_radius=0)
 
-
-        # Scrollable Frame
+        # create scrollable Frame
         self.container = customtkinter.CTkFrame(master=master, width=180,
                                             corner_radius=0)
 
@@ -102,11 +107,8 @@ class control_frame():
             ErrorMsg("strak-machine-image was not found in path %s" % path)
             return
 
-        width = self.master.winfo_screenwidth()
-        heigth = self.master.winfo_screenheight()
-
-        img_width = int(323 * width/1920)
-        img_height = int(87 * heigth/1080)
+        img_width = int(323 * self.width/1920)
+        img_height = int(87 * self.heigth/1080)
 
         # Resize the image in the given (width, height)
         sized_img = img.resize((img_width, img_height), Image.LANCZOS)
@@ -597,9 +599,14 @@ class diagram_frame():
     def __init__(self, master, side, strak_machine):
         # store strak machine instance locally
         self.strak_machine = strak_machine
-
+        self.master = master
         self.figures = []
         self.axes = []
+
+        # determine screen size
+        self.width = self.master.winfo_screenwidth()
+        self.heigth = self.master.winfo_screenheight()
+        strak_machine.set_screenParams(self.width, self.heigth)
 
         # create figures initially (two of each kind for buffering)
         for i in range(2):

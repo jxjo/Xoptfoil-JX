@@ -72,6 +72,9 @@ PER_decimals = 6
 # fontsizes
 fs_infotext = 9
 fs_legend = 8
+fs_axes = 20
+fs_ticks = 10
+fontsScaled = False
 
 # colours
 cl_infotext = 'DeepSkyBlue'
@@ -1494,14 +1497,18 @@ class polarGraph:
         return (visibleFlags[polarIdx])
 
     def set_AxesAndLabels(self, ax, title, xlabel, ylabel):
-
-        # set title of the plot
-        text = (title)
-        #ax.set_title(text, fontsize = 30, color="darkgrey")
+        global fs_axes
+        global fs_ticks
 
         # set axis-labels
-        ax.set_xlabel(xlabel, fontsize = 20, color="darkgrey")
-        ax.set_ylabel(ylabel, fontsize = 20, color="darkgrey")
+        ax.set_xlabel(xlabel, fontsize = fs_axes, color="darkgrey")
+        ax.set_ylabel(ylabel, fontsize = fs_axes, color="darkgrey")
+
+        for tick in ax.xaxis.get_major_ticks():
+            tick.label.set_fontsize(fs_ticks)
+
+        for tick in ax.yaxis.get_major_ticks():
+            tick.label.set_fontsize(fs_ticks)
 
         # customize grid
         ax.grid(True, color='dimgrey',  linestyle='dotted', linewidth=0.4)
@@ -1634,22 +1641,22 @@ class polarGraph:
                     maxGlideTextOffset_x = rootPolar.CD_maxGlide * 1.1
                     maxGlideTextOffset_y = rootPolar.CL_maxGlide
 
-                    ax.annotate('CL=0 (root) @ CD = %.4f' % x, xy=(x,y),
+                    ax.annotate('CL=0 @ CD = %.4f' % x, xy=(x,y),
                       xytext=(CL0TextOffset_x, CL0TextOffset_y),
                       textcoords='data',
                       fontsize = fs_infotext, color=cl_infotext)
 
-                    ax.annotate('maxSpeed (root) @ CL = %.2f, CD = %.4f' % (y, x),
+                    ax.annotate('maxSpeed @ CL = %.2f, CD = %.4f' % (y, x),
                      xy=(x,y), xytext=(maxSpeedTextOffset_x, maxSpeedTextOffset_y),
                      textcoords='data', fontsize = fs_infotext,
                      color=cl_infotext)
 
-                    ax.annotate('maxGlide (root) @ CL = %.2f, CD = %.4f' % (y, x),
+                    ax.annotate('maxGlide @ CL = %.2f, CD = %.4f' % (y, x),
                      xy=(x,y), xytext=(maxGlideTextOffset_x, maxGlideTextOffset_y),
                       textcoords='data', fontsize = fs_infotext, color=cl_infotext)
 
-                    ax.annotate('maxLift (root) @ CL = %.2f, CD = %.4f' %(y,x),
-                      xy=(x,y), xytext=(-160,10), textcoords='offset points',
+                    ax.annotate('maxLift @ CL = %.2f, CD = %.4f' %(y,x),
+                      xy=(x,y), xytext=(-260,10), textcoords='offset points',
                         fontsize = fs_infotext, color=cl_infotext)
             else:
                 # plot target-polar
@@ -1767,7 +1774,7 @@ class polarGraph:
 
                 # Is this the only polar ?
                 if plotted_polars == 0:
-                    ax.annotate('CL=0 (root) @ alpha = %.2f' % x,
+                    ax.annotate('CL=0 @ alpha = %.2f' % x,
                       xy=(x,y), xytext=(20,-15), textcoords='offset points',
                       fontsize = fs_infotext, color=cl_infotext)
 
@@ -1778,7 +1785,7 @@ class polarGraph:
 
                 # Is this the only polar ?
                 if plotted_polars == 0:
-                    ax.annotate('maxSpeed (root) @ alpha = %.2f, CL = %.2f' %\
+                    ax.annotate('maxSpeed @ alpha = %.2f, CL = %.2f' %\
                       (x, y), xy=(x,y),
                       xytext=(20,-5), textcoords='offset points',
                       fontsize = fs_infotext, color=cl_infotext)
@@ -1790,7 +1797,7 @@ class polarGraph:
 
                 # Is this the only polar ?
                 if plotted_polars == 0:
-                    ax.annotate('maxGlide (root) @ alpha = %.2f, CL = %.2f' %\
+                    ax.annotate('maxGlide @ alpha = %.2f, CL = %.2f' %\
                       (x, y), xy=(x,y),
                       xytext=(20,-5), textcoords='offset points',
                       fontsize = fs_infotext, color=cl_infotext)
@@ -1802,7 +1809,7 @@ class polarGraph:
 
                 # Is this the only polar ?
                 if plotted_polars == 0:
-                    ax.annotate('maxLift (root) @ alpha = %.2f, CL = %.2f' %\
+                    ax.annotate('maxLift @ alpha = %.2f, CL = %.2f' %\
                       (x, y), xy=(x,y),
                       xytext=(-140,10), textcoords='offset points',
                       fontsize = fs_infotext, color=cl_infotext)
@@ -1906,7 +1913,7 @@ class polarGraph:
 
                 # Is this the only polar ?
                 if plotted_polars == 0:
-                    ax.annotate('CL=0 (root) @ CL/CD = %.2f' % y, xy=(x,y),
+                    ax.annotate('CL=0 @ CL/CD = %.2f' % y, xy=(x,y),
                     xytext=(20,-5), textcoords='offset points',
                     fontsize = fs_infotext, color=cl_infotext)
 
@@ -1917,8 +1924,8 @@ class polarGraph:
 
                  # Is this the only polar ?
                 if plotted_polars == 0:
-                    ax.annotate('maxSpeed (root) @\nCL = %.2f,\nCL/CD = %.2f' %\
-                    (x, y), xy=(x,y), xytext=(-80,0), textcoords='offset points',
+                    ax.annotate('maxSpeed @\nCL = %.2f,\nCL/CD = %.2f' %\
+                    (x, y), xy=(x,y), xytext=(-160,0), textcoords='offset points',
                     fontsize = fs_infotext, color=cl_infotext)
 
                 # plot max_glide
@@ -1928,8 +1935,8 @@ class polarGraph:
 
                 # Is this the only polar ?
                 if plotted_polars == 0:
-                   ax.annotate('maxGlide (root) @ CL = %.2f, CL/CD = %.2f' %\
-                      (x, y), xy=(x,y), xytext=(-60,15), textcoords='offset points',
+                   ax.annotate('maxGlide @ CL = %.2f, CL/CD = %.2f' %\
+                      (x, y), xy=(x,y), xytext=(-160,15), textcoords='offset points',
                        fontsize = fs_infotext, color=cl_infotext)
 
                 # plot max Lift
@@ -1939,8 +1946,8 @@ class polarGraph:
 
                  # Is this the only polar ?
                 if plotted_polars == 0:
-                    ax.annotate('maxLift (root) @\nCL = %.2f,\nCL/CD = %.2f' %\
-                    (x, y), xy=(x,y), xytext=(-90,0), textcoords='offset points',
+                    ax.annotate('maxLift @\nCL = %.2f,\nCL/CD = %.2f' %\
+                    (x, y), xy=(x,y), xytext=(-200,0), textcoords='offset points',
                     fontsize = fs_infotext, color=cl_infotext)
             else:
                 # plot target-polar
@@ -4128,7 +4135,6 @@ class strak_machine:
     def __init__(self, strakDataFileName):
         global print_disabled
 
-        self.graph = None
         # try to open .json-file
         try:
             strakDataFile = open(strakDataFileName)
@@ -4389,6 +4395,21 @@ class strak_machine:
         inputFile.set_OperatingConditions(operatingConditions)
         return self.exit_action(0)
 
+    def set_screenParams(self, width, height):
+        global fs_infotext
+        global fs_legend
+        global fs_axes
+        global fs_ticks
+        global fontsScaled
+
+        if (fontsScaled == False):
+            # scale font sizes
+            scaleFactor = int(height/1080)
+            fs_infotext = fs_infotext * scaleFactor
+            fs_legend = fs_legend * scaleFactor
+            fs_axes = fs_axes * scaleFactor
+            fs_ticks = fs_ticks * scaleFactor
+            fontsScaled = True
 
     def update_targetPolars(self):
         try:
