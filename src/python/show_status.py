@@ -87,22 +87,21 @@ class show_status():
         Tk_Width = 400
         Tk_Height = 300
 
-        #calculate coordination of screen and window form
-        x_Left = int(self.root.winfo_screenwidth()*2/3 - Tk_Width/2)
-        y_Top = int(self.root.winfo_screenheight()/2 - Tk_Height/2)
-
-        # Write following format for center screen
-        #self.root.geometry("+{}+{}".format(x_Left, y_Top))
-
         # set background-colour
         self.root.configure(bg=bg_colour)
 
         # display logo of the strak machine
         imagename = (".." + bs + ressourcesPath + bs + logoName)
 
+        width = self.root.winfo_screenwidth()
+        heigth = self.root.winfo_screenheight()
+
+        img_width = int(400 * width/1920)
+        img_height = int(100 * heigth/1080)
+
         # Creates a Tkinter-compatible photo image, which can be used everywhere
         # Tkinter expects an image object.
-        img = ImageTk.PhotoImage(Image.open(imagename).resize((400,100)))
+        img = ImageTk.PhotoImage(Image.open(imagename).resize((img_width,img_height)))
 
         # The Label widget is a standard Tkinter widget used to display a text
         # or image on the screen.
