@@ -34,11 +34,15 @@ AL_decimals = 5    # alpha
 
 # name of logo-image
 logoName = 'strakmachine.jpg'
+bg_color_scrollableFrame_light = "#DDDDDD"
+bg_color_scrollableFrame_dark =  "#222222"
 
 # class control frame, change the input-variables / parameters of the
 # strak machine
 class control_frame():
     def __init__(self, master, side, left_Buttons, right_Buttons, strak_machine):
+        global bg_color_scrollableFrame
+
         # store some variables in own class data structure
         self.strak_machine = strak_machine
         self.master = master
@@ -51,10 +55,10 @@ class control_frame():
         self.container = customtkinter.CTkFrame(master=master, width=180,
                                             corner_radius=0)
 
-        self.canvas = tk.Canvas(self.container, background="#000000")
+        self.canvas = tk.Canvas(self.container, background=bg_color_scrollableFrame_dark)
         self.scrollbar = ttk.Scrollbar(self.container, orient="vertical", command=self.canvas.yview)
         #self.frame_bottom  = customtkinter.CTkFrame(self.canvas, width=180, corner_radius=0, background = "#000000")
-        self.frame_bottom  = tk.Frame(self.canvas, width=180, background = "#000000")
+        self.frame_bottom  = tk.Frame(self.canvas, width=180, background = bg_color_scrollableFrame_dark)
         self.frame_bottom.bind("<Configure>", self.OnFrameConfigure)
 
         self.canvas.create_window((10, 10), window=self.frame_bottom , anchor="nw")
@@ -79,7 +83,7 @@ class control_frame():
         self.add_entries(self.frame_bottom)
 
         # show upper frame
-        self.frame_top.pack(side = 'top', fill=tk.BOTH, expand=1)
+        self.frame_top.pack(side = 'top', fill=tk.BOTH)
 
         # show lower frame
         self.container.pack(side = 'bottom', fill=tk.BOTH, expand=1)
@@ -98,8 +102,14 @@ class control_frame():
             ErrorMsg("strak-machine-image was not found in path %s" % path)
             return
 
+        width = self.master.winfo_screenwidth()
+        heigth = self.master.winfo_screenheight()
+
+        img_width = int(323 * width/1920)
+        img_height = int(87 * heigth/1080)
+
         # Resize the image in the given (width, height)
-        sized_img = img.resize((333, 87), Image.LANCZOS)
+        sized_img = img.resize((img_width, img_height), Image.LANCZOS)
 
         # Convert the image in TkImage
         self.my_img = ImageTk.PhotoImage(sized_img)
@@ -174,10 +184,10 @@ class control_frame():
         # Add Label
         oppoint_label = customtkinter.CTkLabel(master=frame,
                                               text="CL",
-                                              text_font=("Roboto Medium", -16))
+                                              text_font=("Roboto Medium", 13))
         target_label = customtkinter.CTkLabel(master=frame,
                                               text="CD",
-                                              text_font=("Roboto Medium", -16))
+                                              text_font=("Roboto Medium", 13))
         self.place_widgets(oppoint_label, target_label)
 
         # create entries and assign values
@@ -200,16 +210,16 @@ class control_frame():
 
             # create entry for oppoint
             oppoint_entry = customtkinter.CTkEntry(frame, show=None,
-             textvariable = oppoint_txt, text_font=('Roboto Medium', 8),
-             width=80, height=16)
+             textvariable = oppoint_txt, text_font=('Roboto Medium', 11),
+             width=100, height=16)
 
              # bind to "Enter"-Message
             oppoint_entry.bind('<Return>', self.update_TargetValues)
 
             # create entry for target
             target_entry = customtkinter.CTkEntry(frame, show=None,
-             textvariable = target_txt, text_font=('Roboto Medium', 8),
-             width=80, height=16)
+             textvariable = target_txt, text_font=('Roboto Medium', 11),
+             width=100, height=16)
 
             # bind to "Enter"-Message
             target_entry.bind('<Return>', self.update_TargetValues)
@@ -616,6 +626,7 @@ class diagram_frame():
 
         # set initial value of active diagram
         self.activeDiagram = "CL_CD_diagram"
+        self.switchDiagrams = False
 
         # show initial diagram
         self.show_activeDiagram()
@@ -694,13 +705,15 @@ class diagram_frame():
             # clear notification variable
             polarsHaveChanged = polarsHaveChanged - 1
 
+        elif (self.switchDiagrams == True):
+                 # show new diagram
+                self.show_activeDiagram()
+                self.switchDiagrams = False
+
     def change_diagram(self, diagram):
         if (self.activeDiagram != diagram):
             self.activeDiagram = diagram
-
-            # show new diagram
-            self.show_activeDiagram()
-
+            self.switchDiagrams = True
 
 
 # main application
@@ -762,17 +775,24 @@ class App(customtkinter.CTk):
 
     def load(self):
         global polarsHaveChanged
-        self.strak_machine.load(self.airfoilIdx)
-        self.targetValues = self.strak_machine.get_targetValues(self.airfoilIdx)
-        self.strak_machine.update_targetPolars()
-        self.frame_left.update_Entries(self.airfoilIdx)
-        polarsHaveChanged = 2
+        result = self.strak_machine.load(self.airfoilIdx)
+        if (result == 0):
+            self.targetValues = self.strak_machine.get_targetValues(self.airfoilIdx)
+            self.strak_machine.update_targetPolars()
+            self.frame_left.update_Entries(self.airfoilIdx)
+            polarsHaveChanged = 2
 
     def save(self):
         self.strak_machine.save(self.airfoilIdx)
 
     def reset(self):
-        self.strak_machine.reset(self.airfoilIdx)
+        global polarsHaveChanged
+        result = self.strak_machine.reset(self.airfoilIdx)
+        if (result == 0):
+            self.targetValues = self.strak_machine.get_targetValues(self.airfoilIdx)
+            self.strak_machine.update_targetPolars()
+            self.frame_left.update_Entries(self.airfoilIdx)
+            polarsHaveChanged = 2
 
     def start(self):
         while True:

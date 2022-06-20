@@ -1540,6 +1540,9 @@ class polarGraph:
 
     # plots lift/drag-polars (Xfoil-worker-polars and target-polars)
     def plot_LiftDragPolars(self, ax, polars, targetPolars, params):
+        T1T2_labelOk = False
+        Target_labelOk = False
+
         # set axes and labels
         self.set_AxesAndLabels(ax, 'CL, CD', 'CD', 'CL')
 
@@ -1562,13 +1565,8 @@ class polarGraph:
         # set y-axis manually
         ax.set_ylim(min(rootPolar.CL) - 0.2, max(rootPolar.CL) + 0.2)
 
-        # determine some text-offsets
-        CL0TextOffset_x = polars[0].find_CD_From_CL(0.0) * 1.1
-        CL0TextOffset_y = -0.2
-        maxSpeedTextOffset_x = polars[0].CD_maxSpeed * 1.1
-        maxSpeedTextOffset_y = rootPolar.CL_maxSpeed
-        maxGlideTextOffset_x = polars[0].find_CD_From_CL(rootPolar.CL_maxGlide) * 1.1
-        maxGlideTextOffset_y = rootPolar.CL_maxGlide
+        # set number of already plotted polars
+        plotted_polars = 0
 
         # all polars
         for polarIdx in range(numPolars):
@@ -1583,10 +1581,11 @@ class polarGraph:
             # determine idx for changing colors
             switchIdx = polar.T2_T1_switchIdx
 
-            # set label only for root-polar
-            if (polar == rootPolar):
+            # set label only once
+            if (T1T2_labelOk == False):
                 T1_label = 'T1-polar'
                 T2_label = 'T2-polar'
+                T1T2_labelOk = True
             else:
                 T1_label = None
                 T2_label = None
@@ -1603,91 +1602,79 @@ class polarGraph:
             # plot CL, CD
             ax.plot(x, y, (cl_T2_polar+'-'), label=T2_label)
 
-            # plot CD @CL = 0
-            x = polar.CD_CL0
-            y = 0.0
-            ax.plot(x, y, 'o', color=cl_infotext)
-
-            # additonal text for root polar only
+            # plot main oppoints for root polar only
             if (polar == rootPolar):
-                ax.annotate('CL=0 (root) @ CD = %.4f' % x, xy=(x,y),
-                  xytext=(CL0TextOffset_x, CL0TextOffset_y),
-                  textcoords='data',
-                  fontsize = fs_infotext, color=cl_infotext)
+                # plot CD @CL = 0
+                x = polar.CD_CL0
+                y = 0.0
+                ax.plot(x, y, 'o', color=cl_infotext)
 
-            # plot max_speed
-            x = polar.CD[polar.maxSpeed_idx]
-            y = polar.CL[polar.maxSpeed_idx]
-            ax.plot(x, y, marker='o',color=cl_infotext)
+                # plot max_speed
+                x = polar.CD[polar.maxSpeed_idx]
+                y = polar.CL[polar.maxSpeed_idx]
+                ax.plot(x, y, marker='o',color=cl_infotext)
 
-            # additonal text for root polar only
-            if (polar == rootPolar):
-                ax.annotate('maxSpeed (root) @ CL = %.2f, CD = %.4f' % (y, x),
-                 xy=(x,y), xytext=(maxSpeedTextOffset_x, maxSpeedTextOffset_y),
-                 textcoords='data', fontsize = fs_infotext,
-                 color=cl_infotext)
+                # plot max_glide
+                x = polar.CD[polar.maxGlide_idx]
+                y = polar.CL[polar.maxGlide_idx]
+                ax.plot(x, y, marker='o', color=cl_infotext)
 
-            # plot preMax_speed
-            x = polar.CD[polar.preMaxSpeed_idx]
-            y = polar.CL[polar.preMaxSpeed_idx]
+                # plot max lift
+                x = polar.CD[polar.maxLift_idx]
+                y = polar.CL[polar.maxLift_idx]
+                ax.plot(x, y, marker='o', color=cl_infotext)
 
-            # additonal text for root polar only
-            #if (polar == rootPolar):
-                #ax.plot(x, y, marker='o',color=cl_infotext)
-##                ax.annotate('preMaxSpeed (root) @ CL = %.2f, CD = %.4f' % (y, x),
-##                 xy=(x,y), xytext=(maxSpeedTextOffset_x, maxSpeedTextOffset_y),
-##                 textcoords='data', fontsize = fs_infotext,
-##                 color=cl_infotext)
+                # Is this the only polar ?
+                if plotted_polars == 0:
+                    # determine some text-offsets
+                    CL0TextOffset_x = rootPolar.CD_CL0 * 1.1
+                    CL0TextOffset_y = 0
+                    maxSpeedTextOffset_x = rootPolar.CD_maxSpeed * 1.1
+                    maxSpeedTextOffset_y = rootPolar.CL_maxSpeed
+                    maxGlideTextOffset_x = rootPolar.CD_maxGlide * 1.1
+                    maxGlideTextOffset_y = rootPolar.CL_maxGlide
 
-            # plot max_glide
-            x = polar.CD[polar.maxGlide_idx]
-            y = polar.CL[polar.maxGlide_idx]
-            ax.plot(x, y, marker='o', color=cl_infotext)
+                    ax.annotate('CL=0 (root) @ CD = %.4f' % x, xy=(x,y),
+                      xytext=(CL0TextOffset_x, CL0TextOffset_y),
+                      textcoords='data',
+                      fontsize = fs_infotext, color=cl_infotext)
 
-            # additonal text for root polar only
-            if (polar == rootPolar):
-                ax.annotate('maxGlide (root) @ CL = %.2f, CD = %.4f' % (y, x),
-                 xy=(x,y), xytext=(maxGlideTextOffset_x, maxGlideTextOffset_y),
-                  textcoords='data', fontsize = fs_infotext, color=cl_infotext)
+                    ax.annotate('maxSpeed (root) @ CL = %.2f, CD = %.4f' % (y, x),
+                     xy=(x,y), xytext=(maxSpeedTextOffset_x, maxSpeedTextOffset_y),
+                     textcoords='data', fontsize = fs_infotext,
+                     color=cl_infotext)
 
-            # plot max lift
-            x = polar.CD[polar.maxLift_idx]
-            y = polar.CL[polar.maxLift_idx]
-            ax.plot(x, y, marker='o', color=cl_infotext)
+                    ax.annotate('maxGlide (root) @ CL = %.2f, CD = %.4f' % (y, x),
+                     xy=(x,y), xytext=(maxGlideTextOffset_x, maxGlideTextOffset_y),
+                      textcoords='data', fontsize = fs_infotext, color=cl_infotext)
 
-            # additonal text for root polar only
-            if (polar == rootPolar):
-                ax.annotate('maxLift (root) @ CL = %.2f, CD = %.4f' %(y,x),
-                  xy=(x,y), xytext=(-160,10), textcoords='offset points',
-                    fontsize = fs_infotext, color=cl_infotext)
-
-            # plot target-polar
-            label = None
-            if (polar == rootPolar):
-                # style for target-polar of root-airfoil
-                style = opt_point_style_root
-                linewidth = 0.0
+                    ax.annotate('maxLift (root) @ CL = %.2f, CD = %.4f' %(y,x),
+                      xy=(x,y), xytext=(-160,10), textcoords='offset points',
+                        fontsize = fs_infotext, color=cl_infotext)
             else:
-                # style for target-polar of strak-airfoil
-                style = opt_point_style_root#opt_point_style_strak
+                # plot target-polar
+                if (Target_labelOk == False):
+                    label = 'target-polar'
+                    Target_labelOk = True
+                else:
+                    label = None
+
+                style = opt_point_style_root
                 linewidth = lw_targetPolar
 
-                # set label only for one of the strak-polars tp avoid multiple
-                # labels that are all the same
-                if (polar == polars[1]):
-                    label = 'target-polar'
-
-            if (polar == rootPolar) or (params.showTargetPolars == True):
                 # remove last elements, as they are dummies
                 x = deepcopy(targetPolar.CD)
                 x.pop()
                 y = deepcopy(targetPolar.CL)
                 y.pop()
 
-            ax.plot(x, y, style, linestyle = ls_targetPolar,
+                ax.plot(x, y, style, linestyle = ls_targetPolar,
                             linewidth = linewidth, label = label)
+
             if T1_label != None:
                 ax.legend(loc='upper left', fontsize = fs_legend)
+
+            plotted_polars = plotted_polars + 1
 
         # plot strak-polars
         if params.plotStrakPolars:
@@ -1716,6 +1703,9 @@ class polarGraph:
 
     # plots lift/alpha-polars (Xfoil-worker-polars and target-polars)
     def plot_LiftAlphaPolars(self, ax, polars, targetPolars, params):
+        T1T2_labelOk = False
+        Target_labelOk = False
+
         # set axes and labels
         self.set_AxesAndLabels(ax, 'CL, alpha', 'alpha', 'CL')
 
@@ -1732,6 +1722,9 @@ class polarGraph:
         # get number of polars to plot
         numPolars = len(polars)
 
+        # set number of already plotted polars
+        plotted_polars = 0
+
         # all polars
         for polarIdx in range(numPolars):
             if (self.check_polarVisibility(params, polarIdx) == False):
@@ -1742,10 +1735,11 @@ class polarGraph:
             polar = polars[polarIdx]
             targetPolar = targetPolars[polarIdx]
 
-            # set label only for root-polar
-            if (polar == rootPolar):
+            # set label only once
+            if (T1T2_labelOk == False):
                 T1_label = 'T1-polar'
                 T2_label = 'T2-polar'
+                T1T2_labelOk = True
             else:
                 T1_label = None
                 T2_label = None
@@ -1765,69 +1759,64 @@ class polarGraph:
             # plot CL, CD
             ax.plot(x, y, (cl_T2_polar+'-'), label=T2_label)
 
-            if (T1_label != None):
-                ax.legend(loc='upper left', fontsize = fs_legend)
-
-            # plot alpha @CL = 0
-            x = polar.alpha_CL0
-            y = 0.0
-
             if (polar == rootPolar):
+                 # plot alpha @CL = 0
+                x = polar.alpha_CL0
+                y = 0.0
                 ax.plot(x, y, 'o', color=cl_infotext)
 
-            # additonal text for root polar only
-            if (polar == rootPolar):
-                ax.annotate('CL=0 (root) @ alpha = %.2f' % x,
-                  xy=(x,y), xytext=(20,-15), textcoords='offset points',
-                  fontsize = fs_infotext, color=cl_infotext)
+                # Is this the only polar ?
+                if plotted_polars == 0:
+                    ax.annotate('CL=0 (root) @ alpha = %.2f' % x,
+                      xy=(x,y), xytext=(20,-15), textcoords='offset points',
+                      fontsize = fs_infotext, color=cl_infotext)
 
-            # plot max Speed
-            x = polar.alpha[polar.maxSpeed_idx]
-            y = polar.CL[polar.maxSpeed_idx]
-
-            if (polar == rootPolar):
+                # plot max Speed
+                x = polar.alpha[polar.maxSpeed_idx]
+                y = polar.CL[polar.maxSpeed_idx]
                 ax.plot(x, y, 'o', color=cl_infotext)
 
-            # additonal text for root polar only
-            if (polar == rootPolar):
-                ax.annotate('maxSpeed (root) @ alpha = %.2f, CL = %.2f' %\
-                  (x, y), xy=(x,y),
-                  xytext=(20,-5), textcoords='offset points',
-                  fontsize = fs_infotext, color=cl_infotext)
+                # Is this the only polar ?
+                if plotted_polars == 0:
+                    ax.annotate('maxSpeed (root) @ alpha = %.2f, CL = %.2f' %\
+                      (x, y), xy=(x,y),
+                      xytext=(20,-5), textcoords='offset points',
+                      fontsize = fs_infotext, color=cl_infotext)
 
-            # plot max Glide
-            x = polar.alpha[polar.maxGlide_idx]
-            y = polar.CL[polar.maxGlide_idx]
-            if (polar == rootPolar):
-               ax.plot(x, y, 'o', color=cl_infotext)
-
-            # additonal text for root polar only
-            if (polar == rootPolar):
-                ax.annotate('maxGlide (root) @ alpha = %.2f, CL = %.2f' %\
-                  (x, y), xy=(x,y),
-                  xytext=(20,-5), textcoords='offset points',
-                  fontsize = fs_infotext, color=cl_infotext)
-
-            # plot max lift
-            x = polar.alpha[polar.maxLift_idx]
-            y = polar.CL[polar.maxLift_idx]
-
-            if (polar == rootPolar):
+                # plot max Glide
+                x = polar.alpha[polar.maxGlide_idx]
+                y = polar.CL[polar.maxGlide_idx]
                 ax.plot(x, y, 'o', color=cl_infotext)
 
-            # additonal text for root polar only
-            if (polar == rootPolar):
-                ax.annotate('maxLift (root) @ alpha = %.2f, CL = %.2f' %\
-                  (x, y), xy=(x,y),
-                  xytext=(-140,10), textcoords='offset points',
-                  fontsize = fs_infotext, color=cl_infotext)
+                # Is this the only polar ?
+                if plotted_polars == 0:
+                    ax.annotate('maxGlide (root) @ alpha = %.2f, CL = %.2f' %\
+                      (x, y), xy=(x,y),
+                      xytext=(20,-5), textcoords='offset points',
+                      fontsize = fs_infotext, color=cl_infotext)
 
-            # plot target-polar, root-polar only
-            label = None
-            if (polar == rootPolar):
+                # plot max lift
+                x = polar.alpha[polar.maxLift_idx]
+                y = polar.CL[polar.maxLift_idx]
+                ax.plot(x, y, 'o', color=cl_infotext)
+
+                # Is this the only polar ?
+                if plotted_polars == 0:
+                    ax.annotate('maxLift (root) @ alpha = %.2f, CL = %.2f' %\
+                      (x, y), xy=(x,y),
+                      xytext=(-140,10), textcoords='offset points',
+                      fontsize = fs_infotext, color=cl_infotext)
+            else:
+                # plot target-polar
+                if (Target_labelOk == False):
+                    label = 'target-polar'
+                    Target_labelOk = True
+                else:
+                    label = None
+
                 # style for target-polar of root-airfoil
                 style = opt_point_style_root
-                linewidth = 0.0
+                linewidth = lw_targetPolar
 
                 # remove last dummy-values
                 x = deepcopy(targetPolar.alpha)
@@ -1839,9 +1828,17 @@ class polarGraph:
                 ax.plot(x, y, style, linestyle = ls_targetPolar,
                         linewidth = linewidth, label = label)
 
+            if (T1_label != None):
+                ax.legend(loc='upper left', fontsize = fs_legend)
+
+            plotted_polars = plotted_polars + 1
+
 
     # plots glide-polars (Xfoil-worker-polars and target-polars)
     def plot_GlidePolars(self, ax, polars, targetPolars, params):
+        T1T2_labelOk = False
+        Target_labelOk = False
+
         # set axes and labels
         self.set_AxesAndLabels(ax, 'CL/CD, CL', 'CL', 'CL/CD')
 
@@ -1862,6 +1859,9 @@ class polarGraph:
         else:
             ax.set_ylim(-5, max(rootPolar.CL_CD) + 5)
 
+        # set number of already plotted polars
+        plotted_polars = 0
+
         # all polars
         for polarIdx in range(numPolars):
             if (self.check_polarVisibility(params, polarIdx) == False):
@@ -1872,10 +1872,11 @@ class polarGraph:
             polar = polars[polarIdx]
             targetPolar = targetPolars[polarIdx]
 
-            # set label only for root-polar
-            if (polar == rootPolar):
+             # set label only once
+            if (T1T2_labelOk == False):
                 T1_label = 'T1-polar'
                 T2_label = 'T2-polar'
+                T1T2_labelOk = True
             else:
                 T1_label = None
                 T2_label = None
@@ -1896,88 +1897,62 @@ class polarGraph:
             # plot CL, CD
             ax.plot(x, y, (cl_T2_polar+'-'), label=T2_label)
 
-            if (T1_label != None):
-                ax.legend(loc='upper left', fontsize = fs_legend)
-
-            # plot Cl/CD @CL = 0
-            x = 0.0
-            y = 0.0
-
+            # main oppoints for root polar only
             if (polar == rootPolar):
+                # plot Cl/CD @CL = 0
+                x = 0.0
+                y = 0.0
                 ax.plot(x, y, 'o', color=cl_infotext)
 
-            # additonal text for root polar only
-            if (polar == rootPolar):
-                ax.annotate('CL=0 (root) @ CL/CD = %.2f' % y, xy=(x,y),
-                  xytext=(20,-5), textcoords='offset points',
-                  fontsize = fs_infotext, color=cl_infotext)
+                # Is this the only polar ?
+                if plotted_polars == 0:
+                    ax.annotate('CL=0 (root) @ CL/CD = %.2f' % y, xy=(x,y),
+                    xytext=(20,-5), textcoords='offset points',
+                    fontsize = fs_infotext, color=cl_infotext)
 
-            # plot max_speed
-            x = polar.CL[polar.maxSpeed_idx]
-            y = polar.CL_CD[polar.maxSpeed_idx]
-
-            if (polar == rootPolar):
+                # plot max_speed
+                x = polar.CL[polar.maxSpeed_idx]
+                y = polar.CL_CD[polar.maxSpeed_idx]
                 ax.plot(x, y, 'o', color=cl_infotext)
 
-            # add text for root Polar only
-            if (polar == rootPolar):
-                ax.annotate('maxSpeed (root) @\nCL = %.2f,\nCL/CD = %.2f' %\
-                 (x, y), xy=(x,y), xytext=(-80,0), textcoords='offset points',
-                  fontsize = fs_infotext, color=cl_infotext)
+                 # Is this the only polar ?
+                if plotted_polars == 0:
+                    ax.annotate('maxSpeed (root) @\nCL = %.2f,\nCL/CD = %.2f' %\
+                    (x, y), xy=(x,y), xytext=(-80,0), textcoords='offset points',
+                    fontsize = fs_infotext, color=cl_infotext)
 
-            # plot preMax_speed
-            x = polar.CL[polar.preMaxSpeed_idx]
-            y = polar.CL_CD[polar.preMaxSpeed_idx]
-
-            # additonal text for root polar only
-            if (polar == rootPolar):
-                ax.plot(x, y, marker='o',color=cl_infotext)
-
-
-            # plot max_glide
-            x = polar.CL[polar.maxGlide_idx]
-            y = polar.CL_CD[polar.maxGlide_idx]
-
-            if (polar == rootPolar):
+                # plot max_glide
+                x = polar.CL[polar.maxGlide_idx]
+                y = polar.CL_CD[polar.maxGlide_idx]
                 ax.plot(x, y, 'o', color=cl_infotext)
 
-            # add text for root Polar only
-            if (polar == rootPolar):
-                ax.annotate('maxGlide (root) @ CL = %.2f, CL/CD = %.2f' %\
-                  (x, y), xy=(x,y), xytext=(-60,7), textcoords='offset points',
-                   fontsize = fs_infotext, color=cl_infotext)
+                # Is this the only polar ?
+                if plotted_polars == 0:
+                   ax.annotate('maxGlide (root) @ CL = %.2f, CL/CD = %.2f' %\
+                      (x, y), xy=(x,y), xytext=(-60,15), textcoords='offset points',
+                       fontsize = fs_infotext, color=cl_infotext)
 
-            # plot max Lift
-            x = polar.CL[polar.maxLift_idx]
-            y = polar.CL_CD[polar.maxLift_idx]
-
-            if (polar == rootPolar):
+                # plot max Lift
+                x = polar.CL[polar.maxLift_idx]
+                y = polar.CL_CD[polar.maxLift_idx]
                 ax.plot(x, y, 'o', color=cl_infotext)
 
-            # add text for root Polar only
-            if (polar == rootPolar):
-                ax.annotate('maxLift (root) @\nCL = %.2f,\nCL/CD = %.2f' %\
-                 (x, y), xy=(x,y), xytext=(10,0), textcoords='offset points',
-                  fontsize = fs_infotext, color=cl_infotext)
-
-
-            # plot target-polar
-            label = None
-            if (polar == rootPolar):
-                # style for target-polar of root-airfoil
-                style = opt_point_style_root
-                linewidth = 0.0
+                 # Is this the only polar ?
+                if plotted_polars == 0:
+                    ax.annotate('maxLift (root) @\nCL = %.2f,\nCL/CD = %.2f' %\
+                    (x, y), xy=(x,y), xytext=(-90,0), textcoords='offset points',
+                    fontsize = fs_infotext, color=cl_infotext)
             else:
-                # style for target-polar of strak-airfoil
-                style = opt_point_style_strak
+                # plot target-polar
+                if (Target_labelOk == False):
+                    label = 'target-polar'
+                    Target_labelOk = True
+                else:
+                    label = None
+
+                style = opt_point_style_root#opt_point_style_strak
                 linewidth = lw_targetPolar
 
-                # set label only for one of the strak-polars tp avoid multiple
-                # labels that are all the same
-                if (polar == polars[1]):
-                    label = 'target-polar'
-
-            if (polar == rootPolar) or (params.showTargetPolars == True):
                 x = deepcopy(targetPolar.CL)
                 x.pop()
                 y = deepcopy(targetPolar.CL_CD)
@@ -1986,6 +1961,11 @@ class polarGraph:
                 # plot
                 ax.plot(x, y, style, linestyle = ls_targetPolar,
                         linewidth = linewidth, label = label)
+
+            if (T1_label != None):
+                ax.legend(loc='upper left', fontsize = fs_legend)
+
+            plotted_polars = plotted_polars + 1
 
         # plot strak-polars
         if params.plotStrakPolars:
@@ -3752,37 +3732,6 @@ def create_new_inputFile(params, i):
     return newFile
 
 
-def createAdjustedInputFile(params, i):
-    adjust = True
-    while (adjust):
-        # create initial, unadjusted  inputFile
-        newFile = create_new_inputFile(params, i)
-
-        targets = params.targets
-
-        # automatic adjustment of max-Lift target-value
-        # for all strak-polars, adjust CD-target-value, so the intersection-point will
-        # be hit, leaving a small error
-        intersection_CL = calculate_intersectionPoint(params, newFile)
-
-        if (intersection_CL > (params.intersectionPoint_CL + params.intersection_Hysteresis)):
-            # increase target-value
-            targets["CD_pre_maxLift"][i] = round(targets["CD_pre_maxLift"][i] + 0.00005, CD_decimals)
-            # destroy the instance of newFile and shifted polar
-            del newFile
-        elif (intersection_CL < (params.intersectionPoint_CL - params.intersection_Hysteresis)):
-            # decrease target-value
-            targets["CD_pre_maxLift"][i] = round(targets["CD_pre_maxLift"][i] - 0.00005, CD_decimals)
-            # destroy the instance of newFile and shifted polar
-            del newFile
-
-        else:
-            # everything o.k., clear adjustment-Flag
-            adjust = False
-
-    return newFile
-
-
 def generate_InputFiles(params, writeToDisk):
     my_print("Generating inputfiles...")
 
@@ -4236,8 +4185,12 @@ class strak_machine:
         # calculate target-values for the main op-points
         self.params.calculate_MainTargetValues()
 
-        # generate input-Files
-        generate_InputFiles(self.params, True)
+        try:
+            self.read_InputFiles()
+        except:
+            NoteMsg("Failed to read input files")
+            # generate input-Files
+            generate_InputFiles(self.params, True)
 
         # generate target polars and write to file
         generate_TargetPolars(self.params, True)
@@ -4266,11 +4219,111 @@ class strak_machine:
         # disable further console print output
         print_disabled = True
 
+
+    def read_InputFiles(self):
+        NoteMsg("Reading inputfiles...")
+
+        # clear are previsously generated inputfiles
+        self.params.inputFiles.clear()
+
+        for fileName in self.params.inputFileNames:
+            new_inputFile = inputFile(self.params)
+            new_inputFile.read_FromFile(fileName)
+            self.params.inputFiles.append(new_inputFile)
+
+        DoneMsg()
+
+
+    def generate_InputFile(self, airfoilIdx, writeToDisk):
+        # get number of airfoils
+        num = len(self.params.ReNumbers)
+
+        # check airfoilIdx
+        if (airfoilIdx >= num):
+            ErrorMsg("Invalid airfoilIdx %d" % airfoilIdx)
+        else:
+            i = airfoilIdx
+            NoteMsg("Generating inputfile(s) for airfoil %s" % self.params.airfoilNames[i])
+
+        # clear are previsously generated inputfiles
+#        self.params.inputFiles[i].clear()
+
+        newFile = create_new_inputFile(self.params, i)
+
+        # set the importance / weightings of the op-points
+        newFile.set_Weightings(self.params)
+
+        # adapt reynolds()-values, get strak-polar
+        strakPolar = self.params.merged_polars[i]
+        newFile.adapt_ReNumbers(strakPolar)
+
+        # insert oppoint for alpha @ CL = 0
+        if self.params.optimizeAlpha0[i]:
+            newFile.insert_alpha0_oppoint(self.params, strakPolar,i)
+
+        # insert oppoints for alpha @maxGlide, maxLift
+        newFile.insert_alphaMaxGlide_oppoint(self.params, i)
+        newFile.insert_alphaMaxLift_oppoint(self.params, i)
+
+        # get default-value of initialPerturb from template
+        initialPerturb = newFile.get_InitialPerturb()
+
+        if (self.params.adaptInitialPerturb and (i>0)):
+            # calculate the initial perturb according to the change in
+            # Re-number
+            if (self.params.useAlwaysRootfoil):
+                # difference calculated to Re-number of root-airfoil
+                ReDiff = self.params.ReNumbers[0] - self.params.ReNumbers[i]
+                # factor calculated to Re-number of root-airfoil
+                ReFactor = self.params.ReNumbers[i] / self.params.ReNumbers[0]
+            else:
+                # difference calculated to Re-number of previous-airfoil
+                ReDiff = self.params.ReNumbers[i-1] - self.params.ReNumbers[i]
+                ReFactor = self.params.ReNumbers[i] / self.params.ReNumbers[i-1]
+
+            # calculate initial perturb now.
+            initialPerturb = newFile.calculate_InitialPerturb(self.params.ReNumbers[i],
+                              ReDiff, ReFactor)
+
+        # get Default-value for max iterations
+        maxIterationsDefault = newFile.get_maxIterations()
+
+        # multi-pass-optimization:
+        # generate input-files for intermediate strak-airfoils
+        for n in range(0, self.params.optimizationPasses):
+            iFileIndex = i*(self.params.optimizationPasses) + n
+            # set input-file name
+            iFile = self.params.inputFileNames[iFileIndex]
+
+            # set max number of iterations
+            maxIterations = self.params.maxIterations[n]
+            if (maxIterations == 0):
+                maxIterations = maxIterationsDefault
+            newFile.set_maxIterations(maxIterations)
+
+            # set initialPerturb
+            newFile.set_InitialPerturb(initialPerturb)
+
+            # set shape_functions
+            newFile.set_shape_functions(self.params.shape_functions[n])
+
+            if writeToDisk:
+                # physically create the file
+                newFile.write_ToFile(iFile)
+
+            # reduce initial perturb for the next pass
+            initialPerturb = initialPerturb*0.5
+
+        # append only input-file of final strak-airfoil to params
+        self.params.inputFiles[i] = newFile
+
+
     def exit_action(self, value):
         global print_disabled
         print_disabled = True
 
         return value
+
 
     def entry_action(self, airfoilIdx):
         global print_disabled
@@ -4311,8 +4364,10 @@ class strak_machine:
     def get_airfoilNames(self):
         return self.params.airfoilNames
 
+
     def set_visiblePolars(self, visibleFlags):
         self.params.set_visibleFlags(visibleFlags)
+
 
     def set_targetValues(self, airfoilIdx, targetValues):
         self.entry_action(airfoilIdx)
@@ -4377,10 +4432,18 @@ class strak_machine:
 
         return self.exit_action(0)
 
+
     def reset(self, airfoilIdx):
         self.entry_action(airfoilIdx)
-        ErrorMsg("command \"reset\" not implemented yet")
-        return self.exit_action(-1)
+        fileName = self.get_inputfileName(airfoilIdx)
+
+        try:
+            self.generate_InputFile(airfoilIdx, False)
+        except:
+            ErrorMsg("Unable to reset input-file %s" % fileName)
+            return self.exit_action(-1)
+
+        return self.exit_action(0)
 
 ################################################################################
 # Main program
