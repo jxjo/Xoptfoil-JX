@@ -93,11 +93,12 @@ class show_status():
         # display logo of the strak machine
         imagename = (".." + bs + ressourcesPath + bs + logoName)
 
-        width = self.root.winfo_screenwidth()
-        heigth = self.root.winfo_screenheight()
+        # determine scale factors
 
-        img_width = int(400 * width/1920)
-        img_height = int(100 * heigth/1080)
+        width_scaler = self.root.winfo_screenwidth()/1920
+        heigth_scaler = self.root.winfo_screenheight()/1080
+        img_width = int(400 * width_scaler)
+        img_height = int(100 * heigth_scaler)
 
         # Creates a Tkinter-compatible photo image, which can be used everywhere
         # Tkinter expects an image object.
@@ -132,13 +133,16 @@ class show_status():
                               {"sticky": ""})],
                'sticky': 'nswe'})])
 
+        # length of progress bars
+        scaled_length = int(400 * width_scaler)
+
         # main-Progress bar widget
-        self.main_progressBar = Progressbar(self.root, orient="horizontal", length=300,
-                    mode = 'determinate',  style="MainProgressbar")
+        self.main_progressBar = Progressbar(self.root, orient="horizontal",
+         length=scaled_length, mode = 'determinate',  style="MainProgressbar")
 
         # sub-Progress bar widget
-        self.sub_progressBar = Progressbar(self.root, orient="horizontal", length=300,
-                    mode = 'determinate',  style="SubProgressbar")
+        self.sub_progressBar = Progressbar(self.root, orient="horizontal",
+         length=scaled_length, mode = 'determinate',  style="SubProgressbar")
 
         self.main_progressBar.pack(pady = 10)
         self.sub_progressBar.pack(pady = 10)
@@ -153,7 +157,7 @@ class show_status():
         scrollbar.pack( side = 'right', fill='y' )
 
         # create textbox to display content of progress-file
-        self.progressLog = tk.Listbox(self.root, height=10, width=100, yscrollcommand = scrollbar.set)
+        self.progressLog = tk.Listbox(self.root, height=10, width=200, yscrollcommand = scrollbar.set)
         self.progressLog.pack(pady = 10)
         scrollbar.config( command = self.progressLog.yview )
 

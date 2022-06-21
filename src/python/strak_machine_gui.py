@@ -4,6 +4,7 @@ import tkinter.messagebox
 import customtkinter
 import strak_machineV2
 import os
+import time
 from PIL import ImageTk, Image
 from strak_machineV3 import diagTypes
 from strak_machineV3 import NoteMsg
@@ -20,7 +21,8 @@ import matplotlib.animation as animation
 
 # some global variables
 num_diagrams = 3
-polarsHaveChanged = 0
+app_running = True
+updateNeeded = False
 
 # paths and separators
 bs = "\\"
@@ -272,7 +274,7 @@ class control_frame():
 
 
     def update_TargetValues(self, command):
-        global polarsHaveChanged
+        global updateNeeded
 
         # local variable if writeback of target values to strak machine is needed
         writeback_needed = False
@@ -308,7 +310,7 @@ class control_frame():
             self.strak_machine.update_targetPolars()
 
             # notify the diagram frame about the change
-            polarsHaveChanged = 2
+            updateNeeded = True
 
 
 
@@ -428,7 +430,7 @@ class control_frame():
 
 
     def update_visibleFlags(self):
-        global polarsHaveChanged
+        global updateNeeded
         newVisibleFlags = []
 
         # read actual values
@@ -446,10 +448,8 @@ class control_frame():
                 self.strak_machine.set_visiblePolars(newVisibleFlags)
 
                 # notify the diagram frame about the change
-                polarsHaveChanged = 2
+                updateNeeded = 2
                 break
-
-
 
     def on_closing(self, event=0):
         self.destroy()
@@ -597,6 +597,8 @@ class diagram(customtkinter.CTkFrame):
 # class diagram frame, shows the graphical output of the strak machine
 class diagram_frame():
     def __init__(self, master, side, strak_machine):
+        global updateNeeded
+
         # store strak machine instance locally
         self.strak_machine = strak_machine
         self.master = master
@@ -633,10 +635,10 @@ class diagram_frame():
 
         # set initial value of active diagram
         self.activeDiagram = "CL_CD_diagram"
-        self.switchDiagrams = False
 
         # show initial diagram
-        self.show_activeDiagram()
+        updateNeeded = True
+        self.update_diagram(master)
 
 
     def create_figures(self):
@@ -677,50 +679,47 @@ class diagram_frame():
 
         return frames
 
-    def show_activeDiagram(self):
-        frame = self.frames[self.activeBufferIdx][self.activeDiagram]
-        frame.tkraise()
-
-        # change Buffer index
-        if self.activeBufferIdx == 0:
-            self.activeBufferIdx = 1
-        else:
-            self.activeBufferIdx = 0
-
-    def update_diagrams(self, master):
-        global polarsHaveChanged
+    def update_diagram(self, master):
+        global updateNeeded
 
         # check if an update has to be carried out
-        if polarsHaveChanged > 0:
+        if updateNeeded:
             # get buffer idx for modifing the frames that are currently not visible
             if self.activeBufferIdx == 0:
                 backgroundIdx = 1
             else:
                 backgroundIdx = 0
 
-            # update all diagrams
-            for diagType in diagTypes:
-                ax = self.axes[backgroundIdx][diagType]
-                # clear existing diagram
-                ax.clear()
-                # plot new diagram
-                self.strak_machine.plot_diagram(diagType, ax)
-                # update figure
-                figure = self.figures[backgroundIdx][diagType]
-                figure.canvas.draw()
+            # get active diagram
+            diagType = self.activeDiagram
+
+            # update active diagram in background
+            ax = self.axes[backgroundIdx][diagType]
+            # clear existing diagram
+            ax.clear()
+            # plot new diagram
+            self.strak_machine.plot_diagram(diagType, ax)
+            # update figure
+            figure = self.figures[backgroundIdx][diagType]
+            figure.canvas.draw()
+
+            # show the updated frame
+            frame = self.frames[backgroundIdx][self.activeDiagram]
+            frame.tkraise()
+
+            # switch buffer index
+            self.activeBufferIdx = backgroundIdx
 
             # clear notification variable
-            polarsHaveChanged = polarsHaveChanged - 1
+            updateNeeded = False
 
-        elif (self.switchDiagrams == True):
-                 # show new diagram
-                self.show_activeDiagram()
-                self.switchDiagrams = False
+
 
     def change_diagram(self, diagram):
+        global updateNeeded
         if (self.activeDiagram != diagram):
             self.activeDiagram = diagram
-            self.switchDiagrams = True
+            updateNeeded = True
 
 
 # main application
@@ -781,35 +780,41 @@ class App(customtkinter.CTk):
         self.frame_right.change_diagram("CLCD_CL_diagram")
 
     def load(self):
-        global polarsHaveChanged
+        global updateNeeded
         result = self.strak_machine.load(self.airfoilIdx)
         if (result == 0):
             self.targetValues = self.strak_machine.get_targetValues(self.airfoilIdx)
             self.strak_machine.update_targetPolars()
             self.frame_left.update_Entries(self.airfoilIdx)
-            polarsHaveChanged = 2
+            updateNeeded = True
 
     def save(self):
         self.strak_machine.save(self.airfoilIdx)
 
     def reset(self):
-        global polarsHaveChanged
+        global updateNeeded
         result = self.strak_machine.reset(self.airfoilIdx)
         if (result == 0):
             self.targetValues = self.strak_machine.get_targetValues(self.airfoilIdx)
             self.strak_machine.update_targetPolars()
             self.frame_left.update_Entries(self.airfoilIdx)
-            polarsHaveChanged = 2
+            updateNeeded = True
 
     def start(self):
-        while True:
+        global app_running
+
+        while app_running:
             self.update_idletasks()
             self.update()
             self.frame_left.update_visibleFlags()
-            self.frame_right.update_diagrams(self)
+            self.frame_right.update_diagram(self)
+
+        self.destroy()
+
 
     def on_closing(self, event=0):
-        self.destroy()
+        global app_running
+        app_running = False
 
 if __name__ == "__main__":
     # init colorama
