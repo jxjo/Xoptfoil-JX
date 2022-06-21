@@ -4,7 +4,6 @@ import tkinter.messagebox
 import customtkinter
 import strak_machineV2
 import os
-import time
 from PIL import ImageTk, Image
 from strak_machineV3 import diagTypes
 from strak_machineV3 import NoteMsg
