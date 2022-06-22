@@ -3471,47 +3471,11 @@ def get_Parameters(dict):
 
     params.ReNumbers = get_MandatoryParameterFromDict(dict, 'reynolds')
 
-    params.maxGlideGain = get_MandatoryParameterFromDict(dict, "maxGlideGain")
-
-    params.CL0Gain = get_MandatoryParameterFromDict(dict, "CL0Gain")
-
-    params.minCLGain  = get_MandatoryParameterFromDict(dict, "minCLGain")
-
-    params.maxSpeedGain = get_MandatoryParameterFromDict(dict, "maxSpeedGain")
-
-    params.maxSpeedShift = get_MandatoryParameterFromDict(dict, "maxSpeedShift")
-
-    params.preMaxSpeedGain = get_MandatoryParameterFromDict(dict, "preMaxSpeedGain")
-
-    params.maxLiftGain = get_MandatoryParameterFromDict(dict, "maxLiftGain")
 
     # get optional parameters
     params.airfoilNames = get_ParameterFromDict(dict, "airfoilNames",
                                                         params.airfoilNames)
 
-    params.maxGlideShift = get_ParameterFromDict(dict, "maxGlideShift",
-                                                        params.maxGlideShift)
-
-    params.maxGlideFactor  = get_ParameterFromDict(dict, "maxGlideFactor",
-                                                        params.maxGlideFactor)
-
-    params.linearFactor_0 = get_ParameterFromDict(dict, "linearFactor_0",
-                                                        params.linearFactor_0)
-
-    params.linearFactor_1 = get_ParameterFromDict(dict, "linearFactor_1",
-                                                        params.linearFactor_1)
-
-    params.linearFactor_2 = get_ParameterFromDict(dict, "linearFactor_2",
-                                                        params.linearFactor_2)
-
-    params.linearFactor_3 = get_ParameterFromDict(dict, "linearFactor_3",
-                                                        params.linearFactor_3)
-
-    params.linearFactor_4 = get_ParameterFromDict(dict, "linearFactor_4",
-                                                        params.linearFactor_4)
-
-    params.intersectionPoint_CL_CD = get_ParameterFromDict(dict, "intersectionPoint_CL_CD",
-                                                        params.intersectionPoint_CL_CD)
 
     params.maxReFactor = get_ParameterFromDict(dict, "maxReynoldsFactor",
                                                         params.maxReFactor)
@@ -3536,10 +3500,6 @@ def get_Parameters(dict):
 
     params.NCrit = get_ParameterFromDict(dict, "NCrit", params.NCrit)
 
-    params.CL_preMaxSpeed = get_ParameterFromDict(dict, "CL_preMaxSpeed",
-                                                    params.CL_preMaxSpeed)
-
-    params.CL_min = get_ParameterFromDict(dict, "CL_min", params.CL_min)
 
     params.weightingMode = get_ParameterFromDict(dict, "weightingMode",
                                                   params.weightingMode)
@@ -3553,13 +3513,6 @@ def get_Parameters(dict):
     params.maxLiftDistance = get_ParameterFromDict(dict, "maxLiftDistance",
                                                 params.maxLiftDistance)
 
-
-     # get optional boolean parameters
-    params.allGraphs = get_booleanParameterFromDict(dict,
-                             "allGraphs", params.allGraphs)
-
-    params.optimizeAlpha0 = get_booleanParameterListFromDict(dict,
-                             "optimizeAlpha0", params.optimizeAlpha0)
 
     params.useAlwaysRootfoil = get_booleanParameterFromDict(dict,
                              "useAlwaysRootfoil", params.useAlwaysRootfoil)
@@ -3576,8 +3529,6 @@ def get_Parameters(dict):
     params.smoothMatchPolarFoil = get_booleanParameterFromDict(dict,
                              "smoothMatchPolarFoil", params.smoothMatchPolarFoil)
 
-    params.plotStrakPolars = get_booleanParameterFromDict(dict,
-                             "plotStrakPolars", params.plotStrakPolars)
     DoneMsg()
 
     # perform parameter-checks now
