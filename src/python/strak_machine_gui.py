@@ -22,6 +22,7 @@ import matplotlib.animation as animation
 num_diagrams = 3
 app_running = True
 updateNeeded = False
+controlFrame = None
 
 # paths and separators
 bs = "\\"
@@ -43,6 +44,7 @@ bg_color_scrollableFrame_dark =  "#222222"
 class control_frame():
     def __init__(self, master, side, left_Buttons, right_Buttons, strak_machine):
         global bg_color_scrollableFrame
+        global controlFrame
 
         # store some variables in own class data structure
         self.strak_machine = strak_machine
@@ -93,6 +95,9 @@ class control_frame():
 
         # show lower frame
         self.container.pack(side = 'bottom', fill=tk.BOTH, expand=1)
+
+        # store control frame instance in global variable
+        controlFrame = self
 
 
     def OnFrameConfigure(self, event):
@@ -269,7 +274,29 @@ class control_frame():
             type_txt.set(str(mode))
             oppoint_txt.set(str(oppoint))
             target_txt.set(str(target))
-            idx = idx +1
+            idx = idx+1
+
+    def change_targetValue(self, x, y, idx):
+        global updateNeeded
+
+        if idx == None:
+            return
+        # read current value to get the mode
+        (mode, oppoint, target) = self.get_valuesFromDict(self.targetValues[idx])
+        # FIXME check: evaluate mode ?
+        self.write_valuesToDict(idx, mode, y, x)
+
+        # writeback dictionary to strakmachine
+        self.strak_machine.set_targetValues(1, self.targetValues)# FIXME only first airfoil supported at the moment
+
+        # perform update of the target polars
+        self.strak_machine.update_targetPolars()
+
+        # update entries in control frame
+        self.update_Entries(1)# FIXME only first airfoil supported at the moment
+
+        # notify the diagram frame about the change
+        updateNeeded = True
 
 
     def update_TargetValues(self, command):
@@ -322,12 +349,14 @@ class control_frame():
 
         self.nextRow = self.nextRow + 1
 
+
     def add_label(self, frame):
         # Label
         label = customtkinter.CTkLabel(master=frame,
                                               text="Select diagram",
                                               text_font=("Roboto Medium", -16))
         self.place_widgets(label, None)
+
 
     def add_buttons(self, frame, left_Buttons, right_Buttons):
         buttonsLeft = []
@@ -358,6 +387,7 @@ class control_frame():
                 right = None
 
             self.place_widgets(left, right)
+
 
     def create_button(self, frame, button):
         text = button["txt"]
@@ -469,13 +499,13 @@ class diagram(customtkinter.CTkFrame):
         canvas.draw()
 ##
 ##        #self.cid = self.add_callback(self.diagram_changed)
-##        self._ind = None  # the active vert
+        self._ind = None  # the active vert
+        self.controller = controller
 ##
 ##        canvas.mpl_connect('draw_event', self.on_draw)
-##        canvas.mpl_connect('button_press_event', self.on_button_press)
-##        canvas.mpl_connect('key_press_event', self.on_key_press)
-##        canvas.mpl_connect('button_release_event', self.on_button_release)
-##        canvas.mpl_connect('motion_notify_event', self.on_mouse_move)
+        canvas.mpl_connect('button_press_event', self.on_button_press)
+        canvas.mpl_connect('button_release_event', self.on_button_release)
+        canvas.mpl_connect('motion_notify_event', self.on_mouse_move)
 ##        self.canvas = canvas
 
     def on_draw(self, event):
@@ -499,6 +529,28 @@ class diagram(customtkinter.CTkFrame):
         Return the index of the point closest to the event position or *None*
         if no point is within ``self.epsilon`` to the event position.
         """
+        global targetValues
+
+        catching_range_oppoint = 0.01
+        catching_range_targetValue = 0.001
+
+        idx = 0
+        mouse_target = event.xdata
+        mouse_oppoint = event.ydata
+
+        # search entry with closest coordinates
+        for targetValue in controlFrame.targetValues:
+            # get values from dictinory
+            (mode, oppoint, target) = controlFrame.get_valuesFromDict(targetValue)
+
+            if ((abs(mouse_target - target) < catching_range_targetValue) and
+                (abs(mouse_oppoint - oppoint) < catching_range_oppoint)):
+                return idx
+
+            idx = idx + 1
+        return None
+
+
         # display coords
 ##        xy = np.asarray(self.poly.xy)
 ##        xyt = self.poly.get_transform().transform(xy)
@@ -511,86 +563,34 @@ class diagram(customtkinter.CTkFrame):
 ##            ind = None
 ##
 ##        return ind
-        return
+        return None
 
     def on_button_press(self, event):
-##        """Callback for mouse button presses."""
-##        if not self.showverts:
-##            return
-##        if event.inaxes is None:
-##            return
-##        if event.button != 1:
-##            return
-##        self._ind = self.get_ind_under_point(event)
-        return
+        """Callback for mouse button presses."""
+        if event.inaxes is None:
+            return
+        if event.button != 1:
+            return
+        self._ind = self.get_ind_under_point(event)
+
 
     def on_button_release(self, event):
         """Callback for mouse button releases."""
-##        if not self.showverts:
-##            return
-##        if event.button != 1:
-##            return
-##        self._ind = None
-        return
+        if event.button != 1:
+            return
+        self._ind = None
 
-    def on_key_press(self, event):
-        """Callback for key presses."""
-##        if not event.inaxes:
-##            return
-##        if event.key == 't':
-##            self.showverts = not self.showverts
-##            self.line.set_visible(self.showverts)
-##            if not self.showverts:
-##                self._ind = None
-##        elif event.key == 'd':
-##            ind = self.get_ind_under_point(event)
-##            if ind is not None:
-##                self.poly.xy = np.delete(self.poly.xy,
-##                                         ind, axis=0)
-##                self.line.set_data(zip(*self.poly.xy))
-##        elif event.key == 'i':
-##            xys = self.poly.get_transform().transform(self.poly.xy)
-##            p = event.x, event.y  # display coords
-##            for i in range(len(xys) - 1):
-##                s0 = xys[i]
-##                s1 = xys[i + 1]
-##                d = dist_point_to_segment(p, s0, s1)
-##                if d <= self.epsilon:
-##                    self.poly.xy = np.insert(
-##                        self.poly.xy, i+1,
-##                        [event.xdata, event.ydata],
-##                        axis=0)
-##                    self.line.set_data(zip(*self.poly.xy))
-##                    break
-##        if self.line.stale:
-##            self.canvas.draw_idle()
-        return
 
     def on_mouse_move(self, event):
         """Callback for mouse movements."""
-##        if not self.showverts:
-##            return
-##        if self._ind is None:
-##            return
-##        if event.inaxes is None:
-##            return
-##        if event.button != 1:
-##            return
-##        x, y = event.xdata, event.ydata
-##
-##        self.poly.xy[self._ind] = x, y
-##        if self._ind == 0:
-##            self.poly.xy[-1] = x, y
-##        elif self._ind == len(self.poly.xy) - 1:
-##            self.poly.xy[0] = x, y
-##        self.line.set_data(zip(*self.poly.xy))
-##
-##        self.canvas.restore_region(self.background)
-##        self.ax.draw_artist(self.poly)
-##        self.ax.draw_artist(self.line)
-##        self.canvas.blit(self.ax.bbox)
-        return
-
+        if self._ind is None:
+            return
+        if event.inaxes is None:
+            return
+        if event.button != 1:
+            return
+        x, y = event.xdata, event.ydata
+        controlFrame.change_targetValue(x,y,self._ind)
 
 
 # class diagram frame, shows the graphical output of the strak machine
