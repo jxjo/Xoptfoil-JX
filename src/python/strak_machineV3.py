@@ -4186,6 +4186,60 @@ class strak_machine:
         DoneMsg()
 
 
+    def generate_MultiPassInputFiles(self, airfoilIdx, writeToDisk, inputFile):
+        i = airfoilIdx
+
+        # get default-value of initialPerturb from template
+        initialPerturb = inputFile.get_InitialPerturb()
+
+        if (self.params.adaptInitialPerturb and (i>0)):
+            # calculate the initial perturb according to the change in
+            # Re-number
+            if (self.params.useAlwaysRootfoil):
+                # difference calculated to Re-number of root-airfoil
+                ReDiff = self.params.ReNumbers[0] - self.params.ReNumbers[i]
+                # factor calculated to Re-number of root-airfoil
+                ReFactor = self.params.ReNumbers[i] / self.params.ReNumbers[0]
+            else:
+                # difference calculated to Re-number of previous-airfoil
+                ReDiff = self.params.ReNumbers[i-1] - self.params.ReNumbers[i]
+                ReFactor = self.params.ReNumbers[i] / self.params.ReNumbers[i-1]
+
+            # calculate initial perturb now.
+            initialPerturb = inputFile.calculate_InitialPerturb(self.params.ReNumbers[i],
+                              ReDiff, ReFactor)
+
+        # get Default-value for max iterations
+        maxIterationsDefault = inputFile.get_maxIterations()
+
+        # multi-pass-optimization:
+        # generate input-files for intermediate strak-airfoils
+        for n in range(0, self.params.optimizationPasses):
+            iFileIndex = i*(self.params.optimizationPasses) + n
+
+            # set input-file name
+            iFile = self.params.inputFileNames[iFileIndex]
+
+            # set max number of iterations
+            maxIterations = self.params.maxIterations[n]
+            if (maxIterations == 0):
+                maxIterations = maxIterationsDefault
+            inputFile.set_maxIterations(maxIterations)
+
+            # set initialPerturb
+            inputFile.set_InitialPerturb(initialPerturb)
+
+            # set shape_functions
+            inputFile.set_shape_functions(self.params.shape_functions[n])
+
+            if writeToDisk:
+                # physically create the file
+                inputFile.write_ToFile(iFile)
+
+            # reduce initial perturb for the next pass
+            initialPerturb = initialPerturb*0.5
+
+
     def generate_InputFile(self, airfoilIdx, writeToDisk):
         # get number of airfoils
         num = len(self.params.ReNumbers)
@@ -4197,9 +4251,7 @@ class strak_machine:
             i = airfoilIdx
             NoteMsg("Generating inputfile(s) for airfoil %s" % self.params.airfoilNames[i])
 
-        # clear are previsously generated inputfiles
-#        self.params.inputFiles[i].clear()
-
+        # create new file
         newFile = create_new_inputFile(self.params, i)
 
         # set the importance / weightings of the op-points
@@ -4217,54 +4269,9 @@ class strak_machine:
         newFile.insert_alphaMaxGlide_oppoint(self.params, i)
         newFile.insert_alphaMaxLift_oppoint(self.params, i)
 
-        # get default-value of initialPerturb from template
-        initialPerturb = newFile.get_InitialPerturb()
-
-        if (self.params.adaptInitialPerturb and (i>0)):
-            # calculate the initial perturb according to the change in
-            # Re-number
-            if (self.params.useAlwaysRootfoil):
-                # difference calculated to Re-number of root-airfoil
-                ReDiff = self.params.ReNumbers[0] - self.params.ReNumbers[i]
-                # factor calculated to Re-number of root-airfoil
-                ReFactor = self.params.ReNumbers[i] / self.params.ReNumbers[0]
-            else:
-                # difference calculated to Re-number of previous-airfoil
-                ReDiff = self.params.ReNumbers[i-1] - self.params.ReNumbers[i]
-                ReFactor = self.params.ReNumbers[i] / self.params.ReNumbers[i-1]
-
-            # calculate initial perturb now.
-            initialPerturb = newFile.calculate_InitialPerturb(self.params.ReNumbers[i],
-                              ReDiff, ReFactor)
-
-        # get Default-value for max iterations
-        maxIterationsDefault = newFile.get_maxIterations()
-
         # multi-pass-optimization:
         # generate input-files for intermediate strak-airfoils
-        for n in range(0, self.params.optimizationPasses):
-            iFileIndex = i*(self.params.optimizationPasses) + n
-            # set input-file name
-            iFile = self.params.inputFileNames[iFileIndex]
-
-            # set max number of iterations
-            maxIterations = self.params.maxIterations[n]
-            if (maxIterations == 0):
-                maxIterations = maxIterationsDefault
-            newFile.set_maxIterations(maxIterations)
-
-            # set initialPerturb
-            newFile.set_InitialPerturb(initialPerturb)
-
-            # set shape_functions
-            newFile.set_shape_functions(self.params.shape_functions[n])
-
-            if writeToDisk:
-                # physically create the file
-                newFile.write_ToFile(iFile)
-
-            # reduce initial perturb for the next pass
-            initialPerturb = initialPerturb*0.5
+        self.generate_MultiPassInputFiles(airfoilIdx, writeToDisk, newFile)
 
         # append only input-file of final strak-airfoil to params
         self.params.inputFiles[i] = newFile
@@ -4391,14 +4398,16 @@ class strak_machine:
 
     def save(self, airfoilIdx):
         self.entry_action(airfoilIdx)
-        # get input file from params
         inputFile = self.params.inputFiles[airfoilIdx]
-        fileName = self.get_inputfileName(airfoilIdx)
 
         try:
-            inputFile.write_ToFile(fileName)
+            # get input file from params
+            inputFile = self.params.inputFiles[airfoilIdx]
+
+            # generate input-files for intermediate strak-airfoils
+            self.generate_MultiPassInputFiles(airfoilIdx, True, inputFile)
         except:
-            ErrorMsg("Unable to save input-file %s" % fileName)
+            ErrorMsg("Unable to save input-file %s" % self.get_inputfileName(airfoilIdx))
             return self.exit_action(-1)
 
         return self.exit_action(0)

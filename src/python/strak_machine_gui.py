@@ -552,7 +552,7 @@ class diagram(customtkinter.CTkFrame):
             mouse_target = event.xdata / event.ydata
         elif (self.controller.activeDiagram == "CL_alpha_diagram"):
             edit_mode == 'spec-al'
-            # FIXME check if this is corrector must be swapped
+            # FIXME check if this is correct or must be swapped
             mouse_target = event.xdata
             mouse_oppoint = event.ydata
 
