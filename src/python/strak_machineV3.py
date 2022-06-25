@@ -4177,8 +4177,14 @@ class strak_machine:
 
         # clear are previsously generated inputfiles
         self.params.inputFiles.clear()
+        num = len(self.params.ReNumbers)
 
-        for fileName in self.params.inputFileNames:
+        for idx in range(num):
+            offset = self.params.optimizationPasses * idx
+            fileIdx = offset + self.params.optimizationPasses-1
+
+            # set input-file name
+            fileName = self.params.inputFileNames[fileIdx]
             new_inputFile = inputFile(self.params)
             new_inputFile.read_FromFile(fileName)
             self.params.inputFiles.append(new_inputFile)
