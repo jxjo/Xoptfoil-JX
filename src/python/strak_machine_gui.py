@@ -20,8 +20,6 @@ import matplotlib.animation as animation
 
 # some global variables
 num_diagrams = 3
-app_running = True
-updateNeeded = False
 controlFrame = None
 
 # paths and separators
@@ -44,11 +42,13 @@ bg_color_scrollableFrame_dark =  "#222222"
 class control_frame():
     def __init__(self, master, side, left_Buttons, right_Buttons, strak_machine):
         global bg_color_scrollableFrame
-        global controlFrame
 
         # store some variables in own class data structure
         self.strak_machine = strak_machine
         self.master = master
+
+        # get some data form strak_machine
+        self.airfoilNames = self.strak_machine.get_airfoilNames()
 
         # determine screen size
         self.width = self.master.winfo_screenwidth()
@@ -95,9 +95,6 @@ class control_frame():
 
         # show lower frame
         self.container.pack(side = 'bottom', fill=tk.BOTH, expand=1)
-
-        # store control frame instance in global variable
-        controlFrame = self
 
 
     def OnFrameConfigure(self, event):
@@ -177,9 +174,9 @@ class control_frame():
 
     def add_entries(self, frame):
         # get initial target values
-        self.targetValues = self.strak_machine.get_targetValues(1)# FIXME select airfoil
+        self.targetValues = self.strak_machine.get_targetValues(self.master.airfoilIdx)
 
-        # init some strucures to store data locally
+        # init some structures to store data locally
         self.entries = []
         self.textVars = []
 
@@ -277,31 +274,28 @@ class control_frame():
             idx = idx+1
 
     def change_targetValue(self, x, y, idx):
-        global updateNeeded
-
         if idx == None:
             return
+
         # read current value to get the mode
         (mode, oppoint, target) = self.get_valuesFromDict(self.targetValues[idx])
         # FIXME check: evaluate mode ?
         self.write_valuesToDict(idx, mode, y, x)
 
         # writeback dictionary to strakmachine
-        self.strak_machine.set_targetValues(1, self.targetValues)# FIXME only first airfoil supported at the moment
+        self.strak_machine.set_targetValues(self.master.airfoilIdx, self.targetValues)
 
         # perform update of the target polars
         self.strak_machine.update_targetPolars()
 
         # update entries in control frame
-        self.update_Entries(1)# FIXME only first airfoil supported at the moment
+        self.update_Entries(self.master.airfoilIdx)
 
         # notify the diagram frame about the change
-        updateNeeded = True
+        self.master.set_updateNeeded()
 
 
     def update_TargetValues(self, command):
-        global updateNeeded
-
         # local variable if writeback of target values to strak machine is needed
         writeback_needed = False
         idx = 0
@@ -330,14 +324,13 @@ class control_frame():
 
         if (writeback_needed):
             # writeback dictionary to strakmachine
-            self.strak_machine.set_targetValues(1, self.targetValues)# FIXME only first airfoil supported at the moment
+            self.strak_machine.set_targetValues(self.master.airfoilIdx, self.targetValues)
 
             # perform update of the target polars
             self.strak_machine.update_targetPolars()
 
             # notify the diagram frame about the change
-            updateNeeded = True
-
+            self.master.set_updateNeeded()
 
 
     def place_widgets(self, widget1, widget2):
@@ -410,9 +403,8 @@ class control_frame():
 
     def add_airfoilChoiceMenu(self, frame):
         self.label_airfoilChoice = customtkinter.CTkLabel(master=frame, text="Edit polar of:")
-        airfoilNames = self.strak_machine.get_airfoilNames()
         self.optionmenu_2 = customtkinter.CTkOptionMenu(master=frame,
-                                                        values=airfoilNames[1:],
+                                                        values=self.airfoilNames[1:],
                                                         command=self.change_airfoil)
         self.place_widgets(self.label_airfoilChoice, self.optionmenu_2)
 
@@ -423,11 +415,10 @@ class control_frame():
         self.lastVisibleFlags = []
         self.label_visiblePolars = customtkinter.CTkLabel(master=frame, text="Visible polars:")
         widget_1 = self.label_visiblePolars
-        airfoilNames = self.strak_machine.get_airfoilNames()
-        num = len(airfoilNames)
+        num = len(self.airfoilNames)
         idx = 0
 
-        for airfoilName in airfoilNames:
+        for airfoilName in self.airfoilNames:
             # new visibleFlag
             self.visibleFlags.append(tk.BooleanVar(value=True))
             self.lastVisibleFlags.append(True)
@@ -454,17 +445,44 @@ class control_frame():
 
 
     def change_airfoil(self, airfoilName):
+        # convert airfoilName to an index
         airfoilIdx = self.airfoilNames.index(airfoilName)
+
+        # check if idx has been changed
+        if (self.master.airfoilIdx == airfoilIdx):
+            return
+
+        # set new idx
         self.master.airfoilIdx = airfoilIdx
+        self.strak_machine.set_activeTargetPolarIdx(airfoilIdx)
+
+        # update entry-frame (will also update self.targetValues)
+        self.update_Entries(airfoilIdx)
+
+        # check visible flags, is polar of selected airfoil visible?
+        isVisible = self.visibleFlags[airfoilIdx].get()
+        if (not isVisible):
+            # set the polar visible
+            self.visibleFlags[airfoilIdx].set(True)
+            # this funtion call will aslo set updateNeeded flag
+            self.update_visibleFlags()
+        else:
+            # notify the diagram frame about the change
+            self.master.set_updateNeeded()
+
+
+    def check_activePolarVisibility(self):
+        activePolar = self.master.airfoilIdx
+        isVisible = self.visibleFlags[activePolar].get()
+        return isVisible
 
 
     def update_visibleFlags(self):
-        global updateNeeded
         newVisibleFlags = []
 
         # read actual values
         num = len(self.visibleFlags)
-        for idx in reversed(range(num)):
+        for idx in range(num):
             newVisibleFlags.append(self.visibleFlags[idx].get())
 
         for idx in range (num):
@@ -477,7 +495,7 @@ class control_frame():
                 self.strak_machine.set_visiblePolars(newVisibleFlags)
 
                 # notify the diagram frame about the change
-                updateNeeded = 2
+                self.master.set_updateNeeded()
                 break
 
     def on_closing(self, event=0):
@@ -497,51 +515,62 @@ class diagram(customtkinter.CTkFrame):
 
         canvas._tkcanvas.pack(fill=tk.BOTH, expand=1)
         canvas.draw()
-##
-##        #self.cid = self.add_callback(self.diagram_changed)
-        self._ind = None  # the active vert
+
+        # index of targetValue that shall be graphically edited
+        self._ind = None
         self.controller = controller
-##
-##        canvas.mpl_connect('draw_event', self.on_draw)
+
         canvas.mpl_connect('button_press_event', self.on_button_press)
         canvas.mpl_connect('button_release_event', self.on_button_release)
         canvas.mpl_connect('motion_notify_event', self.on_mouse_move)
-##        self.canvas = canvas
 
-    def on_draw(self, event):
-        return
-##        self.background = self.canvas.copy_from_bbox(self.ax.bbox)
-##        self.ax.draw_artist(self.poly)
-##        self.ax.draw_artist(self.line)
-        # do not need to blit here, this will fire before the screen is
-        # updated
-
-    def diagram_changed(self, parent):
-        """This method is called whenever the pathpatch object is called."""
-        # only copy the artist props to the line (except visibility)
-##        vis = self.line.get_visible()
-##        Artist.update_from(self.line, poly)
-##        self.line.set_visible(vis)  # don't use the poly visibility state
-        return
 
     def get_ind_under_point(self, event):
         """
         Return the index of the point closest to the event position or *None*
-        if no point is within ``self.epsilon`` to the event position.
+        if no point is within catching range to the event position.
         """
         global targetValues
+        global controlFrame
 
+        # set ranges to catch points
         catching_range_oppoint = 0.01
         catching_range_targetValue = 0.001
 
-        idx = 0
         mouse_target = event.xdata
         mouse_oppoint = event.ydata
 
+        # check type of active diagram
+        if (self.controller.activeDiagram == "CL_CD_diagram"):
+            edit_mode = 'spec-cl'
+            mouse_target = event.xdata
+            mouse_oppoint = event.ydata
+        elif (self.controller.activeDiagram == "CLCD_CL_diagram"):
+            edit_mode = 'spec-cl'
+            mouse_oppoint = event.xdata
+            # convert y-coordinates, CL/CD -> CD
+            mouse_target = event.xdata / event.ydata
+        elif (self.controller.activeDiagram == "CL_alpha_diagram"):
+            edit_mode == 'spec-al'
+            # FIXME check if this is corrector must be swapped
+            mouse_target = event.xdata
+            mouse_oppoint = event.ydata
+
+
+        # check visibility of editable polar
+        if (controlFrame.check_activePolarVisibility() == False):
+            return None
+
         # search entry with closest coordinates
+        idx = 0
         for targetValue in controlFrame.targetValues:
             # get values from dictinory
             (mode, oppoint, target) = controlFrame.get_valuesFromDict(targetValue)
+
+            if (mode != edit_mode):
+                # not graphically editable in this diagram
+                idx = idx + 1
+                continue
 
             if ((abs(mouse_target - target) < catching_range_targetValue) and
                 (abs(mouse_oppoint - oppoint) < catching_range_oppoint)):
@@ -550,20 +579,6 @@ class diagram(customtkinter.CTkFrame):
             idx = idx + 1
         return None
 
-
-        # display coords
-##        xy = np.asarray(self.poly.xy)
-##        xyt = self.poly.get_transform().transform(xy)
-##        xt, yt = xyt[:, 0], xyt[:, 1]
-##        d = np.hypot(xt - event.x, yt - event.y)
-##        indseq, = np.nonzero(d == d.min())
-##        ind = indseq[0]
-##
-##        if d[ind] >= self.epsilon:
-##            ind = None
-##
-##        return ind
-        return None
 
     def on_button_press(self, event):
         """Callback for mouse button presses."""
@@ -583,21 +598,29 @@ class diagram(customtkinter.CTkFrame):
 
     def on_mouse_move(self, event):
         """Callback for mouse movements."""
+        global controlFrame
         if self._ind is None:
             return
         if event.inaxes is None:
             return
         if event.button != 1:
             return
-        x, y = event.xdata, event.ydata
+
+        # check type of active diagram
+        if (self.controller.activeDiagram == "CLCD_CL_diagram"):
+            # convert coordinates
+            x, y = event.ydata, event.xdata
+            x = y/x
+        else:
+            x, y = event.xdata, event.ydata
+
+        # set new target value
         controlFrame.change_targetValue(x,y,self._ind)
 
 
 # class diagram frame, shows the graphical output of the strak machine
 class diagram_frame():
     def __init__(self, master, side, strak_machine):
-        global updateNeeded
-
         # store strak machine instance locally
         self.strak_machine = strak_machine
         self.master = master
@@ -636,7 +659,7 @@ class diagram_frame():
         self.activeDiagram = "CL_CD_diagram"
 
         # show initial diagram
-        updateNeeded = True
+        self.master.set_updateNeeded()
         self.update_diagram(master)
 
 
@@ -679,10 +702,8 @@ class diagram_frame():
         return frames
 
     def update_diagram(self, master):
-        global updateNeeded
-
         # check if an update has to be carried out
-        if updateNeeded:
+        if (self.master.get_updateNeeded()):
             # get buffer idx for modifing the frames that are currently not visible
             if self.activeBufferIdx == 0:
                 backgroundIdx = 1
@@ -710,21 +731,21 @@ class diagram_frame():
             self.activeBufferIdx = backgroundIdx
 
             # clear notification variable
-            updateNeeded = False
-
+            self.master.clear_updateNeeded()
 
 
     def change_diagram(self, diagram):
-        global updateNeeded
         if (self.activeDiagram != diagram):
             self.activeDiagram = diagram
-            updateNeeded = True
+            self.master.set_updateNeeded()
 
 
 # main application
 class App(customtkinter.CTk):
     def __init__(self, strak_machine):
         super().__init__()
+        global controlFrame
+        self.app_running = False
 
         # configure customtkinter
         customtkinter.set_appearance_mode("Dark")    # Modes: "System" (standard), "Dark", "Light"
@@ -732,9 +753,6 @@ class App(customtkinter.CTk):
 
         # store strak_machine instance locally
         self.strak_machine = strak_machine
-
-        # set Index of airfoil, whose polar shall be editable
-        self.airfoilIdx = 1
 
         # set window title
         self.title("The Strak machine")
@@ -745,12 +763,22 @@ class App(customtkinter.CTk):
         # call .on_closing() when app gets closed
         self.protocol("WM_DELETE_WINDOW", self.on_closing)
 
+        # set Index of airfoil, whose polar shall be editable
+        self.airfoilIdx = 1
+
+        # notification variable for updating the diagrams
+        self.updateNeeded = 0
+
         # create diagram frame, which is on the right
         self.frame_right = diagram_frame(self, tk.RIGHT, self.strak_machine)
 
         # create control frame, which is on the left
         self.frame_left = control_frame(self, tk.LEFT,
          self.get_leftButtons(), self.get_rightButtons(), self.strak_machine)
+
+        # set global variable
+        controlFrame = self.frame_left
+
 
 
     def get_leftButtons(self):
@@ -768,6 +796,14 @@ class App(customtkinter.CTk):
         buttons.append({"txt": "Reset", "cmd" : self.reset})
         return buttons
 
+    def set_updateNeeded(self):
+        self.updateNeeded = True
+
+    def get_updateNeeded(self):
+        return self.updateNeeded
+
+    def clear_updateNeeded(self):
+        self.updateNeeded = False
 
     def set_CL_CD_diagram(self):
         self.frame_right.change_diagram("CL_CD_diagram")
@@ -800,9 +836,8 @@ class App(customtkinter.CTk):
             updateNeeded = True
 
     def start(self):
-        global app_running
-
-        while app_running:
+        self.app_running = True
+        while self.app_running:
             self.update_idletasks()
             self.update()
             self.frame_left.update_visibleFlags()
@@ -810,10 +845,8 @@ class App(customtkinter.CTk):
 
         self.destroy()
 
-
     def on_closing(self, event=0):
-        global app_running
-        app_running = False
+        self.app_running = False
 
 if __name__ == "__main__":
     # init colorama

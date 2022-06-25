@@ -1042,6 +1042,7 @@ class strakData:
         self.maxLiftDistance = 0.03
         self.alpha_Resolution = 0.001
         self.optimizationPasses = 3
+        self.activeTargetPolarIdx = 1
         self.allGraphs = True
         self.activeSubplot = 0
         self.scriptsAsExe = False
@@ -1126,6 +1127,8 @@ class strakData:
         self.visibleFlags.clear()
         self.visibleFlags = flags
 
+    def set_activeTargetPolarIdx(self, idx):
+        self.activeTargetPolarIdx = idx
 
     ############################################################################
     # function that returns a list of max Re-numbers
@@ -1496,6 +1499,18 @@ class polarGraph:
         visibleFlags = params.get_visibleFlags()
         return (visibleFlags[polarIdx])
 
+    def check_onlyRootPolarVisible(self, params):
+        visibleFlags = params.get_visibleFlags()
+        if visibleFlags[0] == False:
+            return False
+
+        for flag in visibleFlags[1:]:
+            if flag:
+                return False
+
+        return True
+
+
     def set_AxesAndLabels(self, ax, title, xlabel, ylabel):
         global fs_axes
         global fs_ticks
@@ -1513,17 +1528,6 @@ class polarGraph:
         # customize grid
         ax.grid(True, color='dimgrey',  linestyle='dotted', linewidth=0.4)
 
-
-    # reverts list and returns reverted list
-    def get_ReverseList(self, list):
-        reverseList = []
-        idx = len(list)-1
-
-        for element in list:
-            reverseList.append(list[idx])
-            idx = idx -1
-
-        return reverseList
 
     # plots an image
     def plot_Logo(self, ax, params):
@@ -1556,10 +1560,6 @@ class polarGraph:
         # get polar of root-airfoil
         rootPolar = polars[0]
 
-        # revert List of polars (for graphical reasons: plot root-polar last)
-        polars = self.get_ReverseList(polars)
-        targetPolars = self.get_ReverseList(targetPolars)
-
         # get number of polars to plot
         numPolars = len(polars)
 
@@ -1571,9 +1571,6 @@ class polarGraph:
 
         # set y-axis manually
         ax.set_ylim(min(rootPolar.CL) - 0.2, max(rootPolar.CL) + 0.2)
-
-        # set number of already plotted polars
-        plotted_polars = 0
 
         # all polars
         for polarIdx in range(numPolars):
@@ -1631,8 +1628,8 @@ class polarGraph:
                 y = polar.CL[polar.maxLift_idx]
                 ax.plot(x, y, marker='o', color=cl_infotext)
 
-                # Is this the only polar ?
-                if plotted_polars == 0:
+                # Is this the only visible polar ?
+                if self.check_onlyRootPolarVisible(params):
                     # determine some text-offsets
                     CL0TextOffset_x = rootPolar.CD_CL0 * 1.1
                     CL0TextOffset_y = 0
@@ -1666,7 +1663,12 @@ class polarGraph:
                 else:
                     label = None
 
-                style = opt_point_style_root
+                # is this the selected target polar for editing ?
+                if (polarIdx == params.activeTargetPolarIdx):
+                    style = opt_point_style_root
+                else:
+                    style = opt_point_style_strak
+
                 linewidth = lw_targetPolar
 
                 # remove last elements, as they are dummies
@@ -1680,8 +1682,6 @@ class polarGraph:
 
             if T1_label != None:
                 ax.legend(loc='upper left', fontsize = fs_legend)
-
-            plotted_polars = plotted_polars + 1
 
         # plot strak-polars
         if params.plotStrakPolars:
@@ -1719,18 +1719,11 @@ class polarGraph:
         # get polar of root-airfoil
         rootPolar = polars[0]
 
-        # revert List of polars (for graphical reasons: plot root-polar last)
-        polars = self.get_ReverseList(polars)
-        targetPolars = self.get_ReverseList(targetPolars)
-
         # set y-axis manually
         ax.set_ylim(min(rootPolar.CL) - 0.1, max(rootPolar.CL) + 0.2)
 
         # get number of polars to plot
         numPolars = len(polars)
-
-        # set number of already plotted polars
-        plotted_polars = 0
 
         # all polars
         for polarIdx in range(numPolars):
@@ -1773,7 +1766,8 @@ class polarGraph:
                 ax.plot(x, y, 'o', color=cl_infotext)
 
                 # Is this the only polar ?
-                if plotted_polars == 0:
+                rootPolarOnly = self.check_onlyRootPolarVisible(params)
+                if rootPolarOnly:
                     ax.annotate('CL=0 @ alpha = %.2f' % x,
                       xy=(x,y), xytext=(20,-15), textcoords='offset points',
                       fontsize = fs_infotext, color=cl_infotext)
@@ -1784,7 +1778,7 @@ class polarGraph:
                 ax.plot(x, y, 'o', color=cl_infotext)
 
                 # Is this the only polar ?
-                if plotted_polars == 0:
+                if rootPolarOnly:
                     ax.annotate('maxSpeed @ alpha = %.2f, CL = %.2f' %\
                       (x, y), xy=(x,y),
                       xytext=(20,-5), textcoords='offset points',
@@ -1796,7 +1790,7 @@ class polarGraph:
                 ax.plot(x, y, 'o', color=cl_infotext)
 
                 # Is this the only polar ?
-                if plotted_polars == 0:
+                if rootPolarOnly:
                     ax.annotate('maxGlide @ alpha = %.2f, CL = %.2f' %\
                       (x, y), xy=(x,y),
                       xytext=(20,-5), textcoords='offset points',
@@ -1808,7 +1802,7 @@ class polarGraph:
                 ax.plot(x, y, 'o', color=cl_infotext)
 
                 # Is this the only polar ?
-                if plotted_polars == 0:
+                if rootPolarOnly:
                     ax.annotate('maxLift @ alpha = %.2f, CL = %.2f' %\
                       (x, y), xy=(x,y),
                       xytext=(-140,10), textcoords='offset points',
@@ -1821,8 +1815,12 @@ class polarGraph:
                 else:
                     label = None
 
-                # style for target-polar of root-airfoil
-                style = opt_point_style_root
+                # is this the selected target polar for editing ?
+                if (polarIdx == params.activeTargetPolarIdx):
+                    style = opt_point_style_root
+                else:
+                    style = opt_point_style_strak
+
                 linewidth = lw_targetPolar
 
                 # remove last dummy-values
@@ -1838,8 +1836,6 @@ class polarGraph:
             if (T1_label != None):
                 ax.legend(loc='upper left', fontsize = fs_legend)
 
-            plotted_polars = plotted_polars + 1
-
 
     # plots glide-polars (Xfoil-worker-polars and target-polars)
     def plot_GlidePolars(self, ax, polars, targetPolars, params):
@@ -1851,11 +1847,6 @@ class polarGraph:
 
         # get polar of root-airfoil
         rootPolar = polars[0]
-
-        # revert List of polars (for graphical reasons: plot root-polar last)
-        polars = self.get_ReverseList(polars)
-        targetPolars = self.get_ReverseList(targetPolars)
-
 
         # get number of polars to plot
         numPolars = len(polars)
@@ -1912,7 +1903,8 @@ class polarGraph:
                 ax.plot(x, y, 'o', color=cl_infotext)
 
                 # Is this the only polar ?
-                if plotted_polars == 0:
+                rootPolarOnly = self.check_onlyRootPolarVisible(params)
+                if rootPolarOnly:
                     ax.annotate('CL=0 @ CL/CD = %.2f' % y, xy=(x,y),
                     xytext=(20,-5), textcoords='offset points',
                     fontsize = fs_infotext, color=cl_infotext)
@@ -1923,7 +1915,7 @@ class polarGraph:
                 ax.plot(x, y, 'o', color=cl_infotext)
 
                  # Is this the only polar ?
-                if plotted_polars == 0:
+                if rootPolarOnly:
                     ax.annotate('maxSpeed @\nCL = %.2f,\nCL/CD = %.2f' %\
                     (x, y), xy=(x,y), xytext=(-160,0), textcoords='offset points',
                     fontsize = fs_infotext, color=cl_infotext)
@@ -1934,7 +1926,7 @@ class polarGraph:
                 ax.plot(x, y, 'o', color=cl_infotext)
 
                 # Is this the only polar ?
-                if plotted_polars == 0:
+                if rootPolarOnly:
                    ax.annotate('maxGlide @ CL = %.2f, CL/CD = %.2f' %\
                       (x, y), xy=(x,y), xytext=(-160,15), textcoords='offset points',
                        fontsize = fs_infotext, color=cl_infotext)
@@ -1945,7 +1937,7 @@ class polarGraph:
                 ax.plot(x, y, 'o', color=cl_infotext)
 
                  # Is this the only polar ?
-                if plotted_polars == 0:
+                if rootPolarOnly:
                     ax.annotate('maxLift @\nCL = %.2f,\nCL/CD = %.2f' %\
                     (x, y), xy=(x,y), xytext=(-200,0), textcoords='offset points',
                     fontsize = fs_infotext, color=cl_infotext)
@@ -1957,7 +1949,12 @@ class polarGraph:
                 else:
                     label = None
 
-                style = opt_point_style_root#opt_point_style_strak
+                # is this the selected target polar for editing ?
+                if (polarIdx == params.activeTargetPolarIdx):
+                    style = opt_point_style_root
+                else:
+                    style = opt_point_style_strak
+
                 linewidth = lw_targetPolar
 
                 x = deepcopy(targetPolar.CL)
@@ -1971,8 +1968,6 @@ class polarGraph:
 
             if (T1_label != None):
                 ax.legend(loc='upper left', fontsize = fs_legend)
-
-            plotted_polars = plotted_polars + 1
 
         # plot strak-polars
         if params.plotStrakPolars:
@@ -4324,6 +4319,10 @@ class strak_machine:
 
     def set_visiblePolars(self, visibleFlags):
         self.params.set_visibleFlags(visibleFlags)
+
+
+    def set_activeTargetPolarIdx(self, airfoilIdx):
+        self.params.set_activeTargetPolarIdx(airfoilIdx)
 
 
     def set_targetValues(self, airfoilIdx, targetValues):
