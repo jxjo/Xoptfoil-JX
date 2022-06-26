@@ -446,6 +446,16 @@ class inputFile:
         optimization_options = self.values["optimization_options"]
         optimization_options['initial_perturb'] = newValue
 
+    def set_NCrit(self, newValue):
+        # change ncrit in namelist / dictionary
+        xfoil_run_options = self.values["xfoil_run_options"]
+        xfoil_run_options['ncrit'] = newValue
+
+    def get_Ncrit(self):
+        # get ncrit from namelist / dictionary
+        xfoil_run_options = self.values["xfoil_run_options"]
+        return xfoil_run_options['ncrit']
+
     def set_shape_functions (self, shape_functions):
         optimization_options = self.values["optimization_options"]
         optimization_options['shape_functions'] = shape_functions
@@ -1028,7 +1038,7 @@ class strakData:
         self.matchPolarFoilName = ""
         self.ReSqrtCl = 150000
         self.ReAlpha0 = 0
-        self.NCrit = 9.0
+        self.NCrit = 7.0
         self.numOpPoints = 16
         self.minWeight = 0.7
         self.maxWeight = 2.1
@@ -3389,13 +3399,19 @@ def check_WeightingMode(params):
 def check_quality(params):
     if ((params.quality != 'low') &
         (params.quality != 'medium') &
-        (params.quality != 'high')):
+        (params.quality != 'high') &
+        (params.quality != 'default')):
 
         WarningMsg('quality = \'%s\' is not valid, setting quality'\
-        ' to \'medium\'' % params.quality)
-        params.quality = 'medium'
+        ' to \'default\'' % params.quality)
+        params.quality = 'default'
 
-    if params.quality == 'low':
+    if params.quality == 'default':
+        # single-pass optimization, hicks-henne
+        params.maxIterations = [600]
+        params.numberOfCompetitors = [1]
+        params.shape_functions = ['hicks-henne']
+    elif params.quality == 'low':
         # double-pass optimization, camb-thick-plus / hicks-henne
         params.maxIterations = [160]
         params.numberOfCompetitors = [1]
@@ -4137,12 +4153,8 @@ class strak_machine:
         # calculate target-values for the main op-points
         self.params.calculate_MainTargetValues()
 
-        try:
-            self.read_InputFiles()
-        except:
-            NoteMsg("Failed to read input files")
-            # generate input-Files
-            generate_InputFiles(self.params, True)
+        # read input files / create new ones
+        self.read_InputFiles()
 
         # generate target polars and write to file
         generate_TargetPolars(self.params, True)
@@ -4186,8 +4198,13 @@ class strak_machine:
             # set input-file name
             fileName = self.params.inputFileNames[fileIdx]
             new_inputFile = inputFile(self.params)
-            new_inputFile.read_FromFile(fileName)
             self.params.inputFiles.append(new_inputFile)
+            try:
+                # read existing inputfile, if possible
+                new_inputFile.read_FromFile(fileName)
+            except:
+                # could not read inputfile, create new one
+                self.generate_InputFile(idx, True)
 
         DoneMsg()
 
@@ -4239,6 +4256,7 @@ class strak_machine:
             inputFile.set_shape_functions(self.params.shape_functions[n])
 
             if writeToDisk:
+                #NCrit = inputFile.get_Ncrit()#FIXME Debug
                 # physically create the file
                 inputFile.write_ToFile(iFile)
 
@@ -4262,6 +4280,9 @@ class strak_machine:
 
         # set the importance / weightings of the op-points
         newFile.set_Weightings(self.params)
+
+        # set NCrit
+        newFile.set_NCrit(self.params.NCrit)
 
         # adapt reynolds()-values, get strak-polar
         strakPolar = self.params.merged_polars[i]
@@ -4409,7 +4430,6 @@ class strak_machine:
         try:
             # get input file from params
             inputFile = self.params.inputFiles[airfoilIdx]
-
             # generate input-files for intermediate strak-airfoils
             self.generate_MultiPassInputFiles(airfoilIdx, True, inputFile)
         except:

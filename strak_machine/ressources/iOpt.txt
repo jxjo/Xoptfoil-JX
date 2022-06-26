@@ -40,3 +40,7 @@
   pso_options%max_retries = 50
   pso_tol = 0.00001
 /
+
+&xfoil_run_options
+  ncrit = 9.0
+/
