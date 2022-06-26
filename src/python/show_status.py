@@ -81,22 +81,30 @@ class show_status():
 
         # creating tkinter window
         self.root = ctk.CTk()
-        self.root.title('The Strak Machine V1.1')
-
-        # Same size will be defined in variable for center screen in Tk_Width and Tk_height
-        Tk_Width = 400
-        Tk_Height = 300
+        self.root.title('The Strak Machine')
 
         # set background-colour
         self.root.configure(bg=bg_colour)
 
+        # determine width and height
+        width_value = self.root.winfo_screenwidth()
+        height_value = self.root.winfo_screenheight()
+
+        # determine scale factors
+        width_scaler = width_value/1920
+        heigth_scaler = height_value/1080
+
+        # Same size will be defined in variable for center screen in Tk_Width and Tk_height
+        Tk_Width = int(250 * width_scaler)
+        Tk_Height = int(250 * heigth_scaler)
+
+        # scale and place window
+        self.root.geometry("%dx%d+0+0" % (Tk_Width, Tk_Height))
+
         # display logo of the strak machine
         imagename = (".." + bs + ressourcesPath + bs + logoName)
 
-        # determine scale factors
-
-        width_scaler = self.root.winfo_screenwidth()/1920
-        heigth_scaler = self.root.winfo_screenheight()/1080
+        # scale image
         img_width = int(400 * width_scaler)
         img_height = int(100 * heigth_scaler)
 
