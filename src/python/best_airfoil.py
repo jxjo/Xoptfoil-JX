@@ -11,8 +11,11 @@
 
 import argparse
 import sys
+from os import path, makedirs
 import change_airfoilname
 
+# paths and separators
+bs = "\\"
 
 ################################################################################
 # function that gets arguments from the commandline
@@ -43,9 +46,12 @@ def readPerformanceSummary(filename):
 
 def writeSummaryToFile(airfoilName, summary):
     # example: SD-strak-150k_1_performance_summary.dat
-    summaryFilename = airfoilName + ("_performance_summary.dat")
+    summaryDir = airfoilName + "_temp"
+    summaryFilename = summaryDir + bs + "Performance_Summary.dat"
     try:
         print("writing summary file..")
+        if not path.exists(summaryDir):
+                makedirs(summaryDir)
         file = open(summaryFilename, 'w')
         for line in summary:
             file.writelines(line)
@@ -73,7 +79,7 @@ def main():
 
     for i in range(numCompetitors):
         # example: SD-strak-150k_1_1_performance_summary.dat
-        summaryFileName = airfoilName + ("_%d_performance_summary.dat" % (i+1))
+        summaryFileName = airfoilName + ("_%d_temp"% (i+1)) + bs + "Performance_Summary.dat"
 
         # example: SD-strak-150k_1_1
         competitorFileName = airfoilName + ("_%d" % (i+1))
