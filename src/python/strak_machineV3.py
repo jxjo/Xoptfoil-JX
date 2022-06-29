@@ -3420,12 +3420,12 @@ def check_quality(params):
         # double-pass optimization, camb-thick-plus / hicks-henne
         params.maxIterations = [160, 400]
         params.numberOfCompetitors = [1, 1]
-        params.shape_functions = ['camb-thick-plus', 'hicks-henne-plus']
+        params.shape_functions = ['camb-thick-plus', 'hicks-henne']
     else:
         # multi-pass optimization, camb-thick-plus and hicks-henne
         params.maxIterations = [160, 80, 300]
         params.numberOfCompetitors = [1, 3, 1]
-        params.shape_functions = ['camb-thick-plus','hicks-henne-plus','hicks-henne-plus']
+        params.shape_functions = ['camb-thick-plus','hicks-henne','hicks-henne']
 
     params.optimizationPasses = len(params.maxIterations)
 
