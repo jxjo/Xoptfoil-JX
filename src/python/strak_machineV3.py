@@ -44,7 +44,7 @@ exePath = 'bin'
 
 # fixed filenames
 pythonInterpreterName = "python"
-strakMachineName = "strak_machineV2"
+strakMachineName = "strak_machineV3"
 xfoilWorkerName = "xfoil_worker"
 xoptfoilName = "xoptfoil-jx"
 xoptfoilVisualizerName = "xoptfoil_visualizer-jx"
