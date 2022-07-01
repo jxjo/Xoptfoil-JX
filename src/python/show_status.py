@@ -95,8 +95,8 @@ class show_status():
         heigth_scaler = height_value/1080
 
         # Same size will be defined in variable for center screen in Tk_Width and Tk_height
-        Tk_Width = int(250 * width_scaler)
-        Tk_Height = int(250 * heigth_scaler)
+        Tk_Width = 500#int(250 * width_scaler)
+        Tk_Height = 500#int(250 * heigth_scaler)
 
         # scale and place window
         self.root.geometry("%dx%d+0+0" % (Tk_Width, Tk_Height))
