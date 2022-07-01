@@ -1,5 +1,5 @@
 {
-    "quality": "default",
+    "quality": "high",
     "seedFoilName": "JX-GS-138k", 
     "NCrit": 7.0, 
     "useAlwaysRootfoil": "True", 
@@ -16,7 +16,6 @@
     ], 
     "additionalOpPoints": [
         0.014, 
-        0.024, 
         0.042, 
         0.78
     ]
