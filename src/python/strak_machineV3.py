@@ -99,6 +99,9 @@ gGraph = None
 # disables all print output to console
 print_disabled = False
 
+# default values
+NCrit_Default = 9.0
+
 def my_print(message):
     if print_disabled:
         return
@@ -447,14 +450,22 @@ class inputFile:
         optimization_options['initial_perturb'] = newValue
 
     def set_NCrit(self, newValue):
-        # change ncrit in namelist / dictionary
-        xfoil_run_options = self.values["xfoil_run_options"]
-        xfoil_run_options['ncrit'] = newValue
+        try:
+            # change ncrit in namelist / dictionary
+            xfoil_run_options = self.values["xfoil_run_options"]
+            xfoil_run_options['ncrit'] = newValue
+        except:
+            ErrorMsg("Unable to set NCrit in inputfile")
 
     def get_Ncrit(self):
-        # get ncrit from namelist / dictionary
-        xfoil_run_options = self.values["xfoil_run_options"]
-        return xfoil_run_options['ncrit']
+        try:
+            # get ncrit from namelist / dictionary
+            xfoil_run_options = self.values["xfoil_run_options"]
+            return xfoil_run_options['ncrit']
+        except:
+            ncrit
+            ErrorMsg("Unable to get NCrit from inputfile, using default-value %f" % NCrit_Default)
+            return NCrit_Default
 
     def set_shape_functions (self, shape_functions):
         optimization_options = self.values["optimization_options"]
@@ -1038,7 +1049,7 @@ class strakData:
         self.matchPolarFoilName = ""
         self.ReSqrtCl = 150000
         self.ReAlpha0 = 0
-        self.NCrit = 7.0
+        self.NCrit = NCrit_Default
         self.numOpPoints = 16
         self.minWeight = 0.7
         self.maxWeight = 2.1
@@ -2126,7 +2137,7 @@ class polarData:
         self.polarType = 2
         self.Re = 0
         self.maxRe = 0
-        self.NCrit = 9.0
+        self.NCrit = NCrit_Default
         self.Mach = 0.0
         self.alpha = []
         self.CL = []
@@ -4202,16 +4213,12 @@ class strak_machine:
         num = len(self.params.ReNumbers)
 
         for idx in range(num):
-            offset = self.params.optimizationPasses * idx
-            fileIdx = offset + self.params.optimizationPasses-1
-
-            # set input-file name
-            fileName = self.params.inputFileNames[fileIdx]
+            # create input-file and append to list
             new_inputFile = inputFile(self.params)
             self.params.inputFiles.append(new_inputFile)
             try:
-                # read existing inputfile, if possible
-                new_inputFile.read_FromFile(fileName)
+                # read contents of existing inputfile, if possible
+                new_inputFile.read_FromFile(self.get_inputfileName(idx))
             except:
                 # could not read inputfile, create new one
                 self.generate_InputFile(idx, True)
@@ -4415,7 +4422,8 @@ class strak_machine:
 
 
     def get_inputfileName(self, airfoilIdx):
-        fileName = self.params.inputFileNames[airfoilIdx]
+        idx = ((airfoilIdx + 1) * self.params.optimizationPasses) - 1
+        fileName = self.params.inputFileNames[idx]
         return fileName
 
 
