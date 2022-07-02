@@ -1520,7 +1520,6 @@ class polarGraph:
 
         return True
 
-
     def set_AxesAndLabels(self, ax, title, xlabel, ylabel):
         global fs_axes
         global fs_ticks
@@ -1560,7 +1559,7 @@ class polarGraph:
 
 
     # plots lift/drag-polars (Xfoil-worker-polars and target-polars)
-    def plot_LiftDragPolars(self, ax, polars, targetPolars, params):
+    def plot_LiftDragPolars(self, ax, x_limits, y_limits, polars, targetPolars, params):
         T1T2_labelOk = False
         Target_labelOk = False
 
@@ -1573,14 +1572,16 @@ class polarGraph:
         # get number of polars to plot
         numPolars = len(polars)
 
-        # get maximum CD-value that shall be visible in the plot
-        max_CD = round(rootPolar.CD_maxLift * 1.1, CD_decimals)
-
-        # set x-axis manually
-        ax.set_xlim(right = max_CD)
-
-        # set y-axis manually
-        ax.set_ylim(min(rootPolar.CL) - 0.2, max(rootPolar.CL) + 0.2)
+        if ((x_limits == None) or (y_limits == None)):
+            # get maximum CD-value that shall be visible in the plot
+            max_CD = round(rootPolar.CD_maxLift * 1.1, CD_decimals)
+            # set x-axis manually
+            ax.set_xlim(right = max_CD)
+            # set y-axis manually
+            ax.set_ylim(min(rootPolar.CL) - 0.2, max(rootPolar.CL) + 0.2)
+        else:
+            ax.set_xlim(x_limits)
+            ax.set_ylim(y_limits)
 
         # all polars
         for polarIdx in range(numPolars):
@@ -1719,7 +1720,7 @@ class polarGraph:
 
 
     # plots lift/alpha-polars (Xfoil-worker-polars and target-polars)
-    def plot_LiftAlphaPolars(self, ax, polars, targetPolars, params):
+    def plot_LiftAlphaPolars(self, ax, x_limits, y_limits, polars, targetPolars, params):
         T1T2_labelOk = False
         Target_labelOk = False
 
@@ -1729,8 +1730,13 @@ class polarGraph:
         # get polar of root-airfoil
         rootPolar = polars[0]
 
-        # set y-axis manually
-        ax.set_ylim(min(rootPolar.CL) - 0.1, max(rootPolar.CL) + 0.2)
+        if ((x_limits == None) or (y_limits == None)):
+            # set y-axis manually
+            ax.set_ylim(min(rootPolar.CL) - 0.1, max(rootPolar.CL) + 0.2)
+        else:
+            ax.set_xlim(x_limits)
+            ax.set_ylim(y_limits)
+
 
         # get number of polars to plot
         numPolars = len(polars)
@@ -1848,7 +1854,7 @@ class polarGraph:
 
 
     # plots glide-polars (Xfoil-worker-polars and target-polars)
-    def plot_GlidePolars(self, ax, polars, targetPolars, params):
+    def plot_GlidePolars(self, ax, x_limits, y_limits, polars, targetPolars, params):
         T1T2_labelOk = False
         Target_labelOk = False
 
@@ -1861,11 +1867,15 @@ class polarGraph:
         # get number of polars to plot
         numPolars = len(polars)
 
-        # set y-axis manually
-        if (params.allGraphs == True):
-            ax.set_ylim(min(rootPolar.CL_CD) - 10, max(rootPolar.CL_CD) + 10)
+        if ((x_limits == None) or (y_limits == None)):
+            # set y-axis manually
+            if (params.allGraphs == True):
+                ax.set_ylim(min(rootPolar.CL_CD) - 10, max(rootPolar.CL_CD) + 10)
+            else:
+                ax.set_ylim(-5, max(rootPolar.CL_CD) + 5)
         else:
-            ax.set_ylim(-5, max(rootPolar.CL_CD) + 5)
+            ax.set_xlim(x_limits)
+            ax.set_ylim(y_limits)
 
         # set number of already plotted polars
         plotted_polars = 0
@@ -2003,20 +2013,20 @@ class polarGraph:
                 if (label != None):
                     ax.legend(loc='upper left', fontsize = fs_legend)
 
-    def draw_diagram(self, params, diagramType, ax):
+    def draw_diagram(self, params, diagramType, ax, x_limits, y_limits):
         # get polars
         polars = params.merged_polars
         targetPolars = params.target_polars
 
         if diagramType == "CL_CD_diagram":
             # plot Glide polar
-            self.plot_LiftDragPolars(ax, polars, targetPolars, params)
+            self.plot_LiftDragPolars(ax, x_limits, y_limits, polars, targetPolars, params)
         elif diagramType == "CL_alpha_diagram":
             # plot Glide polar
-            self.plot_LiftAlphaPolars(ax, polars, targetPolars, params)
+            self.plot_LiftAlphaPolars(ax, x_limits, y_limits, polars, targetPolars, params)
         elif diagramType == "CLCD_CL_diagram":
             # plot Glide polar
-            self.plot_GlidePolars(ax, polars, targetPolars, params)
+            self.plot_GlidePolars(ax, x_limits, y_limits, polars, targetPolars, params)
         else:
             ErrorMsg("undefined diagramtype")
 
@@ -2079,16 +2089,16 @@ class polarGraph:
             self.plot_Logo(upper[0], params)
 
             # second figure, display the Lift / Drag-Polar
-            self.plot_LiftDragPolars(lower[0], polars, targetPolars, params)
+            self.plot_LiftDragPolars(lower[0], None, None, polars, targetPolars, params)
 
             # third figure, display the Lift / alpha-Polar
-            self.plot_LiftAlphaPolars(upper[1], polars, targetPolars, params)
+            self.plot_LiftAlphaPolars(upper[1], None, None, polars, targetPolars, params)
 
             # fourth figure, display the Glide polar
-            self.plot_GlidePolars(lower[1], polars, targetPolars, params)
+            self.plot_GlidePolars(lower[1], None, None, polars, targetPolars, params)
         else:
             # plot only Glide polar
-            self.plot_GlidePolars(upper, polars, targetPolars, params)
+            self.plot_GlidePolars(upper, None, None, polars, targetPolars, params)
 
         # maximize window
         figManager = plt.get_current_fig_manager()
@@ -4321,9 +4331,9 @@ class strak_machine:
             return self.exit_action(-1)
 
 
-    def plot_diagram(self, diagramType, ax):
+    def plot_diagram(self, diagramType, ax, x_limits, y_limits):
         # draw the graph
-        self.graph.draw_diagram(self.params, diagramType, ax)
+        self.graph.draw_diagram(self.params, diagramType, ax, x_limits, y_limits)
 
 
     def get_targetValues(self, airfoilIdx):

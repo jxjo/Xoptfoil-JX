@@ -626,6 +626,7 @@ class diagram_frame():
         self.master = master
         self.figures = []
         self.axes = []
+        self.limits = []
 
         # determine screen size
         self.width = self.master.winfo_screenwidth()
@@ -634,9 +635,10 @@ class diagram_frame():
 
         # create figures initially (two of each kind for buffering)
         for i in range(2):
-            (figures, axes) =  self.create_figures()
+            (figures, axes, limits) =  self.create_figures()
             self.figures.append(figures)
             self.axes.append(axes)
+            self.limits.append(limits)
 
         # create new frame (container)
         self.container = customtkinter.CTkFrame(master=master, width=180,
@@ -657,6 +659,7 @@ class diagram_frame():
 
         # set initial value of active diagram
         self.activeDiagram = "CL_CD_diagram"
+        self.old_ActiveDiagram = self.activeDiagram
 
         # show initial diagram
         self.master.set_updateNeeded()
@@ -669,6 +672,7 @@ class diagram_frame():
         # add figures for different diagram types
         figures = {}
         axes = {}
+        limits = {}
 
         # set 'dark' style
         plt.style.use('dark_background')
@@ -678,14 +682,18 @@ class diagram_frame():
             fig = Figure(figsize=(15, 16))
             ax = fig.add_subplot()
 
-            # initial diagram
-            self.strak_machine.plot_diagram(diagType, ax)
+            # initial diagram (limits will be determined automatically)
+            self.strak_machine.plot_diagram(diagType, ax, None, None)
+
+            # get initial limits
+            (x_limits, y_limits) = (ax.get_xlim(), ax.get_ylim())
 
             # append to lists
             figures[diagType] = fig
             axes[diagType] = ax
+            limits[diagType] = (x_limits, y_limits)
 
-        return (figures, axes)
+        return (figures, axes, limits)
 
     def create_frames(self, bufferIdx):
         # empty dictionary of frames
@@ -713,12 +721,23 @@ class diagram_frame():
             # get active diagram
             diagType = self.activeDiagram
 
+            # has diagram type been changed ?
+            if (diagType != self.old_ActiveDiagram):
+                # get limits for diagType
+                (x_limits, y_limits) = (None, None)#=self.limits[0][diagType]
+            else:
+                # get actual limits to preserve zooming
+                ax = self.axes[self.activeBufferIdx][diagType]
+                (x_limits, y_limits) = (ax.get_xlim(), ax.get_ylim())
+                # store limits in case of change of diagType next time
+                #self.limits[0][diagType] = (x_limits, y_limits)
+
             # update active diagram in background
             ax = self.axes[backgroundIdx][diagType]
             # clear existing diagram
             ax.clear()
             # plot new diagram
-            self.strak_machine.plot_diagram(diagType, ax)
+            self.strak_machine.plot_diagram(diagType, ax, None, None)#x_limits, y_limits) FIXME zooming
             # update figure
             figure = self.figures[backgroundIdx][diagType]
             figure.canvas.draw()
@@ -736,7 +755,11 @@ class diagram_frame():
 
     def change_diagram(self, diagram):
         if (self.activeDiagram != diagram):
+            # store old active diagram
+            self.old_ActiveDiagram = self.activeDiagram
+            # set new active diagram
             self.activeDiagram = diagram
+            # trigger update of diagram frame
             self.master.set_updateNeeded()
 
 
