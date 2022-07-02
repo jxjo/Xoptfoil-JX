@@ -838,25 +838,23 @@ class App(customtkinter.CTk):
         self.frame_right.change_diagram("CLCD_CL_diagram")
 
     def load(self):
-        global updateNeeded
         result = self.strak_machine.load(self.airfoilIdx)
         if (result == 0):
             self.targetValues = self.strak_machine.get_targetValues(self.airfoilIdx)
             self.strak_machine.update_targetPolars()
             self.frame_left.update_Entries(self.airfoilIdx)
-            updateNeeded = True
+            self.updateNeeded = True
 
     def save(self):
         self.strak_machine.save(self.airfoilIdx)
 
     def reset(self):
-        global updateNeeded
         result = self.strak_machine.reset(self.airfoilIdx)
         if (result == 0):
             self.targetValues = self.strak_machine.get_targetValues(self.airfoilIdx)
             self.strak_machine.update_targetPolars()
             self.frame_left.update_Entries(self.airfoilIdx)
-            updateNeeded = True
+            self.updateNeeded = True
 
     def start(self):
         self.app_running = True
