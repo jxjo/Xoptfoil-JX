@@ -752,7 +752,7 @@ class diagram_frame():
         self.zoom_factors[self.activeDiagram] = zoom_factor
 
 
-    def calculate_zoomed_limits(self):
+    def calculate_zoomed_limits(self, x_pos, y_pos):
         # get zoom factor for diagType
         zoom_factor = self.zoom_factors[self.activeDiagram]
 
@@ -760,56 +760,24 @@ class diagram_frame():
         (x_limTuple, y_limTuple) = self.initial_limits[self.activeDiagram]
         (x_limits, y_limits) = (list(x_limTuple), list(y_limTuple))
 
-        # scale limits
-        x_limits[0] = x_limits[0] * zoom_factor
-        x_limits[1] = x_limits[1] * zoom_factor
-        y_limits[0] = y_limits[0] * zoom_factor
-        y_limits[1] = y_limits[1] * zoom_factor
+        # adjust limits relative to mouse position
+        x_left = x_pos - x_limits[0]
+        x_right = x_limits[1] - x_pos
+        x_left = x_left * zoom_factor
+        x_right = x_right * zoom_factor
+        x_left_lim = x_pos - x_left
+        x_right_lim = x_pos + x_right
 
-        # writeback
-        self.zoomed_limits[self.activeDiagram] = (tuple(x_limits), tuple(y_limits))
+        y_below = y_pos - y_limits[0]
+        y_beyond = y_limits[1] - y_pos
+        y_below = y_below * zoom_factor
+        y_beyond = y_beyond * zoom_factor
+        y_below_lim = y_pos - y_below
+        y_beyond_lim = y_pos + y_beyond
 
-
-    def adjust_zoomed_limits(self, x_center, y_center):
-        # get zoom factor for diagType
-        zoom_factor = self.zoom_factors[self.activeDiagram]
-
-        # get zoomed limits for diagType
-        (x_limTuple, y_limTuple) = self.zoomed_limits[self.activeDiagram]
-        (x_lim_zoomed, y_lim_zoomed) = (list(x_limTuple), list(y_limTuple))
-
-        # calculate zommed width
-        x_width_zoomed = x_lim_zoomed[1] - x_lim_zoomed[0]
-        y_width_zoomed = y_lim_zoomed[1] - y_lim_zoomed[0]
-
-        # get initial limits for diagType (absolute limits)
-        (x_limTuple, y_limTuple) = self.initial_limits[self.activeDiagram]
-        (x_lim_init, y_lim_init) = (list(x_limTuple), list(y_limTuple))
-
-        x_lim_left = x_center - x_width_zoomed/2
-        x_lim_right = x_center + x_width_zoomed/2
-        y_lim_left = y_center - y_width_zoomed/2
-        y_lim_right = y_center + y_width_zoomed/2
-
-        # adjust x to absolute limits
-        if (x_lim_left < x_lim_init[0]):
-            x_lim_left = x_lim_init[0]
-            x_lim_right = x_lim_left + x_width_zoomed
-        elif (x_lim_right > x_lim_init[1]):
-            x_lim_right = x_lim_init[1]
-            x_lim_left = x_lim_right - x_width_zoomed
-
-        # adjust y to absolute limits
-        if (y_lim_left < y_lim_init[0]):
-            y_lim_left = y_lim_init[0]
-            y_lim_right = y_lim_left + y_width_zoomed
-        elif (y_lim_right > y_lim_init[1]):
-            y_lim_right = y_lim_init[1]
-            y_lim_left = y_lim_right - y_width_zoomed
-
-        # writeback
-        self.zoomed_limits[self.activeDiagram] = ((x_lim_left,x_lim_right)
-                                      ,(y_lim_left, y_lim_right))
+        # write zoomed limits
+        self.zoomed_limits[self.activeDiagram] = ((x_left_lim, x_right_lim),
+                                                  (y_below_lim, y_beyond_lim))
 
 
     def zoom_in_out(self, event):
@@ -817,10 +785,7 @@ class diagram_frame():
         self.change_zoom_factor(event.step)
 
         # caclulate zoomed_limits
-        self.calculate_zoomed_limits()
-
-        # adjust zoomed_limits according to center of zoom
-        self.adjust_zoomed_limits(event.xdata, event.ydata)
+        self.calculate_zoomed_limits(event.xdata, event.ydata)
 
         # set notification flag / update diagram
         self.master.set_updateNeeded()
