@@ -10,13 +10,13 @@ from strak_machineV3 import NoteMsg
 from strak_machineV3 import ErrorMsg
 from strak_machineV3 import strak_machine
 from colorama import init
+from copy import deepcopy
 
 # imports to use matplotlib together with tkinter
 import matplotlib.pyplot as plt
-from matplotlib.backends.backend_tkagg import (
-    FigureCanvasTkAgg, NavigationToolbar2Tk)
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib.figure import Figure
-import matplotlib.animation as animation
+
 
 # some global variables
 num_diagrams = 3
@@ -508,11 +508,6 @@ class diagram(customtkinter.CTkFrame):
 
         # canvas
         canvas = FigureCanvasTkAgg(fig, self)
-
-        # Toolbar of Matplotlib
-        toolbar = NavigationToolbar2Tk(canvas, self)
-        toolbar.update()
-
         canvas._tkcanvas.pack(fill=tk.BOTH, expand=1)
         canvas.draw()
 
@@ -523,7 +518,7 @@ class diagram(customtkinter.CTkFrame):
         canvas.mpl_connect('button_press_event', self.on_button_press)
         canvas.mpl_connect('button_release_event', self.on_button_release)
         canvas.mpl_connect('motion_notify_event', self.on_mouse_move)
-
+        canvas.mpl_connect('scroll_event', self.on_scrollwheel_turn)
 
     def get_ind_under_point(self, event):
         """
@@ -580,20 +575,35 @@ class diagram(customtkinter.CTkFrame):
         return None
 
 
+    def on_scrollwheel_turn(self, event):
+        """Callback for scrollwheel turn."""
+        if event.inaxes is None:
+            return
+        self.controller.zoom_in_out(event)
+
+
     def on_button_press(self, event):
         """Callback for mouse button presses."""
         if event.inaxes is None:
             return
-        if event.button != 1:
+        if event.button == 1: # left mouse button
+            # determine index of target point to change
+            self._ind = self.get_ind_under_point(event)
+        elif event.button == 3: # right mouse button
+            # restore default zoom
+            self.controller.default_zoom()
+        else:
             return
-        self._ind = self.get_ind_under_point(event)
+
 
 
     def on_button_release(self, event):
         """Callback for mouse button releases."""
-        if event.button != 1:
+        if event.button == 1: # left mouse button
+            # clear index of target point to change
+            self._ind = None
+        else:
             return
-        self._ind = None
 
 
     def on_mouse_move(self, event):
@@ -626,7 +636,9 @@ class diagram_frame():
         self.master = master
         self.figures = []
         self.axes = []
-        self.limits = []
+        self.initial_limits = {}
+        self.zoomed_limits = {}
+        self.zoom_factors = {}
 
         # determine screen size
         self.width = self.master.winfo_screenwidth()
@@ -638,7 +650,18 @@ class diagram_frame():
             (figures, axes, limits) =  self.create_figures()
             self.figures.append(figures)
             self.axes.append(axes)
-            self.limits.append(limits)
+
+            # initial limits unbuffered (only once each type)
+            if (i == 0):
+                self.initial_limits = limits
+
+        # set zoomed limits
+        self.zoomed_limits = deepcopy(self.initial_limits)
+
+        # set initial zoomfactors
+        for diagType in diagTypes:
+            self.zoom_factors[diagType] = 1.0
+
 
         # create new frame (container)
         self.container = customtkinter.CTkFrame(master=master, width=180,
@@ -659,7 +682,6 @@ class diagram_frame():
 
         # set initial value of active diagram
         self.activeDiagram = "CL_CD_diagram"
-        self.old_ActiveDiagram = self.activeDiagram
 
         # show initial diagram
         self.master.set_updateNeeded()
@@ -709,6 +731,113 @@ class diagram_frame():
 
         return frames
 
+    def change_zoom_factor(self, step):
+        zoomsteps = 10.0
+        max_zoom = 1.0
+        min_zoom = 1.0 / zoomsteps
+
+        # get actual zoom factor for diagType
+        zoom_factor = self.zoom_factors[self.activeDiagram]
+
+        # change zoom factor, steps is either -1.0 (scroll down) or +1.0 (scroll up)
+        zoom_factor = zoom_factor - (step/zoomsteps)
+
+        # limit zoom_factor
+        if (zoom_factor > max_zoom):
+                zoom_factor = max_zoom
+        elif (zoom_factor < min_zoom):
+              zoom_factor = min_zoom
+
+        # writeback
+        self.zoom_factors[self.activeDiagram] = zoom_factor
+
+
+    def calculate_zoomed_limits(self):
+        # get zoom factor for diagType
+        zoom_factor = self.zoom_factors[self.activeDiagram]
+
+        # get initial limits for diagType
+        (x_limTuple, y_limTuple) = self.initial_limits[self.activeDiagram]
+        (x_limits, y_limits) = (list(x_limTuple), list(y_limTuple))
+
+        # scale limits
+        x_limits[0] = x_limits[0] * zoom_factor
+        x_limits[1] = x_limits[1] * zoom_factor
+        y_limits[0] = y_limits[0] * zoom_factor
+        y_limits[1] = y_limits[1] * zoom_factor
+
+        # writeback
+        self.zoomed_limits[self.activeDiagram] = (tuple(x_limits), tuple(y_limits))
+
+
+    def adjust_zoomed_limits(self, x_center, y_center):
+        # get zoom factor for diagType
+        zoom_factor = self.zoom_factors[self.activeDiagram]
+
+        # get zoomed limits for diagType
+        (x_limTuple, y_limTuple) = self.zoomed_limits[self.activeDiagram]
+        (x_lim_zoomed, y_lim_zoomed) = (list(x_limTuple), list(y_limTuple))
+
+        # calculate zommed width
+        x_width_zoomed = x_lim_zoomed[1] - x_lim_zoomed[0]
+        y_width_zoomed = y_lim_zoomed[1] - y_lim_zoomed[0]
+
+        # get initial limits for diagType (absolute limits)
+        (x_limTuple, y_limTuple) = self.initial_limits[self.activeDiagram]
+        (x_lim_init, y_lim_init) = (list(x_limTuple), list(y_limTuple))
+
+        x_lim_left = x_center - x_width_zoomed/2
+        x_lim_right = x_center + x_width_zoomed/2
+        y_lim_left = y_center - y_width_zoomed/2
+        y_lim_right = y_center + y_width_zoomed/2
+
+        # adjust x to absolute limits
+        if (x_lim_left < x_lim_init[0]):
+            x_lim_left = x_lim_init[0]
+            x_lim_right = x_lim_left + x_width_zoomed
+        elif (x_lim_right > x_lim_init[1]):
+            x_lim_right = x_lim_init[1]
+            x_lim_left = x_lim_right - x_width_zoomed
+
+        # adjust y to absolute limits
+        if (y_lim_left < y_lim_init[0]):
+            y_lim_left = y_lim_init[0]
+            y_lim_right = y_lim_left + y_width_zoomed
+        elif (y_lim_right > y_lim_init[1]):
+            y_lim_right = y_lim_init[1]
+            y_lim_left = y_lim_right - y_width_zoomed
+
+        # writeback
+        self.zoomed_limits[self.activeDiagram] = ((x_lim_left,x_lim_right)
+                                      ,(y_lim_left, y_lim_right))
+
+
+    def zoom_in_out(self, event):
+        # change zoom_factor first
+        self.change_zoom_factor(event.step)
+
+        # caclulate zoomed_limits
+        self.calculate_zoomed_limits()
+
+        # adjust zoomed_limits according to center of zoom
+        self.adjust_zoomed_limits(event.xdata, event.ydata)
+
+        # set notification flag / update diagram
+        self.master.set_updateNeeded()
+
+
+    def default_zoom(self):
+        # set zoom factor for active diagram to default
+        self.zoom_factors[self.activeDiagram] = 1.0
+
+        # restore initial limits for active diagram
+        self.zoomed_limits[self.activeDiagram] =\
+                self.initial_limits[self.activeDiagram]
+
+        # set notification flag / update diagram
+        self.master.set_updateNeeded()
+
+
     def update_diagram(self, master):
         # check if an update has to be carried out
         if (self.master.get_updateNeeded()):
@@ -718,28 +847,20 @@ class diagram_frame():
             else:
                 backgroundIdx = 0
 
-            # get active diagram
-            diagType = self.activeDiagram
-
-            # has diagram type been changed ?
-            if (diagType != self.old_ActiveDiagram):
-                # get limits for diagType
-                (x_limits, y_limits) = (None, None)#=self.limits[0][diagType]
-            else:
-                # get actual limits to preserve zooming
-                ax = self.axes[self.activeBufferIdx][diagType]
-                (x_limits, y_limits) = (ax.get_xlim(), ax.get_ylim())
-                # store limits in case of change of diagType next time
-                #self.limits[0][diagType] = (x_limits, y_limits)
+            # get limits for active diagram
+            (x_limits, y_limits) = self.zoomed_limits[self.activeDiagram]
 
             # update active diagram in background
-            ax = self.axes[backgroundIdx][diagType]
+            ax = self.axes[backgroundIdx][self.activeDiagram]
+
             # clear existing diagram
             ax.clear()
+
             # plot new diagram
-            self.strak_machine.plot_diagram(diagType, ax, None, None)#x_limits, y_limits) FIXME zooming
+            self.strak_machine.plot_diagram(self.activeDiagram, ax, x_limits, y_limits)
+
             # update figure
-            figure = self.figures[backgroundIdx][diagType]
+            figure = self.figures[backgroundIdx][self.activeDiagram]
             figure.canvas.draw()
 
             # show the updated frame
@@ -755,8 +876,6 @@ class diagram_frame():
 
     def change_diagram(self, diagram):
         if (self.activeDiagram != diagram):
-            # store old active diagram
-            self.old_ActiveDiagram = self.activeDiagram
             # set new active diagram
             self.activeDiagram = diagram
             # trigger update of diagram frame
