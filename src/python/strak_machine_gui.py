@@ -741,9 +741,9 @@ class diagram_frame():
         return frames
 
     def change_zoom_factor(self, step):
-        zoomsteps = 10.0
+        zoomsteps = 30.0
         max_zoom = 1.0
-        min_zoom = 1.0 / zoomsteps
+        min_zoom = 0.12
 
         # get actual zoom factor for diagType
         zoom_factor = self.zoom_factors[self.activeDiagram]
