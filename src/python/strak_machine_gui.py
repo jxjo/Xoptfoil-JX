@@ -589,9 +589,12 @@ class diagram(customtkinter.CTkFrame):
         if event.button == 1: # left mouse button
             # determine index of target point to change
             self._ind = self.get_ind_under_point(event)
-        elif event.button == 3: # right mouse button
+        elif event.button == 2: # middle mouse button / scrollwheel
             # restore default zoom
             self.controller.default_zoom()
+        elif event.button == 3: # right mouse button
+            # capture actual position
+            self.controller.capture_position(event)
         else:
             return
 
@@ -609,23 +612,25 @@ class diagram(customtkinter.CTkFrame):
     def on_mouse_move(self, event):
         """Callback for mouse movements."""
         global controlFrame
-        if self._ind is None:
-            return
         if event.inaxes is None:
             return
-        if event.button != 1:
-            return
+        if event.button == 1:
+            if self._ind is None:
+                return
+            # check type of active diagram
+            if (self.controller.activeDiagram == "CLCD_CL_diagram"):
+                # convert coordinates
+                x, y = event.ydata, event.xdata
+                x = y/x
+            else:
+                x, y = event.xdata, event.ydata
+                    # set new target value
+            controlFrame.change_targetValue(x,y,self._ind)
+        elif event.button == 3: # right mouse button
+            # move visible area of the window
+            self.controller.move_visibleArea(event)
 
-        # check type of active diagram
-        if (self.controller.activeDiagram == "CLCD_CL_diagram"):
-            # convert coordinates
-            x, y = event.ydata, event.xdata
-            x = y/x
-        else:
-            x, y = event.xdata, event.ydata
 
-        # set new target value
-        controlFrame.change_targetValue(x,y,self._ind)
 
 
 # class diagram frame, shows the graphical output of the strak machine
@@ -638,7 +643,10 @@ class diagram_frame():
         self.axes = []
         self.initial_limits = {}
         self.zoomed_limits = {}
+        self.offsets = {}
         self.zoom_factors = {}
+        self.captured_x_Position = 0.0
+        self.captured_y_Position = 0.0
 
         # determine screen size
         self.width = self.master.winfo_screenwidth()
@@ -658,9 +666,10 @@ class diagram_frame():
         # set zoomed limits
         self.zoomed_limits = deepcopy(self.initial_limits)
 
-        # set initial zoomfactors
+        # set initial zoomfactors and offsets
         for diagType in diagTypes:
             self.zoom_factors[diagType] = 1.0
+            self.offsets[diagType] = (0.0, 0.0)
 
 
         # create new frame (container)
@@ -781,13 +790,37 @@ class diagram_frame():
 
 
     def zoom_in_out(self, event):
+        # check if there is an update going on
+        if (self.master.get_updateNeeded()):
+            return
+
         # change zoom_factor first
         self.change_zoom_factor(event.step)
 
-        # caclulate zoomed_limits
+        # calculate zoomed_limits
         self.calculate_zoomed_limits(event.xdata, event.ydata)
 
         # set notification flag / update diagram
+        self.master.set_updateNeeded()
+
+
+    def capture_position(self, event):
+        # get curretn offsets
+        (x_offset, y_offset) = self.offsets[self.activeDiagram]
+        # capture new postion, including old offsets
+        self.captured_x_Position = event.x - x_offset
+        self.captured_y_Position = event.y - y_offset
+
+
+    def move_visibleArea(self, event):
+        # calculate offsets for x, y
+        x_offset = event.x - self.captured_x_Position
+        y_offset = event.y - self.captured_y_Position
+
+        # store offsets for active diagram type
+        self.offsets[self.activeDiagram] = (x_offset, y_offset)
+        print(self.offsets[self.activeDiagram])
+         # set notification flag / update diagram
         self.master.set_updateNeeded()
 
 
@@ -799,8 +832,39 @@ class diagram_frame():
         self.zoomed_limits[self.activeDiagram] =\
                 self.initial_limits[self.activeDiagram]
 
+        # set offsets to zero
+        self.offsets[self.activeDiagram] = (0.0, 0.0)
+
         # set notification flag / update diagram
         self.master.set_updateNeeded()
+
+
+    def get_limits(self):
+        # get zoomed limits
+        (x_limTuple, y_limTuple) = self.zoomed_limits[self.activeDiagram]
+        (x_limits, y_limits) = (list(x_limTuple), list(y_limTuple))
+
+        # get offsets
+        (x_offset, y_offset) = self.offsets[self.activeDiagram]
+
+        # get diagram width and height
+        x_width = x_limits[1] - x_limits[0]
+        y_width = y_limits[1] - y_limits[0]
+
+        # determine scaler, depending on the screen resolution
+        scaler = 1000.0 * (self.width/1920)
+
+        # scale offsets to diagram width / height and screen resoultion
+        x_offset = x_offset * x_width / scaler
+        y_offset = y_offset * y_width / scaler
+
+        # shift the limits by offset values
+        x_limits[0] = x_limits[0] - x_offset
+        x_limits[1] = x_limits[1] - x_offset
+        y_limits[0] = y_limits[0] - y_offset
+        y_limits[1] = y_limits[1] - y_offset
+
+        return (tuple(x_limits), tuple(y_limits))
 
 
     def update_diagram(self, master):
@@ -813,7 +877,7 @@ class diagram_frame():
                 backgroundIdx = 0
 
             # get limits for active diagram
-            (x_limits, y_limits) = self.zoomed_limits[self.activeDiagram]
+            (x_limits, y_limits) = self.get_limits()
 
             # update active diagram in background
             ax = self.axes[backgroundIdx][self.activeDiagram]
