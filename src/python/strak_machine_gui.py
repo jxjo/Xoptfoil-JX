@@ -819,7 +819,7 @@ class diagram_frame():
 
         # store offsets for active diagram type
         self.offsets[self.activeDiagram] = (x_offset, y_offset)
-        print(self.offsets[self.activeDiagram])
+
          # set notification flag / update diagram
         self.master.set_updateNeeded()
 
