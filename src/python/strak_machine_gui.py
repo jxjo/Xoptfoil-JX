@@ -32,6 +32,10 @@ CD_decimals = 6    # drag
 CL_CD_decimals = 2 # lift/drag
 AL_decimals = 5    # alpha
 
+# decimals for camber and thicknes targets
+camb_decimals = 2
+thick_decimals = 2
+
 # name of logo-image
 logoName = 'strakmachine.jpg'
 bg_color_scrollableFrame_light = "#DDDDDD"
@@ -86,6 +90,9 @@ class control_frame():
         self.add_appearanceModeMenu(self.frame_top)
         self.add_airfoilChoiceMenu(self.frame_top)
         self.add_visiblePolarsCheckboxes(self.frame_top)
+
+        # add geoTarget-entries to lower frame (scrollable)
+        self.add_geoTargetEntries(self.frame_bottom)
 
         # add entries to lower frame (scrollable)
         self.add_entries(self.frame_bottom)
@@ -171,6 +178,48 @@ class control_frame():
         self.targetValues[idx] = targetValue
 
 
+    def add_geoTargetEntries(self, frame):
+        # get initial target values
+        (camber, thickness) = self.strak_machine.get_geoTargets(self.master.airfoilIdx)
+
+        # remove some decimals
+        camber = round(camber, camb_decimals)
+        thickness = round(thickness, thick_decimals)
+
+        # store targets in local data structure
+        self.geoTargets = (camber, thickness)
+
+        # create text-Vars to interact with entries
+        self.camberTarget_txt = tk.StringVar(frame, value=camber)
+        self.thicknessTarget_txt = tk.StringVar(frame, value=thickness)
+
+        # create entries
+        self.camberTargetEntry = customtkinter.CTkEntry(frame, show=None,
+             textvariable = self.camberTarget_txt, text_font=('Roboto Medium', 11),
+             width=100, height=16)
+        self.thicknessTargetEntry = customtkinter.CTkEntry(frame, show=None,
+             textvariable = self.thicknessTarget_txt, text_font=('Roboto Medium', 11),
+             width=100, height=16)
+
+        # bind entries to "Enter"-Message
+        self.camberTargetEntry.bind('<Return>', self.update_geoTargets)
+        self.thicknessTargetEntry.bind('<Return>', self.update_geoTargets)
+
+        # add labels
+                # add labels
+        self.geometryTargets_label = customtkinter.CTkLabel(master=frame,
+                       text="Geometry targets", text_font=("Roboto Medium", 13))
+        self.camberTarget_label = customtkinter.CTkLabel(master=frame,
+                       text="Camber target", text_font=("Roboto Medium", 11))
+        self.thicknessTarget_label = customtkinter.CTkLabel(master=frame,
+                       text="Thickness target", text_font=("Roboto Medium", 11))
+
+        # place widgets inside frame
+        self.geometryTargets_label.grid(row=self.nextRow, columnspan=2, pady=0, padx=0)
+        self.nextRow = self.nextRow + 1
+        self.place_widgets(self.camberTarget_label, self.camberTargetEntry)
+        self.place_widgets(self.thicknessTarget_label, self.thicknessTargetEntry)
+
 
     def add_entries(self, frame):
         # get initial target values
@@ -255,6 +304,22 @@ class control_frame():
             self.place_widgets(oppoint_entry, target_entry)
 
 
+    def update_GeoEntries(self, airfoilIdx):
+        # get actual targetValues from strak machine
+        (camber, thickness) = self.strak_machine.get_geoTargets(airfoilIdx)
+
+        # remove some decimals
+        camber = round(camber, camb_decimals)
+        thickness = round(thickness, thick_decimals)
+
+        # store targets in local data structure
+        self.geoTargets = (camber, thickness)
+
+        # update textvars
+        self.camberTarget_txt.set(camber)
+        self.thicknessTarget_txt.set(thickness)
+
+
     def update_Entries(self, airfoilIdx):
         # get actual targetValues from strak machine
         self.targetValues = self.strak_machine.get_targetValues(airfoilIdx)
@@ -283,7 +348,8 @@ class control_frame():
         self.write_valuesToDict(idx, mode, y, x)
 
         # writeback dictionary to strakmachine
-        self.strak_machine.set_targetValues(self.master.airfoilIdx, self.targetValues)
+        self.strak_machine.set_targetValues(self.master.airfoilIdx,
+                                            self.targetValues)
 
         # perform update of the target polars
         self.strak_machine.update_targetPolars()
@@ -324,13 +390,32 @@ class control_frame():
 
         if (writeback_needed):
             # writeback dictionary to strakmachine
-            self.strak_machine.set_targetValues(self.master.airfoilIdx, self.targetValues)
+            self.strak_machine.set_targetValues(self.master.airfoilIdx,
+                                                self.targetValues)
 
             # perform update of the target polars
             self.strak_machine.update_targetPolars()
 
             # notify the diagram frame about the change
             self.master.set_updateNeeded()
+
+
+    def update_geoTargets(self, command):
+        # convert strings to float
+        camberTarget = float(self.camberTargetEntry.get())
+        thicknessTarget = float(self.thicknessTargetEntry.get())
+
+        # remove some decimals
+        camberTarget = round(camberTarget, camb_decimals)
+        thicknessTarget = round(thicknessTarget, thick_decimals)
+
+        # store in own data structure
+        self.geoTargets = (camberTarget, thicknessTarget)
+
+        # write targets to strakmachine
+        self.strak_machine.set_geoTargets(self.master.airfoilIdx,
+                                                self.geoTargets)
+
 
 
     def place_widgets(self, widget1, widget2):
@@ -457,6 +542,7 @@ class control_frame():
         self.strak_machine.set_activeTargetPolarIdx(airfoilIdx)
 
         # update entry-frame (will also update self.targetValues)
+        self.update_GeoEntries(airfoilIdx)
         self.update_Entries(airfoilIdx)
 
         # check visible flags, is polar of selected airfoil visible?
@@ -991,6 +1077,7 @@ class App(customtkinter.CTk):
             self.targetValues = self.strak_machine.get_targetValues(self.airfoilIdx)
             self.strak_machine.update_targetPolars()
             self.frame_left.update_Entries(self.airfoilIdx)
+            self.frame_left.update_GeoEntries(self.airfoilIdx)
             self.updateNeeded = True
 
     def save(self):
@@ -1002,6 +1089,7 @@ class App(customtkinter.CTk):
             self.targetValues = self.strak_machine.get_targetValues(self.airfoilIdx)
             self.strak_machine.update_targetPolars()
             self.frame_left.update_Entries(self.airfoilIdx)
+            self.frame_left.update_GeoEntries(self.airfoilIdx)
             self.updateNeeded = True
 
     def start(self):
