@@ -614,9 +614,10 @@ class diagram(customtkinter.CTkFrame):
         global targetValues
         global controlFrame
 
-        # set ranges to catch points
-        catching_range_oppoint = 0.01
-        catching_range_targetValue = 0.001
+        # set ranges to catch points, consider zoomfactor
+        zoom_factor = self.controller.get_zoom_factor()
+        catching_range_oppoint = 0.01 * zoom_factor
+        catching_range_targetValue = 0.001 * zoom_factor
 
         mouse_target = event.xdata
         mouse_oppoint = event.ydata
@@ -845,6 +846,10 @@ class diagram_frame():
 
         # writeback
         self.zoom_factors[self.activeDiagram] = zoom_factor
+
+
+    def get_zoom_factor(self):
+        return self.zoom_factors[self.activeDiagram]
 
 
     def calculate_zoomed_limits(self, x_pos, y_pos):
