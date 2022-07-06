@@ -770,6 +770,19 @@ subroutine check_and_smooth_surface (show_details, show_smooth_details, do_smoot
     iend            = size(foil%xb) - curv_bot_spec%nskip_TE_revers
     iend_spikes     = size(foil%xb) - curv_bot_spec%nskip_TE_spikes
 
+    if (show_details .and. &
+       (curv_threshold  /= curv_top_spec%curv_threshold  .or. &
+        spike_threshold /= curv_top_spec%spike_threshold)) then 
+      write (*,*)
+      write (*,'(3x)', advance = 'no') 
+      call print_colored (COLOR_NOTE, 'Using curv_threshold =')
+      call print_colored_r (5,'(F5.2)', Q_OK, curv_threshold) 
+      call print_colored (COLOR_NOTE, ', spike_threshold =')
+      call print_colored_r (5,'(F5.2)', Q_OK, spike_threshold) 
+      call print_colored (COLOR_NOTE, ' for detection')
+      write (*,*)
+    end if
+
     call assess_surface (show_details, '- Bot side', &
                         istart, iend, iend_spikes, &
                         curv_threshold, spike_threshold, foil%xb, foil%zb, bot_quality)
@@ -935,8 +948,8 @@ subroutine auto_curvature_threshold_polyline (info, show_details, x,y , c_spec)
     if (quality_threshold > Q_BAD) then
       call print_note_only ('The contour will have some reversals within this high treshold', 3)
     else
-      call print_note_only ('Optimal value for '//stri(max_curv_reverse)//&
-                            ' reversals based on seed airfoil',3)
+      call print_note_only ('Optimal value based on seed airfoil for '//stri(max_curv_reverse)//&
+                            ' reversals',3)
     end if 
   end if 
 
@@ -1046,25 +1059,38 @@ subroutine auto_te_curvature_polyline (show_details, x,y , c_spec)
   double precision            :: max_te_curvature 
   integer                     :: quality_te
   character (16)              :: label
+  logical                     :: auto
 
-  max_te_curvature = get_max_te_curvature (x, y)  
+  if (c_spec%max_te_curvature == 10d0) then 
   
-! give a little more to breath during opt.
-  max_te_curvature = max ((max_te_curvature * 1.1d0), (max_te_curvature + 0.05d0))
+    auto = .true.
 
-  c_spec%max_te_curvature = max_te_curvature
+    max_te_curvature = get_max_te_curvature (x, y)  
+  ! give a little more to breath during opt.
+    max_te_curvature = max ((max_te_curvature * 1.1d0), (max_te_curvature + 0.05d0))
+    c_spec%max_te_curvature = max_te_curvature
+
+  else 
+
+    auto = .false.
+  
+  end if
 
 ! Print it all 
 
   if (show_details) then 
-    quality_te      = r_quality (max_te_curvature, 0.2d0, 1d0, 10d0)
+    quality_te      = r_quality (c_spec%max_te_curvature, 0.2d0, 1d0, 10d0)
     label = 'max_te_curvature'
     call print_colored (COLOR_PALE, '         '//label//' =') 
-    call print_colored_r (5,'(F5.2)', quality_te, max_te_curvature) 
-    if (quality_te > Q_BAD) then
-      call print_note_only ('Like seed airfoil the airfoil will have a geometric spoiler at TE', 3)
-    else
-      call print_note_only ('Smallest value based on seed airfoil trailing edge curvature',3)
+    call print_colored_r (5,'(F5.2)', quality_te, c_spec%max_te_curvature) 
+    if (auto) then
+      if (quality_te > Q_BAD) then
+        call print_note_only ('Like seed airfoil the airfoil will have a geometric spoiler at TE', 3)
+      else
+        call print_note_only ('Smallest value based on seed airfoil trailing edge curvature',3)
+      end if 
+    else 
+      call print_note_only ('User defined',3)
     end if 
   end if 
 

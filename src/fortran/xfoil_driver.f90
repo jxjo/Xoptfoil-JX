@@ -81,6 +81,7 @@ module xfoil_driver
     integer :: maxit                      ! max. iterations for BL calcs
     double precision :: vaccel            ! xfoil BL convergence accelerator
     logical :: fix_unconverged            ! try to fix unconverged pts.
+    logical :: detect_outlier             ! try to detect op point outlier during optimization
     logical :: exit_if_unconverged        ! exit die op point loop if a point is unconverged
     logical :: reinitialize               ! reinitialize BLs per op_point
   end type xfoil_options_type
@@ -137,7 +138,7 @@ subroutine run_op_points (foil, geom_options, xfoil_options,         &
   integer :: i, noppoint
   integer :: iretry, nretry
   double precision :: prev_op_delta, op_delta, prev_flap_degree, prev_op_spec_value
-  logical:: point_fixed, show_details, flap_changed, prev_op_spec_cl
+  logical:: point_fixed, show_details, flap_changed, prev_op_spec_cl, detect_outlier
   type(op_point_specification_type) :: op_spec, tmp_op_spec
   type(op_point_result_type)        :: op
 
@@ -172,14 +173,17 @@ subroutine run_op_points (foil, geom_options, xfoil_options,         &
   flap_changed = .false.
   prev_flap_degree = flap_degrees (1) 
   show_details = xfoil_options%show_details
+  detect_outlier = xfoil_options%detect_outlier
 
 
 ! init statistics for out lier detection the first time and when polar changes
 !$omp critical
-  if (.not. allocated(drag_stats)) then
-    call init_statistics (noppoint)
-  else if (size(drag_stats) /= noppoint) then 
-    call init_statistics (noppoint)
+  if (detect_outlier) then 
+    if (.not. allocated(drag_stats)) then
+      call init_statistics (noppoint)
+    else if (size(drag_stats) /= noppoint) then 
+      call init_statistics (noppoint)
+    end if
   end if
 !$omp end critical
 
@@ -273,7 +277,7 @@ subroutine run_op_points (foil, geom_options, xfoil_options,         &
 
 !   Handling of unconverged points
     if (op%converged) then
-      if (is_out_lier (i, op%cd)) then
+      if (detect_outlier .and. is_out_lier (i, op%cd)) then
         op%converged = .false.
         if (show_details) call print_colored (COLOR_WARNING, 'flip')
       else if (cl_changed (op_spec%spec_cl, op_spec%value, op%cl)) then
@@ -328,7 +332,7 @@ subroutine run_op_points (foil, geom_options, xfoil_options,         &
           call run_op_point (op_spec, xfoil_options%viscous_mode, xfoil_options%maxit, &
                             show_details, op)
                                 
-          if (.not. op%converged .or. (is_out_lier (i, op%cd))  &
+          if (.not. op%converged .or. (detect_outlier .and. is_out_lier (i, op%cd))  &
               .or. (cl_changed (op_spec%spec_cl, op_spec%value, op%cl))) then 
             call xfoil_init_BL (show_details .and. (.not. xfoil_options%reinitialize))
           else 
@@ -375,7 +379,7 @@ subroutine run_op_points (foil, geom_options, xfoil_options,         &
 !   Update statistics
     if (op%converged) then 
 
-      call update_statistic (i, op%cd)      ! Update cd outlier statistics
+      if (detect_outlier) call update_statistic (i, op%cd)      ! Update cd outlier statistics
 
     ! Support Type 1 and 2 re numbers - cl may not be negative  
       if ((op_spec%re%type == 2) .and. (op%cl <= 0d0)) then 
@@ -957,38 +961,39 @@ subroutine xfoil_cleanup()
   use xfoil_inc
 
 ! Deallocate variables
-
-  deallocate(AIJ)
-  deallocate(BIJ)
-  deallocate(DIJ)
-  deallocate(CIJ)
-  deallocate(IPAN)
-  deallocate(ISYS)
-  deallocate(W1)
-  deallocate(W2)
-  deallocate(W3)
-  deallocate(W4)
-  deallocate(W5)
-  deallocate(W6)
-  deallocate(VTI)
-  deallocate(XSSI)
-  deallocate(UINV)
-  deallocate(UINV_A)
-  deallocate(UEDG)
-  deallocate(THET)
-  deallocate(DSTR)
-  deallocate(CTAU)
-  deallocate(MASS)
-  deallocate(TAU)
-  deallocate(DIS)
-  deallocate(CTQ)
-  deallocate(DELT)
-  deallocate(TSTR)
-  deallocate(USLP)
-  deallocate(VM)
-  deallocate(VA)
-  deallocate(VB)
-  deallocate(VDEL)
+  if (allocated (AIJ)) then
+    deallocate(AIJ)
+    deallocate(BIJ)
+    deallocate(DIJ)
+    deallocate(CIJ)
+    deallocate(IPAN)
+    deallocate(ISYS)
+    deallocate(W1)
+    deallocate(W2)
+    deallocate(W3)
+    deallocate(W4)
+    deallocate(W5)
+    deallocate(W6)
+    deallocate(VTI)
+    deallocate(XSSI)
+    deallocate(UINV)
+    deallocate(UINV_A)
+    deallocate(UEDG)
+    deallocate(THET)
+    deallocate(DSTR)
+    deallocate(CTAU)
+    deallocate(MASS)
+    deallocate(TAU)
+    deallocate(DIS)
+    deallocate(CTQ)
+    deallocate(DELT)
+    deallocate(TSTR)
+    deallocate(USLP)
+    deallocate(VM)
+    deallocate(VA)
+    deallocate(VB)
+    deallocate(VDEL)
+  end if 
 
 end subroutine xfoil_cleanup
 
@@ -1412,7 +1417,9 @@ subroutine update_statistic (iop, new_value)
   integer, intent (in)         :: iop
   integer                      :: nmean
 
-!$omp critical
+  if (.not. allocated (drag_stats)) return
+
+!$omp critical (update)
   
   if (drag_stats(iop)%nvalue == 0) then      ! first value is best we have (could be outlier!)
 
@@ -1437,40 +1444,10 @@ subroutine update_statistic (iop, new_value)
   end if 
   
 
-!$omp end critical
+!$omp end critical (update)
 
 end subroutine update_statistic
 
-!------------------------------------------------------------------------------
-! Push / pop / reset statistics for outlier statistics
-!  This is quite a hack to get detection of outlier a little re-entrant 
-!  During optimization (objective function) a polar may be generated for each new design
-!     ... which would lead to a reset of statistics
-!------------------------------------------------------------------------------
-
-subroutine xfoil_driver_push_statistic ()
-
-  if (allocated(drag_stats)) then 
-    drag_stats_saved = drag_stats
-    deallocate (drag_stats)
-  end if 
-
-end subroutine xfoil_driver_push_statistic
-
-subroutine xfoil_driver_pop_statistic ()
-
-  if (allocated(drag_stats_saved)) then 
-    drag_stats = drag_stats_saved
-    deallocate (drag_stats_saved)
-  end if 
-
-end subroutine xfoil_driver_pop_statistic
-
-subroutine xfoil_driver_reset_statistic ()
-
-  if (allocated(drag_stats))  deallocate (drag_stats)
-
-end subroutine xfoil_driver_reset_statistic 
 
 
 !------------------------------------------------------------------------------
@@ -1483,6 +1460,8 @@ function is_out_lier (iop, check_value)
   doubleprecision ::  dev_from_mean, max_meanval
 
   is_out_lier = .false. 
+
+  if (.not. allocated (drag_stats)) return
 
   if(drag_stats(iop)%nvalue > 0 .and. (.not. drag_stats(iop)%no_check)) then           !do we have enough values to check? 
 
