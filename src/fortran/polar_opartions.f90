@@ -126,6 +126,7 @@ subroutine generate_polar_files (show_details, subdirectory, foil, xfoil_geom_op
     open(unit=13, file= trim(polars_subdirectory)//trim(polars(i)%file_name), status='replace')
     call write_polar_header (13, polars(i))
     call write_polar_data   (13, op_points_result)
+!    call write_polar_data_csv  (13, foil, op_points_result)
     close (13)
 
   end do 
@@ -388,7 +389,7 @@ subroutine write_polar_data (out_unit, op_points_result)
 
     op = op_points_result(i)
     if (op%converged) then
-      write (out_unit,  "(   F8.3,   F9.5,    F10.6,    F10.5,    F9.4,   F8.4,   F8.4)") &
+      write (out_unit,  "(   F8.3,   F9.5,    F10.6,    F10.5,    F9.5,   F8.4,   F8.4)") &
                           op%alpha, op%cl, op%cd,    0d0,  op%cm,op%xtrt,op%xtrb
     else
       write(text_out,'(A,F5.2,A)') "alpha =",op%alpha," not converged in polar generation. Skipping op point"
@@ -402,6 +403,43 @@ subroutine write_polar_data (out_unit, op_points_result)
   
 end subroutine write_polar_data
 
+
+!------------------------------------------------------------------------------
+! Write polar data of foil in csv format to out_unit
+!------------------------------------------------------------------------------
+subroutine write_polar_data_csv (out_unit, foil, op_points_result)
+
+  use xfoil_driver,       only : op_point_result_type, op_point_specification_type
+  use vardef,             only : airfoil_type
+
+  integer,              intent (in) :: out_unit
+  type (airfoil_type),  intent (in) :: foil
+  type (op_point_result_type), dimension (:), intent (in) :: op_points_result
+
+  type (op_point_result_type) :: op
+  integer              :: i 
+  character (100)      :: text_out
+  logical              :: has_warned = .false.
+
+  write (out_unit,'(A)') "  Airfoil,  alpha,   cl,   cd,  cm, Top Xtr, Bot Xtr "
+
+  do i = 1, size(op_points_result)
+
+    op = op_points_result(i)
+    if (op%converged) then
+      write (out_unit,'(A,",",F8.3,",",F9.5,",",F10.6,",",F9.5, ",",F8.4,",",F8.4)') &
+                    trim(foil%name),  op%alpha, op%cl, op%cd, op%cm,op%xtrt,op%xtrb
+    else
+      write(text_out,'(A,F5.2,A)') "alpha =",op%alpha," not converged in polar generation. Skipping op point"
+      call print_warning (trim(text_out),3)
+      has_warned = .true. 
+    end if
+
+  end do 
+
+  if (has_warned) write (*,*) 
+  
+end subroutine write_polar_data_csv
 
 
 !------------------------------------------------------------------------------
