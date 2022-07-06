@@ -33,6 +33,7 @@ from colorama import init
 from termcolor import colored
 import change_airfoilname
 import re
+visualizer = __import__('xoptfoil_visualizer-jx')
 
 # paths and separators
 bs = "\\"
@@ -502,28 +503,14 @@ class inputFile:
         return particle_swarm_options['pso_maxit']
 
     def calculate_InitialPerturb(self, Re, ReDiff, ReFactor):
-        # TODO: not sure what is the best algorithm:
-        # use Difference in Re or use Re-factor?
-        ReDiffList =  [(70000/4), 70000]
-        perturbList_ReDiff = [(0.0025/2), 0.0025]
-
-        ReFactorList = [(150/220),(80/150)]
-        perturbList_ReFactor = [(0.0025), (0.0025*2.2)]
+        ReFactorList = [0.7, 0.5]
+        perturbList_ReFactor = [0.0025, 0.0028]
 
         # limit to list boundaries
-        if ReDiff < ReDiffList[0]:
-            ReDiff = ReDiffList[0]
-        elif ReDiff > ReDiffList[1]:
-            ReDiff = ReDiffList[1]
-
         if ReFactor < ReFactorList[0]:
             ReDReFactoriff = ReFactorList[0]
         elif ReDiff > ReFactorList[1]:
             ReFactor = ReFactorList[1]
-
-        # calculate corresponding perturb according to Re-Diff
-        perturb_fromDiff = interpolate(ReDiffList[0],ReDiffList[1],
-                           perturbList_ReDiff[0],perturbList_ReDiff[1],ReDiff)
 
         # calculate corresponding perturb according to Re-Factor
         perturb_fromFactor = interpolate(ReFactorList[0],ReFactorList[1],
@@ -3440,10 +3427,8 @@ def check_WeightingMode(params):
 ################################################################################
 # function that checks validity of the 'quality'-input
 def check_quality(params):
-    if ((params.quality != 'low') &
-        (params.quality != 'medium') &
-        (params.quality != 'high') &
-        (params.quality != 'default')):
+    if ((params.quality != 'default') and
+        (params.quality != 'high')):
 
         WarningMsg('quality = \'%s\' is not valid, setting quality'\
         ' to \'default\'' % params.quality)
@@ -3454,21 +3439,11 @@ def check_quality(params):
         params.maxIterations = [600]
         params.numberOfCompetitors = [1]
         params.shape_functions = ['hicks-henne']
-    elif params.quality == 'low':
-        # double-pass optimization, camb-thick-plus / hicks-henne
-        params.maxIterations = [160]
-        params.numberOfCompetitors = [1]
-        params.shape_functions = ['camb-thick-plus']
-    elif params.quality == 'medium':
-        # double-pass optimization, camb-thick-plus / hicks-henne
-        params.maxIterations = [160, 400]
-        params.numberOfCompetitors = [1, 1]
-        params.shape_functions = ['camb-thick-plus', 'hicks-henne']
     else:
-        # multi-pass optimization, camb-thick-plus and hicks-henne
-        params.maxIterations = [160, 80, 300]
-        params.numberOfCompetitors = [1, 3, 1]
-        params.shape_functions = ['camb-thick-plus','hicks-henne','hicks-henne']
+        # double-pass optimization, hicks-henne
+        params.maxIterations = [80, 300]
+        params.numberOfCompetitors = [3, 1]
+        params.shape_functions = ['hicks-henne','hicks-henne']
 
     params.optimizationPasses = len(params.maxIterations)
 
@@ -4186,6 +4161,10 @@ class strak_machine:
         systemString = ("copy %s %s" + bs + "%s\n\n") % \
         (rootfoilName +'.dat', airfoilPath, rootfoilName + '.dat')
         system(systemString)
+
+        # read airfoil coordinates of seedfoil
+        (x, y, maxt, xmaxt, maxc, xmaxc, ioerror, deriv2, deriv3, name) =\
+         visualizer.read_airfoil_coordinates(rootfoilName +'.dat', "seedfoil", 0)
 
         # generate polars of root-airfoil, also analyze
         generate_Polars(self.params, rootfoilName)

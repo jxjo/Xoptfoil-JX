@@ -1,18 +1,20 @@
 {
-    "quality": "default",
+    "quality": "high", 
     "seedFoilName": "JX-GS-138k", 
     "NCrit": 7.0, 
-    "useAlwaysRootfoil": "True", 
-    "weighting": "constant", 
     "reynolds": [
         138000, 
-        100000,
-	80000
+        100000, 
+        80000, 
+        60000,
+        40000
     ], 
     "airfoilNames": [
         "JX-GS-138k", 
-        "JX-GS-100k",
-        "JX-GS-80k"
+        "JX-GS-100k", 
+        "JX-GS-080k", 
+        "JX-GS-060k",
+        "JX-GS-040k"
     ], 
     "additionalOpPoints": [
         0.014, 
