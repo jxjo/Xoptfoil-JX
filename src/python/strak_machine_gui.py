@@ -732,6 +732,7 @@ class diagram_frame():
         self.zoomed_limits = {}
         self.offsets = {}
         self.zoom_factors = {}
+        self.zoom_factors_old = {}
         self.captured_x_Position = 0.0
         self.captured_y_Position = 0.0
 
@@ -756,6 +757,7 @@ class diagram_frame():
         # set initial zoomfactors and offsets
         for diagType in diagTypes:
             self.zoom_factors[diagType] = 1.0
+            self.zoom_factors_old[diagType] = 1.0
             self.offsets[diagType] = (0.0, 0.0)
 
 
@@ -830,10 +832,13 @@ class diagram_frame():
     def change_zoom_factor(self, step):
         zoomsteps = 30.0
         max_zoom = 1.0
-        min_zoom = 0.12
+        min_zoom = 0.08
 
         # get actual zoom factor for diagType
         zoom_factor = self.zoom_factors[self.activeDiagram]
+
+        # store as "old" zoom factor
+        self.zoom_factors_old[self.activeDiagram] = zoom_factor
 
         # change zoom factor, steps is either -1.0 (scroll down) or +1.0 (scroll up)
         zoom_factor = zoom_factor - (step/zoomsteps)
@@ -855,23 +860,25 @@ class diagram_frame():
     def calculate_zoomed_limits(self, x_pos, y_pos):
         # get zoom factor for diagType
         zoom_factor = self.zoom_factors[self.activeDiagram]
+        zoom_factor_old = self.zoom_factors_old[self.activeDiagram]
+        zoom_change = zoom_factor / zoom_factor_old
 
-        # get initial limits for diagType
-        (x_limTuple, y_limTuple) = self.initial_limits[self.activeDiagram]
+        # get actual limits for diagType
+        (x_limTuple, y_limTuple) = self.zoomed_limits[self.activeDiagram]
         (x_limits, y_limits) = (list(x_limTuple), list(y_limTuple))
 
         # adjust limits relative to mouse position
         x_left = x_pos - x_limits[0]
         x_right = x_limits[1] - x_pos
-        x_left = x_left * zoom_factor
-        x_right = x_right * zoom_factor
+        x_left = x_left * zoom_change
+        x_right = x_right * zoom_change
         x_left_lim = x_pos - x_left
         x_right_lim = x_pos + x_right
 
         y_below = y_pos - y_limits[0]
         y_beyond = y_limits[1] - y_pos
-        y_below = y_below * zoom_factor
-        y_beyond = y_beyond * zoom_factor
+        y_below = y_below * zoom_change
+        y_beyond = y_beyond * zoom_change
         y_below_lim = y_pos - y_below
         y_beyond_lim = y_pos + y_beyond
 
@@ -918,6 +925,7 @@ class diagram_frame():
     def default_zoom(self):
         # set zoom factor for active diagram to default
         self.zoom_factors[self.activeDiagram] = 1.0
+        self.zoom_factors_old[self.activeDiagram] = 1.0
 
         # restore initial limits for active diagram
         self.zoomed_limits[self.activeDiagram] =\
