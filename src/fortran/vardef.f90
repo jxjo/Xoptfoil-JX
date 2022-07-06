@@ -68,9 +68,13 @@ module vardef
   logical :: show_details
 
 ! Subdirectory for all the mep design files
-
   character (*), parameter :: DESIGN_SUBDIR_POSTFIX = '_temp'
   character (255)          :: design_subdir
   character (80)           :: output_prefix
+
+
+! Global Constants
+  double precision, parameter :: NOT_DEF_D = -99999d0
+  double precision, parameter :: NOT_DEF_I = -99999
 
 end module vardef

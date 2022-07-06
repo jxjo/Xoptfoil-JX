@@ -1369,12 +1369,16 @@ end subroutine echo_op_points_spec
 subroutine read_curvature_constraints_inputs  (input_file, or_iunit, &
                                           curv_spec, curv_top_spec, curv_bot_spec)
 
+  use vardef, only             : NOT_DEF_D, NOT_DEF_I
   use airfoil_evaluation, only : curvature_specification_type, curvature_polyline_specification_type
+
   character(*), intent(in)           :: input_file
   integer, intent(in)                :: or_iunit
   type (curvature_specification_type),  intent(inout) :: curv_spec
   type (curvature_polyline_specification_type), intent(inout) :: curv_top_spec
   type (curvature_polyline_specification_type), intent(inout) :: curv_bot_spec
+
+  type (curvature_polyline_specification_type) :: spec
 
   integer :: iostat1, iunit, ioerr
   integer :: max_curv_reverse_top, max_curv_reverse_bot
@@ -1392,22 +1396,40 @@ subroutine read_curvature_constraints_inputs  (input_file, or_iunit, &
                          max_te_curvature, &
                          max_curv_reverse_top, max_curv_reverse_bot,  &
                          max_curv_highlow_top, max_curv_highlow_bot, &
-                         max_spikes_top, max_spikes_bot
+                         max_spikes_top, max_spikes_bot, &
+                         curv_top_spec, curv_bot_spec
 
-  do_smoothing         = .false.         ! now default - smoothing will be forced if 
-                                         !               quality of surface is bad
+
+! Default values for curvature parameters
+
+  do_smoothing         = .false.              ! now default - smoothing will be forced if 
+                                              !               quality of surface is bad
   check_curvature      = .true.
   auto_curvature       = .true.
-  max_te_curvature     = 10.d0                    ! more or less inactive by default
+  max_te_curvature     = 10.d0                ! more or less inactive by default
   max_curv_reverse_top = 0
   max_curv_reverse_bot = 0
-  max_curv_highlow_top = -99999                   ! #depricated
-  max_curv_highlow_bot = -99999                   ! #depricated
   max_spikes_top       = 0
   max_spikes_bot       = 0
   curv_threshold       = 0.1d0
   spike_threshold      = 0.4d0
-  highlow_threshold    = -99999d0                 ! #depricated
+
+  highlow_threshold    = NOT_DEF_D            ! #depricated
+  max_curv_highlow_top = NOT_DEF_I            ! #depricated
+  max_curv_highlow_bot = NOT_DEF_I            ! #depricated
+
+  ! Set final top and bot data structure to "undefined" 
+  ! - to detect user overwrite in input file (Expert mode) 
+
+  spec%check_curvature_bumps = .false.
+  spec%max_te_curvature = NOT_DEF_D
+  spec%max_curv_reverse = NOT_DEF_I
+  spec%max_spikes       = NOT_DEF_I
+  spec%curv_threshold   = NOT_DEF_D
+  spec%spike_threshold  = NOT_DEF_D
+
+  curv_top_spec = spec
+  curv_bot_spec = spec
 
   
   ! Open input file and read namelist from file
@@ -1430,32 +1452,38 @@ subroutine read_curvature_constraints_inputs  (input_file, or_iunit, &
   end if
   call namelist_check('curvature', iostat1, 'no-warn')
 
-  if (max_curv_highlow_top /= -99999) & 
+  if (max_curv_highlow_top /= NOT_DEF_I) & 
     call print_note ("'max_curv_highlow_top' is depricated and won't be considered") 
-  if (max_curv_highlow_bot /= -99999) & 
+  if (max_curv_highlow_bot /= NOT_DEF_I) & 
     call print_note ("'max_curv_highlow_bot' is depricated and won't be considered") 
-  if (highlow_threshold /= -99999d0) & 
+  if (highlow_threshold    /= NOT_DEF_D) & 
     call print_note ("'highlow_threshold' is depricated and won't be considered") 
 
   curv_spec%check_curvature      = check_curvature
   curv_spec%auto_curvature       = auto_curvature
   curv_spec%do_smoothing         = do_smoothing
 
+! Allow user input of detailed internal structures  
 
-  curv_top_spec%check_curvature_bumps = .false.
-  curv_top_spec%max_te_curvature = max_te_curvature
-  curv_top_spec%max_curv_reverse = max_curv_reverse_top
-  curv_top_spec%max_spikes       = max_spikes_top
-  curv_top_spec%curv_threshold   = curv_threshold
-  curv_top_spec%spike_threshold  = spike_threshold
+  spec = curv_top_spec
 
-  curv_bot_spec%check_curvature_bumps = .false.
-  curv_bot_spec%max_te_curvature = max_te_curvature
-  curv_bot_spec%max_curv_reverse = max_curv_reverse_bot
-  curv_bot_spec%max_spikes       = max_spikes_bot
-  curv_bot_spec%curv_threshold   = curv_threshold
-  curv_bot_spec%spike_threshold  = spike_threshold
+  if (spec%max_te_curvature == NOT_DEF_D) spec%max_te_curvature = max_te_curvature
+  if (spec%max_curv_reverse == NOT_DEF_I) spec%max_curv_reverse = max_curv_reverse_top
+  if (spec%max_spikes       == NOT_DEF_I) spec%max_spikes       = max_spikes_top
+  if (spec%curv_threshold   == NOT_DEF_D) spec%curv_threshold   = curv_threshold
+  if (spec%spike_threshold  == NOT_DEF_D) spec%spike_threshold  = spike_threshold
 
+  curv_top_spec = spec 
+
+  spec = curv_bot_spec
+
+  if (spec%max_te_curvature == NOT_DEF_D) spec%max_te_curvature = max_te_curvature
+  if (spec%max_curv_reverse == NOT_DEF_I) spec%max_curv_reverse = max_curv_reverse_top
+  if (spec%max_spikes       == NOT_DEF_I) spec%max_spikes       = max_spikes_top
+  if (spec%curv_threshold   == NOT_DEF_D) spec%curv_threshold   = curv_threshold
+  if (spec%spike_threshold  == NOT_DEF_D) spec%spike_threshold  = spike_threshold
+
+  curv_bot_spec = spec 
 
 end subroutine read_curvature_constraints_inputs
 
