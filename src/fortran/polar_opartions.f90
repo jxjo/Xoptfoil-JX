@@ -64,8 +64,6 @@ subroutine generate_polar_files (show_details, subdirectory, foil, xfoil_geom_op
   use os_util,            only : make_directory
   use xfoil_driver,       only : xfoil_geom_options_type, xfoil_options_type
   use xfoil_driver,       only : op_point_result_type, run_op_points 
-  use xfoil_driver,       only : xfoil_driver_reset_statistic
-  use xfoil_driver,       only : xfoil_driver_push_statistic, xfoil_driver_pop_statistic
 
   type (airfoil_type), intent (in)  :: foil
   logical, intent(in)               :: show_details
@@ -73,13 +71,18 @@ subroutine generate_polar_files (show_details, subdirectory, foil, xfoil_geom_op
   type (xfoil_geom_options_type), intent(in) :: xfoil_geom_options
   type (xfoil_options_type), intent(in)      :: xfoil_options
 
+  type (xfoil_options_type)        :: local_xfoil_options
   double precision, dimension(:), allocatable :: flap_degrees
   type(flap_spec_type) :: flap_spec               ! dummy - no flaps used
   type(op_point_result_type), dimension(:), allocatable :: op_points_result
   integer :: i
-  character (255) :: polars_subdirectory, out_string
+  character (255) :: polars_subdirectory, polar_label
 
   flap_spec%use_flap  = .false. 
+  local_xfoil_options = xfoil_options
+  local_xfoil_options%exit_if_unconverged = .false.  ! we need all op points
+  local_xfoil_options%detect_outlier      = .false.  ! makes no sense for polar calcualtion being excuted only once
+  local_xfoil_options%show_details = show_details
 
   if (trim(subdirectory) == '' ) then 
     polars_subdirectory = ''
@@ -89,7 +92,6 @@ subroutine generate_polar_files (show_details, subdirectory, foil, xfoil_geom_op
 
   ! calc and write all polars
 
-  call xfoil_driver_push_statistic          ! hack - save xfoil_driver outlier statistics
 
   do i = 1, npolars
 
@@ -98,29 +100,20 @@ subroutine generate_polar_files (show_details, subdirectory, foil, xfoil_geom_op
     if (allocated(flap_degrees))      deallocate (flap_degrees)
     allocate (flap_degrees(polars(i)%n_op_points))
     flap_degrees (:)    = 0.d0 
-  
-    ! reset out lier detection tect. for a new polar 
-    call xfoil_driver_reset_statistic
- 
+   
     if (show_details) then 
-      write (out_string,'(A,I1,A, I7)') 'Generating polar Type ',polars(i)%re%type,', Re=',  &
-                                        int(polars(i)%re%number)
-      call print_note_only ('- ' //trim(out_string))
-      call print_colored (COLOR_NOTE, '   ')
+      write (polar_label,'(A,I1,A, I7)') 'Type ',polars(i)%re%type,', Re=',  int(polars(i)%re%number)
+      call print_note_only ('- Generating polar ' // trim(polar_label) // '  ')
     end if 
 
-    call run_op_points (foil, xfoil_geom_options, xfoil_options,        &
+    call run_op_points (foil, xfoil_geom_options, local_xfoil_options,        &
                         flap_spec, flap_degrees, &
                         polars(i)%op_points_spec, op_points_result)
   
-    call xfoil_driver_reset_statistic
 
     if (show_details) then 
-      write (out_string,'(A,I1,A, I7,A)') 'Writing polar Type ',polars(i)%re%type,', Re=',  &
-            int(polars(i)%re%number), ' to '//trim(polars_subdirectory)//'...'
-      call print_colored (COLOR_NORMAL, ' - ' //trim(out_string))
-      write (*,*) 
-      write (*,*) 
+      call print_colored (COLOR_NOTE,' - Writing polar ' // trim(polar_label) &
+                                    //' to '//trim(polars_subdirectory) //'   ')
     end if 
 
     open(unit=13, file= trim(polars_subdirectory)//trim(polars(i)%file_name), status='replace')
@@ -131,9 +124,97 @@ subroutine generate_polar_files (show_details, subdirectory, foil, xfoil_geom_op
 
   end do 
 
-  call xfoil_driver_pop_statistic        ! hack - retrieve xfoil_driver outlier statistics
-
 end subroutine generate_polar_files
+
+
+ 
+!=============================================================================
+!
+! * multi threaded version of generate_polar_files * 
+! * only for xfoil_worker * 
+!
+! Generate and write to file all 'npolars' 'polars' for an airfoil
+!
+! Each polar will be written in a single file in xfoil text format
+! in the subdirectory 'foilname_polars'.
+!
+! The name of the file is aligned to xflr5 polar file naming
+!=============================================================================
+
+subroutine generate_polar_set (show_details, subdirectory, foil, xfoil_geom_options, xfoil_options)
+
+  use vardef,             only : airfoil_type, flap_spec_type
+  use os_util,            only : make_directory
+  use xfoil_driver,       only : xfoil_geom_options_type, xfoil_options_type
+  use xfoil_driver,       only : op_point_result_type, run_op_points 
+  use xfoil_driver,       only : xfoil_init, xfoil_cleanup
+
+  type (airfoil_type), intent (in)  :: foil
+  logical, intent(in)               :: show_details
+  character (*), intent(in)         :: subdirectory
+  type (xfoil_geom_options_type), intent(in) :: xfoil_geom_options
+  type (xfoil_options_type), intent(in)      :: xfoil_options
+
+  type(xfoil_options_type)          :: local_xfoil_options
+  double precision, dimension(:), allocatable :: flap_degrees
+  type(flap_spec_type) :: flap_spec               ! dummy - no flaps used
+  type(op_point_result_type), dimension(:), allocatable :: op_points_result
+  integer :: i
+  character (255) :: polars_subdirectory,  polar_label
+
+  flap_spec%use_flap  = .false. 
+
+  local_xfoil_options = xfoil_options
+  local_xfoil_options%exit_if_unconverged = .false.  ! we need all op points
+  local_xfoil_options%detect_outlier      = .false.  ! makes no sense for polar calcualtion being excuted only once
+
+  if (npolars == 1) then
+    local_xfoil_options%show_details = show_details
+  else
+    local_xfoil_options%show_details = .false.        ! multi thread would mix up output
+  end if 
+
+  if (trim(subdirectory) == '' ) then 
+    polars_subdirectory = ''
+  else
+    polars_subdirectory = trim(subdirectory) // '\'
+  end if
+
+  call xfoil_cleanup()                                ! if xfoil_init was done already
+
+!$omp parallel default(shared) private(i, flap_degrees,op_points_result, polar_label) 
+
+  call xfoil_init()
+
+!$omp do schedule(static) 
+  do i = 1, npolars
+
+    if (.not. allocated (flap_degrees)) allocate (flap_degrees(polars(i)%n_op_points))
+    flap_degrees (:)    = 0.d0 
+
+    write (polar_label,'(A,I1,A, I7)') 'Type ',polars(i)%re%type,', Re=',  int(polars(i)%re%number)
+    call print_note_only ('- Generating polar ' // trim(polar_label) // '  ')
+
+    call run_op_points (foil, xfoil_geom_options, local_xfoil_options,        &
+                        flap_spec, flap_degrees, &
+                        polars(i)%op_points_spec, op_points_result)
+  
+!$omp critical (file_write)
+    call print_colored (COLOR_NOTE,' - Writing polar ' // trim(polar_label) &
+                                   //' to '//trim(polars_subdirectory) //'   ')
+    open(unit=13, file= trim(polars_subdirectory)//trim(polars(i)%file_name), status='replace')
+    call write_polar_header (13, polars(i))
+    call write_polar_data   (13, op_points_result)
+    close (13)
+!$omp end critical (file_write)
+
+  end do 
+
+!$omp end do
+  call xfoil_cleanup()
+!$omp end parallel
+
+end subroutine generate_polar_set
 
 !=============================================================================
 ! Read xoptfoil input file to get polars (definition)
@@ -373,7 +454,9 @@ subroutine write_polar_data (out_unit, op_points_result)
   type (op_point_result_type) :: op
   integer              :: i 
   character (100)      :: text_out
-  logical              :: has_warned = .false.
+  logical              :: has_warned
+
+  has_warned = .false.
 
 ! xflr5 example
 ! -
@@ -392,14 +475,19 @@ subroutine write_polar_data (out_unit, op_points_result)
       write (out_unit,  "(   F8.3,   F9.5,    F10.6,    F10.5,    F9.5,   F8.4,   F8.4)") &
                           op%alpha, op%cl, op%cd,    0d0,  op%cm,op%xtrt,op%xtrb
     else
-      write(text_out,'(A,F5.2,A)') "alpha =",op%alpha," not converged in polar generation. Skipping op point"
-      call print_warning (trim(text_out),3)
+      if (.not. has_warned) then 
+        write(text_out,'(A,F5.2)') "alpha =",op%alpha
+      else 
+        write(text_out,'(A,F5.2)') ",",op%alpha
+      end if 
+      call print_colored (COLOR_NOTE, trim(text_out))
       has_warned = .true. 
     end if
 
   end do 
 
-  if (has_warned) write (*,*) 
+  if (has_warned) call print_colored (COLOR_NOTE," not converged - skipped in output")
+  write (*,*) 
   
 end subroutine write_polar_data
 

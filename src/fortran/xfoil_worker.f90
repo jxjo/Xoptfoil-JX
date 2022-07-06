@@ -142,7 +142,7 @@ subroutine check_and_do_polar_generation (input_file, output_prefix, foil)
   use xfoil_driver,       only : xfoil_geom_options_type, xfoil_options_type, re_type
   use input_output,       only : read_xfoil_options_inputs, read_xfoil_paneling_inputs
   use input_output,       only : read_cl_re_default
-  use polar_operations,   only : read_init_polar_inputs, generate_polar_files
+  use polar_operations,   only : read_init_polar_inputs, generate_polar_set
   use os_util
 
  
@@ -179,7 +179,7 @@ subroutine check_and_do_polar_generation (input_file, output_prefix, foil)
     call make_directory (trim(polars_subdirectory))
 
     ! Generate polars in this subdir 
-    call generate_polar_files (.true., trim(polars_subdirectory), foil, xfoil_geom_options, xfoil_options)
+    call generate_polar_set (.true., trim(polars_subdirectory), foil, xfoil_geom_options, xfoil_options)
 
   end if
 

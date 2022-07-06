@@ -1648,6 +1648,7 @@ subroutine read_xfoil_options_inputs  (input_file, or_iunit, xfoil_options)
   xfoil_options%vaccel = vaccel
   xfoil_options%fix_unconverged = fix_unconverged
   xfoil_options%exit_if_unconverged = .false.
+  xfoil_options%detect_outlier = .true.
   xfoil_options%reinitialize = reinitialize
   xfoil_options%show_details = show_details
 

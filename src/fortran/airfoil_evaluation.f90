@@ -1459,7 +1459,6 @@ function write_airfoil_optimization_progress(designvars, designcounter)
     call set_polar_info (foil%name, trim(full_polar_file), 'Design '//trim(tcounter))
     local_xfoil_options = xfoil_options
     local_xfoil_options%show_details        = .false.  
-    local_xfoil_options%exit_if_unconverged = .false.  ! we need all op points
     call generate_polar_files (.false., '' , foil, xfoil_geom_options, local_xfoil_options)
   end if 
 
