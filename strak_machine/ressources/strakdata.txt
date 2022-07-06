@@ -1,5 +1,5 @@
 {
-    "quality": "high",
+    "quality": "default",
     "seedFoilName": "JX-GS-138k", 
     "NCrit": 7.0, 
     "useAlwaysRootfoil": "True", 

@@ -449,6 +449,28 @@ class inputFile:
         optimization_options = self.values["optimization_options"]
         optimization_options['initial_perturb'] = newValue
 
+    def set_geometryTargets(self, newValues):
+        (camber, thickness) = newValues
+        try:
+            geoTargets = self.values["geometry_targets"]
+            geoTargets["target_geo"][0] = round(camber/100.0, 5)
+            geoTargets["target_geo"][1] = round(thickness/100.0, 5)
+        except:
+            ErrorMsg("could not set geoTargets")
+
+    def get_geometryTargets(self):
+        try:
+            geoTargets = self.values["geometry_targets"]
+            camber = geoTargets["target_geo"][0] * 100.0
+            thickness = geoTargets["target_geo"][1] * 100.0
+        except:
+            ErrorMsg("could not get geoTargets")
+            camber = 0.0
+            thickness = 0.0
+
+        return (camber, thickness)
+
+
     def set_NCrit(self, newValue):
         try:
             # change ncrit in namelist / dictionary
@@ -4343,6 +4365,18 @@ class strak_machine:
         self.graph.draw_diagram(self.params, diagramType, ax, x_limits, y_limits)
 
 
+    def get_airfoilNames(self):
+        return self.params.airfoilNames
+
+
+    def set_visiblePolars(self, visibleFlags):
+        self.params.set_visibleFlags(visibleFlags)
+
+
+    def set_activeTargetPolarIdx(self, airfoilIdx):
+        self.params.set_activeTargetPolarIdx(airfoilIdx)
+
+
     def get_targetValues(self, airfoilIdx):
         self.entry_action(airfoilIdx)
 
@@ -4364,18 +4398,6 @@ class strak_machine:
         return self.exit_action(targetValues)
 
 
-    def get_airfoilNames(self):
-        return self.params.airfoilNames
-
-
-    def set_visiblePolars(self, visibleFlags):
-        self.params.set_visibleFlags(visibleFlags)
-
-
-    def set_activeTargetPolarIdx(self, airfoilIdx):
-        self.params.set_activeTargetPolarIdx(airfoilIdx)
-
-
     def set_targetValues(self, airfoilIdx, targetValues):
         self.entry_action(airfoilIdx)
 
@@ -4392,9 +4414,31 @@ class strak_machine:
             # target value of op-point
             operatingConditions['target_value'][idx] = target["target"]
 
+
         # writeback operating-conditions
         inputFile.set_OperatingConditions(operatingConditions)
+
         return self.exit_action(0)
+
+
+    def get_geoTargets(self, airfoilIdx):
+        self.entry_action(airfoilIdx)
+
+        inputFile = self.params.inputFiles[airfoilIdx]
+        geoTargets = inputFile.get_geometryTargets()
+
+        return self.exit_action(geoTargets)
+
+
+    def set_geoTargets(self, airfoilIdx, geoTargets):
+        self.entry_action(airfoilIdx)
+
+        inputFile = self.params.inputFiles[airfoilIdx]
+        # set geometry targets
+        inputFile.set_geometryTargets(geoTargets)
+
+        return self.exit_action(0)
+
 
     def set_screenParams(self, width, height):
         global fs_infotext

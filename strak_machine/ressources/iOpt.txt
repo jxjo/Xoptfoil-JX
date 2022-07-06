@@ -23,6 +23,14 @@
   weighting         = 1.0, 1.0,
 /
 
+&geometry_targets
+  ngeo_targets    = 2
+  target_type(1)  = 'Camber'
+  target_geo(1)   = 0.0  
+  target_type(2)  = 'Thickness'
+  target_geo(2)   = 0.0  
+/  
+
 &initialization
   feasible_init = .true.
   feasible_limit = 100000
