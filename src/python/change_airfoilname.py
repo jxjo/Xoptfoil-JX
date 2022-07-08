@@ -10,6 +10,7 @@
 #-------------------------------------------------------------------------------
 
 import argparse
+import re
 
 ################################################################################
 # function that gets arguments from the commandline
@@ -24,6 +25,13 @@ def getArguments():
     args = parser.parse_args()
     return (args.input, args.output)
 
+
+def remove_suffix(text, suffix):
+    try:
+        text = re.sub(suffix, '', text)
+    except:
+        ErrorMsg("remove_suffix failed, text was %s, suffix was %s" % (text, suffix))
+    return text
 
 def change_airfoilName(old, new):
     try:
@@ -44,7 +52,8 @@ def change_airfoilName(old, new):
         newName = splitlines[(num-1)]
     else:
         newName = new
-    newName = newName.strip('.dat')
+
+    newName = remove_suffix(newName, '.dat')
 
     try:
         newfile = open(new, 'w+')
@@ -67,7 +76,6 @@ def main():
     # get command-line-arguments
     (old, new) = getArguments()
     change_airfoilName(old, new)
-
 
 
 
