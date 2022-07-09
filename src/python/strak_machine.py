@@ -44,20 +44,19 @@ exePath = 'bin'
 
 # fixed filenames
 pythonInterpreterName = "python"
-strakMachineName = "strak_machineV2"
+strakMachineName = "strak_machine"
 xfoilWorkerName = "xfoil_worker"
 xoptfoilName = "xoptfoil-jx"
 xoptfoilVisualizerName = "xoptfoil_visualizer-jx"
 airfoilComparisonName = "best_airfoil"
 showStatusName = "show_status"
-logoName = 'strakmachine.jpg'
 strakMachineInputFileName = 'strakdata.txt'
 T1_polarInputFile = 'iPolars_T1.txt'
 T2_polarInputFile = 'iPolars_T2.txt'
 smoothInputFile = 'iSmooth.txt'
+
 # filename of progress-file
 progressFileName = "progress.txt"
-
 
 # fonts
 csfont = {'fontname':'Segoe Print'}
@@ -69,9 +68,14 @@ CL_CD_decimals = 2 # lift/drag
 AL_decimals = 5 # alpha
 PER_decimals = 6
 
-# fontsizes
+# fontsizes and linewidths
 fs_infotext = 9
 fs_legend = 8
+fs_axes = 20
+fs_ticks = 10
+lw_targetPolar = 0.6
+lw_strakPolar  = 0.4
+fontsScaled = False
 
 # colours
 cl_infotext = 'DeepSkyBlue'
@@ -83,18 +87,17 @@ cl_T2_polar = 'b'
 opt_point_style_root = 'y.'
 opt_point_style_strak = 'y-'
 ls_targetPolar = 'solid'
-lw_targetPolar = 0.6
 ls_strakPolar = 'dashdot'
-lw_strakPolar  = 0.4
+
 
 # types of diagrams
 diagTypes = "CL_CD_diagram", "CL_alpha_diagram", "CLCD_CL_diagram"
 
-# global variables for gui-interface
-gGraph = None
-
 # disables all print output to console
 print_disabled = False
+
+# default values
+NCrit_Default = 9.0
 
 def my_print(message):
     if print_disabled:
@@ -209,29 +212,10 @@ class inputFile:
 
         # read input-file as a Fortan namelist
         self.values = f90nml.read(self.presetInputFileName)
-        #operatingConditions = self.values["operating_conditions"]#Debug
-        #my_print (operatingConditions)#Debug
-
-        # clean-up file
-        #self.remove_DeactivatedOpPoints() #TODO remove
 
 
     def __del__(self):
         class_name = self.__class__.__name__
-        #my_print (class_name, "destroyed")#Debug
-
-
-    # my_prints all op-points for debugging-purposes
-    def my_print_OpPoints(self):
-        # get operating-conditions
-        operatingConditions = self.values["operating_conditions"]
-        opPointNames = operatingConditions["name"]
-        opPoints = operatingConditions["op_point"]
-        targetValues = operatingConditions["target_value"]
-
-        my_print(opPointNames)
-        my_print(opPoints)
-        my_print(targetValues)
 
 
     # writes contents to file, using f90nnml-parser
@@ -239,9 +223,12 @@ class inputFile:
         # delete 'name'
         operatingConditions = self.values["operating_conditions"]
         operatingConditionsBackup = operatingConditions.copy()
-        del(operatingConditions['name'])
-        #FIXME Xoptfoil does not accept dynamic weighting in combination with certain sonstant weighting values anymore (!) --> talk to Jochen
-        del(operatingConditions['weighting'])
+        try:
+            del(operatingConditions['name'])
+            #FIXME Xoptfoil does not accept dynamic weighting in combination with certain sonstant weighting values anymore (!) --> talk to Jochen
+            del(operatingConditions['weighting'])
+        except:
+            pass
 
         self.values["operating_conditions"] = operatingConditions
 
@@ -251,6 +238,14 @@ class inputFile:
 
         # restore 'name'
         self.values["operating_conditions"] = operatingConditionsBackup.copy()
+        DoneMsg()
+
+
+    # reads contents to file, using f90nnml-parser
+    def read_FromFile(self, fileName):
+        my_print("reading input-file %s..." % fileName)
+        currentDir = getcwd()#FIXME Debug
+        self.values = f90nml.read(fileName)
         DoneMsg()
 
 
@@ -266,41 +261,6 @@ class inputFile:
         operatingConditions["weighting"] = []
         operatingConditions["reynolds"] = []
         operatingConditions['noppoint'] = 0
-
-
-    # deletes the key 'geometry_targets' in dictionary
-    def clear_GeoTargets(self):
-        if 'geometry_targets' in self.values:
-            del self.values['geometry_targets']
-
-
-    # removes an op-Point if weighting is beyond a certain limit
-    def remove_DeactivatedOpPoints(self):
-        # get operating-conditions
-        operatingConditions = self.values["operating_conditions"]
-
-        # make a copy
-        newOperatingConditions = operatingConditions.copy()
-
-        # clear all opPoints of the copy
-        self.delete_AllOpPoints(newOperatingConditions)
-
-       # walk through the opPoints
-        for idx in range(len(operatingConditions["weighting"])):
-            # get OpPoint-weight
-
-            if (operatingConditions["weighting"][idx] >= 0.001):
-                # copy this opPoint to the new operating-conditions
-                newOperatingConditions["name"].append(operatingConditions["name"][idx])
-                newOperatingConditions["op_mode"].append(operatingConditions["op_mode"][idx])
-                newOperatingConditions["op_point"].append(operatingConditions["op_point"][idx])
-                newOperatingConditions["optimization_type"].append(operatingConditions["optimization_type"][idx])
-                newOperatingConditions["target_value"].append(operatingConditions["target_value"][idx])
-                newOperatingConditions["weighting"].append(operatingConditions["weighting"][idx])
-                newOperatingConditions['noppoint'] = newOperatingConditions['noppoint'] + 1
-
-        # write-back operatingConditions
-        self.values["operating_conditions"] = newOperatingConditions
 
 
     def change_TargetValue(self, keyName, targetValue):
@@ -373,6 +333,11 @@ class inputFile:
         return operatingConditions
 
 
+    def set_OperatingConditions(self, operatingConditions):
+         # put operating-conditions into dictionary
+        self.values["operating_conditions"] = operatingConditions
+
+
     def get_OpPoint(self, keyName):
         # get operating-conditions from dictionary
         operatingConditions = self.values["operating_conditions"]
@@ -424,393 +389,110 @@ class inputFile:
                 return operatingConditions['op_mode'][idx]
             idx = idx + 1
 
+
     def get_InitialPerturb(self):
         optimization_options = self.values["optimization_options"]
         return optimization_options['initial_perturb']
+
 
     def set_InitialPerturb(self, newValue):
         optimization_options = self.values["optimization_options"]
         optimization_options['initial_perturb'] = newValue
 
+
+    def set_geometryTargets(self, newValues):
+        (camber, thickness) = newValues
+        try:
+            geoTargets = self.values["geometry_targets"]
+            geoTargets["target_geo"][0] = round(camber/100.0, 5)
+            geoTargets["target_geo"][1] = round(thickness/100.0, 5)
+        except:
+            ErrorMsg("could not set geoTargets")
+
+
+    def get_geometryTargets(self):
+        try:
+            geoTargets = self.values["geometry_targets"]
+            camber = geoTargets["target_geo"][0] * 100.0
+            thickness = geoTargets["target_geo"][1] * 100.0
+        except:
+            ErrorMsg("could not get geoTargets")
+            camber = 0.0
+            thickness = 0.0
+
+        return (camber, thickness)
+
+
+    def set_NCrit(self, newValue):
+        try:
+            # change ncrit in namelist / dictionary
+            xfoil_run_options = self.values["xfoil_run_options"]
+            xfoil_run_options['ncrit'] = newValue
+        except:
+            ErrorMsg("Unable to set NCrit in inputfile")
+
+
+    def get_Ncrit(self):
+        try:
+            # get ncrit from namelist / dictionary
+            xfoil_run_options = self.values["xfoil_run_options"]
+            return xfoil_run_options['ncrit']
+        except:
+            ncrit
+            ErrorMsg("Unable to get NCrit from inputfile, using default-value %f" % NCrit_Default)
+            return NCrit_Default
+
+
     def set_shape_functions (self, shape_functions):
         optimization_options = self.values["optimization_options"]
         optimization_options['shape_functions'] = shape_functions
+
 
     def set_maxIterations(self, newValue):
         particle_swarm_options = self.values["particle_swarm_options"]
         particle_swarm_options['pso_maxit'] = newValue
 
+
     def get_maxIterations(self):
         particle_swarm_options = self.values["particle_swarm_options"]
         return particle_swarm_options['pso_maxit']
 
-    def calculate_InitialPerturb(self, Re, ReDiff, ReFactor):
-        # TODO: not sure what is the best algorithm:
-        # use Difference in Re or use Re-factor?
-        ReDiffList =  [(70000/4), 70000]
-        perturbList_ReDiff = [(0.0025/2), 0.0025]
 
-        ReFactorList = [(150/220),(80/150)]
-        perturbList_ReFactor = [(0.0025), (0.0025*2.2)]
+    def calculate_InitialPerturb(self, Re, ReFactor):
+        ReFactorList = [0.7, 0.5]
+        perturbList = [0.0025, 0.0028]
 
         # limit to list boundaries
-        if ReDiff < ReDiffList[0]:
-            ReDiff = ReDiffList[0]
-        elif ReDiff > ReDiffList[1]:
-            ReDiff = ReDiffList[1]
-
         if ReFactor < ReFactorList[0]:
-            ReDReFactoriff = ReFactorList[0]
-        elif ReDiff > ReFactorList[1]:
+            ReFactor = ReFactorList[0]
+        elif ReFactor > ReFactorList[1]:
             ReFactor = ReFactorList[1]
 
-        # calculate corresponding perturb according to Re-Diff
-        perturb_fromDiff = interpolate(ReDiffList[0],ReDiffList[1],
-                           perturbList_ReDiff[0],perturbList_ReDiff[1],ReDiff)
-
         # calculate corresponding perturb according to Re-Factor
-        perturb_fromFactor = interpolate(ReFactorList[0],ReFactorList[1],
-                             perturbList_ReFactor[0],perturbList_ReFactor[1],ReFactor)
+        perturb = interpolate(ReFactorList[0],ReFactorList[1],
+                             perturbList[0],perturbList[1],ReFactor)
 
-        # return perturb, based on Re-Factor
-        return round(perturb_fromFactor, PER_decimals)
+        return round(perturb, PER_decimals)
 
 
-    def set_NewTargetValues(self, start, end, rootPolar, x1, x2, y1, y2):
+    def init_TargetValues(self, params, strakPolar):
         # get operating-conditions from dictionary
         operatingConditions = self.values["operating_conditions"]
-
-        # get op-points / names
-        opPoints = operatingConditions["op_point"]
-        opPointNames = operatingConditions["name"]
-
-        for idx in range(start, end):
-            # get opPoint
-            opPoint = opPoints[idx]
-            #my_print(opPointNames[idx])#Debug
-
-            # find CD value of root-polar
-            CD = rootPolar.find_CD_From_CL(opPoint)
-
-            # determine the factor for scaling the CD-values by
-            # linear interpolation
-            factor = interpolate(x1, x2, y1, y2, opPoint)
-
-            # calculate new target-value
-            CD_new = CD * factor
-
-            # set new target-value
-            self.change_TargetValue(opPointNames[idx], CD_new)
-
-    def linearizeTargetValues(self, start, end, factor):
-        # get operating-conditions from dictionary
-        operatingConditions = self.values["operating_conditions"]
-
-        # get op-points / names
         opPoints = operatingConditions["op_point"]
         targetValues = operatingConditions["target_value"]
-        opPointNames = operatingConditions["name"]
-
-        x1 = targetValues[start]
-        x2 = targetValues[end]
-        y1 = opPoints[start]
-        y2 = opPoints[end]
-
-        for idx in range(start+1, end):
-            #my_print ("changing opPoint: %s" % opPointNames[idx]) #Debug
-
-            # get opPoint
-            opPoint = opPoints[idx]
-
-            # calculate target-value by linear-interpolation between start and
-            # end
-            linearTargetValue = interpolate_2(x1, x2, y1, y2, opPoint)
-
-            # get actual target-value of target-polar
-            targetValue = targetValues[idx]
-
-            # calculate new target-value
-            new_targetValue = (factor * linearTargetValue)\
-                              + (1-factor) * targetValue
-
-            # set new target-value
-            self.change_TargetValue(opPointNames[idx], new_targetValue)
-
-
-    def set_IntermediateOpPointTargetValues(self, params, targets,
-                                            shifted_rootPolar, strakPolar, i):
-        # get root-polar
-        rootPolar = params.merged_polars[0]
-
-        # shift the CD-values of the root-polar according to change in CD at the
-        # maxGlide-point
-        target_CD = round(targets["CD_maxGlide"][i], CD_decimals)
-        CD_shiftValue = target_CD - shifted_rootPolar.CD_maxGlide
-        shifted_rootPolar.shift_CD(CD_shiftValue)
-
-        # determine factors for the main op-points
-        # CL_min
-        CL_min_strak = targets["CL_min"][i]
-        CD_min_strak = targets["CD_min"][i]
-        # important: use root-polar, as this is polar is closer to the desired target-polar
-        CD_min_root = rootPolar.find_CD_From_CL(CL_min_strak)
-        factor_min = CD_min_strak / CD_min_root
-
-        # CL0
-        CL0_strak = targets["CL0"][i]
-        CD0_strak = targets["CD0"][i]
-        CD0_root = rootPolar.find_CD_From_CL(CL0_strak)
-        factor0 = CD0_strak / CD0_root
-
-        # maxSpeed
-        CL_maxSpeed_strak = targets["CL_maxSpeed"][i]
-        CD_maxSpeed_strak = targets["CD_maxSpeed"][i]
-        alpha_maxSpeed_strak = targets["alpha_maxSpeed"][i]
-        CD_strak = targets["CD_maxSpeed"][i]
-        CD_maxSpeed_root_1 = rootPolar.find_CD_From_alpha(alpha_maxSpeed_strak)
-        CD_maxSpeed_root = shifted_rootPolar.find_CD_From_alpha(alpha_maxSpeed_strak)
-        factor_maxSpeed_1 = CD_maxSpeed_strak / CD_maxSpeed_root_1
-        factor_maxSpeed = CD_maxSpeed_strak / CD_maxSpeed_root
-
-        # preMaxSpeed
-        CL_preMaxSpeed_strak = targets["CL_preMaxSpeed"][i]
-        CD_preMaxSpeed_strak = targets["CD_preMaxSpeed"][i]
-        alpha_preMaxSpeed_strak = targets["alpha_preMaxSpeed"][i]
-        CD_strak = targets["CD_preMaxSpeed"][i]
-        CD_preMaxSpeed_root = shifted_rootPolar.find_CD_From_alpha(alpha_preMaxSpeed_strak)
-        factor_preMaxSpeed = CD_preMaxSpeed_strak / CD_preMaxSpeed_root
-
-        # maxGlide
-        CL_maxGlide_strak = targets["CL_maxGlide"][i]
-        CD_maxGlide_strak = targets["CD_maxGlide"][i]
-        alpha_maxGlide_strak = targets["alpha_maxGlide"][i]
-        # factor for maxGlide is alway 1.0, because this correction in the polar
-        # was done by shifting the whole polar.
-        factor_maxGlide = 1.0
-
-        # maxLift
-        # get strak-polar-values (target-values)
-        CL_pre_maxLift_strak = targets["CL_pre_maxLift"][i]
-        CD_pre_maxLift_strak = targets["CD_pre_maxLift"][i]
-        alpha_pre_maxLift_strak = targets["alpha_pre_maxLift"][i]
-        CD_pre_maxLift_root = shifted_rootPolar.find_CD_From_alpha(alpha_pre_maxLift_strak)
-
-        factor_maxLift = CD_pre_maxLift_strak / CD_pre_maxLift_root
-
-        # get operating-conditions from dictionary
-        operatingConditions = self.values["operating_conditions"]
-
-        # get OpPoint-names
-        opPointNames = operatingConditions["name"]
-        opPoints = operatingConditions["op_point"]
-        targetValues = operatingConditions["target_value"]
-
-        # check if there are intermediate oppoints
-        if (self.idx_CL0 > 1):
-            # determine start and end-index for all op-points between
-            # CL_min and CL0
-            start = 1
-            end = self.idx_CL0
-
-            # now change all target-values of these op-points
-            y1 = factor_min
-            y2 = factor0
-            x1 = CL_min_strak
-            x2 = CL0_strak
-
-            # important: use root-polar, as this is polar is closer to the desired target-polar
-            self.set_NewTargetValues(start, end, rootPolar, x1, x2, y1, y2)
-
-            # now linearize the values by a certain factor
-            linearFactor = params.linearFactor_0[i]
-            self.linearizeTargetValues(0, self.idx_CL0, linearFactor)
-
-        # check if there are intermediate oppoints
-        if ((self.idx_maxSpeed - self.idx_CL0) > 1):
-            # determine start and end-index for all op-points between
-            # CL0 and maxSpeed
-            start =  self.idx_CL0 + 1
-            end = self.idx_maxSpeed
-
-            # now change all target-values of these op-points
-            y1 = factor0
-            y2 = factor_maxSpeed_1
-            x1 = CL0_strak
-            x2 = CL_maxSpeed_strak
-
-            # important: use root-polar, as this is polar is closer to the desired target-polar
-            self.set_NewTargetValues(start, end, rootPolar, x1, x2, y1, y2)
-
-            # now linearize the values by a certain factor
-            linearFactor = params.linearFactor_1[i]
-            self.linearizeTargetValues(self.idx_CL0, self.idx_maxSpeed, linearFactor)
-
-        # check if there are intermediate oppoints
-        if ((self.idx_preMaxSpeed - self.idx_maxSpeed) > 1):
-            # determine start and end-index for all op-points between
-            # maxSpeed and preMaxSpeed
-            start = self.idx_maxSpeed + 1
-            end = self.idx_preMaxSpeed
-
-            # now change all target-values of these op-points
-            y1 = factor_maxSpeed
-            y2 = factor_preMaxSpeed
-            x1 = CL_maxSpeed_strak
-            x2 = CL_preMaxSpeed_strak
-
-            self.set_NewTargetValues(start, end, shifted_rootPolar, x1, x2, y1, y2)
-
-            # now linearize the values by a certain factor
-            linearFactor = params.linearFactor_2[i]
-            self.linearizeTargetValues(self.idx_maxSpeed, self.idx_preMaxSpeed, linearFactor)
-
-        # check if there are intermediate oppoints
-        if ((self.idx_maxGlide - self.idx_preMaxSpeed) > 1):
-            # determine start and end-index for all op-points between
-            # preMaxSpeed and maxGlide
-            start = self.idx_preMaxSpeed + 1
-            end = self.idx_maxGlide
-
-            # now change all target-values of these op-points
-            y1 = factor_preMaxSpeed
-            y2 = factor_maxGlide
-            x1 = CL_preMaxSpeed_strak
-            x2 = CL_maxGlide_strak
-
-            self.set_NewTargetValues(start, end, shifted_rootPolar, x1, x2, y1, y2)
-
-            # now linearize the values by a certain factor
-            linearFactor = params.linearFactor_3[i]
-            self.linearizeTargetValues(self.idx_preMaxSpeed, self.idx_maxGlide, linearFactor)
-
-        # check if there are intermediate oppoints
-        if ((self.idx_preClmax - self.idx_maxGlide) > 1):
-            # determine start and end-index for all op-points between
-            # maxGlide and pre_maxLift
-            start = self.idx_maxGlide + 1
-            end = self.idx_preClmax + 1
-
-            # now change all target-values of these op-points
-            y1 = factor_maxGlide
-            y2 = factor_maxLift
-            x1 = CL_maxGlide_strak
-            x2 = CL_pre_maxLift_strak
-
-            self.set_NewTargetValues(start, end, shifted_rootPolar, x1, x2, y1, y2)
-
-            # now linearize the values by a certain factor
-            linearFactor = params.linearFactor_4[i]
-            self.linearizeTargetValues(self.idx_maxGlide, self.idx_preClmax, linearFactor)
-
-
-    def apply_maxGlideFactor(self, params, i):
-         # get operating-conditions from dictionary
-        operatingConditions = self.values["operating_conditions"]
-
-         # get op-points / names
-        opPoints = operatingConditions["op_point"]
-        targetValues = operatingConditions["target_value"]
-        opPointNames = operatingConditions["name"]
-
-        # get actual target-value of target-polar
-        targetValue = targetValues[self.idx_maxGlide]
-
-        # calculate new target-value
-        new_targetValue = params.maxGlideFactor[i] * targetValue
-
-        # set new target-value
-        self.change_TargetValue(opPointNames[self.idx_maxGlide], new_targetValue)
-
-
-    def set_constantWeighting(self, start, end, weight):
-        for idx in range(start, (end+1)):
-            self.change_Weighting(idx, weight)
-
-
-    def set_linearProgressionWeighting(self, start, end, startWeight, endWeight):
-        num_intervals = end - start
-        diff = (endWeight - startWeight) / num_intervals
-        interval = 0
-
-        for idx in range(start, (end+1)):
-            weight = round(startWeight + (interval*diff), 2)
-            self.change_Weighting(idx, weight)
-            interval = interval + 1
-            my_print (idx)
-
-
-    def set_sinusWeighting(self, opPoints, minWeight, maxWeight, start, end, y1, y2):
-        for idx in range(start, (end+1)):
-            # set up x/y-points for linear-interpolation.
-            # x-values are CL-values of op-points
-            # y-values are 0..pi/2 for sinus- calculation
-            x1 = opPoints[start]
-            x2 = opPoints[end]
-
-            # calculate y by linear interpolation
-            y = interpolate(x1, x2, y1, y2, opPoints[idx])
-
-            # calculate sinus-function. The result is a "delta-" value
-            # that will be added to minWeight
-            diff = (maxWeight - minWeight) * sin(y)
-
-            # calculate new weight
-            weight = round((minWeight + diff), 2)
-
-            # set the new weighting for the op-point now
-            self.change_Weighting(idx, weight)
-
-
-    # Set weighting of all op-points according to the parameters
-    # 'weightingMode', 'minWeight' and 'maxWeight'
-    def set_Weightings(self, params):
-
-        # get operating-conditions
-        operatingConditions = self.values["operating_conditions"]
-        opPoints = operatingConditions["op_point"]
-
-         # determine min and max weight
-        minWeight = params.minWeight
-        maxWeight = params.maxWeight
-        mediumWeight = int((maxWeight + minWeight)/2)
-
-        # evaluate the weighting-mode
-        if (params.weightingMode == 'constant'):
-            self.set_constantWeighting(0, self.idx_preClmax, mediumWeight)
-
-        elif (params.weightingMode == 'linear_progression'):
-           self.set_linearProgressionWeighting(self, 0, self.idx_preClmax, minWeight, maxWeight)
-
-        elif (params.weightingMode == 'sinus'):
-            #self.set_sinusWeighting(opPoints, minWeight, maxWeight, 0, self.idx_maxGlide-2, 0.0, pi/2)
-            #self.set_sinusWeighting(opPoints, minWeight, maxWeight, self.idx_maxGlide-2, self.idx_preClmax, pi/2, 0.0)
-            self.set_constantWeighting( 0, self.idx_preClmax, minWeight)
-            self.set_sinusWeighting(opPoints, minWeight, maxWeight, self.idx_preMaxSpeed, self.idx_maxGlide, 0.0, pi/2)
-            self.set_sinusWeighting(opPoints, minWeight, maxWeight, self.idx_maxGlide, self.idx_preClmax, pi/2, 0.0)
-
-        elif (params.weightingMode == 'doubleSinus'):
-            # set constant-weighting minWeight to all oppoints first.
-            self.set_constantWeighting( 0, self.idx_preClmax, minWeight)
-
-            # determine node-point
-            nodePoint = self.idx_preMaxSpeed + int((self.idx_maxGlide - self.idx_preMaxSpeed)/2)
-
-            # now set sinus-weighting to oppoints from Cl_min to node-point.
-            self.set_sinusWeighting(opPoints, minWeight, mediumWeight, 0, self.idx_preMaxSpeed, 0.0, pi/2)
-            self.set_sinusWeighting(opPoints, minWeight, mediumWeight, self.idx_preMaxSpeed, nodePoint, pi/2, 0.0)
-
-            self.set_sinusWeighting(opPoints, mediumWeight, maxWeight, nodePoint, self.idx_maxGlide, 0.0, pi/2)
-            self.set_sinusWeighting(opPoints, mediumWeight, maxWeight, self.idx_maxGlide, self.idx_preClmax, pi/2, 0.0)
-
-        # set weighting of max-Lift op-point to maxWeight
-        self.change_Weighting(self.idx_preClmax, maxWeight)
-
-        # set weighting of CL_min to maxWeight
-        #self.change_Weighting(0, maxWeight)
-
-        #my_print(operatingConditions["weighting"])#Debug
-        #my_print(operatingConditions["op_point"])
-        #my_print("Done.")#Debug
+        opModes = operatingConditions["op_mode"]
+        optTypes = operatingConditions["optimization_type"]
+
+        # init all target values with current value of strak polar
+        for idx in range(len(opPoints)):
+            if opModes[idx] == 'spec-cl':
+                # opPoint is Cl value
+                targetValues[idx] = strakPolar.find_CD_From_CL(opPoints[idx])
+            elif opModes[idx] == 'spec-al':
+                # opPoint is alpha value
+                targetValues[idx] = strakPolar.find_CL_from_alpha(opPoints[idx])
+            else:
+                ErrMsg("unknown op_mode %s" % opModes[idx])
 
 
     # adapts 'reynolds'-value of all op-points, that are below a certain
@@ -1015,20 +697,10 @@ class inputFile:
         # get alpha0 - target
         alpha = round(params.targets["alpha0"][i], AL_decimals)
 
-        # set weighting to 2 times maxWeight
-        weighting = 2*params.maxWeight
-
-        # set reynolds
-        if params.ReAlpha0 > 0:
-            reynolds = params.ReAlpha0
-        else:
-            reynolds = maxRe #800000
-
         # insert op-Point, get index
         idx = self.insert_OpPoint('alpha0', 'spec-al', alpha, 'target-lift',
-                                     0.0, weighting, reynolds)
+                                     0.0, 2.0, maxRe)
 
-            #my_print (idx)#Debug
 
     def insert_alphaMaxGlide_oppoint(self, params, i):
         # get maxRe
@@ -1039,12 +711,9 @@ class inputFile:
         alpha = round(rootPolar.alpha_maxGlide, AL_decimals)
         CL = round(rootPolar.CL_maxGlide, CL_decimals)
 
-        # set weighting to maxWeight
-        weighting = 2*params.maxWeight
-
         # insert op-Point, get index
         idx = self.insert_OpPoint('alphaMaxGlide', 'spec-al', alpha, 'target-lift',
-                                     CL, weighting, None)
+                                     CL, 2.0, None)
 
     def insert_alphaMaxLift_oppoint(self, params, i):
         # get maxRe
@@ -1055,12 +724,9 @@ class inputFile:
         alpha = round(params.targets["alpha_pre_maxLift"][i], AL_decimals)
         CL = round(params.targets["CL_pre_maxLift"][i], CL_decimals)
 
-        # set weighting to maxWeight
-        weighting = 2*params.maxWeight
-
         # insert op-Point, get index
         idx = self.insert_OpPoint('alphaMaxLift', 'spec-al', alpha, 'target-lift',
-                                     CL, weighting, None)
+                                     CL, 2.0, None)
 
 
     # All op-points between start and end shall be distributed equally.
@@ -1226,51 +892,45 @@ class strakData:
         self.buildDir = ''
         self.workingDir = ''
         self.quality = 'medium'
-        self.strakMachineCall = "strak_machineV2.py"
-        self.xfoilWorkerCall = "xfoil_worker.exe"
-        self.xoptfoilCall = "xoptfoil-jx.exe"
-        self.showStatusCall = "show_status.py"
-        self.xoptfoilVisualizerCall = "xoptfoil_visualizer-jx.exe"
-        self.airfoilComparisonCall = "best_airfoil.py"
-        self.weightingMode = 'doubleSinus'
+##        self.strakMachineCall = "strak_machineV2.py"
+##        self.xfoilWorkerCall = "xfoil_worker.exe"
+##        self.xoptfoilCall = "xoptfoil-jx.exe"
+##        self.showStatusCall = "show_status.py"
+##        self.xoptfoilVisualizerCall = "xoptfoil_visualizer-jx.exe"
+##        self.airfoilComparisonCall = "best_airfoil.py"
         self.batchfileName = 'make_strak.bat'
         self.xoptfoilTemplate = "iOpt"
         self.operatingMode = 'default'
         self.seedFoilName = ""
-        self.matchPolarFoilName = ""
         self.ReSqrtCl = 150000
-        self.ReAlpha0 = 0
-        self.NCrit = 9.0
-        self.numOpPoints = 16
-        self.minWeight = 0.7
-        self.maxWeight = 2.1
+        self.NCrit = NCrit_Default
+        self.numOpPoints = 17
         self.CL_min = -0.1
         self.CL_preMaxSpeed = 0.2
-        self.intersectionPoint_CL = 0.0
-        self.intersectionPoint_CL_CD = 99.0 # Deactivated
-        self.intersection_Hysteresis= 0.001
+        #self.intersectionPoint_CL = 0.0
+        #self.intersectionPoint_CL_CD = 99.0 # Deactivated
+        #self.intersection_Hysteresis= 0.001
         self.CL_switchpoint_Type2_Type1_polar = 0.05
         self.maxReFactor = 15.0
         self.maxLiftDistance = 0.03
         self.alpha_Resolution = 0.001
-        self.optimizationPasses = 3
-        self.allGraphs = True
-        self.activeSubplot = 0
-        self.scriptsAsExe = False
+        self.optimizationPasses = 2
+        self.activeTargetPolarIdx = 1
+        #self.allGraphs = True
+        #self.activeSubplot = 0
         self.generateBatch = True
         self.xmlFileName = None
-        self.wingData = None
-        self.useWingPlanform = True
-        self.useAlwaysRootfoil = True
+        #self.wingData = None
+        #self.useWingPlanform = True
         self.showTargetPolars = True
         self.adaptInitialPerturb = True
         self.smoothSeedfoil = False
         self.smoothStrakFoils = True
-        self.smoothMatchPolarFoil = False
+        #self.smoothMatchPolarFoil = False
         self.plotStrakPolars = True
         self.ReNumbers = []
         self.additionalOpPoints = [[]]
-        self.chordLengths = []
+        #self.chordLengths = []
         self.maxReNumbers = []
         self.polarFileNames = []
         self.polarFileNames_T1 = []
@@ -1279,29 +939,12 @@ class strakData:
         self.T1_polars = []
         self.T2_polars = []
         self.merged_polars = []
-        self.shifted_rootPolars = []
+        #self.shifted_rootPolars = []
         self.target_polars = []
         self.strak_polars = []
         self.inputFiles = []
         self.airfoilNames = []
-        #self.maxIterations = [30,40,160], # multi-pass optimization
-        self.numberOfCompetitors = [1, 3, 1], # multi-pass optimization
-        #self.shape_functions = ['camb-thick-plus','hicks-henne','hicks-henne'],
-        self.optimizeAlpha0 = [True, True, True, True, True, True, True, True, True, True, True, True]
-        self.minCLGain = [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
-        self.CL0Gain = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
-        self.maxGlideShift = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
-        self.maxGlideGain = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
-        self.maxGlideFactor = [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
-        self.maxSpeedGain = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
-        self.maxSpeedShift = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
-        self.preMaxSpeedGain = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
-        self.maxLiftGain = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
-        self.linearFactor_0 = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
-        self.linearFactor_1 = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
-        self.linearFactor_2 = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
-        self.linearFactor_3 = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
-        self.linearFactor_4 = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+        self.visibleFlags = [True, True, True, True, True, True, True, True, True, True, True, True]
         self.targets ={
                         "CL_min": [],
                         "CD_min": [],
@@ -1330,6 +973,15 @@ class strakData:
     def get_ReList(params):
         return params.ReNumbers
 
+    def get_visibleFlags(self):
+        return self.visibleFlags
+
+    def set_visibleFlags(self, flags):
+        self.visibleFlags.clear()
+        self.visibleFlags = flags
+
+    def set_activeTargetPolarIdx(self, idx):
+        self.activeTargetPolarIdx = idx
 
     ############################################################################
     # function that returns a list of max Re-numbers
@@ -1367,54 +1019,19 @@ class strakData:
     def calculate_DependendValues(self):
         # setup tool-calls
         #exeCallString =  " .." + bs + exePath + bs
-        exeCallString =  "echo y | .." + bs + exePath + bs
-
+        exeCallString =  "echo y | .." + bs + exePath + bs # This will automatically answer with 'yes'
         pythonCallString = pythonInterpreterName + ' ..' + bs + scriptPath + bs
 
         self.xfoilWorkerCall = exeCallString + xfoilWorkerName + '.exe'
         self.xoptfoilCall = exeCallString + xoptfoilName + '.exe'
-
-        if (self.scriptsAsExe):
-            self.strakMachineCall = exeCallString + strakMachineName + '.exe'
-            self.xoptfoilVisualizerCall = exeCallString + xoptfoilVisualizerName + '.exe'
-            self.airfoilComparisonCall = exeCallString + airfoilComparisonName + '.exe'
-            self.showStatusCall = "start \"\" \"%s\"\n" % (".."+bs+exePath+bs+showStatusName + '.exe')
-        else:
-            self.strakMachineCall = pythonCallString + strakMachineName + '.py'
-            self.xoptfoilVisualizerCall = pythonCallString + xoptfoilVisualizerName + '.py'
-            self.airfoilComparisonCall = pythonCallString + airfoilComparisonName + '.py'
-            self.showStatusCall = "start \"\" \"%s\" %s\n" % (pythonInterpreterName +"w", \
+        self.strakMachineCall = pythonCallString + strakMachineName + '.py'
+        self.xoptfoilVisualizerCall = pythonCallString + xoptfoilVisualizerName + '.py'
+        self.airfoilComparisonCall = pythonCallString + airfoilComparisonName + '.py'
+        self.showStatusCall = "start \"\" \"%s\" %s\n" % (pythonInterpreterName +"w", \
                          (' ..' + bs + scriptPath + bs + showStatusName + '.py'))
 
         # set value of NCrit for polar creation
         self.set_NCrit()
-
-        # calculate List of Re-numers, if wingdata available
-        if (self.wingData != None):
-            # clear the list of chord-lenghts
-            self.chordLengths = []
-
-            # get list of all chord-lengths of the wing
-            chordLengths = params.wingData.get('chordLengths')
-
-            # copy the list
-            self.chordLengths = chordLengths
-
-        # is there a list of chord-lengths available ?
-        if (self.chordLengths != []):
-            # clear the list of Re-numbers
-            self.ReNumbers = []
-
-            # get Re-number of root-airfoil
-            rootRe = params.ReSqrtCl
-
-            # get chord-length of root-airfoil
-            rootChord = self.chordLengths[0]
-
-            # calculate list of Re-numbers
-            for chord in chordLengths:
-                Re = (rootRe * chord) / rootChord
-                self.ReNumbers.append(Re)
 
         # calculate list of max Re-numbers
         for Re in self.ReNumbers:
@@ -1429,9 +1046,9 @@ class strakData:
 
 
     def calculate_CD_TargetValue(self, root, strak, gain):
-        target = (  (root * gain)           # part coming from root-airfoil
-                  + (strak * (1.0 - gain))) # part coming from strak-airfoil
-
+        #target = (  (root * gain)           # part coming from root-airfoil
+        #          + (strak * (1.0 - gain))) # part coming from strak-airfoil
+        target = strak * (1.0 + gain)
         return round(target, CD_decimals)
 
     def clear_MainTargetValues(self):
@@ -1465,30 +1082,21 @@ class strakData:
         self.clear_MainTargetValues()
 
         for idx in range(num):
-            # get polar
+            # get polar according to Re
             polar = self.merged_polars[idx]
-            shifted_root_polar = self.shifted_rootPolars[idx]
+
+            # Get root-polar for this operation
+            rootPolar = self.merged_polars[0]
 
             # get gain and loss values
-            if (polar == rootPolar):
-                # no gain / loss / shift for root-polar
-                minCLGain = 0.0
-                CL0Gain = 0.0
-                maxSpeedGain = 0.0
-                maxSpeedShift = 0.0
-                preMaxSpeedGain = 0.0
-                maxGlideGain = 0.0
-                maxGlideShift = 0.0
-                maxLiftGain = 0.0
-            else:
-                minCLGain = self.minCLGain[idx]
-                CL0Gain = self.CL0Gain[idx]
-                maxSpeedGain = self.maxSpeedGain[idx]
-                maxSpeedShift = self.maxSpeedShift[idx]
-                preMaxSpeedGain = self.preMaxSpeedGain[idx]
-                maxGlideGain = self.maxGlideGain[idx]
-                maxGlideShift = self.maxGlideShift[idx]
-                maxLiftGain = self.maxLiftGain[idx]
+            minCLGain = 0.0
+            CL0Gain = 0.0
+            maxSpeedGain = 0.0
+            maxSpeedShift = 0.0
+            preMaxSpeedGain = 0.0
+            maxGlideGain = 0.0
+            maxGlideShift = 0.0
+            maxLiftGain = 0.0
 
             #---------------------- CL_min-targets ----------------------------
             target_CL_min = rootPolar.CL_min
@@ -1535,7 +1143,7 @@ class strakData:
 
             #---------------------- maxGlide-targets --------------------------
             # Caution: use CL-target from shifted root-polar
-            target_CL_maxGlide = shifted_root_polar.CL_maxGlide
+            target_CL_maxGlide = rootPolar.CL_maxGlide
             target_alpha_maxGlide = rootPolar.alpha[rootPolar.maxGlide_idx]
             #polar_CD_maxGlide = polar.find_CD_From_CL(target_CL_maxGlide)
             polar_CD_maxGlide = polar.find_CD_From_alpha(target_alpha_maxGlide)
@@ -1582,9 +1190,6 @@ class strakData:
 
             idx = idx + 1
 
-        #my_print(self.targets)#Debug
-        #DoneMsg()#Debug
-
 
     def correctOpPoint_left(self, opPoint, CL_maxSpeed_root,
                     CL_maxSpeed_strak, CL_maxGlide_root, CL_maxGlide_strak):
@@ -1621,53 +1226,6 @@ class strakData:
         return round(correctedOpPoint, CL_decimals)
 
 
-##    # correct additional op-Points for strak-airfoils
-##    def calculate_AdditionalOpPoints(self):
-##        # get and additional op-points of root
-##        rootAddOpPoints = self.additionalOpPoints[0]
-##
-##        if (len(rootAddOpPoints) == 0):
-##            # nothing to do
-##            return
-##
-##        # get target-values
-##        targets = self.targets
-##        CL0_root = targets["CL0"][0]
-##        CL_maxSpeed_root = targets["CL_maxSpeed"][0]
-##        CL_maxGlide_root = targets["CL_maxGlide"][0]
-##        CL_pre_maxLift_root = targets["CL_pre_maxLift"][0]
-##
-##        # all polars behind the root polar
-##        num = len(self.merged_polars)
-##        for idx in range (1, num):
-##            strakAddOpPoints = []
-##
-##            # get strak-target-values
-##            CL0_strak = targets["CL0"][idx]
-##            CL_maxSpeed_strak = targets["CL_maxSpeed"][idx]
-##            CL_maxGlide_strak = targets["CL_maxGlide"][idx]
-##            CL_pre_maxLift_strak = targets["CL_pre_maxLift"][idx]
-##
-##            # all additional opPoints
-##            for opPoint in rootAddOpPoints:
-##                if (CL_maxSpeed_root <= opPoint) and (CL_maxGlide_root >= opPoint):
-##                    # correct the opPoint
-##                    correctedOpPoint = self.correctOpPoint_left(opPoint,
-##                    CL_maxSpeed_root, CL_maxSpeed_strak,
-##                    CL_maxGlide_root, CL_maxGlide_strak)
-##                else:
-##                    # correct the opPoint
-##                    correctedOpPoint = self.correctOpPoint_right(opPoint,
-##                    CL_pre_maxLift_root, CL_pre_maxLift_strak,
-##                    CL_maxGlide_root, CL_maxGlide_strak)
-##
-##                # append corrected opPoint to additional strakop-points
-##                strakAddOpPoints.append(correctedOpPoint)
-##
-##            # append list of additional strak op-points to params
-##            self.additionalOpPoints.append(strakAddOpPoints)
-
-
 ################################################################################
 #
 # polarGraph class
@@ -1675,88 +1233,74 @@ class strakData:
 ################################################################################
 class polarGraph:
     def __init__(self):
+        self.visibleFlags = []
         return
 
+    def check_polarVisibility(self, params, polarIdx):
+        visibleFlags = params.get_visibleFlags()
+        return (visibleFlags[polarIdx])
+
+    def check_onlyRootPolarVisible(self, params):
+        visibleFlags = params.get_visibleFlags()
+        if visibleFlags[0] == False:
+            return False
+
+        for flag in visibleFlags[1:]:
+            if flag:
+                return False
+
+        return True
 
     def set_AxesAndLabels(self, ax, title, xlabel, ylabel):
-
-        # set title of the plot
-        text = (title)
-        #ax.set_title(text, fontsize = 30, color="darkgrey")
+        global fs_axes
+        global fs_ticks
 
         # set axis-labels
-        ax.set_xlabel(xlabel, fontsize = 20, color="darkgrey")
-        ax.set_ylabel(ylabel, fontsize = 20, color="darkgrey")
+        ax.set_xlabel(xlabel, fontsize = fs_axes, color="darkgrey")
+        ax.set_ylabel(ylabel, fontsize = fs_axes, color="darkgrey")
+
+        for tick in ax.xaxis.get_major_ticks():
+            tick.label.set_fontsize(fs_ticks)
+
+        for tick in ax.yaxis.get_major_ticks():
+            tick.label.set_fontsize(fs_ticks)
 
         # customize grid
         ax.grid(True, color='dimgrey',  linestyle='dotted', linewidth=0.4)
 
 
-    # reverts list and returns reverted list
-    def get_ReverseList(self, list):
-        reverseList = []
-        idx = len(list)-1
-
-        for element in list:
-            reverseList.append(list[idx])
-            idx = idx -1
-
-        return reverseList
-
-    # plots an image
-    def plot_Logo(self, ax, params):
-        searchPaths = []
-        searchPaths.append(ressourcesPath + bs + logoName)
-        # further Search-paths can be added here
-
-        for path in searchPaths:
-            try:
-                image = mpimg.imread(path)
-            except:
-                NoteMsg("strak-machine-image was not found in path %s,"\
-                         "trying different path" % path)
-        try:
-            ax.imshow(image)
-            ax.set_axis_off()
-        except:
-            ErrorMsg("could not find strak-machine-image, plotting of image was"
-                     " skipped")
-
 
     # plots lift/drag-polars (Xfoil-worker-polars and target-polars)
-    def plot_LiftDragPolars(self, ax, polars, targetPolars, params):
+    def plot_LiftDragPolars(self, ax, x_limits, y_limits, polars, targetPolars, params):
+        T1T2_labelOk = False
+        Target_labelOk = False
+
         # set axes and labels
         self.set_AxesAndLabels(ax, 'CL, CD', 'CD', 'CL')
 
         # get polar of root-airfoil
         rootPolar = polars[0]
 
-        # revert List of polars (for graphical reasons: plot root-polar last)
-        polars = self.get_ReverseList(polars)
-        targetPolars = self.get_ReverseList(targetPolars)
-
         # get number of polars to plot
         numPolars = len(polars)
 
-        # get maximum CD-value that shall be visible in the plot
-        max_CD = round(rootPolar.CD_maxLift * 1.1, CD_decimals)
-
-        # set x-axis manually
-        ax.set_xlim(right = max_CD)
-
-        # set y-axis manually
-        ax.set_ylim(min(rootPolar.CL) - 0.2, max(rootPolar.CL) + 0.2)
-
-        # determine some text-offsets
-        CL0TextOffset_x = polars[0].find_CD_From_CL(0.0) * 1.1
-        CL0TextOffset_y = -0.2
-        maxSpeedTextOffset_x = polars[0].CD_maxSpeed * 1.1
-        maxSpeedTextOffset_y = rootPolar.CL_maxSpeed
-        maxGlideTextOffset_x = polars[0].find_CD_From_CL(rootPolar.CL_maxGlide) * 1.1
-        maxGlideTextOffset_y = rootPolar.CL_maxGlide
+        if ((x_limits == None) or (y_limits == None)):
+            # get maximum CD-value that shall be visible in the plot
+            max_CD = round(rootPolar.CD_maxLift * 1.1, CD_decimals)
+            # set x-axis manually
+            ax.set_xlim(right = max_CD)
+            # set y-axis manually
+            ax.set_ylim(min(rootPolar.CL) - 0.2, max(rootPolar.CL) + 0.2)
+        else:
+            ax.set_xlim(x_limits)
+            ax.set_ylim(y_limits)
 
         # all polars
         for polarIdx in range(numPolars):
+            if (self.check_polarVisibility(params, polarIdx) == False):
+                # do not plot this polar
+                continue
+
             #  get polar and target-polar to plot
             polar = polars[polarIdx]
             targetPolar = targetPolars[polarIdx]
@@ -1764,10 +1308,11 @@ class polarGraph:
             # determine idx for changing colors
             switchIdx = polar.T2_T1_switchIdx
 
-            # set label only for root-polar
-            if (polar == rootPolar):
+            # set label only once
+            if (T1T2_labelOk == False):
                 T1_label = 'T1-polar'
                 T2_label = 'T2-polar'
+                T1T2_labelOk = True
             else:
                 T1_label = None
                 T2_label = None
@@ -1784,91 +1329,80 @@ class polarGraph:
             # plot CL, CD
             ax.plot(x, y, (cl_T2_polar+'-'), label=T2_label)
 
-            # plot CD @CL = 0
-            x = polar.CD_CL0
-            y = 0.0
-
+            # plot main oppoints for root polar only
             if (polar == rootPolar):
+                # plot CD @CL = 0
+                x = polar.CD_CL0
+                y = 0.0
                 ax.plot(x, y, 'o', color=cl_infotext)
 
-            # additonal text for root polar only
-            if (polar == rootPolar):
-                ax.annotate('CL=0 (root) @ CD = %.4f' % x, xy=(x,y),
-                  xytext=(CL0TextOffset_x, CL0TextOffset_y),
-                  textcoords='data',
-                  fontsize = fs_infotext, color=cl_infotext)
-
-            # plot max_speed
-            x = polar.CD[polar.maxSpeed_idx]
-            y = polar.CL[polar.maxSpeed_idx]
-
-            # additonal text for root polar only
-            if (polar == rootPolar):
+                # plot max_speed
+                x = polar.CD[polar.maxSpeed_idx]
+                y = polar.CL[polar.maxSpeed_idx]
                 ax.plot(x, y, marker='o',color=cl_infotext)
-                ax.annotate('maxSpeed (root) @ CL = %.2f, CD = %.4f' % (y, x),
-                 xy=(x,y), xytext=(maxSpeedTextOffset_x, maxSpeedTextOffset_y),
-                 textcoords='data', fontsize = fs_infotext,
-                 color=cl_infotext)
 
-            # plot preMax_speed
-            x = polar.CD[polar.preMaxSpeed_idx]
-            y = polar.CL[polar.preMaxSpeed_idx]
-
-            # additonal text for root polar only
-            if (polar == rootPolar):
-                ax.plot(x, y, marker='o',color=cl_infotext)
-##                ax.annotate('preMaxSpeed (root) @ CL = %.2f, CD = %.4f' % (y, x),
-##                 xy=(x,y), xytext=(maxSpeedTextOffset_x, maxSpeedTextOffset_y),
-##                 textcoords='data', fontsize = fs_infotext,
-##                 color=cl_infotext)
-
-            # plot max_glide
-            x = polar.CD[polar.maxGlide_idx]
-            y = polar.CL[polar.maxGlide_idx]
-
-            # additonal text for root polar only
-            if (polar == rootPolar):
+                # plot max_glide
+                x = polar.CD[polar.maxGlide_idx]
+                y = polar.CL[polar.maxGlide_idx]
                 ax.plot(x, y, marker='o', color=cl_infotext)
-                ax.annotate('maxGlide (root) @ CL = %.2f, CD = %.4f' % (y, x),
-                 xy=(x,y), xytext=(maxGlideTextOffset_x, maxGlideTextOffset_y),
-                  textcoords='data', fontsize = fs_infotext, color=cl_infotext)
 
-            # plot max lift
-            x = polar.CD[polar.maxLift_idx]
-            y = polar.CL[polar.maxLift_idx]
-
-            # additonal text for root polar only
-            if (polar == rootPolar):
+                # plot max lift
+                x = polar.CD[polar.maxLift_idx]
+                y = polar.CL[polar.maxLift_idx]
                 ax.plot(x, y, marker='o', color=cl_infotext)
-                ax.annotate('maxLift (root) @ CL = %.2f, CD = %.4f' %(y,x),
-                  xy=(x,y), xytext=(-160,10), textcoords='offset points',
-                    fontsize = fs_infotext, color=cl_infotext)
 
-            # plot target-polar
-            label = None
-            if (polar == rootPolar):
-                # style for target-polar of root-airfoil
-                style = opt_point_style_root
-                linewidth = 0.0
+                # Is this the only visible polar ?
+                if self.check_onlyRootPolarVisible(params):
+                    # determine some text-offsets
+                    CL0TextOffset_x = rootPolar.CD_CL0 * 1.1
+                    CL0TextOffset_y = 0
+                    maxSpeedTextOffset_x = rootPolar.CD_maxSpeed * 1.1
+                    maxSpeedTextOffset_y = rootPolar.CL_maxSpeed
+                    maxGlideTextOffset_x = rootPolar.CD_maxGlide * 1.1
+                    maxGlideTextOffset_y = rootPolar.CL_maxGlide
+
+                    ax.annotate('CL=0 @ CD = %.4f' % x, xy=(x,y),
+                      xytext=(CL0TextOffset_x, CL0TextOffset_y),
+                      textcoords='data',
+                      fontsize = fs_infotext, color=cl_infotext)
+
+                    ax.annotate('maxSpeed @ CL = %.2f, CD = %.4f' % (y, x),
+                     xy=(x,y), xytext=(maxSpeedTextOffset_x, maxSpeedTextOffset_y),
+                     textcoords='data', fontsize = fs_infotext,
+                     color=cl_infotext)
+
+                    ax.annotate('maxGlide @ CL = %.2f, CD = %.4f' % (y, x),
+                     xy=(x,y), xytext=(maxGlideTextOffset_x, maxGlideTextOffset_y),
+                      textcoords='data', fontsize = fs_infotext, color=cl_infotext)
+
+                    ax.annotate('maxLift @ CL = %.2f, CD = %.4f' %(y,x),
+                      xy=(x,y), xytext=(-260,10), textcoords='offset points',
+                        fontsize = fs_infotext, color=cl_infotext)
             else:
-                # style for target-polar of strak-airfoil
-                style = opt_point_style_strak
+                # plot target-polar
+                if (Target_labelOk == False):
+                    label = 'target-polar'
+                    Target_labelOk = True
+                else:
+                    label = None
+
+                # is this the selected target polar for editing ?
+                if (polarIdx == params.activeTargetPolarIdx):
+                    style = opt_point_style_root
+                else:
+                    style = opt_point_style_strak
+
                 linewidth = lw_targetPolar
 
-                # set label only for one of the strak-polars tp avoid multiple
-                # labels that are all the same
-                if (polar == polars[1]):
-                    label = 'target-polar'
-
-            if (polar == rootPolar) or (params.showTargetPolars == True):
                 # remove last elements, as they are dummies
                 x = deepcopy(targetPolar.CD)
                 x.pop()
                 y = deepcopy(targetPolar.CL)
                 y.pop()
 
-            ax.plot(x, y, style, linestyle = ls_targetPolar,
+                ax.plot(x, y, style, linestyle = ls_targetPolar,
                             linewidth = linewidth, label = label)
+
             if T1_label != None:
                 ax.legend(loc='upper left', fontsize = fs_legend)
 
@@ -1898,33 +1432,42 @@ class polarGraph:
 
 
     # plots lift/alpha-polars (Xfoil-worker-polars and target-polars)
-    def plot_LiftAlphaPolars(self, ax, polars, targetPolars, params):
+    def plot_LiftAlphaPolars(self, ax, x_limits, y_limits, polars, targetPolars, params):
+        T1T2_labelOk = False
+        Target_labelOk = False
+
         # set axes and labels
         self.set_AxesAndLabels(ax, 'CL, alpha', 'alpha', 'CL')
 
         # get polar of root-airfoil
         rootPolar = polars[0]
 
-        # revert List of polars (for graphical reasons: plot root-polar last)
-        polars = self.get_ReverseList(polars)
-        targetPolars = self.get_ReverseList(targetPolars)
+        if ((x_limits == None) or (y_limits == None)):
+            # set y-axis manually
+            ax.set_ylim(min(rootPolar.CL) - 0.1, max(rootPolar.CL) + 0.2)
+        else:
+            ax.set_xlim(x_limits)
+            ax.set_ylim(y_limits)
 
-        # set y-axis manually
-        ax.set_ylim(min(rootPolar.CL) - 0.1, max(rootPolar.CL) + 0.2)
 
         # get number of polars to plot
         numPolars = len(polars)
 
         # all polars
         for polarIdx in range(numPolars):
+            if (self.check_polarVisibility(params, polarIdx) == False):
+                # do not plot this polar
+                continue
+
             #  get polar and target-polar to plot
             polar = polars[polarIdx]
             targetPolar = targetPolars[polarIdx]
 
-            # set label only for root-polar
-            if (polar == rootPolar):
+            # set label only once
+            if (T1T2_labelOk == False):
                 T1_label = 'T1-polar'
                 T2_label = 'T2-polar'
+                T1T2_labelOk = True
             else:
                 T1_label = None
                 T2_label = None
@@ -1944,69 +1487,69 @@ class polarGraph:
             # plot CL, CD
             ax.plot(x, y, (cl_T2_polar+'-'), label=T2_label)
 
-            if (T1_label != None):
-                ax.legend(loc='upper left', fontsize = fs_legend)
-
-            # plot alpha @CL = 0
-            x = polar.alpha_CL0
-            y = 0.0
-
             if (polar == rootPolar):
+                 # plot alpha @CL = 0
+                x = polar.alpha_CL0
+                y = 0.0
                 ax.plot(x, y, 'o', color=cl_infotext)
 
-            # additonal text for root polar only
-            if (polar == rootPolar):
-                ax.annotate('CL=0 (root) @ alpha = %.2f' % x,
-                  xy=(x,y), xytext=(20,-15), textcoords='offset points',
-                  fontsize = fs_infotext, color=cl_infotext)
+                # Is this the only polar ?
+                rootPolarOnly = self.check_onlyRootPolarVisible(params)
+                if rootPolarOnly:
+                    ax.annotate('CL=0 @ alpha = %.2f' % x,
+                      xy=(x,y), xytext=(20,-15), textcoords='offset points',
+                      fontsize = fs_infotext, color=cl_infotext)
 
-            # plot max Speed
-            x = polar.alpha[polar.maxSpeed_idx]
-            y = polar.CL[polar.maxSpeed_idx]
-
-            if (polar == rootPolar):
+                # plot max Speed
+                x = polar.alpha[polar.maxSpeed_idx]
+                y = polar.CL[polar.maxSpeed_idx]
                 ax.plot(x, y, 'o', color=cl_infotext)
 
-            # additonal text for root polar only
-            if (polar == rootPolar):
-                ax.annotate('maxSpeed (root) @ alpha = %.2f, CL = %.2f' %\
-                  (x, y), xy=(x,y),
-                  xytext=(20,-5), textcoords='offset points',
-                  fontsize = fs_infotext, color=cl_infotext)
+                # Is this the only polar ?
+                if rootPolarOnly:
+                    ax.annotate('maxSpeed @ alpha = %.2f, CL = %.2f' %\
+                      (x, y), xy=(x,y),
+                      xytext=(20,-5), textcoords='offset points',
+                      fontsize = fs_infotext, color=cl_infotext)
 
-            # plot max Glide
-            x = polar.alpha[polar.maxGlide_idx]
-            y = polar.CL[polar.maxGlide_idx]
-            if (polar == rootPolar):
-               ax.plot(x, y, 'o', color=cl_infotext)
-
-            # additonal text for root polar only
-            if (polar == rootPolar):
-                ax.annotate('maxGlide (root) @ alpha = %.2f, CL = %.2f' %\
-                  (x, y), xy=(x,y),
-                  xytext=(20,-5), textcoords='offset points',
-                  fontsize = fs_infotext, color=cl_infotext)
-
-            # plot max lift
-            x = polar.alpha[polar.maxLift_idx]
-            y = polar.CL[polar.maxLift_idx]
-
-            if (polar == rootPolar):
+                # plot max Glide
+                x = polar.alpha[polar.maxGlide_idx]
+                y = polar.CL[polar.maxGlide_idx]
                 ax.plot(x, y, 'o', color=cl_infotext)
 
-            # additonal text for root polar only
-            if (polar == rootPolar):
-                ax.annotate('maxLift (root) @ alpha = %.2f, CL = %.2f' %\
-                  (x, y), xy=(x,y),
-                  xytext=(-140,10), textcoords='offset points',
-                  fontsize = fs_infotext, color=cl_infotext)
+                # Is this the only polar ?
+                if rootPolarOnly:
+                    ax.annotate('maxGlide @ alpha = %.2f, CL = %.2f' %\
+                      (x, y), xy=(x,y),
+                      xytext=(20,-5), textcoords='offset points',
+                      fontsize = fs_infotext, color=cl_infotext)
 
-            # plot target-polar, root-polar only
-            label = None
-            if (polar == rootPolar):
-                # style for target-polar of root-airfoil
-                style = opt_point_style_root
-                linewidth = 0.0
+                # plot max lift
+                x = polar.alpha[polar.maxLift_idx]
+                y = polar.CL[polar.maxLift_idx]
+                ax.plot(x, y, 'o', color=cl_infotext)
+
+                # Is this the only polar ?
+                if rootPolarOnly:
+                    ax.annotate('maxLift @ alpha = %.2f, CL = %.2f' %\
+                      (x, y), xy=(x,y),
+                      xytext=(-140,10), textcoords='offset points',
+                      fontsize = fs_infotext, color=cl_infotext)
+            else:
+                # plot target-polar
+                if (Target_labelOk == False):
+                    label = 'target-polar'
+                    Target_labelOk = True
+                else:
+                    label = None
+
+                # is this the selected target polar for editing ?
+                if (polarIdx == params.activeTargetPolarIdx):
+                    style = opt_point_style_root
+                else:
+                    style = opt_point_style_strak
+
+                linewidth = lw_targetPolar
 
                 # remove last dummy-values
                 x = deepcopy(targetPolar.alpha)
@@ -2018,39 +1561,50 @@ class polarGraph:
                 ax.plot(x, y, style, linestyle = ls_targetPolar,
                         linewidth = linewidth, label = label)
 
+            if (T1_label != None):
+                ax.legend(loc='upper left', fontsize = fs_legend)
+
 
     # plots glide-polars (Xfoil-worker-polars and target-polars)
-    def plot_GlidePolars(self, ax, polars, targetPolars, params):
+    def plot_GlidePolars(self, ax, x_limits, y_limits, polars, targetPolars, params):
+        T1T2_labelOk = False
+        Target_labelOk = False
+
         # set axes and labels
         self.set_AxesAndLabels(ax, 'CL/CD, CL', 'CL', 'CL/CD')
 
         # get polar of root-airfoil
         rootPolar = polars[0]
 
-        # revert List of polars (for graphical reasons: plot root-polar last)
-        polars = self.get_ReverseList(polars)
-        targetPolars = self.get_ReverseList(targetPolars)
-
-
         # get number of polars to plot
         numPolars = len(polars)
 
-        # set y-axis manually
-        if (params.allGraphs == True):
-            ax.set_ylim(min(rootPolar.CL_CD) - 10, max(rootPolar.CL_CD) + 10)
-        else:
+        if ((x_limits == None) or (y_limits == None)):
+            # set y-axis manually
+            ax.set_xlim(-0.1, max(rootPolar.CL) + 0.05)
             ax.set_ylim(-5, max(rootPolar.CL_CD) + 5)
+        else:
+            ax.set_xlim(x_limits)
+            ax.set_ylim(y_limits)
+
+        # set number of already plotted polars
+        plotted_polars = 0
 
         # all polars
         for polarIdx in range(numPolars):
+            if (self.check_polarVisibility(params, polarIdx) == False):
+                # do not plot this polar
+                continue
+
             #  get polar and target-polar to plot
             polar = polars[polarIdx]
             targetPolar = targetPolars[polarIdx]
 
-            # set label only for root-polar
-            if (polar == rootPolar):
+             # set label only once
+            if (T1T2_labelOk == False):
                 T1_label = 'T1-polar'
                 T2_label = 'T2-polar'
+                T1T2_labelOk = True
             else:
                 T1_label = None
                 T2_label = None
@@ -2071,88 +1625,68 @@ class polarGraph:
             # plot CL, CD
             ax.plot(x, y, (cl_T2_polar+'-'), label=T2_label)
 
-            if (T1_label != None):
-                ax.legend(loc='upper left', fontsize = fs_legend)
-
-            # plot Cl/CD @CL = 0
-            x = 0.0
-            y = 0.0
-
+            # main oppoints for root polar only
             if (polar == rootPolar):
+                # plot Cl/CD @CL = 0
+                x = 0.0
+                y = 0.0
                 ax.plot(x, y, 'o', color=cl_infotext)
 
-            # additonal text for root polar only
-            if (polar == rootPolar):
-                ax.annotate('CL=0 (root) @ CL/CD = %.2f' % y, xy=(x,y),
-                  xytext=(20,-5), textcoords='offset points',
-                  fontsize = fs_infotext, color=cl_infotext)
+                # Is this the only polar ?
+                rootPolarOnly = self.check_onlyRootPolarVisible(params)
+                if rootPolarOnly:
+                    ax.annotate('CL=0 @ CL/CD = %.2f' % y, xy=(x,y),
+                    xytext=(20,-5), textcoords='offset points',
+                    fontsize = fs_infotext, color=cl_infotext)
 
-            # plot max_speed
-            x = polar.CL[polar.maxSpeed_idx]
-            y = polar.CL_CD[polar.maxSpeed_idx]
-
-            if (polar == rootPolar):
+                # plot max_speed
+                x = polar.CL[polar.maxSpeed_idx]
+                y = polar.CL_CD[polar.maxSpeed_idx]
                 ax.plot(x, y, 'o', color=cl_infotext)
 
-            # add text for root Polar only
-            if (polar == rootPolar):
-                ax.annotate('maxSpeed (root) @\nCL = %.2f,\nCL/CD = %.2f' %\
-                 (x, y), xy=(x,y), xytext=(-80,0), textcoords='offset points',
-                  fontsize = fs_infotext, color=cl_infotext)
+                 # Is this the only polar ?
+                if rootPolarOnly:
+                    ax.annotate('maxSpeed @\nCL = %.2f,\nCL/CD = %.2f' %\
+                    (x, y), xy=(x,y), xytext=(-160,0), textcoords='offset points',
+                    fontsize = fs_infotext, color=cl_infotext)
 
-            # plot preMax_speed
-            x = polar.CL[polar.preMaxSpeed_idx]
-            y = polar.CL_CD[polar.preMaxSpeed_idx]
-
-            # additonal text for root polar only
-            if (polar == rootPolar):
-                ax.plot(x, y, marker='o',color=cl_infotext)
-
-
-            # plot max_glide
-            x = polar.CL[polar.maxGlide_idx]
-            y = polar.CL_CD[polar.maxGlide_idx]
-
-            if (polar == rootPolar):
+                # plot max_glide
+                x = polar.CL[polar.maxGlide_idx]
+                y = polar.CL_CD[polar.maxGlide_idx]
                 ax.plot(x, y, 'o', color=cl_infotext)
 
-            # add text for root Polar only
-            if (polar == rootPolar):
-                ax.annotate('maxGlide (root) @ CL = %.2f, CL/CD = %.2f' %\
-                  (x, y), xy=(x,y), xytext=(-60,7), textcoords='offset points',
-                   fontsize = fs_infotext, color=cl_infotext)
+                # Is this the only polar ?
+                if rootPolarOnly:
+                   ax.annotate('maxGlide @ CL = %.2f, CL/CD = %.2f' %\
+                      (x, y), xy=(x,y), xytext=(-160,15), textcoords='offset points',
+                       fontsize = fs_infotext, color=cl_infotext)
 
-            # plot max Lift
-            x = polar.CL[polar.maxLift_idx]
-            y = polar.CL_CD[polar.maxLift_idx]
-
-            if (polar == rootPolar):
+                # plot max Lift
+                x = polar.CL[polar.maxLift_idx]
+                y = polar.CL_CD[polar.maxLift_idx]
                 ax.plot(x, y, 'o', color=cl_infotext)
 
-            # add text for root Polar only
-            if (polar == rootPolar):
-                ax.annotate('maxLift (root) @\nCL = %.2f,\nCL/CD = %.2f' %\
-                 (x, y), xy=(x,y), xytext=(10,0), textcoords='offset points',
-                  fontsize = fs_infotext, color=cl_infotext)
-
-
-            # plot target-polar
-            label = None
-            if (polar == rootPolar):
-                # style for target-polar of root-airfoil
-                style = opt_point_style_root
-                linewidth = 0.0
+                 # Is this the only polar ?
+                if rootPolarOnly:
+                    ax.annotate('maxLift @\nCL = %.2f,\nCL/CD = %.2f' %\
+                    (x, y), xy=(x,y), xytext=(-200,0), textcoords='offset points',
+                    fontsize = fs_infotext, color=cl_infotext)
             else:
-                # style for target-polar of strak-airfoil
-                style = opt_point_style_strak
+                # plot target-polar
+                if (Target_labelOk == False):
+                    label = 'target-polar'
+                    Target_labelOk = True
+                else:
+                    label = None
+
+                # is this the selected target polar for editing ?
+                if (polarIdx == params.activeTargetPolarIdx):
+                    style = opt_point_style_root
+                else:
+                    style = opt_point_style_strak
+
                 linewidth = lw_targetPolar
 
-                # set label only for one of the strak-polars tp avoid multiple
-                # labels that are all the same
-                if (polar == polars[1]):
-                    label = 'target-polar'
-
-            if (polar == rootPolar) or (params.showTargetPolars == True):
                 x = deepcopy(targetPolar.CL)
                 x.pop()
                 y = deepcopy(targetPolar.CL_CD)
@@ -2161,6 +1695,9 @@ class polarGraph:
                 # plot
                 ax.plot(x, y, style, linestyle = ls_targetPolar,
                         linewidth = linewidth, label = label)
+
+            if (T1_label != None):
+                ax.legend(loc='upper left', fontsize = fs_legend)
 
         # plot strak-polars
         if params.plotStrakPolars:
@@ -2186,105 +1723,23 @@ class polarGraph:
                 if (label != None):
                     ax.legend(loc='upper left', fontsize = fs_legend)
 
-    def draw_diagram(self, params, diagramType, ax):
+    def draw_diagram(self, params, diagramType, ax, x_limits, y_limits):
         # get polars
         polars = params.merged_polars
         targetPolars = params.target_polars
 
         if diagramType == "CL_CD_diagram":
             # plot Glide polar
-            self.plot_LiftDragPolars(ax, polars, targetPolars, params)
+            self.plot_LiftDragPolars(ax, x_limits, y_limits, polars, targetPolars, params)
         elif diagramType == "CL_alpha_diagram":
             # plot Glide polar
-            self.plot_LiftAlphaPolars(ax, polars, targetPolars, params)
+            self.plot_LiftAlphaPolars(ax, x_limits, y_limits, polars, targetPolars, params)
         elif diagramType == "CLCD_CL_diagram":
             # plot Glide polar
-            self.plot_GlidePolars(ax, polars, targetPolars, params)
+            self.plot_GlidePolars(ax, x_limits, y_limits, polars, targetPolars, params)
         else:
             ErrorMsg("undefined diagramtype")
 
-    # draw the graph
-    def draw(self, params):
-        # get polars
-        polars = params.merged_polars
-        targetPolars = params.target_polars
-        T1_polars = params.T1_polars
-        T2_polars = params.T2_polars
-
-        # get polar of root-airfoil
-        rootPolar = polars[0]
-        rootPolar_T1 = T1_polars[0]
-        rootPolar_T2 = T2_polars[0]
-
-        if (params.operatingMode == 'matchpolarfoils'):
-            airfoilName = params.matchPolarFoilName
-        else:
-            airfoilName = params.seedFoilName
-
-        my_print("plotting polars of airfoil %s..." % (airfoilName))
-
-        # set 'dark' style
-        plt.style.use('dark_background')
-
-        # setup subplots
-        if (params.allGraphs == True):
-            fig, (upper,lower) = plt.subplots(2,2)
-        else:
-            fig, upper = plt.subplots(params.activeSubplot)
-
-        # compose diagram-title
-        text = ("Analysis of airfoil \"%s\"\n" % airfoilName)
-        text = text + "T1-polars, Re = "
-
-        # add Re-numbers
-        num_polars = len(T1_polars)
-        for i in range(num_polars):
-            Re = T1_polars[i].Re
-            if (i == num_polars-1):
-                text = text + ("%d\n" % Re)
-            else:
-                text = text + ("%d, " % Re)
-
-        text = text + "T2-polars, ReSqrt(CL) = "
-
-         # add Re-numbers
-        for i in range(num_polars):
-            Re = T2_polars[i].Re
-            if (i == num_polars-1):
-                text = text + ("%d\n" % Re)
-            else:
-                text = text + ("%d, " % Re)
-
-        fig.suptitle(text, fontsize = 12, color="darkgrey", **csfont)
-
-        if (params.allGraphs == True):
-            # first figure, display strak-machine-logo
-            self.plot_Logo(upper[0], params)
-
-            # second figure, display the Lift / Drag-Polar
-            self.plot_LiftDragPolars(lower[0], polars, targetPolars, params)
-
-            # third figure, display the Lift / alpha-Polar
-            self.plot_LiftAlphaPolars(upper[1], polars, targetPolars, params)
-
-            # fourth figure, display the Glide polar
-            self.plot_GlidePolars(lower[1], polars, targetPolars, params)
-        else:
-            # plot only Glide polar
-            self.plot_GlidePolars(upper, polars, targetPolars, params)
-
-        # maximize window
-        figManager = plt.get_current_fig_manager()
-        try:
-            figManager.window.state('zoomed')
-        except:
-            try:
-                figManager.window.Maximize(True)
-            except:
-                pass
-
-        # show diagram
-        plt.show()
 
 
 ################################################################################
@@ -2299,7 +1754,7 @@ class polarData:
         self.polarType = 2
         self.Re = 0
         self.maxRe = 0
-        self.NCrit = 9.0
+        self.NCrit = NCrit_Default
         self.Mach = 0.0
         self.alpha = []
         self.CL = []
@@ -2613,79 +2068,6 @@ class polarData:
         #my_print("Ready")#Debug
 
 
-
-    # generate a new shifted polar. The max-glide-point (this means maximum CL/CD)
-    # will be shifted left or right. The max Lift point will remain the same.
-    # The max Speed-point will be influenced in some kind.
-    # The alpha_CL0 point will remain the same
-    def get_shiftedPolar(self, shiftValue, params):
-        # copy existing polar
-        shiftedPolar = deepcopy(self)
-
-       # check whether to shift the polar
-        if abs(shiftValue) < 0.000001:
-            # nothing to do
-            return shiftedPolar
-
-        # determine stretch-factor to strech the complete polar
-        CL_factor = (self.CL_maxGlide + shiftValue) / self.CL_maxGlide
-
-        # determine number of values
-        num = len(shiftedPolar.CL)
-
-        # stretch the whole polar by factor, changing CL-values
-        for i in range(num):
-            shiftedPolar.CL[i] = shiftedPolar.CL[i] * CL_factor
-            # calculate new drag-value
-            CD_old = shiftedPolar.CD[i]
-            shiftedPolar.CD[i] = shiftedPolar.CL[i] / shiftedPolar.CL_CD[i]
-            #my_print(CD_old, shiftedPolar.CD[i])#Debug
-
-        # analyze streched-polar, determine max-lift
-        shiftedPolar.analyze(params)
-
-        # determine factor to correct aerea between max-glide and maxLift,
-        # so max-lift has the same value than before stretching
-        maxLift_factor = self.CL_maxLift / shiftedPolar.CL_maxLift
-
-        y1 = 1.0
-        y2 = maxLift_factor
-
-        # now linear correct all CL-values after maxGlide, get the same max-lift as before
-        for i in range(shiftedPolar.maxGlide_idx, num):
-            factor = interpolate(shiftedPolar.maxGlide_idx, shiftedPolar.maxLift_idx, y1, y2, i)
-            shiftedPolar.CL[i] = shiftedPolar.CL[i] * factor
-            # calculate new drag-value
-            shiftedPolar.CD[i] = shiftedPolar.CL[i] / shiftedPolar.CL_CD[i]
-
-        # return the polar
-        return shiftedPolar
-
-
-    # all CD-values will be shifted by the given shiftValue.
-    # all CL_CD-values will be recalculated
-    def shift_CD(self, shiftValue):
-        # determine number of values
-        num = len(self.CD)
-
-        # now shift all CD-values, recalculate CL_CD
-        for i in range(num):
-            self.CD[i] = self.CD[i] + shiftValue
-            self.CL_CD[i] = self.CL[i] / self.CD[i]
-
-
-    # all CL_CD-values will be sscaled by the given scale-factor.
-    # all CD-values will be recalculated
-    def scale_CL_CD(self, scaleFactor):
-        # determine number of values
-        num = len(self.CL_CD)
-
-        # now scale all CL_CD-values, recalculate CD
-        for i in range(num):
-            self.CL_CD[i] = self.CL_CD[i] * scaleFactor
-            self.CD[i] = self.CL[i] / self.CL_CD[i]
-
-
     # determines the overall minimum CL-value of a given polar and some
     # corresponding values
     def determine_MaxSpeed(self):
@@ -2844,136 +2226,6 @@ class polarData:
 
 
 ################################################################################
-# function that gets the name of the wing
-def get_wingName(wing):
-    for name in wing.iter('Name'):
-        return name.text
-
-    # name was not found, return default-name
-    return 'wing'
-
-
-################################################################################
-# function, that gets the chord-length of a section
-def get_chordFromSection(section):
-    # create an empty list
-    chordList = []
-
-    # iterate through elements
-    for chord in section.iter('Chord'):
-        # convert text to float
-        chordlength = float(chord.text.strip("\r\n\t '"))
-
-        #append chordlength to list
-        chordList.append(chordlength)
-
-    return chordList
-
-
-################################################################################
-# function that gets the airfoil-name of a section
-def get_airfoilNameFromSection(section):
-    # create an empty list
-    airfoilNameList = []
-
-    # iterate through elements
-    for airfoilName in section.iter('Left_Side_FoilName'):
-
-        #append airfoilName to list
-        airfoilNameList.append(airfoilName.text)
-
-    return airfoilNameList
-
-
-################################################################################
-# function that gets the chord-lengths of the wing
-def get_wingChords(wing):
-    # iterate the elements of the wing
-    for section in wing.iter('Sections'):
-        return get_chordFromSection(section)
-
-
-################################################################################
-# function that gets the airfoil-names of the wing
-def get_airfoilNames(wing):
-    # iterate the elements of the wing
-    for section in wing.iter('Sections'):
-        return get_airfoilNameFromSection(section)
-
-
-################################################################################
-# function that reads plane-data from XFLR5 XML-file
-def read_planeDataFile(fileName):
-
-    # init data as an empty list
-    data = []
-
-    # parse the file containing XFLR5-plane-data
-    tree = ET.parse(fileName)
-
-    #get root of XML-tree
-    root = tree.getroot()
-
-    # find wing-data
-    for wing in root.iter('wing'):
-        # create dictionary containg the wing-data
-        wingDict = 	{ 'name': get_wingName(wing),
-                      'chordLengths': get_wingChords(wing),
-                      'airfoilNames': get_airfoilNames(wing)
-                    }
-
-        #append dictionary to data
-        data.append(wingDict)
-
-    # debug output
-    #my_print data
-    return data
-
-
-################################################################################
-# function that gets the name of an airfoil
-def get_FoilName(params, index):
-
-    # is there wingdata available ?
-    if (params.wingData != None):
-        # yes
-        wing = params.wingData
-        # get airfoil-names from wing-dictionary
-        airfoilNames = wing.get('airfoilNames')
-        foilName = airfoilNames[index]
-    else:
-        # try to get airfoilname from user-defined list
-        if (index < len(params.airfoilNames)):
-            return (params.airfoilNames[index] + ".dat")
-
-        # otherwise compose foilname with seedfoilname and Re-number
-        Re = params.ReNumbers[index]
-
-        if (params.operatingMode == 'matchpolarfoils'):
-            foilName = params.matchPolarFoilName
-        else:
-            foilName = params.seedFoilName
-
-        foilName = (foilName + "-%s.dat") % get_ReString(Re)
-
-    return (foilName)
-
-################################################################################
-# function that gets the number of chords
-def get_NumberOfAirfoils(params):
-
-    # is there wingdata available ?
-    if (params.wingData != None):
-        # get number of chords from wing-data
-        num = len(params.wingData.get('chordLengths'))
-    else:
-        # get number of chords from ReNumbers
-        num = len(params.ReNumbers)
-
-    return num
-
-
-################################################################################
 # function that generates commandlines to create and merge polars
 def generate_polarCreationCommandLines(commandlines, params, strakFoilName, maxRe, Re):
 
@@ -3075,7 +2327,7 @@ def insert_StatusCall(commandLines, params):
 
 def calculate_MainTaskProgress(params, i):
     # get number of airfoils without root-airfoil
-    numFoils = get_NumberOfAirfoils(params)-1
+    numFoils = len(params.ReNumbers) - 1
     if (numFoils > 0):
         progress = (i*100.0)/numFoils
     else:
@@ -3127,14 +2379,9 @@ def generate_Commandlines(params):
     commandLines = []
 
     # do some initializations / set local variables
-    if (params.operatingMode != 'matchpolarfoils'):
-        rootfoilName = get_FoilName(params, 0)
-        firstIdx = 1
-    else:
-        rootfoilName = params.seedFoilName +'.dat'
-        firstIdx = 0
+    rootfoilName = params.airfoilNames[0] + ".dat"
 
-    numFoils = get_NumberOfAirfoils(params)#TODO refactor
+    numFoils = len(params.ReNumbers)
     ReList = params.get_ReList()
     maxReList = params.get_maxReList()
 
@@ -3160,14 +2407,10 @@ def generate_Commandlines(params):
 
     # add command-lines for each strak-airfoil
     # skip the root airfoil (as it was already copied)
-    for i in range (firstIdx, numFoils):
-
-        if (params.useAlwaysRootfoil == False):
-            # store previous airfoil-name
-            previousFoilname = strakFoilName
+    for i in range (1, numFoils):
 
         # get name of the airfoil
-        strakFoilName = get_FoilName(params, i)
+        strakFoilName = params.airfoilNames[i] + ".dat"
         seedfoilName = previousFoilname
 
         # insert specification of sub-task
@@ -3329,8 +2572,7 @@ def generate_Batchfile(batchFileName, commandlines):
 def get_strak_commandlines(params, commandlines, idx):
     strak_commandlines = []
     ReString = get_ReString(params.ReNumbers[idx])
-    airfoilName = get_FoilName(params, idx)
-    airfoilName = remove_suffix(airfoilName, '.dat')
+    airfoilName = params.airfoilNames[idx]
 
     # change current working dir to output folder
     strak_commandlines.append("cd %s\n\n" % buildPath)
@@ -3370,10 +2612,6 @@ def get_strak_commandlines(params, commandlines, idx):
 ################################################################################
 # function that generates a Xoptfoil-batchfile for one strak airfoil
 def generate_StrakBatchfiles(params, commandlines):
-    if (params.operatingMode == 'matchpolarfoils'):
-        # nothing to do
-        return
-
     for i in range(1, len(params.ReNumbers)):
         batchFileName = "make_%s.bat" % (get_ReString(params.ReNumbers[i]))
 
@@ -3522,35 +2760,6 @@ def get_booleanParameterFromDict(dict, key, default):
         ' default-value \'%s\'' % (key, str(value)))
     return value
 
-################################################################################
-# function that gets a single boolean parameter from dictionary and returns a
-#  default value in case of error
-def get_booleanParameterListFromDict(dict, key, default):
-    try:
-        stringList = dict[key]
-        # Is entry a list-entry?
-        if type(stringList) is list:
-            # Yes, it is a list
-            result = []
-            for string in stringList:
-                if (string == 'true') or (string == 'True'):
-                    result.append(True)
-                else:
-                    result.append(False)
-        else:
-            if (stringList == 'true') or (stringList == 'True'):
-                result = True
-            else:
-                result = False
-
-        # No, not a list
-    except:
-        result = default
-        NoteMsg('parameter \'%s\' not specified, using' \
-        ' default-value' % key)
-
-    return result
-
 
 ################################################################################
 # function that gets a single mandatory parameter from dictionary and exits, if
@@ -3565,44 +2774,25 @@ def get_MandatoryParameterFromDict(dict, key):
 
 
 ################################################################################
-# function that checks validity of the 'weighting-mode'-input
-def check_WeightingMode(params):
-    if ((params.weightingMode != 'linear_progression') &
-        (params.weightingMode != 'constant') &
-        (params.weightingMode != 'sinus') &
-        (params.weightingMode != 'doubleSinus')):
-
-        WarningMsg('weightingMode = \'%s\' is not valid, setting weightingMode'\
-        ' to \'constant\'' % params.weightingMode)
-        params.weightingMode = 'constant'
-
-
-################################################################################
 # function that checks validity of the 'quality'-input
 def check_quality(params):
-    if ((params.quality != 'low') &
-        (params.quality != 'medium') &
+    if ((params.quality != 'default') and
         (params.quality != 'high')):
 
         WarningMsg('quality = \'%s\' is not valid, setting quality'\
-        ' to \'medium\'' % params.quality)
-        params.quality = 'medium'
+        ' to \'default\'' % params.quality)
+        params.quality = 'default'
 
-    if params.quality == 'low':
-        # double-pass optimization, camb-thick-plus / hicks-henne
-        params.maxIterations = [160]
+    if params.quality == 'default':
+        # single-pass optimization, hicks-henne
+        params.maxIterations = [600]
         params.numberOfCompetitors = [1]
-        params.shape_functions = ['camb-thick-plus']
-    elif params.quality == 'medium':
-        # double-pass optimization, camb-thick-plus / hicks-henne
-        params.maxIterations = [160, 400]
-        params.numberOfCompetitors = [1, 1]
-        params.shape_functions = ['camb-thick-plus', 'hicks-henne-plus']
+        params.shape_functions = ['hicks-henne']
     else:
-        # multi-pass optimization, camb-thick-plus and hicks-henne
-        params.maxIterations = [160, 80, 300]
-        params.numberOfCompetitors = [1, 3, 1]
-        params.shape_functions = ['camb-thick-plus','hicks-henne-plus','hicks-henne-plus']
+        # double-pass optimization, hicks-henne
+        params.maxIterations = [80, 300]
+        params.numberOfCompetitors = [3, 1]
+        params.shape_functions = ['hicks-henne','hicks-henne']
 
     params.optimizationPasses = len(params.maxIterations)
 
@@ -3616,23 +2806,6 @@ def check_NumOpPoints(params):
 
 
 ################################################################################
-# function that checks validity of the operating-mode
-def check_operatingMode(params, dict):
-    if ((params.operatingMode != 'default') &
-        (params.operatingMode != 'matchpolarfoils')):
-
-        WarningMsg('operatingMode = \'%s\' is not valid, setting operatingMode'\
-        ' to \'default\'' % params.operatingMode)
-        params.operatingMode = 'default'
-
-    # get matchpolarfoilname only if operating-mode is set to "matchpolarfoils"
-    if (params.operatingMode == 'matchpolarfoils'):
-        params.matchPolarFoilName = get_MandatoryParameterFromDict(dict,
-                                                      "matchPolarFoilName")
-        params.useAlwaysRootfoil = True
-
-
-################################################################################
 # function that gets parameters from dictionary
 def get_Parameters(dict):
 
@@ -3641,119 +2814,25 @@ def get_Parameters(dict):
 
     my_print("getting parameters..\n")
 
-    # get program-call from arguments
-    call = sys.argv[0]
-
-    # was it an .exe-call ?
-    if call.find('.exe') >= 0:
-        # yes, perform all following calls as exe-calls
-        params.scriptsAsExe = True
-    else:
-        # yes, perform all following calls as python-calls
-        params.scriptsAsExe = False
-
     # get mandatory parameters first
     params.quality = get_MandatoryParameterFromDict(dict, 'quality')
-
     params.seedFoilName = get_MandatoryParameterFromDict(dict, 'seedFoilName')
-
     params.ReNumbers = get_MandatoryParameterFromDict(dict, 'reynolds')
 
-    params.maxGlideGain = get_MandatoryParameterFromDict(dict, "maxGlideGain")
-
-    params.CL0Gain = get_MandatoryParameterFromDict(dict, "CL0Gain")
-
-    params.minCLGain  = get_MandatoryParameterFromDict(dict, "minCLGain")
-
-    params.maxSpeedGain = get_MandatoryParameterFromDict(dict, "maxSpeedGain")
-
-    params.maxSpeedShift = get_MandatoryParameterFromDict(dict, "maxSpeedShift")
-
-    params.preMaxSpeedGain = get_MandatoryParameterFromDict(dict, "preMaxSpeedGain")
-
-    params.maxLiftGain = get_MandatoryParameterFromDict(dict, "maxLiftGain")
-
     # get optional parameters
-    params.airfoilNames = get_ParameterFromDict(dict, "airfoilNames",
-                                                        params.airfoilNames)
+    params.airfoilNames = get_MandatoryParameterFromDict(dict, "airfoilNames")
 
-    params.maxGlideShift = get_ParameterFromDict(dict, "maxGlideShift",
-                                                        params.maxGlideShift)
-
-    params.maxGlideFactor  = get_ParameterFromDict(dict, "maxGlideFactor",
-                                                        params.maxGlideFactor)
-
-    params.linearFactor_0 = get_ParameterFromDict(dict, "linearFactor_0",
-                                                        params.linearFactor_0)
-
-    params.linearFactor_1 = get_ParameterFromDict(dict, "linearFactor_1",
-                                                        params.linearFactor_1)
-
-    params.linearFactor_2 = get_ParameterFromDict(dict, "linearFactor_2",
-                                                        params.linearFactor_2)
-
-    params.linearFactor_3 = get_ParameterFromDict(dict, "linearFactor_3",
-                                                        params.linearFactor_3)
-
-    params.linearFactor_4 = get_ParameterFromDict(dict, "linearFactor_4",
-                                                        params.linearFactor_4)
-
-    params.intersectionPoint_CL_CD = get_ParameterFromDict(dict, "intersectionPoint_CL_CD",
-                                                        params.intersectionPoint_CL_CD)
 
     params.maxReFactor = get_ParameterFromDict(dict, "maxReynoldsFactor",
                                                         params.maxReFactor)
 
-    params.xoptfoilTemplate = get_ParameterFromDict(dict, 'xoptfoilTemplate',
-                                 params.xoptfoilTemplate)
-
     params.additionalOpPoints[0] = get_ParameterFromDict(dict, "additionalOpPoints",
                                                    params.additionalOpPoints[0])
-
-    params.ReAlpha0 = get_ParameterFromDict(dict, "ReAlpha0",
-                                                   params.ReAlpha0)
-
-    params.operatingMode = get_ParameterFromDict(dict, "operatingMode",
-                                              params.operatingMode)
-
-    params.xmlFileName = get_ParameterFromDict(dict, "xmlFileName",
-                                                  params.xmlFileName)
 
     params.numOpPoints = get_ParameterFromDict(dict, "numOpPoints",
                                                params.numOpPoints)
 
     params.NCrit = get_ParameterFromDict(dict, "NCrit", params.NCrit)
-
-    params.CL_preMaxSpeed = get_ParameterFromDict(dict, "CL_preMaxSpeed",
-                                                    params.CL_preMaxSpeed)
-
-    params.CL_min = get_ParameterFromDict(dict, "CL_min", params.CL_min)
-
-    params.weightingMode = get_ParameterFromDict(dict, "weightingMode",
-                                                  params.weightingMode)
-
-    params.minWeight = get_ParameterFromDict(dict, "minWeight",
-                                                  params.minWeight)
-
-    params.maxWeight = get_ParameterFromDict(dict, "maxWeight",
-                                                  params.maxWeight)
-
-    params.maxLiftDistance = get_ParameterFromDict(dict, "maxLiftDistance",
-                                                params.maxLiftDistance)
-
-
-     # get optional boolean parameters
-    params.allGraphs = get_booleanParameterFromDict(dict,
-                             "allGraphs", params.allGraphs)
-
-    params.optimizeAlpha0 = get_booleanParameterListFromDict(dict,
-                             "optimizeAlpha0", params.optimizeAlpha0)
-
-    params.useAlwaysRootfoil = get_booleanParameterFromDict(dict,
-                             "useAlwaysRootfoil", params.useAlwaysRootfoil)
-
-    params.adaptInitialPerturb = get_booleanParameterFromDict(dict,
-                             "adaptInitialPerturb", params.adaptInitialPerturb)
 
     params.smoothSeedfoil = get_booleanParameterFromDict(dict,
                              "smoothSeedfoil", params.smoothSeedfoil)
@@ -3761,17 +2840,10 @@ def get_Parameters(dict):
     params.smoothStrakFoils = get_booleanParameterFromDict(dict,
                              "smoothStrakFoils", params.smoothStrakFoils)
 
-    params.smoothMatchPolarFoil = get_booleanParameterFromDict(dict,
-                             "smoothMatchPolarFoil", params.smoothMatchPolarFoil)
-
-    params.plotStrakPolars = get_booleanParameterFromDict(dict,
-                             "plotStrakPolars", params.plotStrakPolars)
     DoneMsg()
 
     # perform parameter-checks now
     my_print("checking validity of all parameters..")
-    check_operatingMode(params, dict)
-    check_WeightingMode(params)
     check_NumOpPoints(params)
     check_quality(params)
 
@@ -3791,19 +2863,6 @@ def get_ListOfFiles(dirName):
         allFiles.append(fullPath)
 
     return allFiles
-
-
-def get_WingDataFromXML(params):
-
-    xmlFileName = ressourcesPath + '/' + params.xmlFileName
-    try:
-        planeData = read_planeDataFile(xmlFileName)
-    except:
-        ErrorMsg("file \"%s\" could not be opened.") % xmlFileName
-        sys.exit(-1)
-
-    # return data
-    return planeData[0]
 
 
 def copyAndSmooth_Airfoil(xfoilWorkerCall, inputFilename, srcName, srcPath, destName, smooth):
@@ -3826,38 +2885,12 @@ def copyAndSmooth_Airfoil(xfoilWorkerCall, inputFilename, srcName, srcPath, dest
     DoneMsg()
 
 
-def copy_Matchpolarfoils(params):
-    # get the name of the matchfoil
-    matchfoilName = params.matchPolarFoilName
-
-    # get name of seed-airfoil
-    seedFoilName = params.seedFoilName
-
-    # get the path where the airfoil can be found
-    srcPath = "." + bs + airfoilPath
-
-    inputFilename = ".." + bs + ressourcesPath + bs + smoothInputFile
-
-    # copy and smooth the matchfoil
-    copyAndSmooth_Airfoil(params.xfoilWorkerCall, inputFilename,
-                          matchfoilName, srcPath, matchfoilName,
-                          params.smoothMatchPolarFoil)
-
-    # copy and smooth the seedfoil
-    copyAndSmooth_Airfoil(params.xfoilWorkerCall, inputFilename,
-                          seedFoilName, srcPath, seedFoilName,
-                          params.smoothSeedfoil)
-
-    return matchfoilName
-
-
 def generate_rootfoil(params):
     # get name of seed-airfoil
     seedFoilName = params.seedFoilName
 
     # get name of root-airfoil
-    rootfoilName = get_FoilName(params, 0)
-    rootfoilName = remove_suffix(rootfoilName, '.dat')
+    rootfoilName = params.airfoilNames[0]
 
     # get the path where the seed-airfoil can be found
     srcPath = "." + bs + airfoilPath
@@ -3870,209 +2903,6 @@ def generate_rootfoil(params):
 
     return rootfoilName
 
-
-def calculate_intersectionPoint(params, inputfile):
-    # get operating-conditions
-    operatingConditions = inputfile.get_OperatingConditions()
-    #inputfile.print_OpPoints()#Debug
-
-    CL_list = operatingConditions["op_point"]
-    CD_list = operatingConditions["target_value"]
-    num = len(CL_list)
-    x1 = CL_list[num-2]
-    x2 = CL_list[num-1]
-    y1 = x1/CD_list[num-2]
-    y2 = x2/CD_list[num-1]
-
-    # extrapolate CL_CD up to CL_CD_intersection-coordinate
-    result = interpolate_2(x1, x2, y1, y2, params.intersectionPoint_CL_CD)
-    result = round(result, CL_decimals)
-    return result
-
-
-def create_new_inputFile(params, i):
-     # get strak-polar
-    strakPolar = params.merged_polars[i]
-
-    # get shifted root-polar (with shifted max-glide point).
-    # all target-values will be derived from the shifted root-polar.
-    shifted_rootPolar = deepcopy(params.shifted_rootPolars[i])
-
-    # create new inputfile from template
-    newFile = inputFile(params)
-
-    # get the target-values
-    targets = params.targets
-    CL_pre_maxLift = targets["CL_pre_maxLift"][i]
-
-    # generate op-points in the range CL_min..CL_max
-    # the CL0-oppoint will be inserted later, so generate numOpPoints-1
-    newFile.generate_OpPoints(params.numOpPoints-1, params.CL_min,
-                           CL_pre_maxLift)
-
-    # distribute main opPoints, also set the target-values
-    newFile.distribute_MainOpPoints(targets, i)
-
-    # insert additional opPoints (if there are any):
-    if len(params.additionalOpPoints[0])>0:
-        newFile.insert_AdditionalOpPoints(params.additionalOpPoints[0])
-        # The below line will use "adjusted" additional oppoints for each
-        # strak-polar. Sometimes this behaviour is not desired, bcause this means
-        # that the CL-value is changed.
-        #newFile.insert_AdditionalOpPoints(params.additionalOpPoints[i])
-
-    # now distribute the opPoints between the main opPoints and additional
-    # oppoints equally
-    newFile.distribute_IntermediateOpPoints()
-
-    # set the target-values of all intermediate-op-points now
-    newFile.set_IntermediateOpPointTargetValues(params, targets, shifted_rootPolar,
-                                                strakPolar, i)
-
-    newFile.apply_maxGlideFactor(params, i)
-
-    # not needed anymore
-    del shifted_rootPolar
-
-    return newFile
-
-
-def createAdjustedInputFile(params, i):
-    adjust = True
-    while (adjust):
-        # create initial, unadjusted  inputFile
-        newFile = create_new_inputFile(params, i)
-
-        targets = params.targets
-
-        # automatic adjustment of max-Lift target-value
-        # for all strak-polars, adjust CD-target-value, so the intersection-point will
-        # be hit, leaving a small error
-        intersection_CL = calculate_intersectionPoint(params, newFile)
-
-        if (intersection_CL > (params.intersectionPoint_CL + params.intersection_Hysteresis)):
-            # increase target-value
-            targets["CD_pre_maxLift"][i] = round(targets["CD_pre_maxLift"][i] + 0.00005, CD_decimals)
-            # destroy the instance of newFile and shifted polar
-            del newFile
-        elif (intersection_CL < (params.intersectionPoint_CL - params.intersection_Hysteresis)):
-            # decrease target-value
-            targets["CD_pre_maxLift"][i] = round(targets["CD_pre_maxLift"][i] - 0.00005, CD_decimals)
-            # destroy the instance of newFile and shifted polar
-            del newFile
-
-        else:
-            # everything o.k., clear adjustment-Flag
-            adjust = False
-
-    return newFile
-
-
-def generate_InputFiles(params, writeToDisk):
-    my_print("Generating inputfiles...")
-
-    # clear are previsously generated inputfiles
-    params.inputFiles.clear()
-
-    # calculate number of files to be created
-    num_files = len(params.ReNumbers)
-
-    # create inputFile of root-airfoil
-    newFile = create_new_inputFile(params, 0)
-
-##    # append input-file to params
-##    params.inputFiles.append(newFile)
-##
-##    # calculate the common intersectionPoint, so maxLiftGain can be adjusted
-##    # automatically
-##    params.intersectionPoint_CL = calculate_intersectionPoint(params, newFile)
-
-
-    # generate files for all Re-numbers
-    for i in range(0, num_files):
-##        if (i == 0):
-##            # create inputFile of root-airfoil
-##            newFile = create_new_inputFile(params, 0)
-##
-##            if (params.intersectionPoint_CL_CD != 99.0):
-##                # calculate the common intersectionPoint, so maxLiftGain can be adjusted
-##                # automatically
-##                params.intersectionPoint_CL = calculate_intersectionPoint(params, newFile)
-##
-##        else:
-##            # generate file that has an adjusted maxLift-Target
-##            if (params.intersectionPoint_CL_CD != 99.0):
-##                newFile = createAdjustedInputFile(params, i)
-##            else:
-
-        newFile = create_new_inputFile(params, i)
-
-        # set the importance / weightings of the op-points
-        newFile.set_Weightings(params)
-
-        # adapt reynolds()-values, get strak-polar
-        strakPolar = params.merged_polars[i]
-        newFile.adapt_ReNumbers(strakPolar)
-
-        # insert oppoint for alpha @ CL = 0
-        if params.optimizeAlpha0[i]:
-            newFile.insert_alpha0_oppoint(params, strakPolar,i)
-
-        # insert oppoints for alpha @maxGlide, maxLift
-        newFile.insert_alphaMaxGlide_oppoint(params, i)
-        newFile.insert_alphaMaxLift_oppoint(params, i)
-
-        # get default-value of initialPerturb from template
-        initialPerturb = newFile.get_InitialPerturb()
-
-        if (params.adaptInitialPerturb and (i>0)):
-            # calculate the initial perturb according to the change in
-            # Re-number
-            if (params.useAlwaysRootfoil):
-                # difference calculated to Re-number of root-airfoil
-                ReDiff = params.ReNumbers[0] - params.ReNumbers[i]
-                # factor calculated to Re-number of root-airfoil
-                ReFactor = params.ReNumbers[i] / params.ReNumbers[0]
-            else:
-                # difference calculated to Re-number of previous-airfoil
-                ReDiff = params.ReNumbers[i-1] - params.ReNumbers[i]
-                ReFactor = params.ReNumbers[i] / params.ReNumbers[i-1]
-
-            # calculate initial perturb now.
-            initialPerturb = newFile.calculate_InitialPerturb(params.ReNumbers[i],
-                              ReDiff, ReFactor)
-
-        # get Default-value for max iterations
-        maxIterationsDefault = newFile.get_maxIterations()
-
-        # multi-pass-optimization:
-        # generate input-files for intermediate strak-airfoils
-        for n in range(0, params.optimizationPasses):
-            iFileIndex = i*(params.optimizationPasses) + n
-            # set input-file name
-            iFile = params.inputFileNames[iFileIndex]
-
-            # set max number of iterations
-            maxIterations = params.maxIterations[n]
-            if (maxIterations == 0):
-                maxIterations = maxIterationsDefault
-            newFile.set_maxIterations(maxIterations)
-
-            # set initialPerturb
-            newFile.set_InitialPerturb(initialPerturb)
-
-            # set shape_functions
-            newFile.set_shape_functions (params.shape_functions[n])
-
-            if writeToDisk:
-                # physically create the file
-                newFile.write_ToFile(iFile)
-
-            # reduce initial perturb for the next pass
-            initialPerturb = initialPerturb*0.5
-
-        # append only input-file of final strak-airfoil to params
-        params.inputFiles.append(newFile)
 
 
 def compose_Polarfilename_T1(Re, NCrit):
@@ -4175,35 +3005,16 @@ def generate_Polars(params, rootfoilName):
         # add merged polar to params
         params.merged_polars.append(mergedPolar)
 
-        # create shifted root-polars. This means that the max-glide-point
-        # (maximum CL/CD-value) will be shifted left or right by a certain
-        # shift-factor that comes from user-parameters
-
-        # Use always root-polar for this operation
-        rootPolar = params.merged_polars[0]
-
-        # get shift-value according to strak-airfoil / index
-        shiftValue = params.maxGlideShift[ReIdx]
-
-        # shift the max-glide-point now, create a new polar
-        shiftedPolar = rootPolar.get_shiftedPolar(shiftValue, params)
-
-        # also update values like maxSpeed, maxGlide etc.
-        shiftedPolar.analyze(params)
-
-        # append the new, shifted root-polar to params
-        params.shifted_rootPolars.append(shiftedPolar)
-
     DoneMsg()
 
 
 def import_strakPolars(params):
     for i in range(1, len(params.ReNumbers)-1):
         # get name of the strak-airfoil
-        strakFoilName = get_FoilName(params, i)
+        strakFoilName = params.airfoilNames[i]
 
         # compose polar-dir of strak-airfoil-polars
-        polarDir = '.' + bs + remove_suffix(strakFoilName, '.dat') + '_polars'
+        polarDir = '.' + bs + strakFoilName + '_polars'
         fileName = "merged_polar_%s.txt" % get_ReString(params.ReNumbers[i+1])
         polarFileNameAndPath = polarDir + bs + fileName
 
@@ -4230,7 +3041,7 @@ def set_PolarDataFromInputFile(polarData, rootPolar, inputFile,
     target_values = operatingConditions["target_value"]
     op_points = operatingConditions["op_point"]
     op_modes =  operatingConditions["op_mode"]
-    names = operatingConditions["name"]
+    #names = operatingConditions["name"] #FIXME is this neccessary any more ?
 
     # get the number of op-points
     numOpPoints = len(op_points)
@@ -4292,8 +3103,7 @@ def generate_TargetPolars(params, writeToDisk):
     rootPolar = params.merged_polars[0]
 
     # get name of the root-airfoil
-    airfoilName = get_FoilName(params, 0)
-    airfoilName = remove_suffix(airfoilName, '.dat')
+    airfoilName = params.airfoilNames[0]
     my_print("Generating target polars for airfoil %s..." % airfoilName)
 
     for i in range(numTargetPolars):
@@ -4365,7 +3175,14 @@ class strak_machine:
     def __init__(self, strakDataFileName):
         global print_disabled
 
-        self.graph = None
+        # check working-directory, have we been started from "scripts"-dir? (Debugging)
+        currentDir = getcwd()
+        if (currentDir.find("scripts")>=0):
+            self.startedFromScriptsFolder = True
+            chdir("..")
+        else:
+            self.startedFromScriptsFolder = False
+
         # try to open .json-file
         try:
             strakDataFile = open(strakDataFileName)
@@ -4422,8 +3239,8 @@ class strak_machine:
         # calculate target-values for the main op-points
         self.params.calculate_MainTargetValues()
 
-        # generate input-Files
-        generate_InputFiles(self.params, True)
+        # read input files / create new ones
+        self.read_InputFiles()
 
         # generate target polars and write to file
         generate_TargetPolars(self.params, True)
@@ -4453,128 +3270,320 @@ class strak_machine:
         print_disabled = True
 
 
-    def plot_diagram(self, diagramType, ax):
-        # draw the graph
-        self.graph.draw_diagram(self.params, diagramType, ax)
+    def read_InputFiles(self):
+        NoteMsg("Reading inputfiles...")
 
-    def get_Param(self, airfoilIdx, paramIdx):
-        if airfoilIdx > 10:
-            ErrorMsg("get_Param: invalid airfoilIdx :%d" % airfoilIdx)
-            return None
+        # clear are previsously generated inputfiles
+        self.params.inputFiles.clear()
+        num = len(self.params.ReNumbers)
 
-        if paramIdx == 0:
-            value = self.params.minCLGain[airfoilIdx]
-        elif paramIdx == 1:
-            value = self.params.CL0Gain[airfoilIdx]
-        elif paramIdx == 2:
-            value = self.params.maxSpeedGain[airfoilIdx]
-        elif paramIdx == 3:
-            value = self.params.preMaxSpeedGain[airfoilIdx]
-        elif paramIdx == 4:
-            value = self.params.maxGlideGain[airfoilIdx]
-        elif paramIdx == 5:
-            value = self.params.maxLiftGain[airfoilIdx]
-        elif paramIdx == 6:
-            value = self.params.maxGlideShift[airfoilIdx]
-        elif paramIdx == 7:
-            value = self.params.maxSpeedShift[airfoilIdx]
-        elif paramIdx == 8:
-            value = self.params.linearFactor_0[airfoilIdx]
-        elif paramIdx == 9:
-            value = self.params.linearFactor_1[airfoilIdx]
-        elif paramIdx == 10:
-            value = self.params.linearFactor_2[airfoilIdx]
-        elif paramIdx == 11:
-            value = self.params.linearFactor_3[airfoilIdx]
-        elif paramIdx == 12:
-            value = self.params.linearFactor_4[airfoilIdx]
-        elif paramIdx == 13:
-            value = self.params.maxGlideFactor[airfoilIdx]
+        for idx in range(num):
+            # create input-file and append to list
+            new_inputFile = inputFile(self.params)
+            self.params.inputFiles.append(new_inputFile)
+            try:
+                # read contents of existing inputfile, if possible
+                new_inputFile.read_FromFile(self.get_inputfileName(idx))
+            except:
+                # could not read inputfile, create new one
+                self.generate_InputFile(idx, True)
+
+        DoneMsg()
+
+
+    def generate_MultiPassInputFiles(self, airfoilIdx, writeToDisk, inputFile):
+        i = airfoilIdx
+
+        # get default-value of initialPerturb from template
+        initialPerturb = inputFile.get_InitialPerturb()
+
+        if (self.params.adaptInitialPerturb and (i>0)):
+            # factor calculated to Re-number of root-airfoil
+            ReFactor = self.params.ReNumbers[i] / self.params.ReNumbers[0]
+
+            # calculate initial perturb now.
+            initialPerturb = inputFile.calculate_InitialPerturb(self.params.ReNumbers[i],
+                              ReFactor)
+
+        # get Default-value for max iterations
+        maxIterationsDefault = inputFile.get_maxIterations()
+
+        # multi-pass-optimization:
+        # generate input-files for intermediate strak-airfoils
+        for n in range(0, self.params.optimizationPasses):
+            iFileIndex = i*(self.params.optimizationPasses) + n
+
+            # set input-file name
+            iFile = self.params.inputFileNames[iFileIndex]
+
+            # set max number of iterations
+            maxIterations = self.params.maxIterations[n]
+            if (maxIterations == 0):
+                maxIterations = maxIterationsDefault
+            inputFile.set_maxIterations(maxIterations)
+
+            # set initialPerturb
+            inputFile.set_InitialPerturb(initialPerturb)
+
+            # set shape_functions
+            inputFile.set_shape_functions(self.params.shape_functions[n])
+
+            if writeToDisk:
+                #NCrit = inputFile.get_Ncrit()#FIXME Debug
+                # physically create the file
+                inputFile.write_ToFile(iFile)
+
+            # reduce initial perturb for the next pass
+            initialPerturb = initialPerturb*0.5
+
+
+    def create_new_inputFile(self, i):
+         # get strak-polar
+        strakPolar = self.params.merged_polars[i]
+
+        # create new inputfile from template
+        newFile = inputFile(self.params)
+
+        # get the target-values
+        targets = self.params.targets
+        CL_pre_maxLift = targets["CL_pre_maxLift"][i]
+
+        # generate op-points in the range CL_min..CL_max
+        # the CL0-oppoint will be inserted later, so generate numOpPoints-1
+        newFile.generate_OpPoints(self.params.numOpPoints-1, self.params.CL_min,
+                               CL_pre_maxLift)
+
+        # distribute main opPoints, also set the target-values
+        newFile.distribute_MainOpPoints(targets, i)
+
+        # insert additional opPoints (if there are any):
+        if len(self.params.additionalOpPoints[0])>0:
+            newFile.insert_AdditionalOpPoints(self.params.additionalOpPoints[0])
+            # The below line will use "adjusted" additional oppoints for each
+            # strak-polar. Sometimes this behaviour is not desired, bcause this means
+            # that the CL-value is changed.
+            #newFile.insert_AdditionalOpPoints(self.params.additionalOpPoints[i])
+
+        # now distribute the opPoints between the main opPoints and additional
+        # oppoints equally
+        newFile.distribute_IntermediateOpPoints()
+
+        # initialize all target-valuesnow
+        newFile.init_TargetValues(self.params, strakPolar)
+
+        return newFile
+
+
+    def generate_InputFile(self, airfoilIdx, writeToDisk):
+        # get number of airfoils
+        num = len(self.params.ReNumbers)
+
+        # check airfoilIdx
+        if (airfoilIdx >= num):
+            ErrorMsg("Invalid airfoilIdx %d" % airfoilIdx)
+            return
         else:
-           ErrorMsg("get_Param: invalid paramIdx :%d" % paramIdx)
-           value = None
+            i = airfoilIdx
+            NoteMsg("Generating inputfile(s) for airfoil %s" % self.params.airfoilNames[i])
+
+        # create new file
+        newFile = self.create_new_inputFile(i)
+
+        # set NCrit
+        newFile.set_NCrit(self.params.NCrit)
+
+        # adapt reynolds()-values, get strak-polar
+        strakPolar = self.params.merged_polars[i]
+        newFile.adapt_ReNumbers(strakPolar)
+
+        # insert oppoint for alpha @ CL = 0
+        newFile.insert_alpha0_oppoint(self.params, strakPolar,i)
+
+        # insert oppoints for alpha @maxGlide, maxLift
+        newFile.insert_alphaMaxGlide_oppoint(self.params, i)
+        newFile.insert_alphaMaxLift_oppoint(self.params, i)
+
+        # multi-pass-optimization:
+        # generate input-files for intermediate strak-airfoils
+        self.generate_MultiPassInputFiles(airfoilIdx, writeToDisk, newFile)
+
+        # append only input-file of final strak-airfoil to params
+        self.params.inputFiles[i] = newFile
+
+
+    def exit_action(self, value):
+        global print_disabled
+        print_disabled = True
 
         return value
 
-    def set_Param(self, airfoilIdx, paramIdx, value):
+
+    def entry_action(self, airfoilIdx):
+        global print_disabled
+        print_disabled = False
 
         # check if airfoilIdx exceeds number of airfoils handled by parameters
         if airfoilIdx > len(self.params.ReNumbers):
-            ErrorMsg("get_Param: invalid airfoilIdx :%d" % airfoilIdx)
-            return None
+            ErrorMsg("set_targetValues: invalid airfoilIdx :%d" % airfoilIdx)
+            return self.exit_action(-1)
 
-        if paramIdx == 0:
-            self.params.minCLGain[airfoilIdx] = value
-        elif paramIdx == 1:
-            self.params.CL0Gain[airfoilIdx] = value
-        elif paramIdx == 2:
-            self.params.maxSpeedGain[airfoilIdx] = value
-        elif paramIdx == 3:
-            self.params.preMaxSpeedGain[airfoilIdx] = value
-        elif paramIdx == 4:
-            self.params.maxGlideGain[airfoilIdx] = value
-        elif paramIdx == 5:
-            self.params.maxLiftGain[airfoilIdx] = value
-        elif paramIdx == 6:
-            self.params.maxGlideShift[airfoilIdx] = value
-            print("max glide shift: %f" % value)
-        elif paramIdx == 7:
-            self.params.maxSpeedShift[airfoilIdx] = value
-        elif paramIdx == 8:
-            self.params.linearFactor_0[airfoilIdx] = value
-        elif paramIdx == 9:
-            self.params.linearFactor_1[airfoilIdx] = value
-        elif paramIdx == 10:
-            self.params.linearFactor_2[airfoilIdx] = value
-        elif paramIdx == 11:
-            self.params.linearFactor_3[airfoilIdx] = value
-        elif paramIdx == 12:
-            self.params.linearFactor_4[airfoilIdx] = value
-        elif paramIdx == 13:
-            self.params.maxGlideFactor[airfoilIdx] = value
-        else:
-           ErrorMsg("get_Param: invalid paramIdx :%d" % paramIdx)
 
+    def plot_diagram(self, diagramType, ax, x_limits, y_limits):
+        # draw the graph
+        self.graph.draw_diagram(self.params, diagramType, ax, x_limits, y_limits)
+
+
+    def get_airfoilNames(self):
+        return self.params.airfoilNames
+
+
+    def set_visiblePolars(self, visibleFlags):
+        self.params.set_visibleFlags(visibleFlags)
+
+
+    def set_activeTargetPolarIdx(self, airfoilIdx):
+        self.params.set_activeTargetPolarIdx(airfoilIdx)
+
+
+    def get_targetValues(self, airfoilIdx):
+        self.entry_action(airfoilIdx)
+
+        targetValues = []
+        inputFile = self.params.inputFiles[airfoilIdx]
+        operatingConditions = inputFile.get_OperatingConditions()
+        num = len(operatingConditions['op_point'])
+
+        for idx in range(num):
+            # type of op-point
+            mode = operatingConditions['op_mode'][idx]
+            # x-value of op-point
+            oppoint = operatingConditions['op_point'][idx]
+            # target value of op-point
+            target = operatingConditions['target_value'][idx]
+
+            targetValues.append({"type": mode, "oppoint" : oppoint, "target" : target})
+
+        return self.exit_action(targetValues)
+
+
+    def set_targetValues(self, airfoilIdx, targetValues):
+        self.entry_action(airfoilIdx)
+
+        inputFile = self.params.inputFiles[airfoilIdx]
+        operatingConditions = inputFile.get_OperatingConditions()
+        num = len(operatingConditions['op_point'])
+
+        for idx in range(num):
+            target = targetValues[idx]
+            # type of op-point
+            operatingConditions['op_mode'][idx] = target["type"]
+            # x-value of op-point
+            operatingConditions['op_point'][idx] = target["oppoint"]
+            # target value of op-point
+            operatingConditions['target_value'][idx] = target["target"]
+
+
+        # writeback operating-conditions
+        inputFile.set_OperatingConditions(operatingConditions)
+
+        return self.exit_action(0)
+
+
+    def get_geoTargets(self, airfoilIdx):
+        self.entry_action(airfoilIdx)
+
+        inputFile = self.params.inputFiles[airfoilIdx]
+        geoTargets = inputFile.get_geometryTargets()
+
+        return self.exit_action(geoTargets)
+
+
+    def set_geoTargets(self, airfoilIdx, geoTargets):
+        self.entry_action(airfoilIdx)
+
+        inputFile = self.params.inputFiles[airfoilIdx]
+        # set geometry targets
+        inputFile.set_geometryTargets(geoTargets)
+
+        return self.exit_action(0)
+
+
+    def set_screenParams(self, width, height):
+        global fs_infotext
+        global fs_legend
+        global fs_axes
+        global fs_ticks
+        global lw_targetPolar
+        global lw_strakPolar
+        global fontsScaled
+
+        if (fontsScaled == False):
+            # scale font sizes
+            scaleFactor = int(height/1080)
+            fs_infotext = fs_infotext * scaleFactor
+            fs_legend = fs_legend * scaleFactor
+            fs_axes = fs_axes * scaleFactor
+            fs_ticks = fs_ticks * scaleFactor
+            lw_targetPolar = lw_targetPolar * scaleFactor
+            lw_strakPolar = lw_strakPolar * scaleFactor
+            fontsScaled = True
 
     def update_targetPolars(self):
         try:
-             # calculate target-values for the main op-points
-            self.params.calculate_MainTargetValues()
-        except:
-            ErrorMsg("Unable to calculate main target values")
-            return
-
-        try:
-            # generate input-Files
-            generate_InputFiles(self.params, False)
-        except:
-            ErrorMsg("Unable to generate input files")
-            return
-
-        try:
-            # generate target polars and write to file
-            generate_TargetPolars(self.params, False)
-        except:
-            ErrorMsg("Unable to generate target polars")
-
-    def load(self):
-        return #FIXME load parameters from strakdata.txt
-
-    def save(self):
-        # FIXME save parameters to strakdata.txt
-        try:
-            # generate input-Files
-            generate_InputFiles(self.params, True)
-        except:
-            ErrorMsg("Unable to generate input files")
-            return
-
-        try:
             # generate target polars and write to file
             generate_TargetPolars(self.params, True)
+            NoteMsg("TargetPolars were updated")
         except:
             ErrorMsg("Unable to generate target polars")
 
+
+    def get_inputfileName(self, airfoilIdx):
+        idx = ((airfoilIdx + 1) * self.params.optimizationPasses) - 1
+        fileName = self.params.inputFileNames[idx]
+        return fileName
+
+
+    def load(self, airfoilIdx):
+        self.entry_action(airfoilIdx)
+        try:
+            # get input file from params
+            inputFile = self.params.inputFiles[airfoilIdx]
+            fileName = self.get_inputfileName(airfoilIdx)
+            inputFile.read_FromFile(fileName)
+        except:
+            ErrorMsg("Unable to load input-file %s" % fileName)
+            return self.exit_action(-1)
+
+        return self.exit_action(0)
+
+
+    def save(self, airfoilIdx):
+        self.entry_action(airfoilIdx)
+        inputFile = self.params.inputFiles[airfoilIdx]
+
+        try:
+            # get input file from params
+            inputFile = self.params.inputFiles[airfoilIdx]
+            # generate input-files for intermediate strak-airfoils
+            self.generate_MultiPassInputFiles(airfoilIdx, True, inputFile)
+        except:
+            ErrorMsg("Unable to save input-file %s" % self.get_inputfileName(airfoilIdx))
+            return self.exit_action(-1)
+
+        return self.exit_action(0)
+
+
+    def reset(self, airfoilIdx):
+        self.entry_action(airfoilIdx)
+        fileName = self.get_inputfileName(airfoilIdx)
+
+        try:
+            self.generate_InputFile(airfoilIdx, False)
+        except:
+            ErrorMsg("Unable to reset input-file %s" % fileName)
+            return self.exit_action(-1)
+
+        return self.exit_action(0)
 
 ################################################################################
 # Main program
@@ -4585,117 +3594,10 @@ if __name__ == "__main__":
     (strakDataFileName, workerAction, polarFile_1, polarFile_2,
       mergedPolarFile, mergeCL) = get_Arguments()
 
-   ## check working-directory, have we been started from "scripts"-dir?
-   # if (!getcwd().find("scripts")>=0):
-   # chdir("..")
-
     # decide what action to perform.
     if (workerAction == 'merge'):
         # do nothing else but merging the polars
         merge_Polars(polarFile_1, polarFile_2 , mergedPolarFile, mergeCL)
         exit(0)
 
-    # try to open .json-file
-    try:
-        strakDataFile = open(strakDataFileName)
-    except:
-        ErrorMsg('failed to open file %s' % strakDataFileName)
-        sys.exit(-1)
 
-    # load dictionary from .json-file
-    try:
-        strakdata = load(strakDataFile)
-        strakDataFile.close()
-    except:
-        ErrorMsg('failed to read data from file %s' % strakDataFileName)
-        strakDataFile.close()
-        sys.exit(-1)
-
-    # get strak-machine-parameters from dictionary
-    params = get_Parameters(strakdata)
-
-    # read plane-data from XML-File, if requested //TODO: only wing-data
-    if (params.xmlFileName != None):
-        params.wingData = get_WingDataFromXML(params)
-
-    # calculate further values like max Re-numbers etc., also setup
-    # calls of further tools like xoptfoil
-    params.calculate_DependendValues()
-
-    # get current working dir
-    params.workingDir = getcwd()
-
-    # check if output-folder exists. If not, create folder.
-    if not path.exists(buildPath):
-        makedirs(buildPath)
-
-    # check if airfoil-folder exists. If not, create folder.
-    if not path.exists(buildPath + bs + airfoilPath):
-        makedirs(buildPath + bs + airfoilPath)
-
-    # change working-directory to output-directory
-    chdir(params.workingDir + bs + buildPath)
-
-    # get current working dir again
-    params.buildDir = getcwd()
-
-    # get name of root-airfoil according to operating-mode
-    if (params.operatingMode == 'matchpolarfoils'):
-        rootfoilName = copy_Matchpolarfoils(params)
-    else:
-        rootfoilName = generate_rootfoil(params)
-        # copy root-foil to airfoil-folder, as it can be used
-        # as the root airfoil without optimization
-        systemString = ("copy %s %s" + bs + "%s\n\n") % \
-        (rootfoilName +'.dat', airfoilPath, rootfoilName + '.dat')
-        system(systemString)
-
-    if (params.operatingMode == 'fromtargetpolar'):
-        ErrorMsg("Not implemented yet")
-        sys.exit(-1)
-        # TODO implement
-        # read target-polars from file
-        # generate input-Files directly from target-polars
-        # (no) plotting option (?)
-    else:
-        # generate polars of root-airfoil, also analyze
-        generate_Polars(params, rootfoilName)
-
-        # import polars of strak-airfoils, if they exist
-        import_strakPolars(params)
-
-        # calculate target-values for the main op-points
-        params.calculate_MainTargetValues()
-
-        # calculate the additional op-points
-        #params.calculate_AdditionalOpPoints()#TODO remove
-
-        # generate input-Files
-        generate_InputFiles(params, True)
-
-        # generate target polars and write to file
-        generate_TargetPolars(params, True)
-
-    # generate Xoptfoil command-lines
-    commandlines = generate_Commandlines(params)
-
-    # change working-directory
-    chdir(".." + bs)
-
-    # generate batchfile
-    my_print("Generating batchfiles...")
-    if (params.generateBatch == True):
-        my_print ('generating batchfile \'%s\'' % params.batchfileName)
-        generate_Batchfile(params.batchfileName, commandlines)
-
-        my_print ('generating batchfiles for each single airfoil of the strak')
-        generate_StrakBatchfiles(params, commandlines)
-    DoneMsg()
-
-    # create an instance of polar graph
-    graph = polarGraph()
-
-    # show graph
-    graph.draw(params)
-
-    my_print("Ready.")

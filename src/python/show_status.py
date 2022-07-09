@@ -30,7 +30,7 @@ buildPath = 'build'
 scriptPath = 'scripts'
 ressourcesPath = 'ressources'
 exePath = 'bin'
-logoName = 'strakmachine.jpg'
+logoName = 'strakmachine.png'
 finishSound = 'fanfare.wav'
 
 # fixed filenames
@@ -106,7 +106,7 @@ class show_status():
 
         # scale image
         img_width = int(400 * width_scaler)
-        img_height = int(100 * heigth_scaler)
+        img_height = int(130 * heigth_scaler)
 
         # Creates a Tkinter-compatible photo image, which can be used everywhere
         # Tkinter expects an image object.

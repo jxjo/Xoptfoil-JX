@@ -2,13 +2,12 @@ import tkinter as tk
 from tkinter import ttk
 import tkinter.messagebox
 import customtkinter
-import strak_machineV2
 import os
 from PIL import ImageTk, Image
-from strak_machineV3 import diagTypes
-from strak_machineV3 import NoteMsg
-from strak_machineV3 import ErrorMsg
-from strak_machineV3 import strak_machine
+from strak_machine import diagTypes
+from strak_machine import NoteMsg
+from strak_machine import ErrorMsg
+from strak_machine import strak_machine
 from colorama import init
 from copy import deepcopy
 
@@ -37,7 +36,7 @@ camb_decimals = 2
 thick_decimals = 2
 
 # name of logo-image
-logoName = 'strakmachine.jpg'
+logoName = 'strakmachine.png'
 bg_color_scrollableFrame_light = "#DDDDDD"
 bg_color_scrollableFrame_dark =  "#222222"
 
@@ -117,8 +116,8 @@ class control_frame():
             ErrorMsg("strak-machine-image was not found in path %s" % path)
             return
 
-        img_width = int(323 * self.width/1920)
-        img_height = int(87 * self.heigth/1080)
+        img_width = int(350 * self.width/1920)
+        img_height = int(113 * self.heigth/1080)
 
         # Resize the image in the given (width, height)
         sized_img = img.resize((img_width, img_height), Image.LANCZOS)
