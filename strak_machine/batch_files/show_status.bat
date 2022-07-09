@@ -1,1 +1,1 @@
-pythonw  .\scripts\show_status.py 
+start pythonw  .\scripts\show_status.py
