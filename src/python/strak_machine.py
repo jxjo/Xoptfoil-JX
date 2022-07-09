@@ -74,7 +74,7 @@ fs_legend = 8
 fs_axes = 20
 fs_ticks = 10
 lw_targetPolar = 0.6
-lw_strakPolar  = 0.4
+lw_referencePolar  = 0.4
 scaled = False
 
 # colours
@@ -86,8 +86,9 @@ cl_T2_polar = 'b'
 # styles
 opt_point_style_root = 'y.'
 opt_point_style_strak = 'y-'
+opt_point_style_reference = 'r-'
 ls_targetPolar = 'solid'
-ls_strakPolar = 'dashdot'
+ls_referencePolar = 'dashdot'
 
 
 # types of diagrams
@@ -892,12 +893,6 @@ class strakData:
         self.buildDir = ''
         self.workingDir = ''
         self.quality = 'medium'
-##        self.strakMachineCall = "strak_machineV2.py"
-##        self.xfoilWorkerCall = "xfoil_worker.exe"
-##        self.xoptfoilCall = "xoptfoil-jx.exe"
-##        self.showStatusCall = "show_status.py"
-##        self.xoptfoilVisualizerCall = "xoptfoil_visualizer-jx.exe"
-##        self.airfoilComparisonCall = "best_airfoil.py"
         self.batchfileName = 'make_strak.bat'
         self.xoptfoilTemplate = "iOpt"
         self.operatingMode = 'default'
@@ -907,30 +902,21 @@ class strakData:
         self.numOpPoints = 17
         self.CL_min = -0.1
         self.CL_preMaxSpeed = 0.2
-        #self.intersectionPoint_CL = 0.0
-        #self.intersectionPoint_CL_CD = 99.0 # Deactivated
-        #self.intersection_Hysteresis= 0.001
         self.CL_switchpoint_Type2_Type1_polar = 0.05
         self.maxReFactor = 15.0
         self.maxLiftDistance = 0.03
         self.alpha_Resolution = 0.001
         self.optimizationPasses = 2
         self.activeTargetPolarIdx = 1
-        #self.allGraphs = True
-        #self.activeSubplot = 0
         self.generateBatch = True
         self.xmlFileName = None
-        #self.wingData = None
-        #self.useWingPlanform = True
         self.showTargetPolars = True
         self.adaptInitialPerturb = True
         self.smoothSeedfoil = False
         self.smoothStrakFoils = True
-        #self.smoothMatchPolarFoil = False
-        self.plotStrakPolars = True
+        self.showReferencePolars = True
         self.ReNumbers = []
         self.additionalOpPoints = [[]]
-        #self.chordLengths = []
         self.maxReNumbers = []
         self.polarFileNames = []
         self.polarFileNames_T1 = []
@@ -939,7 +925,6 @@ class strakData:
         self.T1_polars = []
         self.T2_polars = []
         self.merged_polars = []
-        #self.shifted_rootPolars = []
         self.target_polars = []
         self.strak_polars = []
         self.inputFiles = []
@@ -979,6 +964,9 @@ class strakData:
     def set_visibleFlags(self, flags):
         self.visibleFlags.clear()
         self.visibleFlags = flags
+
+    def set_referenceFlag(self, flag):
+        self.showReferencePolars = flag
 
     def set_activeTargetPolarIdx(self, idx):
         self.activeTargetPolarIdx = idx
@@ -1272,8 +1260,10 @@ class polarGraph:
 
     # plots lift/drag-polars (Xfoil-worker-polars and target-polars)
     def plot_LiftDragPolars(self, ax, x_limits, y_limits, polars, targetPolars, params):
+        T1_label = None
         T1T2_labelOk = False
         Target_labelOk = False
+        Reference_labelOk = False
 
         # set axes and labels
         self.set_AxesAndLabels(ax, 'CL, CD', 'CD', 'CL')
@@ -1403,36 +1393,36 @@ class polarGraph:
                 ax.plot(x, y, style, linestyle = ls_targetPolar,
                             linewidth = linewidth, label = label)
 
-            if T1_label != None:
-                ax.legend(loc='upper left', fontsize = fs_legend)
-
         # plot strak-polars
-        if params.plotStrakPolars:
+        if params.showReferencePolars:
             strakPolars = params.strak_polars
             numPolars = len(strakPolars)
 
             for i in range(numPolars):
-                # set style
-                style = "r-"
-                linewidth = lw_strakPolar
+                if ((self.check_polarVisibility(params, i) == False) or
+                    (strakPolars[i] == None)):
+                        continue
+
                 x = strakPolars[i].CD
                 y = strakPolars[i].CL
 
-                # set label only for one of the strak-polars tp avoid multiple
-                # labels that are all the same
-                if (i == 0):
-                    label = 'polar of previous strak-airfoil'
+                # set label only once
+                if (Reference_labelOk == False):
+                    label = 'reference (polar of previous strak-airfoil)'
+                    Reference_labelOk = True
                 else:
                     label = None
 
-                ax.plot(x, y, style, linestyle = ls_strakPolar,
-                                linewidth = lw_strakPolar, label = label)
-                if (label != None):
-                    ax.legend(loc='upper left', fontsize = fs_legend)
+                ax.plot(x, y, linestyle = ls_referencePolar, color = 'gray',
+                                linewidth = lw_referencePolar, label = label)
+
+        if (T1T2_labelOk):
+            ax.legend(loc='upper left', fontsize = fs_legend)
 
 
     # plots lift/alpha-polars (Xfoil-worker-polars and target-polars)
     def plot_LiftAlphaPolars(self, ax, x_limits, y_limits, polars, targetPolars, params):
+        T1_label = None
         T1T2_labelOk = False
         Target_labelOk = False
 
@@ -1561,14 +1551,16 @@ class polarGraph:
                 ax.plot(x, y, style, linestyle = ls_targetPolar,
                         linewidth = linewidth, label = label)
 
-            if (T1_label != None):
-                ax.legend(loc='upper left', fontsize = fs_legend)
+        if (T1T2_labelOk):
+            ax.legend(loc='upper left', fontsize = fs_legend)
 
 
     # plots glide-polars (Xfoil-worker-polars and target-polars)
     def plot_GlidePolars(self, ax, x_limits, y_limits, polars, targetPolars, params):
+        T1_label = None
         T1T2_labelOk = False
         Target_labelOk = False
+        Reference_labelOk = False
 
         # set axes and labels
         self.set_AxesAndLabels(ax, 'CL/CD, CL', 'CL', 'CL/CD')
@@ -1696,32 +1688,36 @@ class polarGraph:
                 ax.plot(x, y, style, linestyle = ls_targetPolar,
                         linewidth = linewidth, label = label)
 
-            if (T1_label != None):
-                ax.legend(loc='upper left', fontsize = fs_legend)
-
         # plot strak-polars
-        if params.plotStrakPolars:
+        if params.showReferencePolars:
             strakPolars = params.strak_polars
             numPolars = len(strakPolars)
 
             for i in range(numPolars):
+                if ((self.check_polarVisibility(params, i) == False) or
+                    (strakPolars[i] == None)):
+                    # do not plot this polar
+                    continue
+
                 # set style
                 style = "r-"
 
                 x = strakPolars[i].CL
                 y = strakPolars[i].CL_CD
 
-                # set label only for one of the strak-polars tp avoid multiple
-                # labels that are all the same
-                if (i == 0):
-                    label = 'polar of previous strak-airfoil'
+                # set label only once
+                if (Reference_labelOk == False):
+                    label = 'reference (polar of previous strak-airfoil)'
+                    Reference_labelOk = True
                 else:
                     label = None
 
-                ax.plot(x, y, style, linestyle = ls_strakPolar,
-                                linewidth = lw_strakPolar, label = label)
-                if (label != None):
-                    ax.legend(loc='upper left', fontsize = fs_legend)
+                ax.plot(x, y, linestyle = ls_referencePolar, color = 'gray',
+                                linewidth = lw_referencePolar, label = label)
+        # Legend
+        if (T1T2_labelOk):
+            ax.legend(loc='upper left', fontsize = fs_legend)
+
 
     def draw_diagram(self, params, diagramType, ax, x_limits, y_limits):
         # get polars
@@ -3009,6 +3005,13 @@ def generate_Polars(params, rootfoilName):
 
 
 def import_strakPolars(params):
+    params.strak_polars = []
+
+    # append two dummy entries, one for root polar, one for first strak airfoil
+    # the first strak airfoil uses the polar of root airfoil as a reference
+    params.strak_polars.append(None)
+    params.strak_polars.append(None)
+
     for i in range(1, len(params.ReNumbers)-1):
         # get name of the strak-airfoil
         strakFoilName = params.airfoilNames[i]
@@ -3023,6 +3026,7 @@ def import_strakPolars(params):
             newPolar.import_FromFile(polarFileNameAndPath)
             params.strak_polars.append(newPolar)
         except:
+            params.strak_polars.append(None)
             pass
 
 
@@ -3441,6 +3445,10 @@ class strak_machine:
         self.params.set_visibleFlags(visibleFlags)
 
 
+    def set_referencePolarsVisibility(self, referenceFlag):
+        self.params.set_referenceFlag(referenceFlag)
+
+
     def set_activeTargetPolarIdx(self, airfoilIdx):
         self.params.set_activeTargetPolarIdx(airfoilIdx)
 
@@ -3514,7 +3522,7 @@ class strak_machine:
         global fs_axes
         global fs_ticks
         global lw_targetPolar
-        global lw_strakPolar
+        global lw_referencePolar
         global scaled
 
         if (scaled == False):
@@ -3525,7 +3533,7 @@ class strak_machine:
             fs_axes = fs_axes * scaleFactor
             fs_ticks = fs_ticks * scaleFactor
             lw_targetPolar = lw_targetPolar * scaleFactor
-            lw_strakPolar = lw_strakPolar * scaleFactor
+            lw_referencePolar = lw_referencePolar * scaleFactor
             scaled = True
 
     def update_targetPolars(self):

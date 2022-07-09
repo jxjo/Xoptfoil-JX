@@ -99,6 +99,7 @@ class control_frame():
         self.add_appearanceModeMenu(self.frame_top)
         self.add_airfoilChoiceMenu(self.frame_top)
         self.add_visiblePolarsCheckboxes(self.frame_top)
+        self.add_referencePolarsCheckbox(self.frame_top)
 
         # add geoTarget-entries to lower frame (scrollable)
         self.add_geoTargetEntries(self.frame_bottom)
@@ -508,6 +509,7 @@ class control_frame():
         self.visibleFlags = []
         self.lastVisibleFlags = []
         self.label_visiblePolars = customtkinter.CTkLabel(master=frame, text="Visible polars:")
+
         widget_1 = self.label_visiblePolars
         num = len(self.airfoilNames)
         idx = 0
@@ -526,6 +528,17 @@ class control_frame():
             self.place_widgets(widget_1, checkBox)
             widget_1 = None
             idx = idx + 1
+
+
+    def add_referencePolarsCheckbox(self, frame):
+        self.lastReferencePolarsFlag = True
+        self.referencePolarsFlag = tk.BooleanVar(value=True)
+
+        checkBox = customtkinter.CTkCheckBox(master=frame,
+        text="Reference Polars",variable=self.referencePolarsFlag)
+        self.checkBoxes.append(checkBox)
+        self.place_widgets(None, checkBox)
+
 
     def add_blankRow(self):
         self.nextRow = self.nextRow + 1
@@ -592,6 +605,22 @@ class control_frame():
                 # notify the diagram frame about the change
                 self.master.set_updateNeeded()
                 break
+
+
+    def update_referencePolarsFlag(self):
+        # read actual value
+        newReferencePolarsFlag = self.referencePolarsFlag.get()
+
+        # check if something has changed
+        if (self.lastReferencePolarsFlag != newReferencePolarsFlag):
+            self.lastReferencePolarsFlag = newReferencePolarsFlag
+
+            # notify strak machine
+            self.strak_machine.set_referencePolarsVisibility(newReferencePolarsFlag)
+
+            # notify the diagram frame about the change
+            self.master.set_updateNeeded()
+
 
     def on_closing(self, event=0):
         self.destroy()
@@ -1120,6 +1149,7 @@ class App(customtkinter.CTk):
             self.update_idletasks()
             self.update()
             self.frame_left.update_visibleFlags()
+            self.frame_left.update_referencePolarsFlag()
             self.frame_right.update_diagram(self)
 
         self.destroy()
