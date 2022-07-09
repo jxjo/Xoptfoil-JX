@@ -2019,6 +2019,10 @@ def generate_polarCreationFile(wingData):
             # write worker call to batchfile
             AirfoilPolarCreationFile.write(workerCall)
 
+        # append small timeout and close the window
+        AirfoilPolarCreationFile.write("timeout 5 >nul\n")
+        AirfoilPolarCreationFile.write("exit\n")
+
         # finished polar cration for this airfoil
         AirfoilPolarCreationFile.close()
 
@@ -2027,7 +2031,6 @@ def generate_polarCreationFile(wingData):
 
     # change back directory
     File.write("cd ..\n")
-    File.write("pause")
     File.close()
     NoteMsg("polar creation file \"%s\" was successfully generated"\
              % polarCreationFileName)
