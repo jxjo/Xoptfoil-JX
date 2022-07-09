@@ -1,21 +1,21 @@
 #!/usr/bin/env python
 
-#  This file is part of XOPTFOIL-JX.
+#  This file is part of "The Strak Machine".
 
-#  XOPTFOIL-JX is free software: you can redistribute it and/or modify
+#  "The Strak Machine" is free software: you can redistribute it and/or modify
 #  it under the terms of the GNU General Public License as published by
 #  the Free Software Foundation, either version 3 of the License, or
 #  (at your option) any later version.
 
-#  XOPTFOIL-JX is distributed in the hope that it will be useful,
+#  "The Strak Machine" is distributed in the hope that it will be useful,
 #  but WITHOUT ANY WARRANTY; without even the implied warranty of
 #  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 #  GNU General Public License for more details.
 
 #  You should have received a copy of the GNU General Public License
-#  along with XOPTFOIL-JX.  If not, see <http://www.gnu.org/licenses/>.
+#  along with "The Strak Machine".  If not, see <http://www.gnu.org/licenses/>.
 
-#  Copyright (C) 2020 Matthias Boese
+#  Copyright (C) 2020-2022 Matthias Boese
 
 # imports
 import xml.etree.ElementTree as ET
@@ -75,7 +75,7 @@ fs_axes = 20
 fs_ticks = 10
 lw_targetPolar = 0.6
 lw_strakPolar  = 0.4
-fontsScaled = False
+scaled = False
 
 # colours
 cl_infotext = 'DeepSkyBlue'
@@ -3515,9 +3515,9 @@ class strak_machine:
         global fs_ticks
         global lw_targetPolar
         global lw_strakPolar
-        global fontsScaled
+        global scaled
 
-        if (fontsScaled == False):
+        if (scaled == False):
             # scale font sizes
             scaleFactor = int(height/1080)
             fs_infotext = fs_infotext * scaleFactor
@@ -3526,7 +3526,7 @@ class strak_machine:
             fs_ticks = fs_ticks * scaleFactor
             lw_targetPolar = lw_targetPolar * scaleFactor
             lw_strakPolar = lw_strakPolar * scaleFactor
-            fontsScaled = True
+            scaled = True
 
     def update_targetPolars(self):
         try:

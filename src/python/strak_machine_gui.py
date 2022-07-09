@@ -1,13 +1,27 @@
+#!/usr/bin/env python
+
+#  This file is part of "The Strak Machine".
+
+#  "The Strak Machine" is free software: you can redistribute it and/or modify
+#  it under the terms of the GNU General Public License as published by
+#  the Free Software Foundation, either version 3 of the License, or
+#  (at your option) any later version.
+
+#  "The Strak Machine" is distributed in the hope that it will be useful,
+#  but WITHOUT ANY WARRANTY; without even the implied warranty of
+#  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#  GNU General Public License for more details.
+
+#  You should have received a copy of the GNU General Public License
+#  along with "The Strak Machine".  If not, see <http://www.gnu.org/licenses/>.
+
+#  Copyright (C) 2020-2022 Matthias Boese
+
 import tkinter as tk
 from tkinter import ttk
-import tkinter.messagebox
 import customtkinter
 import os
 from PIL import ImageTk, Image
-from strak_machine import diagTypes
-from strak_machine import NoteMsg
-from strak_machine import ErrorMsg
-from strak_machine import strak_machine
 from colorama import init
 from copy import deepcopy
 
@@ -16,20 +30,16 @@ import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib.figure import Figure
 
+# imports from strak machine
+from strak_machine import (strak_machine, diagTypes,
+                           ErrorMsg, WarningMsg, NoteMsg, DoneMsg,
+                           bs, ressourcesPath,
+                           CL_decimals, CD_decimals, CL_CD_decimals,
+                           AL_decimals)
 
 # some global variables
 num_diagrams = 3
 controlFrame = None
-
-# paths and separators
-bs = "\\"
-ressourcesPath = 'ressources'
-
-# number of decimals in the generated input-files
-CL_decimals = 5    # lift
-CD_decimals = 6    # drag
-CL_CD_decimals = 2 # lift/drag
-AL_decimals = 5    # alpha
 
 # decimals for camber and thicknes targets
 camb_decimals = 2

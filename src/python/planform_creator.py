@@ -1,25 +1,21 @@
 #!/usr/bin/env python
 
-#  This file is part of XOPTFOIL-JX.
+#  This file is part of "The Strak Machine".
 
-#  XOPTFOIL-JX is free software: you can redistribute it and/or modify
+#  "The Strak Machine" is free software: you can redistribute it and/or modify
 #  it under the terms of the GNU General Public License as published by
 #  the Free Software Foundation, either version 3 of the License, or
 #  (at your option) any later version.
 
-#  XOPTFOIL-JX is distributed in the hope that it will be useful,
+#  "The Strak Machine" is distributed in the hope that it will be useful,
 #  but WITHOUT ANY WARRANTY; without even the implied warranty of
 #  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 #  GNU General Public License for more details.
 
 #  You should have received a copy of the GNU General Public License
-#  along with XOPTFOIL-JX.  If not, see <http://www.gnu.org/licenses/>.
+#  along with "The Strak Machine".  If not, see <http://www.gnu.org/licenses/>.
 
-#  Copyright (C) 2020 Matthias Boese
-
-
-
-#  !!!!! WORK IN PROGRESS !!!!
+#  Copyright (C) 2020-2022 Matthias Boese
 
 import re
 import xml.etree.ElementTree as ET
@@ -44,7 +40,7 @@ from matplotlib.backends.backend_tkagg import (
 # Implement the default Matplotlib key bindings.
 from matplotlib.backend_bases import key_press_handler
 import tkinter.font as font
-from strak_machineV2 import (copyAndSmooth_Airfoil, get_ReString,
+from strak_machine import (copyAndSmooth_Airfoil, get_ReString,
                              get_MandatoryParameterFromDict,
                              get_booleanParameterFromDict,
                              ErrorMsg, WarningMsg, NoteMsg, DoneMsg,
@@ -57,9 +53,6 @@ from colorama import init
 from termcolor import colored
 from FLZ_Vortex_export import export_toFLZ
 #import bezier FIXME BEZIER
-
-
-
 
 
 ################################################################################

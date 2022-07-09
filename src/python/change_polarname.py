@@ -1,15 +1,24 @@
-#-------------------------------------------------------------------------------
-# Name:        module1
-# Purpose:
-#
-# Author:      matth
-#
-# Created:     23.05.2020
-# Copyright:   (c) matth 2020
-# Licence:     <your licence>
-#-------------------------------------------------------------------------------
+#!/usr/bin/env python
+
+#  This file is part of "The Strak Machine".
+
+#  "The Strak Machine" is free software: you can redistribute it and/or modify
+#  it under the terms of the GNU General Public License as published by
+#  the Free Software Foundation, either version 3 of the License, or
+#  (at your option) any later version.
+
+#  "The Strak Machine" is distributed in the hope that it will be useful,
+#  but WITHOUT ANY WARRANTY; without even the implied warranty of
+#  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#  GNU General Public License for more details.
+
+#  You should have received a copy of the GNU General Public License
+#  along with "The Strak Machine".  If not, see <http://www.gnu.org/licenses/>.
+
+#  Copyright (C) 2020-2022 Matthias Boese
 
 import argparse
+import re
 
 ################################################################################
 # function that gets arguments from the commandline
@@ -28,8 +37,8 @@ def main():
     # get command-line-arguments
     (filename, airfoilName) = getArguments()
 
-    # strip file-ending, if neccessary
-    airfoilName = airfoilName.strip('.dat')
+    # remove file-ending, if neccessary
+    airfoilName = re.sub('.dat', '', airfoilName)
 
     file = open(filename, 'r')
     file_content = file.readlines()
