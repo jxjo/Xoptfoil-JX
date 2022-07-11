@@ -21,7 +21,7 @@
 import xml.etree.ElementTree as ET
 import argparse
 import sys
-from json import load
+import json
 from os import listdir, path, system, makedirs, chdir, getcwd, remove
 from matplotlib import pyplot as plt
 from matplotlib import image as mpimg
@@ -67,6 +67,10 @@ CD_decimals = 6 # drag
 CL_CD_decimals = 2 # lift/drag
 AL_decimals = 5 # alpha
 PER_decimals = 6
+
+# decimals for camber and thickness etc.
+camb_decimals = 2
+thick_decimals = 2
 
 # fontsizes and linewidths
 fs_infotext = 9
@@ -888,8 +892,8 @@ class inputFile:
 # strakData class
 #
 ################################################################################
-class strakData:
-    def __init__(self):
+class strak_machineParams:
+    def __init__(self, fileName):
         self.buildDir = ''
         self.workingDir = ''
         self.quality = 'medium'
@@ -916,6 +920,7 @@ class strakData:
         self.smoothStrakFoils = True
         self.showReferencePolars = True
         self.ReNumbers = []
+        self.geoParams = {}
         self.additionalOpPoints = [[]]
         self.maxReNumbers = []
         self.polarFileNames = []
@@ -953,10 +958,317 @@ class strakData:
                        }
 
 
+        # read json-dictionary from file containing necessary parameters
+        self.fileContent = self.read_paramsFromFile(fileName)
+
+        # store filename locally
+        self.fileName = fileName
+
+        # evaluate file content
+        writebackNeeded = self.get_Parameters(self.fileContent)
+
+        if (writebackNeeded):
+            result = self.write_paramsToFile(fileName, self.fileContent)
+            if (result != 0):
+                sys.exit(-1)
+
+        # calculate further values like max Re-numbers etc., also setup
+        # calls of further tools like xoptfoil
+        self.calculate_DependendValues()
+
+
+    def read_paramsFromFile(self, fileName):
+        cwd = getcwd()
+        # try to open .json-file
+        try:
+            parameterFile = open(fileName)
+        except:
+            ErrorMsg('failed to open file %s' % fileName)
+            sys.exit(-1)
+
+        # load dictionary from .json-file
+        try:
+            fileContent = json.load(parameterFile)
+            parameterFile.close()
+        except:
+            ErrorMsg('failed to read data from file %s' % fileName)
+            parameterFile.close()
+            sys.exit(-1)
+
+        return fileContent
+
+
+    def get_geoParamsOfAirfoil(self, airfoilIdx, geoParams):
+        # separate tuple of lists
+        (thick, thickPos, camb, cambPos) = geoParams
+
+        # return tuple of single values
+        return (thick[airfoilIdx], thickPos[airfoilIdx],
+                camb[airfoilIdx], cambPos[airfoilIdx])
+
+
+    def read_geoParamsfromFile(self, airfoilIdx):
+        # try to open .json-file
+        cwd = getcwd()# FIXME Debug
+        fileName = '..' + bs + self.fileName
+        try:
+            parameterFile = open(fileName)
+        except:
+            ErrorMsg('failed to open file %s' % fileName)
+            return(-1)
+
+        # load dictionary from .json-file
+        try:
+            fileContent = json.load(parameterFile)
+            parameterFile.close()
+        except:
+            ErrorMsg('failed to read data from file %s' % fileName)
+            parameterFile.close()
+            return(-2)
+        try:
+            # read complete geo params of all airfoils
+            all_GeoParams = self.get_geoParamsFromDict(fileContent)
+
+            # extract geo params of single airfoil
+            airfoil_GeoParams = self.get_geoParamsOfAirfoil(airfoilIdx, all_GeoParams)
+
+            # set geo params of single airfoil in strak machine data structure
+            self.set_geoParameters(airfoilIdx, airfoil_GeoParams)
+        except:
+            ErrorMsg('unable to set geo params')
+            return(-3)
+        return 0
+
+
+    def write_geoParamsToFile(self, airfoilIdx):
+        cwd = getcwd()# FIXME Debug
+        fileName = '..' + bs + self.fileName
+
+        # read actual fileContent of parameter file
+        fileContent = self.read_paramsFromFile(fileName)
+
+        # get actual geo params from filecontent
+        (thick, thickPos, camb, cambPos) = self.get_geoParamsFromDict(fileContent)
+
+        # get actual geoparams stored in strak machine parameters (Ram)
+        (new_thick, new_thickPos, new_camb, new_cambPos) = self.geoParams
+
+        # insert new values at the correct array-position
+        thick[airfoilIdx] =    new_thick[airfoilIdx]
+        thickPos[airfoilIdx] = new_thickPos[airfoilIdx]
+        camb[airfoilIdx] =     new_camb[airfoilIdx]
+        cambPos[airfoilIdx] =  new_cambPos[airfoilIdx]
+
+        # writeback geo parameters to file content
+        self.set_geoParamsInDict(fileContent, (thick, thickPos, camb, cambPos))
+
+        # writeback parameter file
+        result = self.write_paramsToFile(fileName, fileContent)
+        return result
+
+
+    def write_paramsToFile(self, fileName, fileContent):
+        cwd = getcwd()# FIXME Debug
+        try:
+            parameterFile = open(fileName, 'w')
+        except:
+            ErrorMsg('failed to open file %s for writing' % fileName)
+            return(-1)
+
+        # writeback dictionary to .json-file
+        try:
+            json.dump(fileContent, parameterFile)
+            parameterFile.close()
+            NoteMsg('%s was successfully written' % fileName)
+        except:
+            ErrorMsg('failed to write data to file %s' % fileName)
+            parameterFile.close()
+            return(-2)
+        return 0
+
+
+
+    ################################################################################
+    # function that gets a single parameter from dictionary and returns a
+    # default value in case of error
+    def get_ParameterFromDict(self, dict, key, default):
+        res = type(default) is tuple
+        # set default-value first
+        if (res):
+            value = None
+            for element in default:
+                value = element
+        else:
+            value = default
+
+        try:
+            value = dict[key]
+        except:
+            NoteMsg('parameter \'%s\' not specified, using default-value \'%s\'' %\
+                  (key, str(value)))
+        return value
+
+
+    def get_geoParamsFromDict(self, dict):
+        # read all parameters from dictionary
+        try:
+            geoParams = dict["geoParams"]
+            thickness = geoParams["thickness"]
+            thicknessPosition = geoParams["thicknessPosition"]
+            camber = geoParams["camber"]
+            camberPosition = geoParams["camberPosition"]
+        except:
+            WarnMsg("unable to read geo paramters")
+            return None
+
+        # check array size against number of airfoils
+        num = len(self.ReNumbers)
+        if ((len(thickness) != num) or
+            (len(thicknessPosition) != num) or
+            (len(camber) != num) or
+            (len(camberPosition) != num)):
+                ErrorMsg("expected geo parameters for % airfoils, but" \
+                 "parameters for %d airfoils were found" % (num, len(thickness)))
+                return None
+
+        NoteMsg("geo parameters for %d airfoils were successfully read" % num)
+        return (thickness, thicknessPosition, camber, camberPosition)
+
+
+    def set_geoParamsInDict(self, dict, geoParams):
+        new_geoParams = {}
+
+        # unpack tuple
+        (thick, thickPos, camb, cambPos) = geoParams
+
+        # create dictionary entries
+        new_geoParams["thickness"] = thick
+        new_geoParams["thicknessPosition"] = thickPos
+        new_geoParams["camber"] = camb
+        new_geoParams["camberPosition"] = cambPos
+
+        # put geoParams dictionary into main dictionary
+        dict["geoParams"] = new_geoParams
+
+
+
+    ################################################################################
+    # function that gets a single boolean parameter from dictionary and returns a
+    #  default value in case of error
+    def get_booleanParameterFromDict(self, dict, key, default):
+        value = default
+        try:
+            string = dict[key]
+            if (string == 'true') or (string == 'True'):
+                value = True
+            else:
+                value = False
+        except:
+            NoteMsg('parameter \'%s\' not specified, using' \
+            ' default-value \'%s\'' % (key, str(value)))
+        return value
+
+
+    ################################################################################
+    # function that gets a single mandatory parameter from dictionary and exits, if
+    # the key was not found
+    def get_MandatoryParameterFromDict(self, dict, key):
+        try:
+            value = dict[key]
+        except:
+            ErrorMsg('parameter \'%s\' not specified, this key is mandatory!'% key)
+            sys.exit(-1)
+        return value
+
+
+    ################################################################################
+    # function that checks validity of the 'quality'-input
+    def check_quality(self):
+        if ((self.quality != 'default') and
+            (self.quality != 'high')):
+
+            WarningMsg('quality = \'%s\' is not valid, setting quality'\
+            ' to \'default\'' % self.quality)
+            self.quality = 'default'
+
+        if self.quality == 'default':
+            # single-pass optimization, hicks-henne
+            self.maxIterations = [600]
+            self.numberOfCompetitors = [1]
+            self.shape_functions = ['hicks-henne']
+        else:
+            # double-pass optimization, hicks-henne
+            self.maxIterations = [80, 300]
+            self.numberOfCompetitors = [3, 1]
+            self.shape_functions = ['hicks-henne','hicks-henne']
+
+        self.optimizationPasses = len(self.maxIterations)
+
+
+    ################################################################################
+    # function that checks validity of the number of op-points
+    def check_NumOpPoints(self):
+        if (self.numOpPoints < 6):
+            WarningMsg('numOpPoints must be >= 6, setting numOpPoints to minimum-value of 6')
+            self.numOpPoints = 6
+
+
+    ################################################################################
+    # function that gets parameters from dictionary
+    def get_Parameters(self, fileContent):
+        writebackNeeded = False
+
+        my_print("getting parameters..\n")
+
+        # get mandatory parameters first
+        self.quality = self.get_MandatoryParameterFromDict(fileContent, 'quality')
+        self.seedFoilName = self.get_MandatoryParameterFromDict(fileContent, 'seedFoilName')
+        self.ReNumbers = self.get_MandatoryParameterFromDict(fileContent, 'reynolds')
+        self.airfoilNames = self.get_MandatoryParameterFromDict(fileContent, "airfoilNames")
+
+        # get optional parameters
+        self.maxReFactor = self.get_ParameterFromDict(fileContent, "maxReynoldsFactor",
+                                                            self.maxReFactor)
+
+        self.additionalOpPoints[0] = self.get_ParameterFromDict(fileContent, "additionalOpPoints",
+                                                       self.additionalOpPoints[0])
+
+        self.numOpPoints = self.get_ParameterFromDict(fileContent, "numOpPoints",
+                                                   self.numOpPoints)
+
+        self.NCrit = self.get_ParameterFromDict(fileContent, "NCrit", self.NCrit)
+
+        self.smoothSeedfoil = self.get_booleanParameterFromDict(fileContent,
+                                 "smoothSeedfoil", self.smoothSeedfoil)
+
+        self.smoothStrakFoils = self.get_booleanParameterFromDict(fileContent,
+                                 "smoothStrakFoils", self.smoothStrakFoils)
+
+
+        # get geoParameters from dictionary
+        self.geoParams = self.get_geoParamsFromDict(fileContent)
+        if (self.geoParams == None):
+            NoteMsg("No geo parameters were found. Setting default values.")
+            # set geoParameters to default values
+            self.set_defaultGeoParams(fileContent)
+            writebackNeeded = True
+
+        DoneMsg()
+
+        # perform parameter-checks now
+        my_print("checking validity of all parameters..")
+        self.check_NumOpPoints()
+        self.check_quality()
+        DoneMsg()
+
+        return writebackNeeded
+
+
+
     ############################################################################
     # function that returns a list of Re-numbers
-    def get_ReList(params):
-        return params.ReNumbers
+    def get_ReList(self):
+        return self.ReNumbers
 
     def get_visibleFlags(self):
         return self.visibleFlags
@@ -973,8 +1285,115 @@ class strakData:
 
     ############################################################################
     # function that returns a list of max Re-numbers
-    def get_maxReList(params):
-        return params.maxReNumbers
+    def get_maxReList(self):
+        return self.maxReNumbers
+
+    def get_geoParameters(self, airfoilIdx):
+        # get parameters from instance data
+        (thick, thickPos, camb, cambPos) = self.geoParams
+
+        return (thick[airfoilIdx], thickPos[airfoilIdx],
+                camb[airfoilIdx], cambPos[airfoilIdx])
+
+
+    def set_geoParameters(self, airfoilIdx, geoParams):
+        # separate input-tuple
+        (new_thick, new_thickPos, new_camb, new_cambPos) = geoParams
+
+        # get parameters from instance data
+        (thick, thickPos, camb, cambPos) = self.geoParams
+
+        # insert new values at the correct array-position
+        thick[airfoilIdx] =    new_thick
+        thickPos[airfoilIdx] = new_thickPos
+        camb[airfoilIdx] =     new_camb
+        cambPos[airfoilIdx] =  new_cambPos
+
+        # writeback geo parameters to instance data
+        self.geoParams = (thick, thickPos, camb, cambPos)
+
+        # get inputfile
+        inputFile = self.inputFiles[airfoilIdx]
+
+        # set geometry targets in inputfile
+        inputFile.set_geometryTargets((new_camb, new_thick))
+        return 0
+
+
+    def get_rootGeoParameters(self):
+        # FIXME: analyse root airfoil to get the following absolute values
+        thick_ref =     7.55
+        thickPos_ref = 27.83
+        camb_ref =      1.46
+        cambPos_ref =  39.54
+
+        return (thick_ref, thickPos_ref, camb_ref, cambPos_ref)
+
+    def init_geoParams(self, airfoilIdx):
+        # get absolute geo params for root airfoil
+        root_geoParams = self.get_rootGeoParameters()
+
+        # unpack tuple
+        (thick_root, thickPos_root, camb_root, cambPos_root) = root_geoParams
+
+        # init reference_geoParams-class
+        reference_geoParams = reference_GeoParameters()
+
+        # calulate ratio Re(strak) to Re(root)
+        Re_ratio = self.ReNumbers[airfoilIdx]/self.ReNumbers[0]
+
+        # get geo-ratios acording to Re_ratio
+        (thick_ratio, thickPos_ratio, camb_ratio, cambPos_ratio) = reference_geoParams.get(Re_ratio)
+
+        # calculate absolute values
+        thick = round((thick_root * thick_ratio), thick_decimals)
+        thickPos  = round((thickPos_root * thickPos_ratio), thick_decimals)
+        camb = round((camb_root * camb_ratio), camb_decimals)
+        cambPos = round((cambPos_root * cambPos_ratio), camb_decimals)
+
+        # compose tuple
+        new_geoParams = (thick, thickPos, camb, cambPos)
+        result = self.set_geoParameters(airfoilIdx, new_geoParams)
+        return result
+
+
+    def set_defaultGeoParams(self, fileContent):
+        self.geoParams.clear()
+        thick = []
+        thickPos = []
+        camb = []
+        cambPos = []
+
+        # get Reynolds of root airfoil as a reference
+        Re_root = self.ReNumbers[0]
+
+        # get geo params for root airfoil and append to list
+        root_geoParams = self.get_rootGeoParameters()
+        (thick_root, thickPos_root, camb_root, cambPos_root) = root_geoParams
+        thick.append()
+        thickPos.append(thickPos_root)
+        camb.append(camb_root)
+        cambPos.append(cambPos_root)
+
+        # init reference_geoParams-class
+        reference_geoParams = reference_GeoParameters()
+
+        # calculate geo params for strak airfoils
+        for Re in self.ReNumbers:
+            # calulate ratio Re(strak) to Re(root)
+            Re_ratio = Re/Re_root
+
+            # get geo-ratios acording to Re_ratio
+            (thick_ratio, thickPos_ratio, camb_ratio, cambPos_ratio) = reference_geoParams.get(Re_ratio)
+
+            # calculate absolute geo-params from ratios and append to lists
+            thick.append(thick_root * thick_ratio)
+            thickPos.append(thickPos_root * thickPos_ratio)
+            camb.append(camb_root * camb_ratio)
+            cambPos.append(cambPos_root * cambPos_ratio)
+
+        # set new geoParams
+        self.geoParams = (thick, thickPos, camb, cambPos)
 
 
     ############################################################################
@@ -2719,132 +3138,7 @@ def get_Arguments():
 
 
 
-################################################################################
-# function that gets a single parameter from dictionary and returns a
-# default value in case of error
-def get_ParameterFromDict(dict, key, default):
-    res = type(default) is tuple
-    # set default-value first
-    if (res):
-        value = None
-        for element in default:
-            value = element
-    else:
-        value = default
 
-    try:
-        value = dict[key]
-    except:
-        NoteMsg('parameter \'%s\' not specified, using default-value \'%s\'' %\
-              (key, str(value)))
-    return value
-
-
-################################################################################
-# function that gets a single boolean parameter from dictionary and returns a
-#  default value in case of error
-def get_booleanParameterFromDict(dict, key, default):
-    value = default
-    try:
-        string = dict[key]
-        if (string == 'true') or (string == 'True'):
-            value = True
-        else:
-            value = False
-    except:
-        NoteMsg('parameter \'%s\' not specified, using' \
-        ' default-value \'%s\'' % (key, str(value)))
-    return value
-
-
-################################################################################
-# function that gets a single mandatory parameter from dictionary and exits, if
-# the key was not found
-def get_MandatoryParameterFromDict(dict, key):
-    try:
-        value = dict[key]
-    except:
-        ErrorMsg('parameter \'%s\' not specified, this key is mandatory!'% key)
-        sys.exit(-1)
-    return value
-
-
-################################################################################
-# function that checks validity of the 'quality'-input
-def check_quality(params):
-    if ((params.quality != 'default') and
-        (params.quality != 'high')):
-
-        WarningMsg('quality = \'%s\' is not valid, setting quality'\
-        ' to \'default\'' % params.quality)
-        params.quality = 'default'
-
-    if params.quality == 'default':
-        # single-pass optimization, hicks-henne
-        params.maxIterations = [600]
-        params.numberOfCompetitors = [1]
-        params.shape_functions = ['hicks-henne']
-    else:
-        # double-pass optimization, hicks-henne
-        params.maxIterations = [80, 300]
-        params.numberOfCompetitors = [3, 1]
-        params.shape_functions = ['hicks-henne','hicks-henne']
-
-    params.optimizationPasses = len(params.maxIterations)
-
-
-################################################################################
-# function that checks validity of the number of op-points
-def check_NumOpPoints(params):
-    if (params.numOpPoints < 6):
-        WarningMsg('numOpPoints must be >= 6, setting numOpPoints to minimum-value of 6')
-        params.numOpPoints = 6
-
-
-################################################################################
-# function that gets parameters from dictionary
-def get_Parameters(dict):
-
-    # create new instance of parameters
-    params = strakData()
-
-    my_print("getting parameters..\n")
-
-    # get mandatory parameters first
-    params.quality = get_MandatoryParameterFromDict(dict, 'quality')
-    params.seedFoilName = get_MandatoryParameterFromDict(dict, 'seedFoilName')
-    params.ReNumbers = get_MandatoryParameterFromDict(dict, 'reynolds')
-
-    # get optional parameters
-    params.airfoilNames = get_MandatoryParameterFromDict(dict, "airfoilNames")
-
-
-    params.maxReFactor = get_ParameterFromDict(dict, "maxReynoldsFactor",
-                                                        params.maxReFactor)
-
-    params.additionalOpPoints[0] = get_ParameterFromDict(dict, "additionalOpPoints",
-                                                   params.additionalOpPoints[0])
-
-    params.numOpPoints = get_ParameterFromDict(dict, "numOpPoints",
-                                               params.numOpPoints)
-
-    params.NCrit = get_ParameterFromDict(dict, "NCrit", params.NCrit)
-
-    params.smoothSeedfoil = get_booleanParameterFromDict(dict,
-                             "smoothSeedfoil", params.smoothSeedfoil)
-
-    params.smoothStrakFoils = get_booleanParameterFromDict(dict,
-                             "smoothStrakFoils", params.smoothStrakFoils)
-
-    DoneMsg()
-
-    # perform parameter-checks now
-    my_print("checking validity of all parameters..")
-    check_NumOpPoints(params)
-    check_quality(params)
-
-    DoneMsg()
-    return params
 
 
 def get_ListOfFiles(dirName):
@@ -3175,8 +3469,42 @@ def merge_Polars(polarFile_1, polarFile_2 , mergedPolarFile, mergeCL):
         ErrorMsg("polarfile \'%s\' could not be generated" % mergedPolarFile)
         sys.exit(-1)
 
+
+class reference_GeoParameters:
+    def __init__(self):
+        # reference data, this data may have to changed depending on the type of strak
+        Re_ref =      150000
+        thick_ref =     7.60
+        thickPos_ref = 27.83
+        camb_ref =      1.46
+        cambPos_ref =  40.04
+
+        self.Re_ratio       = [      40000/Re_ref,       60000/Re_ref,      100000/Re_ref,      138000/Re_ref,      150000/Re_ref]
+        self.thick_ratio    = [    6.90/thick_ref ,    7.10/thick_ref,     7.41/thick_ref,     7.55/thick_ref,     7.60/thick_ref]
+        self.thickPos_ratio = [23.22/thickPos_ref, 25.03/thickPos_ref, 26.83/thickPos_ref, 27.83/thickPos_ref, 27.83/thickPos_ref]
+        self.camb_ratio     = [     1.49/camb_ref,      1.47/camb_ref,      1.47/camb_ref,      1.46/camb_ref,      1.46/camb_ref]
+        self.cambPos_ratio  = [ 28.63/cambPos_ref,  32.63/cambPos_ref,  36.34/cambPos_ref,  39.54/cambPos_ref,  40.04/cambPos_ref]
+
+
+    def get(self, Re_ratio):
+
+        # limit to list boundaries
+        if (Re_ratio < self.Re_ratio[0]):
+            Re_ratio = self.Re_ratio[0]
+        elif (Re_ratio > self.Re_ratio[-1]):
+            Re_ratio = self.Re_ratio[-1]
+
+        # calculate corresponding perturb according to Re-Factor
+        thick_ratio = np.interp(Re_ratio, self.Re_ratio, self.thick_ratio)
+        thickPos_ratio = np.interp(Re_ratio, self.Re_ratio, self.thickPos_ratio)
+        camb_ratio = np.interp(Re_ratio, self.Re_ratio, self.camb_ratio)
+        cambPos_ratio = np.interp(Re_ratio, self.Re_ratio, self.cambPos_ratio)
+
+        return (thick_ratio, thickPos_ratio, camb_ratio, cambPos_ratio)
+
+
 class strak_machine:
-    def __init__(self, strakDataFileName):
+    def __init__(self, parameterFileName):
         global print_disabled
 
         # check working-directory, have we been started from "scripts"-dir? (Debugging)
@@ -3187,28 +3515,8 @@ class strak_machine:
         else:
             self.startedFromScriptsFolder = False
 
-        # try to open .json-file
-        try:
-            strakDataFile = open(strakDataFileName)
-        except:
-            ErrorMsg('failed to open file %s' % strakDataFileName)
-            sys.exit(-1)
-
-        # load dictionary from .json-file
-        try:
-            strakdata = load(strakDataFile)
-            strakDataFile.close()
-        except:
-            ErrorMsg('failed to read data from file %s' % strakDataFileName)
-            strakDataFile.close()
-            sys.exit(-1)
-
-        # get strak-machine-parameters from dictionary
-        self.params = get_Parameters(strakdata)
-
-         # calculate further values like max Re-numbers etc., also setup
-        # calls of further tools like xoptfoil
-        self.params.calculate_DependendValues()
+        # get strak-machine-parameters from file
+        self.params = strak_machineParams(parameterFileName)
 
         # get current working dir
         self.params.workingDir = getcwd()
@@ -3497,23 +3805,16 @@ class strak_machine:
         return self.exit_action(0)
 
 
-    def get_geoTargets(self, airfoilIdx):
+    def get_geoParams(self, airfoilIdx):
         self.entry_action(airfoilIdx)
-
-        inputFile = self.params.inputFiles[airfoilIdx]
-        geoTargets = inputFile.get_geometryTargets()
-
-        return self.exit_action(geoTargets)
+        geoParams = self.params.get_geoParameters(airfoilIdx)
+        return self.exit_action(geoParams)
 
 
-    def set_geoTargets(self, airfoilIdx, geoTargets):
+    def set_geoParams(self, airfoilIdx, geoParams):
         self.entry_action(airfoilIdx)
-
-        inputFile = self.params.inputFiles[airfoilIdx]
-        # set geometry targets
-        inputFile.set_geometryTargets(geoTargets)
-
-        return self.exit_action(0)
+        result = self.params.set_geoParameters(airfoilIdx, geoParams)
+        return self.exit_action(result)
 
 
     def set_screenParams(self, width, height):
@@ -3562,12 +3863,13 @@ class strak_machine:
             ErrorMsg("Unable to load input-file %s" % fileName)
             return self.exit_action(-1)
 
-        return self.exit_action(0)
+        # read geometry params of the airfoil from parameterfile
+        result = self.params.read_geoParamsfromFile(airfoilIdx)
+        return self.exit_action(result)
 
 
     def save(self, airfoilIdx):
         self.entry_action(airfoilIdx)
-        inputFile = self.params.inputFiles[airfoilIdx]
 
         try:
             # get input file from params
@@ -3578,7 +3880,9 @@ class strak_machine:
             ErrorMsg("Unable to save input-file %s" % self.get_inputfileName(airfoilIdx))
             return self.exit_action(-1)
 
-        return self.exit_action(0)
+        # writ geometry params of the airfoil to parameterfile
+        result = self.params.write_geoParamsToFile(airfoilIdx)
+        return self.exit_action(result)
 
 
     def reset(self, airfoilIdx):
@@ -3591,7 +3895,8 @@ class strak_machine:
             ErrorMsg("Unable to reset input-file %s" % fileName)
             return self.exit_action(-1)
 
-        return self.exit_action(0)
+        result = self.params.init_geoParams(airfoilIdx)
+        return self.exit_action(result)
 
 ################################################################################
 # Main program
