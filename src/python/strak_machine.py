@@ -33,6 +33,8 @@ from colorama import init
 from termcolor import colored
 import change_airfoilname
 import re
+import importlib
+visualizer = importlib.import_module("xoptfoil_visualizer-jx")
 
 # paths and separators
 bs = "\\"
@@ -54,6 +56,7 @@ strakMachineInputFileName = 'strakdata.txt'
 T1_polarInputFile = 'iPolars_T1.txt'
 T2_polarInputFile = 'iPolars_T2.txt'
 smoothInputFile = 'iSmooth.txt'
+DesignCoordinatesName = 'Design_Coordinates.dat'
 
 # filename of progress-file
 progressFileName = "progress.txt"
@@ -1325,11 +1328,17 @@ class strak_machineParams:
 
 
     def get_rootGeoParameters(self):
-        # FIXME: analyse root airfoil to get the following absolute values
-        thick_ref =     7.55
-        thickPos_ref = 27.83
-        camb_ref =      1.46
-        cambPos_ref =  39.54
+        coordfilename = self.airfoilNames[0] +'_temp' + bs + DesignCoordinatesName
+        zonetitle = 'zone t="Seed airfoil'
+
+        # read design coordinates of root airfoil using the visualizer
+        (x, y, maxt, xmaxt, maxc, xmaxc, ioerror, deriv2, deriv3, name) =\
+                visualizer.read_airfoil_coordinates(coordfilename, zonetitle, 0)
+
+        thick_ref    = round( maxt*100, thick_decimals)
+        thickPos_ref = round(xmaxt*100, thick_decimals)
+        camb_ref     = round( maxc*100, camb_decimals)
+        cambPos_ref  = round(xmaxc*100, camb_decimals)
 
         return (thick_ref, thickPos_ref, camb_ref, cambPos_ref)
 
@@ -3538,6 +3547,12 @@ class strak_machine:
         # as the root airfoil without optimization
         systemString = ("copy %s %s" + bs + "%s\n\n") % \
         (rootfoilName +'.dat', airfoilPath, rootfoilName + '.dat')
+        system(systemString)
+
+        # perform check of root airfoil and generate some data that can be read
+        # with the visualizer
+        systemString = ("%s -w check -v -a %s\n\n" % (self.params.xfoilWorkerCall, (rootfoilName +'.dat')))
+        print(systemString)
         system(systemString)
 
         # generate polars of root-airfoil, also analyze
