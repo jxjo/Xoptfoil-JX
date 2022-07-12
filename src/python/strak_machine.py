@@ -912,6 +912,7 @@ class strak_machineParams:
         self.alpha_Resolution = 0.001
         self.optimizationPasses = 2
         self.activeTargetPolarIdx = 1
+        self.scaleFactor = 1.0
         self.generateBatch = True
         self.xmlFileName = None
         self.showTargetPolars = True
@@ -1077,7 +1078,7 @@ class strak_machineParams:
 
         # writeback dictionary to .json-file
         try:
-            json.dump(fileContent, parameterFile)
+            json.dump(fileContent, parameterFile, indent=2, separators=(',', ':'))
             parameterFile.close()
             NoteMsg('%s was successfully written' % fileName)
         except:
@@ -1118,7 +1119,7 @@ class strak_machineParams:
             camber = geoParams["camber"]
             camberPosition = geoParams["camberPosition"]
         except:
-            WarnMsg("unable to read geo paramters")
+            WarningMsg("unable to read geo parameters")
             return None
 
         # check array size against number of airfoils
@@ -1312,11 +1313,14 @@ class strak_machineParams:
         # writeback geo parameters to instance data
         self.geoParams = (thick, thickPos, camb, cambPos)
 
-        # get inputfile
-        inputFile = self.inputFiles[airfoilIdx]
+        try:
+            # get inputfile, if there already is one
+            inputFile = self.inputFiles[airfoilIdx]
 
-        # set geometry targets in inputfile
-        inputFile.set_geometryTargets((new_camb, new_thick))
+            # set geometry targets in inputfile
+            inputFile.set_geometryTargets((new_camb, new_thick))
+        except:
+            pass
         return 0
 
 
@@ -1342,14 +1346,15 @@ class strak_machineParams:
         # calulate ratio Re(strak) to Re(root)
         Re_ratio = self.ReNumbers[airfoilIdx]/self.ReNumbers[0]
 
-        # get geo-ratios acording to Re_ratio
-        (thick_ratio, thickPos_ratio, camb_ratio, cambPos_ratio) = reference_geoParams.get(Re_ratio)
+        # get geo-ratios according to Re_ratio
+        (thick_ratio, thickPos_ratio, camb_ratio, cambPos_ratio) =\
+         reference_geoParams.get(Re_ratio)
 
         # calculate absolute values
-        thick = round((thick_root * thick_ratio), thick_decimals)
+        thick =     round((thick_root * thick_ratio), thick_decimals)
         thickPos  = round((thickPos_root * thickPos_ratio), thick_decimals)
-        camb = round((camb_root * camb_ratio), camb_decimals)
-        cambPos = round((cambPos_root * cambPos_ratio), camb_decimals)
+        camb =      round((camb_root * camb_ratio), camb_decimals)
+        cambPos =   round((cambPos_root * cambPos_ratio), camb_decimals)
 
         # compose tuple
         new_geoParams = (thick, thickPos, camb, cambPos)
@@ -1358,42 +1363,28 @@ class strak_machineParams:
 
 
     def set_defaultGeoParams(self, fileContent):
-        self.geoParams.clear()
         thick = []
         thickPos = []
         camb = []
         cambPos = []
+        num = len(self.ReNumbers)
 
-        # get Reynolds of root airfoil as a reference
-        Re_root = self.ReNumbers[0]
+        # build up default lists
+        for idx in range(num):
+            thick.append(0.0)
+            thickPos.append(0.0)
+            camb.append(0.0)
+            cambPos.append(0.0)
 
-        # get geo params for root airfoil and append to list
-        root_geoParams = self.get_rootGeoParameters()
-        (thick_root, thickPos_root, camb_root, cambPos_root) = root_geoParams
-        thick.append()
-        thickPos.append(thickPos_root)
-        camb.append(camb_root)
-        cambPos.append(cambPos_root)
-
-        # init reference_geoParams-class
-        reference_geoParams = reference_GeoParameters()
-
-        # calculate geo params for strak airfoils
-        for Re in self.ReNumbers:
-            # calulate ratio Re(strak) to Re(root)
-            Re_ratio = Re/Re_root
-
-            # get geo-ratios acording to Re_ratio
-            (thick_ratio, thickPos_ratio, camb_ratio, cambPos_ratio) = reference_geoParams.get(Re_ratio)
-
-            # calculate absolute geo-params from ratios and append to lists
-            thick.append(thick_root * thick_ratio)
-            thickPos.append(thickPos_root * thickPos_ratio)
-            camb.append(camb_root * camb_ratio)
-            cambPos.append(cambPos_root * cambPos_ratio)
-
-        # set new geoParams
+        # assign default lists
         self.geoParams = (thick, thickPos, camb, cambPos)
+
+        # init geo params of each airfoil including root airfoil
+        for idx in range(num):
+            self.init_geoParams(idx)
+
+        # write to dicitonary
+        self.set_geoParamsInDict(fileContent, self.geoParams)
 
 
     ############################################################################
@@ -1784,8 +1775,10 @@ class polarGraph:
                      xy=(x,y), xytext=(maxGlideTextOffset_x, maxGlideTextOffset_y),
                       textcoords='data', fontsize = fs_infotext, color=cl_infotext)
 
+                    x_off = -130 * params.scaleFactor
+                    y_off = 10 * params.scaleFactor
                     ax.annotate('maxLift @ CL = %.2f, CD = %.4f' %(y,x),
-                      xy=(x,y), xytext=(-260,10), textcoords='offset points',
+                      xy=(x,y), xytext=(x_off,y_off), textcoords='offset points',
                         fontsize = fs_infotext, color=cl_infotext)
             else:
                 # plot target-polar
@@ -1998,9 +1991,6 @@ class polarGraph:
             ax.set_xlim(x_limits)
             ax.set_ylim(y_limits)
 
-        # set number of already plotted polars
-        plotted_polars = 0
-
         # all polars
         for polarIdx in range(numPolars):
             if (self.check_polarVisibility(params, polarIdx) == False):
@@ -2046,8 +2036,10 @@ class polarGraph:
                 # Is this the only polar ?
                 rootPolarOnly = self.check_onlyRootPolarVisible(params)
                 if rootPolarOnly:
+                    x_off = int(20/params.scaleFactor)
+                    y_off = int(-5/params.scaleFactor)
                     ax.annotate('CL=0 @ CL/CD = %.2f' % y, xy=(x,y),
-                    xytext=(20,-5), textcoords='offset points',
+                    xytext=(x_off,y_off), textcoords='offset points',
                     fontsize = fs_infotext, color=cl_infotext)
 
                 # plot max_speed
@@ -2057,8 +2049,10 @@ class polarGraph:
 
                  # Is this the only polar ?
                 if rootPolarOnly:
+                    x_off = int(20/params.scaleFactor)
+                    y_off = 0
                     ax.annotate('maxSpeed @\nCL = %.2f,\nCL/CD = %.2f' %\
-                    (x, y), xy=(x,y), xytext=(-160,0), textcoords='offset points',
+                    (x, y), xy=(x,y), xytext=(x_off,y_off), textcoords='offset points',
                     fontsize = fs_infotext, color=cl_infotext)
 
                 # plot max_glide
@@ -2068,8 +2062,10 @@ class polarGraph:
 
                 # Is this the only polar ?
                 if rootPolarOnly:
+                   x_off = int(-60/params.scaleFactor)
+                   y_off = int(15/params.scaleFactor)
                    ax.annotate('maxGlide @ CL = %.2f, CL/CD = %.2f' %\
-                      (x, y), xy=(x,y), xytext=(-160,15), textcoords='offset points',
+                      (x, y), xy=(x,y), xytext=(x_off,y_off), textcoords='offset points',
                        fontsize = fs_infotext, color=cl_infotext)
 
                 # plot max Lift
@@ -2079,8 +2075,10 @@ class polarGraph:
 
                  # Is this the only polar ?
                 if rootPolarOnly:
+                    x_off = int(-80/params.scaleFactor)
+                    y_off = 0
                     ax.annotate('maxLift @\nCL = %.2f,\nCL/CD = %.2f' %\
-                    (x, y), xy=(x,y), xytext=(-200,0), textcoords='offset points',
+                    (x, y), xy=(x,y), xytext=(x_off, y_off), textcoords='offset points',
                     fontsize = fs_infotext, color=cl_infotext)
             else:
                 # plot target-polar
@@ -3715,6 +3713,16 @@ class strak_machine:
         newFile.insert_alphaMaxGlide_oppoint(self.params, i)
         newFile.insert_alphaMaxLift_oppoint(self.params, i)
 
+        # get geo params of single airfoil
+        airfoil_geoParams =\
+                self.params.get_geoParamsOfAirfoil(i, self.params.geoParams)
+
+        # separate tuple
+        (thick, thickPos, camb, cambPos) = airfoil_geoParams
+
+        # insert geo targets into inputfile
+        newFile.set_geometryTargets((camb, thick))
+
         # multi-pass-optimization:
         # generate input-files for intermediate strak-airfoils
         self.generate_MultiPassInputFiles(airfoilIdx, writeToDisk, newFile)
@@ -3827,14 +3835,16 @@ class strak_machine:
         global scaled
 
         if (scaled == False):
-            # scale font sizes
-            scaleFactor = int(height/1080)
+            # scale font sizes (1920 being default screen width)
+            scaleFactor = int(1920/width)
             fs_infotext = fs_infotext * scaleFactor
             fs_legend = fs_legend * scaleFactor
             fs_axes = fs_axes * scaleFactor
             fs_ticks = fs_ticks * scaleFactor
             lw_targetPolar = lw_targetPolar * scaleFactor
             lw_referencePolar = lw_referencePolar * scaleFactor
+
+            self.params.scaleFactor = scaleFactor
             scaled = True
 
     def update_targetPolars(self):

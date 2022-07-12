@@ -800,6 +800,7 @@ class diagram_frame():
         # determine screen size
         self.width = self.master.winfo_screenwidth()
         self.heigth = self.master.winfo_screenheight()
+        self.scaleFactor = self.width/1980
         strak_machine.set_screenParams(self.width, self.heigth)
 
         # create figures initially (two of each kind for buffering)
@@ -860,7 +861,9 @@ class diagram_frame():
 
         for diagType in diagTypes:
             # new figure
-            fig = Figure(figsize=(15, 16))
+            x = 14* self.scaleFactor
+            y = 16* self.scaleFactor
+            fig = Figure(figsize=(x, y))
             ax = fig.add_subplot()
 
             # initial diagram (limits will be determined automatically)
