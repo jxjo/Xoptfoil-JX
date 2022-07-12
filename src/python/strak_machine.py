@@ -23,6 +23,7 @@ import argparse
 import sys
 import json
 from os import listdir, path, system, makedirs, chdir, getcwd, remove
+from os.path import exists
 from matplotlib import pyplot as plt
 from matplotlib import image as mpimg
 from math import pi, sin
@@ -917,7 +918,6 @@ class strak_machineParams:
         self.activeTargetPolarIdx = 1
         self.scaleFactor = 1.0
         self.generateBatch = True
-        self.xmlFileName = None
         self.showTargetPolars = True
         self.adaptInitialPerturb = True
         self.smoothSeedfoil = False
@@ -3552,8 +3552,10 @@ class strak_machine:
         # perform check of root airfoil and generate some data that can be read
         # with the visualizer
         systemString = ("%s -w check -v -a %s\n\n" % (self.params.xfoilWorkerCall, (rootfoilName +'.dat')))
-        print(systemString)
         system(systemString)
+
+        # check if all seedfoils are there, generate missing seedfoils
+        self.check_andGenerateSeedfoils()
 
         # generate polars of root-airfoil, also analyze
         generate_Polars(self.params, rootfoilName)
@@ -3614,6 +3616,15 @@ class strak_machine:
                 self.generate_InputFile(idx, True)
 
         DoneMsg()
+
+    def check_andGenerateSeedfoils(self):
+        num = len(self.params.ReNumbers)
+        for idx in range(1, num):
+            Re = self.params.ReNumbers[idx]
+            seedfoilName = 'seed_%s.dat' % get_ReString(Re)
+
+            if (not exists(seedfoilName)):
+                self.generate_seedfoil(idx)
 
 
     def generate_MultiPassInputFiles(self, airfoilIdx, writeToDisk, inputFile):
@@ -3744,6 +3755,45 @@ class strak_machine:
 
         # append only input-file of final strak-airfoil to params
         self.params.inputFiles[i] = newFile
+
+    def generate_seedfoil(self, airfoilIdx):
+        rootfoilName = self.params.airfoilNames[0] + '.dat'
+        # determine name of seedfoil according to Re-number
+        seedfoilPrefix = 'seed_%s' % get_ReString(self.params.ReNumbers[airfoilIdx])
+        seedfoilName = seedfoilPrefix + '.dat'
+        # get geoParams for the airfoil
+        geoParams = self.params.get_geoParamsOfAirfoil(airfoilIdx, self.params.geoParams)
+
+        # unpack tuple
+        (thick, thickPos, camb, cambPos) = geoParams
+
+        # worker commands are:
+        # t=yy Set thickness to xx%
+        # xt=xx Set location of maximum thickness to xx% of chord
+        # c=yy Set camber to xx%
+        # xc=xx
+
+        # set thickness
+        systemString = ("%s -w set t=%.2f -a %s -o %s\n\n" %\
+        (self.params.xfoilWorkerCall, thick, rootfoilName, seedfoilPrefix))
+        system(systemString)
+
+        # set camber
+        systemString = ("%s -w set c=%.2f -a %s -o %s\n\n" %\
+        (self.params.xfoilWorkerCall, camb, seedfoilName, seedfoilPrefix))
+        system(systemString)
+
+         # set thickness position
+        systemString = ("%s -w set xt=%.2f -a %s -o %s\n\n" %\
+        (self.params.xfoilWorkerCall, thickPos, seedfoilName, seedfoilPrefix))
+        system(systemString)
+
+        # set camber position
+        systemString = ("%s -w set xc=%.2f -a %s -o %s\n\n" %\
+        (self.params.xfoilWorkerCall, cambPos, seedfoilName, seedfoilPrefix))
+        system(systemString)
+
+        NoteMsg("seedfoil %s was successfully generated")
 
 
     def exit_action(self, value):
@@ -3905,8 +3955,13 @@ class strak_machine:
             ErrorMsg("Unable to save input-file %s" % self.get_inputfileName(airfoilIdx))
             return self.exit_action(-1)
 
-        # writ geometry params of the airfoil to parameterfile
+        # write geometry params of the airfoil to parameterfile
         result = self.params.write_geoParamsToFile(airfoilIdx)
+
+        # generate seedfoil now
+        if result == 0:
+            result = self.generate_seedfoil(airfoilIdx)
+
         return self.exit_action(result)
 
 
