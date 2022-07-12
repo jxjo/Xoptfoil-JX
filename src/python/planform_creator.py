@@ -41,14 +41,13 @@ from matplotlib.backends.backend_tkagg import (
 from matplotlib.backend_bases import key_press_handler
 import tkinter.font as font
 from strak_machine import (copyAndSmooth_Airfoil, get_ReString,
-                             get_MandatoryParameterFromDict,
-                             get_booleanParameterFromDict,
                              ErrorMsg, WarningMsg, NoteMsg, DoneMsg,
                              remove_suffix, interpolate, round_Re,
                              bs, buildPath, ressourcesPath, airfoilPath,
                              scriptPath, exePath, smoothInputFile,
                              strakMachineInputFileName, xfoilWorkerName,
                              T1_polarInputFile)
+
 from colorama import init
 from termcolor import colored
 from FLZ_Vortex_export import export_toFLZ
@@ -270,6 +269,35 @@ def objective_elliptical(x, normalizedTipChord, tipSharpness,
 ##    result = curve.evaluate(x)
 ##    y = result[1][0]
 ##    return y
+
+################################################################################
+# function that gets a single boolean parameter from dictionary and returns a
+#  default value in case of error
+def get_booleanParameterFromDict(dict, key, default):
+    value = default
+    try:
+        string = dict[key]
+        if (string == 'true') or (string == 'True'):
+            value = True
+        else:
+            value = False
+    except:
+        NoteMsg('parameter \'%s\' not specified, using' \
+        ' default-value \'%s\'' % (key, str(value)))
+    return value
+
+
+################################################################################
+# function that gets a single mandatory parameter from dictionary and exits, if
+# the key was not found
+def get_MandatoryParameterFromDict(dict, key):
+    try:
+        value = dict[key]
+    except:
+        ErrorMsg('parameter \'%s\' not specified, this key is mandatory!'% key)
+        sys.exit(-1)
+    return value
+
 
 ################################################################################
 #
