@@ -2045,8 +2045,8 @@ class polarGraph:
                 # Is this the only polar ?
                 rootPolarOnly = self.check_onlyRootPolarVisible(params)
                 if rootPolarOnly:
-                    x_off = int(20/params.scaleFactor)
-                    y_off = int(-5/params.scaleFactor)
+                    x_off = int(20*params.scaleFactor)
+                    y_off = int(-5*params.scaleFactor)
                     ax.annotate('CL=0 @ CL/CD = %.2f' % y, xy=(x,y),
                     xytext=(x_off,y_off), textcoords='offset points',
                     fontsize = fs_infotext, color=cl_infotext)
@@ -2058,7 +2058,7 @@ class polarGraph:
 
                  # Is this the only polar ?
                 if rootPolarOnly:
-                    x_off = int(20/params.scaleFactor)
+                    x_off = int(20*params.scaleFactor)
                     y_off = 0
                     ax.annotate('maxSpeed @\nCL = %.2f,\nCL/CD = %.2f' %\
                     (x, y), xy=(x,y), xytext=(x_off,y_off), textcoords='offset points',
@@ -2071,8 +2071,8 @@ class polarGraph:
 
                 # Is this the only polar ?
                 if rootPolarOnly:
-                   x_off = int(-60/params.scaleFactor)
-                   y_off = int(15/params.scaleFactor)
+                   x_off = int(-60*params.scaleFactor)
+                   y_off = int(15*params.scaleFactor)
                    ax.annotate('maxGlide @ CL = %.2f, CL/CD = %.2f' %\
                       (x, y), xy=(x,y), xytext=(x_off,y_off), textcoords='offset points',
                        fontsize = fs_infotext, color=cl_infotext)
@@ -2084,7 +2084,7 @@ class polarGraph:
 
                  # Is this the only polar ?
                 if rootPolarOnly:
-                    x_off = int(-80/params.scaleFactor)
+                    x_off = int(-80*params.scaleFactor)
                     y_off = 0
                     ax.annotate('maxLift @\nCL = %.2f,\nCL/CD = %.2f' %\
                     (x, y), xy=(x,y), xytext=(x_off, y_off), textcoords='offset points',
@@ -3793,7 +3793,7 @@ class strak_machine:
         (self.params.xfoilWorkerCall, cambPos, seedfoilName, seedfoilPrefix))
         system(systemString)
 
-        NoteMsg("seedfoil %s was successfully generated")
+        NoteMsg("seedfoil %s was successfully generated" % seedfoilName)
 
 
     def exit_action(self, value):
@@ -3901,7 +3901,10 @@ class strak_machine:
 
         if (scaled == False):
             # scale font sizes (1920 being default screen width)
-            scaleFactor = int(1920/width)
+            scaleFactor = int(width/1920)
+            if (scaleFactor < 1):
+                scaleFactor = 1
+
             fs_infotext = fs_infotext * scaleFactor
             fs_legend = fs_legend * scaleFactor
             fs_axes = fs_axes * scaleFactor
