@@ -924,7 +924,8 @@ class strak_machineParams:
         self.smoothStrakFoils = True
         self.showReferencePolars = True
         self.ReNumbers = []
-        self.geoParams = {}
+        self.geoParams = None
+        self.rootGeoParams = None
         self.additionalOpPoints = [[]]
         self.maxReNumbers = []
         self.polarFileNames = []
@@ -969,12 +970,7 @@ class strak_machineParams:
         self.fileName = fileName
 
         # evaluate file content
-        writebackNeeded = self.get_Parameters(self.fileContent)
-
-        if (writebackNeeded):
-            result = self.write_paramsToFile(fileName, self.fileContent)
-            if (result != 0):
-                sys.exit(-1)
+        self.get_Parameters(self.fileContent)
 
         # calculate further values like max Re-numbers etc., also setup
         # calls of further tools like xoptfoil
@@ -1220,8 +1216,6 @@ class strak_machineParams:
     ################################################################################
     # function that gets parameters from dictionary
     def get_Parameters(self, fileContent):
-        writebackNeeded = False
-
         my_print("getting parameters..\n")
 
         # get mandatory parameters first
@@ -1247,16 +1241,6 @@ class strak_machineParams:
 
         self.smoothStrakFoils = self.get_booleanParameterFromDict(fileContent,
                                  "smoothStrakFoils", self.smoothStrakFoils)
-
-
-        # get geoParameters from dictionary
-        self.geoParams = self.get_geoParamsFromDict(fileContent)
-        if (self.geoParams == None):
-            NoteMsg("No geo parameters were found. Setting default values.")
-            # set geoParameters to default values
-            self.set_defaultGeoParams(fileContent)
-            writebackNeeded = True
-
         DoneMsg()
 
         # perform parameter-checks now
@@ -1265,9 +1249,23 @@ class strak_machineParams:
         self.check_quality()
         DoneMsg()
 
-        return writebackNeeded
 
+    def read_geoParameters(self):
+        my_print("getting geo parameters..\n")
+        # read root geo parameters first
+        self.read_rootGeoParameters()
 
+       # get geoParameters from dictionary
+        self.geoParams = self.get_geoParamsFromDict(self.fileContent)
+        if (self.geoParams == None):
+            NoteMsg("No geo parameters were found. Setting default values.")
+            # set geoParameters to default values
+            self.set_defaultGeoParams(self.fileContent)
+            result = self.write_paramsToFile('..' + bs + self.fileName, self.fileContent)
+            if (result != 0):
+                sys.exit(-1)
+
+        DoneMsg()
 
     ############################################################################
     # function that returns a list of Re-numbers
@@ -1325,9 +1323,11 @@ class strak_machineParams:
         except:
             pass
         return 0
-
-
     def get_rootGeoParameters(self):
+        return self.rootGeoParams
+
+
+    def read_rootGeoParameters(self):
         coordfilename = self.airfoilNames[0] +'_temp' + bs + DesignCoordinatesName
         zonetitle = 'zone t="Seed airfoil'
 
@@ -1340,7 +1340,7 @@ class strak_machineParams:
         camb_ref     = round( maxc*100, camb_decimals)
         cambPos_ref  = round(xmaxc*100, camb_decimals)
 
-        return (thick_ref, thickPos_ref, camb_ref, cambPos_ref)
+        self.rootGeoParams = (thick_ref, thickPos_ref, camb_ref, cambPos_ref)
 
     def init_geoParams(self, airfoilIdx):
         # get absolute geo params for root airfoil
@@ -3562,6 +3562,11 @@ class strak_machine:
         systemString = ("%s -w check -v -a %s\n\n" % (self.params.xfoilWorkerCall, (rootfoilName +'.dat')))
         system(systemString)
 
+        # after root-airfoil data was generated, we can read geo parameters.
+        # in case there are no geo parameters, we can initially create them using
+        # data of root airfoil
+        self.params.read_geoParameters()
+
         # check if all seedfoils are there, generate missing seedfoils
         self.check_andGenerateSeedfoils()
 
@@ -3624,6 +3629,7 @@ class strak_machine:
                 self.generate_InputFile(idx, True)
 
         DoneMsg()
+
 
     def check_andGenerateSeedfoils(self):
         num = len(self.params.ReNumbers)
