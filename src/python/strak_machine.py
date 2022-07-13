@@ -990,7 +990,8 @@ class strak_machineParams:
         try:
             fileContent = json.load(parameterFile)
             parameterFile.close()
-        except:
+        except ValueError as e:
+            ErrorMsg('invalid json: %s' % e)
             ErrorMsg('failed to read data from file %s' % fileName)
             parameterFile.close()
             sys.exit(-1)
