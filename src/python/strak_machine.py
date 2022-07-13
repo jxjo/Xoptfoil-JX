@@ -1741,24 +1741,24 @@ class polarGraph:
             # plot main oppoints for root polar only
             if (polar == rootPolar):
                 # plot CD @CL = 0
-                x = polar.CD_CL0
-                y = 0.0
-                ax.plot(x, y, 'o', color=cl_infotext)
+                x_CL0 = polar.CD_CL0
+                y_CL0 = 0.0
+                ax.plot(x_CL0, y_CL0, 'o', color=cl_infotext)
 
                 # plot max_speed
-                x = polar.CD[polar.maxSpeed_idx]
-                y = polar.CL[polar.maxSpeed_idx]
-                ax.plot(x, y, marker='o',color=cl_infotext)
+                x_maxSpeed = polar.CD[polar.maxSpeed_idx]
+                y_maxSpeed = polar.CL[polar.maxSpeed_idx]
+                ax.plot(x_maxSpeed, y_maxSpeed, marker='o',color=cl_infotext)
 
                 # plot max_glide
-                x = polar.CD[polar.maxGlide_idx]
-                y = polar.CL[polar.maxGlide_idx]
-                ax.plot(x, y, marker='o', color=cl_infotext)
+                x_maxGlide = polar.CD[polar.maxGlide_idx]
+                y_maxGlide = polar.CL[polar.maxGlide_idx]
+                ax.plot(x_maxGlide, y_maxGlide, marker='o', color=cl_infotext)
 
                 # plot max lift
-                x = polar.CD[polar.maxLift_idx]
-                y = polar.CL[polar.maxLift_idx]
-                ax.plot(x, y, marker='o', color=cl_infotext)
+                x_maxLift = polar.CD[polar.maxLift_idx]
+                y_maxLift = polar.CL[polar.maxLift_idx]
+                ax.plot(x_maxLift, y_maxLift, marker='o', color=cl_infotext)
 
                 # Is this the only visible polar ?
                 if self.check_onlyRootPolarVisible(params):
@@ -1770,24 +1770,24 @@ class polarGraph:
                     maxGlideTextOffset_x = rootPolar.CD_maxGlide * 1.1
                     maxGlideTextOffset_y = rootPolar.CL_maxGlide
 
-                    ax.annotate('CL=0 @ CD = %.4f' % x, xy=(x,y),
+                    ax.annotate('CL=0 @ CD = %.4f' % x_CL0, xy=(x_CL0,y_CL0),
                       xytext=(CL0TextOffset_x, CL0TextOffset_y),
                       textcoords='data',
                       fontsize = fs_infotext, color=cl_infotext)
 
-                    ax.annotate('maxSpeed @ CL = %.2f, CD = %.4f' % (y, x),
-                     xy=(x,y), xytext=(maxSpeedTextOffset_x, maxSpeedTextOffset_y),
+                    ax.annotate('maxSpeed @ CL = %.2f, CD = %.4f' % (y_maxSpeed, x_maxSpeed),
+                     xy=(x_maxSpeed,y_maxSpeed), xytext=(maxSpeedTextOffset_x, maxSpeedTextOffset_y),
                      textcoords='data', fontsize = fs_infotext,
                      color=cl_infotext)
 
-                    ax.annotate('maxGlide @ CL = %.2f, CD = %.4f' % (y, x),
-                     xy=(x,y), xytext=(maxGlideTextOffset_x, maxGlideTextOffset_y),
+                    ax.annotate('maxGlide @ CL = %.2f, CD = %.4f' % (y_maxGlide, x_maxGlide),
+                     xy=(x_maxGlide,y_maxGlide), xytext=(maxGlideTextOffset_x, maxGlideTextOffset_y),
                       textcoords='data', fontsize = fs_infotext, color=cl_infotext)
 
                     x_off = -130 * params.scaleFactor
                     y_off = 10 * params.scaleFactor
-                    ax.annotate('maxLift @ CL = %.2f, CD = %.4f' %(y,x),
-                      xy=(x,y), xytext=(x_off,y_off), textcoords='offset points',
+                    ax.annotate('maxLift @ CL = %.2f, CD = %.4f' %(y_maxLift,x_maxLift),
+                      xy=(x_maxLift,y_maxLift), xytext=(x_off,y_off), textcoords='offset points',
                         fontsize = fs_infotext, color=cl_infotext)
             else:
                 # plot target-polar
