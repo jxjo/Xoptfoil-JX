@@ -37,6 +37,11 @@
   feasible_init_attempts = 1000
 /
 
+&curvature
+  max_curv_reverse_bot = 0
+  max_curv_reverse_top = 0
+/
+
 &xfoil_paneling_options
   repanel = .true.
 /
