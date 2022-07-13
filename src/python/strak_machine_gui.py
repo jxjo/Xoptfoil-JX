@@ -123,11 +123,12 @@ class control_frame():
             ErrorMsg("strak-machine-image was not found in path %s" % path)
             return
 
-        img_width = int(350 * self.width/1920)
-        img_height = int(113 * self.heigth/1080)
+        scaleFactor = (self.width/1920.0)*1.6
+        img_width = int(350 * scaleFactor)
+        img_height = int(113 * scaleFactor)
 
         # Resize the image in the given (width, height)
-        sized_img = img.resize((img_width, img_height), Image.LANCZOS)
+        sized_img = img.resize((img_width, img_height))
 
         # Convert the image in TkImage
         self.my_img = ImageTk.PhotoImage(sized_img)
@@ -222,13 +223,13 @@ class control_frame():
         self.geometryParams_label = customtkinter.CTkLabel(master=frame,
                        text="Geometry parameters", text_font=("Roboto Medium", 13))
         self.thickness_label = customtkinter.CTkLabel(master=frame,
-                       text="Thickness", text_font=("Roboto Medium", 11))
+                       text="max Thickness", text_font=("Roboto Medium", 11))
         self.thicknessPosition_label = customtkinter.CTkLabel(master=frame,
-                       text="Thickness position", text_font=("Roboto Medium", 11))
+                       text="max Thickness position", text_font=("Roboto Medium", 11))
         self.camber_label = customtkinter.CTkLabel(master=frame,
-                       text="Camber", text_font=("Roboto Medium", 11))
+                       text="max Camber", text_font=("Roboto Medium", 11))
         self.camberPosition_label = customtkinter.CTkLabel(master=frame,
-                       text="Camber position", text_font=("Roboto Medium", 11))
+                       text="max Camber position", text_font=("Roboto Medium", 11))
 
         # place widgets inside frame
         self.geometryParams_label.grid(row=self.nextRow, columnspan=2, pady=0, padx=0)
