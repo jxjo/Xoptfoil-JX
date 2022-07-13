@@ -1425,11 +1425,12 @@ class strak_machineParams:
     # function that calculates dependend values
     def calculate_DependendValues(self):
         # setup tool-calls
-        #exeCallString =  " .." + bs + exePath + bs
+        firstExeCallString =  " .." + bs + exePath + bs
         exeCallString =  "echo y | .." + bs + exePath + bs # This will automatically answer with 'yes'
         pythonCallString = pythonInterpreterName + ' ..' + bs + scriptPath + bs
 
         self.xfoilWorkerCall = exeCallString + xfoilWorkerName + '.exe'
+        self.firstXoptfoilCall = firstExeCallString + xoptfoilName + '.exe'
         self.xoptfoilCall = exeCallString + xoptfoilName + '.exe'
         self.strakMachineCall = pythonCallString + strakMachineName + '.py'
         self.xoptfoilVisualizerCall = pythonCallString + xoptfoilVisualizerName + '.py'
@@ -2863,8 +2864,15 @@ def generate_Commandlines(params):
                 # insert name of airfoil to be processes into progress-file
                 insert_preliminaryAirfoilName(commandLines, progressFileName, competitorName)
 
+                # set callstring for calling xoptfoil
+                if (c==0):
+                    # first call
+                    xoptfoilCall = params.firstXoptfoilCall
+                else:
+                    xoptfoilCall = params.xoptfoilCall
+
                 # generate commandline for competitor-intermediate strak-airfoil
-                commandline = params.xoptfoilCall + " -i %s -r %d -a %s -o %s\n" %\
+                commandline = xoptfoilCall + " -i %s -r %d -a %s -o %s\n" %\
                 (iFile, ReList[i], seedfoilName, competitorName)
                 commandLines.append(commandline)
 
