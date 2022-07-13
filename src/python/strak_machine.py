@@ -1336,7 +1336,8 @@ class strak_machineParams:
         if not exists(coordfilename):
             # perform check of root airfoil and generate some data that can be read
             # with the visualizer
-            systemString = ("%s -w check -v -a %s\n\n" % (self.params.xfoilWorkerCall, (rootfoilName +'.dat')))
+            systemString = ("%s -w check -v -a %s\n\n" %\
+                (self.xfoilWorkerCall, self.airfoilNames[0]+'.dat'))
             system(systemString)
 
         # read design coordinates of root airfoil using the visualizer
@@ -3206,7 +3207,7 @@ def generate_rootfoil(params):
     rootfoilName = params.airfoilNames[0]
 
     # get the path where the seed-airfoil can be found
-    srcPath = "." + bs + airfoilPath
+    srcPath = "." + bs# + airfoilPath
 
     inputFilename = ".." + bs + ressourcesPath + bs + smoothInputFile
 
