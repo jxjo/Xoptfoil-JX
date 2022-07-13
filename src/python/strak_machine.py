@@ -1323,17 +1323,25 @@ class strak_machineParams:
         except:
             pass
         return 0
+
+
     def get_rootGeoParameters(self):
         return self.rootGeoParams
 
 
     def read_rootGeoParameters(self):
         coordfilename = self.airfoilNames[0] +'_temp' + bs + DesignCoordinatesName
-        zonetitle = 'zone t="Seed airfoil'
+
+        # check if file containing information about the root airfoil already exists
+        if not exists(coordfilename):
+            # perform check of root airfoil and generate some data that can be read
+            # with the visualizer
+            systemString = ("%s -w check -v -a %s\n\n" % (self.params.xfoilWorkerCall, (rootfoilName +'.dat')))
+            system(systemString)
 
         # read design coordinates of root airfoil using the visualizer
         (x, y, maxt, xmaxt, maxc, xmaxc, ioerror, deriv2, deriv3, name) =\
-                visualizer.read_airfoil_coordinates(coordfilename, zonetitle, 0)
+            visualizer.read_airfoil_coordinates(coordfilename, 'zone t="Seed airfoil', 0)
 
         thick_ref    = round( maxt*100, thick_decimals)
         thickPos_ref = round(xmaxt*100, thick_decimals)
@@ -3220,12 +3228,37 @@ def compose_Polarfilename_T2(ReSqrt_Cl, NCrit):
  % (round_Re(ReSqrt_Cl)/1000, round_Re(ReSqrt_Cl)%1000, NCrit))
 
 
+def generate_PolarCreationFile(fileName, polarType, params, ReList):
+    if polarType == 'T1':
+        inputFilename = get_PresetInputFileName(T1_polarInputFile, params)
+    elif polarType == 'T2':
+        inputFilename = get_PresetInputFileName(T2_polarInputFile, params)
+    else:
+        ErrorMsg("unknown polarType : %s" % polarType)
+
+    # read template file
+    fileContent = f90nml.read(inputFilename)
+
+    # add list of Re-numbers
+    polarGenerationOptions = fileContent['polar_generation']
+    polarGenerationOptions['polar_reynolds'] = ReList
+
+    # write new file
+    f90nml.write(fileContent, fileName, True)
+
+
+def get_missingPolars(params, rootfoilName, polarType):
+    if polarType == 'T1':
+        return params.maxReNumbers
+    elif polarType == 'T2':
+        return params.ReNumbers
+
+
 def generate_Polars(params, rootfoilName):
     # generate polars of seedfoil / root-airfoil:
     my_print("Generating polars for airfoil %s..." % rootfoilName)
 
     # compose polar-dir
-#    polarDir = '.' + bs + rootfoilName + '_polars' #FIXME why did this not work anymore and had to be changed?
     polarDir = '..' + bs + buildPath + bs + rootfoilName + '_polars'
 
     # create polars, polar-file-Names and input-file-names from Re-Numbers
@@ -3485,6 +3518,123 @@ def merge_Polars(polarFile_1, polarFile_2 , mergedPolarFile, mergeCL):
         sys.exit(-1)
 
 
+
+class polar_worker:
+    def __init__(self):
+        return
+
+    def compose_Polarfilename_T1(self, Re, NCrit):
+        return ("T1_Re%d.%03d_M0.00_N%.1f.txt"\
+            % (round_Re(Re)/1000, round_Re(Re)%1000, NCrit))
+
+
+    def compose_Polarfilename_T2(self, ReSqrt_Cl, NCrit):
+        return ("T2_Re%d.%03d_M0.00_N%.1f.txt"\
+     % (round_Re(ReSqrt_Cl)/1000, round_Re(ReSqrt_Cl)%1000, NCrit))
+
+
+    def generate_PolarCreationFile(self, fileName, polarType, params, ReList):
+        if polarType == 'T1':
+            inputFilename = get_PresetInputFileName(T1_polarInputFile, params)
+        elif polarType == 'T2':
+            inputFilename = get_PresetInputFileName(T2_polarInputFile, params)
+        else:
+            ErrorMsg("unknown polarType : %s" % polarType)
+
+        # read template file
+        fileContent = f90nml.read(inputFilename)
+
+        # add list of Re-numbers
+        polarGenerationOptions = fileContent['polar_generation']
+        polarGenerationOptions['polar_reynolds'] = ReList
+
+        # write new file
+        f90nml.write(fileContent, fileName, True)
+
+
+    def get_missingPolars(self, params, airfoilName, ReList_T1, ReList_T2):
+        # compose polar-dir
+        polarDir = '..' + bs + buildPath + bs + airfoilName + '_polars'
+        ReList_T1_missing = []
+        ReList_T2_missing = []
+
+        for Re in ReList_T1:
+            # create polar-file-Name T1-polar from Re-Number
+            polarFileName_T1 = self.compose_Polarfilename_T1(Re, params.NCrit)
+            polarFileNameAndPath_T1 = polarDir + bs + polarFileName_T1
+
+            if (not exists(polarFileNameAndPath_T1)):
+                ReList_T1_missing.append(Re)
+
+        for Re in ReList_T2:
+            # create polar-file-Name T2-polar from Re-Number
+            polarFileName_T2 = self.compose_Polarfilename_T2(Re, params.NCrit)
+            polarFileNameAndPath_T2 = polarDir + bs + polarFileName_T2
+
+            if (not exists(polarFileNameAndPath_T2)):
+                ReList_T2_missing.append(Re)
+
+        return (ReList_T1_missing, ReList_T2_missing)
+
+
+    def generate_Polars(self, params, airfoilName, ReList_T1, ReList_T2):
+        # generate polars for airfoil:
+        my_print("Generating polars for airfoil %s..." % airfoilName)
+
+        # get list of T1 polars that have to be generated
+        (ReList_T1_missing, ReList_T2_missing) =\
+             self.get_missingPolars(params, airfoilName, ReList_T1, ReList_T2)
+
+        if (len(ReList_T1_missing) > 0):
+            # create inputfile for worker
+            T1_fileName = 'iPolars_T1_%s.txt' % airfoilName
+            generate_PolarCreationFile(T1_fileName, 'T1', params, ReList_T1_missing)
+
+            # compose string for system-call of XFOIL-worker for T1-polar generation
+            systemString = params.xfoilWorkerCall + " -i \"%s\" -w polar -a \"%s\"" %\
+                                  (T1_fileName, airfoilName+'.dat')
+            system(systemString)
+
+
+        if (len(ReList_T2_missing) > 0):
+            # create inputfile for worker
+            T2_fileName = 'iPolars_T2_%s.txt' % airfoilName
+            generate_PolarCreationFile(T2_fileName, 'T2', params, ReList_T2_missing)
+
+            # compose string for system-call of XFOIL-worker for T1-polar generation
+            systemString = params.xfoilWorkerCall + " -i \"%s\" -w polar -a \"%s\"" %\
+                                  (T2_fileName, airfoilName+'.dat')
+            system(systemString)
+
+        DoneMsg()
+
+
+    def import_strakPolars(self, params):
+        params.strak_polars = []
+
+        # append two dummy entries, one for root polar, one for first strak airfoil
+        # the first strak airfoil uses the polar of root airfoil as a reference
+        params.strak_polars.append(None)
+        params.strak_polars.append(None)
+
+        for i in range(1, len(params.ReNumbers)-1):
+            # get name of the strak-airfoil
+            strakFoilName = params.airfoilNames[i]
+
+            # compose polar-dir of strak-airfoil-polars
+            polarDir = '.' + bs + strakFoilName + '_polars'
+            fileName = "merged_polar_%s.txt" % get_ReString(params.ReNumbers[i+1])
+            polarFileNameAndPath = polarDir + bs + fileName
+
+            try:
+                newPolar = polarData()
+                newPolar.import_FromFile(polarFileNameAndPath)
+                params.strak_polars.append(newPolar)
+            except:
+                params.strak_polars.append(None)
+                pass
+
+
 class reference_GeoParameters:
     def __init__(self):
         # reference data, this data may have to changed depending on the type of strak
@@ -3557,11 +3707,6 @@ class strak_machine:
         (rootfoilName +'.dat', airfoilPath, rootfoilName + '.dat')
         system(systemString)
 
-        # perform check of root airfoil and generate some data that can be read
-        # with the visualizer
-        systemString = ("%s -w check -v -a %s\n\n" % (self.params.xfoilWorkerCall, (rootfoilName +'.dat')))
-        system(systemString)
-
         # after root-airfoil data was generated, we can read geo parameters.
         # in case there are no geo parameters, we can initially create them using
         # data of root airfoil
@@ -3569,6 +3714,13 @@ class strak_machine:
 
         # check if all seedfoils are there, generate missing seedfoils
         self.check_andGenerateSeedfoils()
+
+        # create polar worker
+        self.polarWorker = polar_worker()
+
+        # create all necessary polars of root airfoil
+        self.polarWorker.generate_Polars(self.params, self.params.airfoilNames[0],
+                          self.params.maxReNumbers, self.params.ReNumbers)
 
         # generate polars of root-airfoil, also analyze
         generate_Polars(self.params, rootfoilName)
