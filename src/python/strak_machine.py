@@ -1331,14 +1331,22 @@ class strak_machineParams:
 
 
     def read_rootGeoParameters(self):
-        coordfilename = self.airfoilNames[0] +'_temp' + bs + DesignCoordinatesName
+        filepath = self.airfoilNames[0] +'_temp' + bs
+        coordfilename = filepath + DesignCoordinatesName
+        assessfilename = filepath + 'Assessment_Results.dat'
 
         # check if file containing information about the root airfoil already exists
-        if not exists(coordfilename):
+        if (not exists(coordfilename) or not exists(assessfilename)):
+            if exists(assessfilename):
+                # remove an existing assessment file in case it existst. Otherwise
+                # the new assessment results would be appended
+                remove(assessfilename)
+
             # perform check of root airfoil and generate some data that can be read
-            # with the visualizer
-            systemString = ("%s -w check -v -a %s\n\n" %\
-                (self.xfoilWorkerCall, self.airfoilNames[0]+'.dat'))
+            # by the visualizer and additional assassment data of the airfoil
+            systemString = ("%s -w check -v -a %s >%s\n" %\
+            (self.xfoilWorkerCall, self.airfoilNames[0]+'.dat', assessfilename))
+            print(systemString)
             system(systemString)
 
         # read design coordinates of root airfoil using the visualizer
