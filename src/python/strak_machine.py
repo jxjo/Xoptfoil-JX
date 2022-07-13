@@ -1335,6 +1335,10 @@ class strak_machineParams:
         coordfilename = filepath + DesignCoordinatesName
         assessfilename = filepath + 'Assessment_Results.dat'
 
+        # check if output-folder exists. If not, create folder.
+        if not path.exists(filepath):
+            makedirs(filepath)
+
         # check if file containing information about the root airfoil already exists
         if (not exists(coordfilename) or not exists(assessfilename)):
             if exists(assessfilename):
