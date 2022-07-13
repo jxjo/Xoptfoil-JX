@@ -2833,7 +2833,7 @@ def generate_Commandlines(params):
 
         # get name of the airfoil
         strakFoilName = params.airfoilNames[i] + ".dat"
-        seedfoilName = previousFoilname
+        seedfoilName = 'seed_%s.dat' % get_ReString(params.ReNumbers[i])
 
         # insert specification of sub-task
         insert_SubTaskStart(commandLines, progressFileName, strakFoilName)
