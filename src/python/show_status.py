@@ -85,17 +85,21 @@ class show_status():
         # set background-colour
         self.root.configure(bg=bg_colour)
 
-        # determine width and height
-        width_value = self.root.winfo_screenwidth()
-        height_value = self.root.winfo_screenheight()
+        # get screen width
+        width = self.root.winfo_screenwidth()
 
-        # determine scale factors
-        width_scaler = width_value/1920
-        heigth_scaler = height_value/1080
+        # determine scale factor
+        scaleFactor = (self.root.winfo_screenwidth()/1920.0)
+        if (width <= 1366):
+            scaleFactor = scaleFactor * 1.55
+        elif (width <= 1920):
+            scaleFactor = scaleFactor * 1.1
+        elif (width <= 3840):
+            scaleFactor = scaleFactor * 1.0
 
         # Same size will be defined in variable for center screen in Tk_Width and Tk_height
-        Tk_Width = 500#int(250 * width_scaler)
-        Tk_Height = 500#int(250 * heigth_scaler)
+        Tk_Width = 500
+        Tk_Height = 500
 
         # scale and place window
         self.root.geometry("%dx%d+0+0" % (Tk_Width, Tk_Height))
@@ -104,8 +108,8 @@ class show_status():
         imagename = (".." + bs + ressourcesPath + bs + logoName)
 
         # scale image
-        img_width = int(400 * width_scaler)
-        img_height = int(130 * heigth_scaler)
+        img_width = int(400 * scaleFactor)
+        img_height = int(130 * scaleFactor)
 
         # Creates a Tkinter-compatible photo image, which can be used everywhere
         # Tkinter expects an image object.
@@ -141,7 +145,7 @@ class show_status():
                'sticky': 'nswe'})])
 
         # length of progress bars
-        scaled_length = int(400 * width_scaler)
+        scaled_length = int(400 * scaleFactor)
 
         # main-Progress bar widget
         self.main_progressBar = Progressbar(self.root, orient="horizontal",

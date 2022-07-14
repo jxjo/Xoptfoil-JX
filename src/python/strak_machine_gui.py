@@ -125,12 +125,12 @@ class control_frame():
 
         scaleFactor = (self.width/1920.0)
         if (self.width <= 1366):
-            scaleFactor = scaleFactor * 1.6
+            scaleFactor = scaleFactor * 1.55
         elif (self.width <= 1920):
             scaleFactor = scaleFactor * 1.1
-        elif (self.width <= 3840):            
+        elif (self.width <= 3840):
             scaleFactor = scaleFactor * 1.0
-            
+
         img_width = int(350 * scaleFactor)
         img_height = int(113 * scaleFactor)
 
