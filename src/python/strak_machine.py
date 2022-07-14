@@ -58,6 +58,7 @@ T1_polarInputFile = 'iPolars_T1.txt'
 T2_polarInputFile = 'iPolars_T2.txt'
 smoothInputFile = 'iSmooth.txt'
 DesignCoordinatesName = 'Design_Coordinates.dat'
+AssessmentResultsName = 'Assessment_Results.dat'
 
 # filename of progress-file
 progressFileName = "progress.txt"
@@ -450,6 +451,17 @@ class inputFile:
             ncrit
             ErrorMsg("Unable to get NCrit from inputfile, using default-value %f" % NCrit_Default)
             return NCrit_Default
+
+
+    def set_reversals(self, reversals_top, reversals_bot):
+        try:
+            curvature = self.values['curvature']
+        except:
+            curvature = {}
+
+        curvature['max_curv_reverse_top'] = reversals_top
+        curvature['max_curv_reverse_bot'] = reversals_bot
+        self.values['curvature'] = curvature
 
 
     def set_shape_functions (self, shape_functions):
@@ -1330,28 +1342,35 @@ class strak_machineParams:
         return self.rootGeoParams
 
 
-    def read_rootGeoParameters(self):
-        filepath = self.airfoilNames[0] +'_temp' + bs
+    def generate_CoordsAndAssessFile(self, airfoilName):
+        filepath = airfoilName +'_temp' + bs
         coordfilename = filepath + DesignCoordinatesName
-        assessfilename = filepath + 'Assessment_Results.dat'
+        assessfilename = filepath + AssessmentResultsName
 
         # check if output-folder exists. If not, create folder.
         if not path.exists(filepath):
             makedirs(filepath)
 
-        # check if file containing information about the root airfoil already exists
-        if (not exists(coordfilename) or not exists(assessfilename)):
-            if exists(assessfilename):
-                # remove an existing assessment file in case it existst. Otherwise
-                # the new assessment results would be appended
-                remove(assessfilename)
+        if exists(assessfilename):
+            # remove an existing assessment file in case it exists. Otherwise
+            # the new assessment results would be appended
+            remove(assessfilename)
 
-            # perform check of root airfoil and generate some data that can be read
-            # by the visualizer and additional assassment data of the airfoil
-            systemString = ("%s -w check -v -a %s >%s\n" %\
-            (self.xfoilWorkerCall, self.airfoilNames[0]+'.dat', assessfilename))
-            print(systemString)
-            system(systemString)
+        if exists(coordfilename):
+            remove(coordfilename)
+
+        # perform check of airfoil and generate some data that can be read
+        # by the visualizer and additional assessment data of the airfoil
+        systemString = ("%s -w check -v -a %s >%s\n" %\
+            (self.xfoilWorkerCall, airfoilName+'.dat', assessfilename))
+        system(systemString)
+
+
+    def read_rootGeoParameters(self):
+        coordfilename = self.airfoilNames[0]+'_temp' + bs + DesignCoordinatesName
+
+        # generate the necessary files now
+        self.generate_CoordsAndAssessFile(self.airfoilNames[0])
 
         # read design coordinates of root airfoil using the visualizer
         (x, y, maxt, xmaxt, maxc, xmaxc, ioerror, deriv2, deriv3, name) =\
@@ -1417,6 +1436,33 @@ class strak_machineParams:
         # write to dicitonary
         self.set_geoParamsInDict(fileContent, self.geoParams)
 
+
+    def read_AssessmentData(self, airfoilName):
+        reversals = []
+        smoothingNecessary = True
+
+        filepath = airfoilName+'_temp' + bs
+        assessfilename = filepath + AssessmentResultsName
+
+        if exists(assessfilename):
+            file = open(assessfilename)
+            lines = file.readlines()
+            file.close()
+
+        for line in lines:
+            if line.find('perfect surface quality')>=0:
+                smoothingNecessary = False
+            elif line.find('Reversals')>=0:
+                splitlines = line.split('Reversals')
+                value = int(splitlines[1][0:3])
+                reversals.append(value)
+
+        return (reversals[1], reversals[3], smoothingNecessary)
+
+
+    def get_rootReversals(self):
+        (rev_top, rev_bot, smooth) = self.read_AssessmentData(self.airfoilNames[0])
+        return (rev_top, rev_bot)
 
     ############################################################################
     # function to change the NCrit-value in a given Namelist-file
@@ -3212,25 +3258,6 @@ def copyAndSmooth_Airfoil(xfoilWorkerCall, inputFilename, srcName, srcPath, dest
     DoneMsg()
 
 
-def generate_rootfoil(params):
-    # get name of seed-airfoil
-    seedFoilName = params.seedFoilName
-
-    # get name of root-airfoil
-    rootfoilName = params.airfoilNames[0]
-
-    # get the path where the seed-airfoil can be found
-    srcPath = "." + bs# + airfoilPath
-
-    inputFilename = ".." + bs + ressourcesPath + bs + smoothInputFile
-
-    # copy and smooth the airfoil, also rename
-    copyAndSmooth_Airfoil(params.xfoilWorkerCall, inputFilename, seedFoilName, srcPath,
-                          rootfoilName, params.smoothSeedfoil)
-
-    return rootfoilName
-
-
 
 def compose_Polarfilename_T1(Re, NCrit):
     return ("T1_Re%d.%03d_M0.00_N%.1f.txt"\
@@ -3714,7 +3741,9 @@ class strak_machine:
         # get current working dir again
         self.params.buildDir = getcwd()
 
-        rootfoilName = generate_rootfoil(self.params)
+        # generate rootfoil from seedfoil
+        rootfoilName = self.generate_rootfoil()
+
         # copy root-foil to airfoil-folder, as it can be used
         # as the root airfoil without optimization
         systemString = ("copy %s %s" + bs + "%s\n\n") % \
@@ -3929,12 +3958,39 @@ class strak_machine:
         # insert geo targets into inputfile
         newFile.set_geometryTargets((camb, thick))
 
+        # get reversals of root airfoil
+        (reversals_top, reversals_bot) = self.params.get_rootReversals()
+        newFile.set_reversals(reversals_top, reversals_bot)
+
+
         # multi-pass-optimization:
         # generate input-files for intermediate strak-airfoils
         self.generate_MultiPassInputFiles(airfoilIdx, writeToDisk, newFile)
 
         # append only input-file of final strak-airfoil to params
         self.params.inputFiles[i] = newFile
+
+    def generate_rootfoil(self):
+        # get name of seed-airfoil
+        seedFoilName = self.params.seedFoilName
+
+        # get name of root-airfoil
+        rootfoilName = self.params.airfoilNames[0]
+
+        # generate assessment data of seedfoil to find out, if smoothing is necessary
+        self.params.generate_CoordsAndAssessFile(seedFoilName)
+        (reversals_top, reversals_bot, smooth) = self.params.read_AssessmentData(seedFoilName)
+
+        # get the path where the seed-airfoil can be found
+        srcPath = "." + bs# + airfoilPath
+
+        inputFilename = ".." + bs + ressourcesPath + bs + smoothInputFile
+
+        # copy and smooth the airfoil, also rename
+        copyAndSmooth_Airfoil(self.params.xfoilWorkerCall, inputFilename,
+           seedFoilName, srcPath, rootfoilName, smooth)
+
+        return rootfoilName
 
     def generate_seedfoil(self, airfoilIdx):
         rootfoilName = self.params.airfoilNames[0] + '.dat'
