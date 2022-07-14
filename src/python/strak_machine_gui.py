@@ -123,7 +123,14 @@ class control_frame():
             ErrorMsg("strak-machine-image was not found in path %s" % path)
             return
 
-        scaleFactor = (self.width/1920.0)*1.6
+        scaleFactor = (self.width/1920.0)
+        if (self.width <= 1366):
+            scaleFactor = scaleFactor * 1.6
+        elif (self.width <= 1920):
+            scaleFactor = scaleFactor * 1.1
+        elif (self.width <= 3840):            
+            scaleFactor = scaleFactor * 1.0
+            
         img_width = int(350 * scaleFactor)
         img_height = int(113 * scaleFactor)
 
