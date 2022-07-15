@@ -537,7 +537,7 @@ class inputFile:
                 # check the op-point-value
                 CL = op_points[idx]
                 # is the CL below the CL-switchpoint T1/T2-polar ?
-                if (CL <= polarData.CL_switchpoint_Type2_Type1_polar):
+                if (CL <= polarData.CL_merge):
                     # yes, adapt maxRe --> Type 1 oppoint
                     reynolds[idx] = int(polarData.maxRe)
                     my_print("adapted oppoint @ Cl = %0.3f, Type 1, Re = %d\n" % \
@@ -921,7 +921,7 @@ class strak_machineParams:
         self.numOpPoints = 17
         self.CL_min = -0.1
         self.CL_preMaxSpeed = 0.2
-        self.CL_switchpoint_Type2_Type1_polar = 0.05
+        self.CL_merge = 0.05
         self.maxReFactor = 15.0
         self.maxLiftDistance = 0.03
         self.alpha_Resolution = 0.001
@@ -943,9 +943,10 @@ class strak_machineParams:
         self.polarFileNames_T1 = []
         self.polarFileNames_T2 = []
         self.inputFileNames = []
-        self.T1_polars = []
-        self.T2_polars = []
+        #self.T1_polars = []
+        #self.T2_polars = []
         self.merged_polars = []
+        self.seedfoilPolars = []
         self.target_polars = []
         self.strak_polars = []
         self.inputFiles = []
@@ -1513,9 +1514,8 @@ class strak_machineParams:
             ReMax = int(round(Re * self.maxReFactor, 0))
             self.maxReNumbers.append(ReMax)
 
-        # calculate Cl where polar-generation is going to switch from
-        # type2- to type1-polar
-        self.CL_switchpoint_Type2_Type1_polar =\
+        # calculate Cl where T1 and T2 polars will be merged
+        self.CL_merge =\
                    ((self.ReNumbers[0] * self.ReNumbers[0]))/\
                    ((self.maxReNumbers[0])*(self.maxReNumbers[0]))
 
@@ -2284,7 +2284,7 @@ class polarData:
         self.pre_maxLift_idx = 0
         self.alpha_pre_maxLift = 0.0
         self.operatingConditions = None
-        self.CL_switchpoint_Type2_Type1_polar = 999999
+        self.CL_merge = 999999
         self.T2_T1_switchIdx = 0
 
 
@@ -2428,14 +2428,19 @@ class polarData:
         self.determine_alpha_CL0(params)
         DoneMsg()
 
+    # this function must be called after reading a merged polar from file
+    def restore_mergeData(self, CL_merge, maxRe):
+        self.CL_merge = CL_merge
+        self.maxRe = maxRe
+        for idx in range(len(self.CL)):
+            if (self.CL[idx] <= CL_merge):
+                self.T2_T1_switchIdx = idx
 
     # merge two polars at a certain CL-value, return a merged-polar
     # mergePolar_1 will be the "lower" part of the merged-polar from
     # minimum CL up to the CL-value where the merge happens.
     # "self" will be the upper part of the merged-polar
-    def merge(self, mergePolar_1, switching_CL, maxRe):
-        my_print ("merging polars at CL = %s" % switching_CL)
-
+    def merge(self, mergePolar_1, CL_merge, maxRe):
         # create a new, empty polar
         mergedPolar = polarData()
 
@@ -2444,13 +2449,13 @@ class polarData:
         mergedPolar.polarType = 12
         mergedPolar.Re = self.Re
         mergedPolar.NCrit = 1.0
-        mergedPolar.CL_switchpoint_Type2_Type1_polar = switching_CL
+        mergedPolar.CL_merge = CL_merge
         mergedPolar.maxRe = maxRe
         mergedPolar.polarName = 'merged_polar_%s' % get_ReString(self.Re)
 
-        # merge first polar from start Cl to switching_Cl
+        # merge first polar from start Cl to CL_merge
         for idx in range(len(mergePolar_1.CL)):
-            if (mergePolar_1.CL[idx] <= switching_CL):
+            if (mergePolar_1.CL[idx] <= CL_merge):
                 mergedPolar.alpha.append(mergePolar_1.alpha[idx])
                 mergedPolar.CL.append(mergePolar_1.CL[idx])
                 mergedPolar.CD.append(mergePolar_1.CD[idx])
@@ -2463,7 +2468,7 @@ class polarData:
 
         # merge second polar from switching_Cl to end Cl
         for idx in range(len(self.CL)):
-            if (self.CL[idx] > switching_CL):
+            if (self.CL[idx] > CL_merge):
                 mergedPolar.alpha.append(self.alpha[idx])
                 mergedPolar.CL.append(self.CL[idx])
                 mergedPolar.CD.append(self.CD[idx])
@@ -2554,7 +2559,7 @@ class polarData:
         self.Bot_Xtr = new_Bot_Xtr
 
         # correct the switching-idx between T1 / T2-polar
-        self.T2_T1_switchIdx = self.find_index_From_CL(self.CL_switchpoint_Type2_Type1_polar)
+        self.T2_T1_switchIdx = self.find_index_From_CL(self.CL_merge)
         #my_print("Ready")#Debug
 
 
@@ -2749,7 +2754,7 @@ def generate_polarCreationCommandLines(commandlines, params, strakFoilName, maxR
     commandline = params.strakMachineCall + " -w merge -p1 \"%s\"  -p2 \"%s\""\
                  " -m \"%s\" -c %f\n" %\
               (polarFileNameAndPath_T1, polarFileNameAndPath_T2,
-               mergedPolarFileName, params.CL_switchpoint_Type2_Type1_polar)
+               mergedPolarFileName, params.CL_merge)
     commandlines.append(commandline)
 
 
@@ -3268,124 +3273,6 @@ def compose_Polarfilename_T2(ReSqrt_Cl, NCrit):
  % (round_Re(ReSqrt_Cl)/1000, round_Re(ReSqrt_Cl)%1000, NCrit))
 
 
-def generate_PolarCreationFile(fileName, polarType, params, ReList):
-    if polarType == 'T1':
-        inputFilename = get_PresetInputFileName(T1_polarInputFile)
-    elif polarType == 'T2':
-        inputFilename = get_PresetInputFileName(T2_polarInputFile)
-    else:
-        ErrorMsg("unknown polarType : %s" % polarType)
-
-    # read template file
-    fileContent = f90nml.read(inputFilename)
-
-    # add list of Re-numbers
-    polarGenerationOptions = fileContent['polar_generation']
-    polarGenerationOptions['polar_reynolds'] = ReList
-
-    # write new file
-    f90nml.write(fileContent, fileName, True)
-
-
-def get_missingPolars(params, rootfoilName, polarType):
-    if polarType == 'T1':
-        return params.maxReNumbers
-    elif polarType == 'T2':
-        return params.ReNumbers
-
-
-def generate_Polars(params, rootfoilName):
-    # generate polars of seedfoil / root-airfoil:
-    my_print("Generating polars for airfoil %s..." % rootfoilName)
-
-    # compose polar-dir
-    polarDir = '..' + bs + buildPath + bs + rootfoilName + '_polars'
-
-    # create polars, polar-file-Names and input-file-names from Re-Numbers
-    for ReIdx in range(len(params.ReNumbers)):
-        # get Re, maxRe
-        Re = params.ReNumbers[ReIdx]
-        maxRe = params.maxReNumbers[ReIdx]
-
-        # create polar-file-Name T1-polar from maxRe-Number
-        polarFileName_T1 = compose_Polarfilename_T1(maxRe, params.NCrit)
-        polarFileNameAndPath_T1 = polarDir + bs + polarFileName_T1
-        params.polarFileNames_T1.append(polarFileNameAndPath_T1)
-
-        # create polar-file-Name T2-polar from Re-Number
-        polarFileName_T2 = compose_Polarfilename_T2(Re, params.NCrit)
-        polarFileNameAndPath_T2 = polarDir + bs + polarFileName_T2
-        params.polarFileNames_T2.append(polarFileNameAndPath_T2)
-
-        # generate inputfilename from Re-number
-        inputFilename = params.xoptfoilTemplate + ("_%s.txt" % get_ReString(Re))
-
-        # multi-pass-optimization: generate input-filenames for intermediate-airfoils
-        for n in range(1, (params.optimizationPasses)):
-            name = inputFilename
-            name = remove_suffix(name, ".txt")
-            name = name + ("_%d.txt" % n)
-            params.inputFileNames.append(name)
-
-        # append name of inputfile for final airfoil
-        params.inputFileNames.append(inputFilename)
-
-        # compose string for system-call of XFOIL-worker for T1-polar generation
-        airfoilName = rootfoilName + '.dat'
-        inputFilename = get_PresetInputFileName(T1_polarInputFile)
-        systemString_T1 = params.xfoilWorkerCall + " -i \"%s\" -o \"%s\" -w polar -a \"%s\" -r %d" %\
-                              (inputFilename, rootfoilName, airfoilName, maxRe)
-
-        # compose string for system-call of XFOIL-worker for T2-polar generation
-        inputFilename = get_PresetInputFileName(T2_polarInputFile)
-        systemString_T2 = params.xfoilWorkerCall + " -i \"%s\" -o \"%s\" -w polar -a \"%s\" -r %d" %\
-                                 (inputFilename, rootfoilName, airfoilName, Re)
-
-        # import polar type 1
-        newPolar_T1 = polarData()
-        try:
-            newPolar_T1.import_FromFile(polarFileNameAndPath_T1)
-        except:
-            # execute xfoil-worker / create T1 polar-file
-            my_print("Generating polar %s" % polarFileName_T1)
-            system(systemString_T1)
-            newPolar_T1.import_FromFile(polarFileNameAndPath_T1)
-
-        params.T1_polars.append(newPolar_T1)
-
-        # import polar type 2
-        newPolar_T2 = polarData()
-        try:
-            newPolar_T2.import_FromFile(polarFileNameAndPath_T2)
-        except:
-            # execute xfoil-worker / create T2 polar-file
-            my_print("Generating polar %s" % polarFileName_T2)
-            system(systemString_T2)
-            newPolar_T2.import_FromFile(polarFileNameAndPath_T2)
-
-        params.T2_polars.append(newPolar_T2)
-
-        # merge T1/T2 polars at Cl switching-point
-        mergedPolar = newPolar_T2.merge(newPolar_T1,
-                         params.CL_switchpoint_Type2_Type1_polar, maxRe)
-
-        # write merged polar to file
-        polarFileNameAndPath = polarDir + bs + ('merged_polar_%3s.txt' %\
-                              get_ReString(newPolar_T2.Re))
-        mergedPolar.write_ToFile(polarFileNameAndPath)
-
-        # change resolution of alpha for accurate conversion between CL /CD/ alpha
-        mergedPolar.set_alphaResolution(params.alpha_Resolution)
-
-        # analyze merged polar
-        mergedPolar.analyze(params)
-
-        # add merged polar to params
-        params.merged_polars.append(mergedPolar)
-
-    DoneMsg()
-
-
 def import_strakPolars(params):
     params.strak_polars = []
 
@@ -3560,9 +3447,12 @@ def merge_Polars(polarFile_1, polarFile_2 , mergedPolarFile, mergeCL):
 
 
 class polar_worker:
-    def __init__(self, NCrit, xfoilWorkerCall):
-        self.NCrit = NCrit
-        self.xfoilWorkerCall = xfoilWorkerCall
+    def __init__(self, params):
+        self.params = params
+        self.NCrit = params.NCrit
+        self.xfoilWorkerCall = params.xfoilWorkerCall
+        self.alpha_Resolution = params.alpha_Resolution
+        self.CL_merge = params.CL_merge
 
 
     def generate_PolarCreationFile(self, fileName, polarType, ReList):
@@ -3620,12 +3510,64 @@ class polar_worker:
         return (ReList_T1_missing, ReList_T2_missing)
 
 
-    def import_Polars(self, airfoilName, ReList_T1, ReList_T2):
+    def import_polars(self, airfoilName, ReList_T1, ReList_T2):
         # import polars of airfoil
         my_print("Importing polars for airfoil %s..." % airfoilName)
 
+        merged_polars = []
+        num = len(ReList_T1)
+        polarDir = '..' + bs + buildPath + bs + airfoilName + '_polars'
 
-    def generate_Polars(self, airfoilName, ReList_T1, ReList_T2):
+        if (num != len(ReList_T2)):
+            ErrorMsg("number of list elements for T1 and T2 must be equal!")
+            return None
+
+        for idx in range(num):
+            Re_T1 = ReList_T1[idx]
+            Re_T2 = ReList_T2[idx]
+
+            # get filename of merged polar
+            mergedPolarfileName = polarDir + bs + ('merged_polar_%3s.txt' %\
+                                      get_ReString(Re_T2))
+
+            # check if merged polar already exists as a file
+            if exists(mergedPolarfileName):
+                # yes, import from file
+                mergedPolar = polarData()
+                mergedPolar.import_FromFile(mergedPolarfileName)
+                mergedPolar.restore_mergeData(self.CL_merge, Re_T1)
+            else:
+                # does not exist. Read corresponding T1 polar from file
+                fileName = polarDir + bs + self.get_polarfileName_T1(Re_T1)
+                newPolar_T1 = polarData()
+                newPolar_T1.import_FromFile(fileName)
+
+                # read corresponding T2 polar from file
+                fileName = polarDir + bs + self.get_polarfileName_T2(Re_T2)
+                newPolar_T2 = polarData()
+                newPolar_T2.import_FromFile(fileName)
+
+                # merge T1/T2 polars at Cl_merge
+                mergedPolar = newPolar_T2.merge(newPolar_T1,
+                                                self.CL_merge, Re_T1)
+
+                # write merged polar to file (with original alpha resolution
+                # to save disk space)
+                mergedPolar.write_ToFile(mergedPolarfileName)
+
+            # change resolution of alpha for accurate conversion between CL /CD/ alpha
+            mergedPolar.set_alphaResolution(self.alpha_Resolution)
+
+            # analyze merged polar
+            mergedPolar.analyze(self.params)
+
+            # add merged polar to list
+            merged_polars.append(mergedPolar)
+
+        return merged_polars
+
+
+    def generate_polars(self, airfoilName, ReList_T1, ReList_T2):
         # generate polars for airfoil
         my_print("Generating polars for airfoil %s..." % airfoilName)
 
@@ -3770,8 +3712,6 @@ class strak_machine:
 
         # import existing polars
         self.import_polars()
-        # import polars of strak-airfoils, if they exist
-        import_strakPolars(self.params)
 
         # calculate target-values for the main op-points
         self.params.calculate_MainTargetValues()
@@ -3810,11 +3750,26 @@ class strak_machine:
     def read_InputFiles(self):
         NoteMsg("Reading inputfiles...")
 
-        # clear are previsously generated inputfiles
-        self.params.inputFiles.clear()
-        num = len(self.params.ReNumbers)
+        # clear are previsously generated inputfiles and -names
+        self.params.inputFiles = []
+        self.params.inputFileNames = []
 
-        for idx in range(num):
+        # first generate inputfile names
+        for Re in self.params.ReNumbers:
+            # generate inputfilename from Re-number
+            inputFilename = self.params.xoptfoilTemplate + ("_%s.txt" % get_ReString(Re))
+
+            # multi-pass-optimization: generate input-filenames for intermediate-airfoils
+            for n in range(1, (self.params.optimizationPasses)):
+                name = inputFilename
+                name = remove_suffix(name, ".txt")
+                name = name + ("_%d.txt" % n)
+                self.params.inputFileNames.append(name)
+
+            # append name of inputfile for final airfoil
+            self.params.inputFileNames.append(inputFilename)
+
+        for idx in range(len(self.params.ReNumbers)):
             # create input-file and append to list
             new_inputFile = inputFile(self.params)
             self.params.inputFiles.append(new_inputFile)
@@ -3843,16 +3798,11 @@ class strak_machine:
 
     def check_andGeneratePolars(self):
         # create polar worker
-        self.polarWorker = polar_worker(self.params.NCrit,
-                                        self.params.xfoilWorkerCall)
+        self.polarWorker = polar_worker(self.params)
 
         # create all necessary polars of root airfoil
-        self.polarWorker.generate_Polars(self.params.airfoilNames[0],
+        self.polarWorker.generate_polars(self.params.airfoilNames[0],
                           self.params.maxReNumbers, self.params.ReNumbers)
-
-
-        # generate polars of root-airfoil, also analyze
-        generate_Polars(self.params, self.params.airfoilNames[0]) # FIXME migrate to polar worker
 
         # generate polars of seedfoils
         num = len(self.params.ReNumbers)
@@ -3861,24 +3811,29 @@ class strak_machine:
             Re_T1 = [self.params.maxReNumbers[idx]]
             Re_T2 = [self.params.ReNumbers[idx]]
 
-            self.polarWorker.generate_Polars(self.params.seedfoilNames[idx-1],
+            self.polarWorker.generate_polars(self.params.seedfoilNames[idx-1],
                                              Re_T1, Re_T2)
 
 
     def import_polars(self):
         # import polars of root airfoil
-        self.polarWorker.import_Polars(self.params.airfoilNames[0],
-                          self.params.maxReNumbers, self.params.ReNumbers)
+        self.params.merged_polars =\
+             self.polarWorker.import_polars(self.params.airfoilNames[0],
+                             self.params.maxReNumbers, self.params.ReNumbers)
 
         # import polars of seedfoils
         num = len(self.params.ReNumbers)
+        self.params.seedfoilPolars = []
 
         for idx in range(1, num):
             Re_T1 = [self.params.maxReNumbers[idx]]
             Re_T2 = [self.params.ReNumbers[idx]]
 
-            self.polarWorker.import_Polars(self.params.seedfoilNames[idx-1],
-                                           Re_T1, Re_T2)
+            merged_polar =\
+                self.polarWorker.import_polars(self.params.seedfoilNames[idx-1],
+                                               Re_T1, Re_T2)
+
+            self.params.seedfoilPolars.append(merged_polar)
 
         # import polars of strak-airfoils, if they exist
         import_strakPolars(self.params) #FIXME migrate to polar worker
