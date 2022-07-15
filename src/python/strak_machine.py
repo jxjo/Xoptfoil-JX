@@ -122,13 +122,13 @@ def my_print(message):
 #
 ################################################################################
 def ErrorMsg(message):
-    my_print(colored(' Error: ', 'red') + message)
+    my_print(colored('Error: ', 'red') + message)
 
 def WarningMsg(message):
-    my_print(colored(' Warning: ', 'yellow') + message)
+    my_print(colored('Warning: ', 'yellow') + message)
 
 def NoteMsg(message):
-    my_print(colored(' Note: ', 'cyan') + message)
+    my_print(colored('Note: ', 'cyan') + message)
 
 def DoneMsg():
     my_print("Done.\n")
@@ -943,10 +943,8 @@ class strak_machineParams:
         self.polarFileNames_T1 = []
         self.polarFileNames_T2 = []
         self.inputFileNames = []
-        #self.T1_polars = []
-        #self.T2_polars = []
         self.merged_polars = []
-        self.seedfoilPolars = []
+        self.seedfoil_polars = []
         self.target_polars = []
         self.strak_polars = []
         self.inputFiles = []
@@ -1551,14 +1549,16 @@ class strak_machineParams:
     def calculate_MainTargetValues(self):
         # get root-polar
         rootPolar = self.merged_polars[0]
-        num = len(self.merged_polars)
+        num = len(self.ReNumbers)
 
         # clear all targets
         self.clear_MainTargetValues()
 
         for idx in range(num):
-            # get polar according to Re
-            polar = self.merged_polars[idx]
+            if (idx == 0):
+                polar = self.merged_polars[idx]
+            else:
+                polar = self.seedfoil_polars[idx-1]
 
             # Get root-polar for this operation
             rootPolar = self.merged_polars[0]
@@ -3363,9 +3363,6 @@ def generate_TargetPolars(params, writeToDisk):
         # create new target polar
         targetPolar = polarData()
 
-        # get strak-Polar
-        strakPolar = params.merged_polars[i]
-
         # put the necessary data into the polar
         set_PolarDataFromInputFile(targetPolar, rootPolar, inputFile,
                                   airfoilName, Re[i], i)
@@ -3803,17 +3800,17 @@ class strak_machine:
 
         # import polars of seedfoils
         num = len(self.params.ReNumbers)
-        self.params.seedfoilPolars = []
+        self.params.seedfoil_polars = []
 
         for idx in range(1, num):
             Re_T1 = [self.params.maxReNumbers[idx]]
             Re_T2 = [self.params.ReNumbers[idx]]
 
-            merged_polar =\
+            merged_polars =\
                 self.polarWorker.import_polars(self.params.seedfoilNames[idx-1],
                                                Re_T1, Re_T2)
-
-            self.params.seedfoilPolars.append(merged_polar)
+            # worker call will return list, containing only one element
+            self.params.seedfoil_polars.append(merged_polars[0])
 
         # import polars of strak-airfoils, if they exist
         self.params.strak_polars = self.polarWorker.import_strakPolars()
@@ -3867,7 +3864,12 @@ class strak_machine:
 
     def create_new_inputFile(self, i):
          # get strak-polar
-        strakPolar = self.params.merged_polars[i]
+        if (i>0):
+            # use polar of respective seedfoil to initialize target values
+            strakPolar = self.params.seedfoil_polars[i-1]
+        else:
+            # use polar of rootfoil to initialize target values
+            strakPolar = self.params.merged_polars[i]
 
         # create new inputfile from template
         newFile = inputFile(self.params)
