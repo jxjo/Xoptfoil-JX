@@ -180,7 +180,7 @@ def remove_suffix(text, suffix):
 
 # get the name and absolute path of an template xoptfoil-input-file, that
 # resides in the 'presets'-folder.
-def get_PresetInputFileName(xoptfoilTemplate, params):
+def get_PresetInputFileName(xoptfoilTemplate):
     searchPaths = []
     searchPaths.append(".." + bs + ressourcesPath)
 
@@ -217,8 +217,7 @@ class inputFile:
         self.idx_additionalOpPoints = []
 
         # get name and path of xoptfoil-inputfile
-        self.presetInputFileName = get_PresetInputFileName(params.xoptfoilTemplate,
-                                                           params)
+        self.presetInputFileName = get_PresetInputFileName(params.xoptfoilTemplate)
 
         # read input-file as a Fortan namelist
         self.values = f90nml.read(self.presetInputFileName)
@@ -2732,7 +2731,7 @@ def generate_polarCreationCommandLines(commandlines, params, strakFoilName, maxR
                  ('merged_polar_%s.txt' % get_ReString(Re))
 
     # T1-polar
-    inputFilename = get_PresetInputFileName('iPolars_T1', params)
+    inputFilename = get_PresetInputFileName('iPolars_T1')
     commandline = params.xfoilWorkerCall + " -i \"%s\" -a \"%s\" -w polar -o \"%s\" -r %d\n" %\
                              (inputFilename, strakFoilName,
                              remove_suffix(strakFoilName, '.dat'),
@@ -2740,7 +2739,7 @@ def generate_polarCreationCommandLines(commandlines, params, strakFoilName, maxR
     commandlines.append(commandline)
 
     # T2-polar
-    inputFilename = get_PresetInputFileName('iPolars_T2', params)
+    inputFilename = get_PresetInputFileName('iPolars_T2')
     commandline = params.xfoilWorkerCall + " -i \"%s\" -a \"%s\" -w polar -o \"%s\" -r %d\n" %\
                              (inputFilename, strakFoilName,
                               remove_suffix(strakFoilName, '.dat'), Re)
@@ -2948,7 +2947,7 @@ def generate_Commandlines(params):
                 # creation
                 if (params.smoothStrakFoils):
                     # smooth the airfoil
-                    smoothFileName = get_PresetInputFileName(smoothInputFile, params)
+                    smoothFileName = get_PresetInputFileName(smoothInputFile)
 
                     # compose commandline for smoothing the airfoil
                     commandline = params.xfoilWorkerCall + " -w smooth -i %s -a %s -o %s\n" % \
@@ -2988,7 +2987,7 @@ def generate_Commandlines(params):
         # creation
         if (params.smoothStrakFoils):
             # smooth the airfoil
-            inputFilename = get_PresetInputFileName(smoothInputFile, params)
+            inputFilename = get_PresetInputFileName(smoothInputFile)
 
             # compose commandline for smoothing the airfoil
             commandline = params.xfoilWorkerCall + " -w smooth -i %s -a %s -o %s\n" % \
@@ -3271,9 +3270,9 @@ def compose_Polarfilename_T2(ReSqrt_Cl, NCrit):
 
 def generate_PolarCreationFile(fileName, polarType, params, ReList):
     if polarType == 'T1':
-        inputFilename = get_PresetInputFileName(T1_polarInputFile, params)
+        inputFilename = get_PresetInputFileName(T1_polarInputFile)
     elif polarType == 'T2':
-        inputFilename = get_PresetInputFileName(T2_polarInputFile, params)
+        inputFilename = get_PresetInputFileName(T2_polarInputFile)
     else:
         ErrorMsg("unknown polarType : %s" % polarType)
 
@@ -3333,12 +3332,12 @@ def generate_Polars(params, rootfoilName):
 
         # compose string for system-call of XFOIL-worker for T1-polar generation
         airfoilName = rootfoilName + '.dat'
-        inputFilename = get_PresetInputFileName(T1_polarInputFile, params)
+        inputFilename = get_PresetInputFileName(T1_polarInputFile)
         systemString_T1 = params.xfoilWorkerCall + " -i \"%s\" -o \"%s\" -w polar -a \"%s\" -r %d" %\
                               (inputFilename, rootfoilName, airfoilName, maxRe)
 
         # compose string for system-call of XFOIL-worker for T2-polar generation
-        inputFilename = get_PresetInputFileName(T2_polarInputFile, params)
+        inputFilename = get_PresetInputFileName(T2_polarInputFile)
         systemString_T2 = params.xfoilWorkerCall + " -i \"%s\" -o \"%s\" -w polar -a \"%s\" -r %d" %\
                                  (inputFilename, rootfoilName, airfoilName, Re)
 
@@ -3561,24 +3560,16 @@ def merge_Polars(polarFile_1, polarFile_2 , mergedPolarFile, mergeCL):
 
 
 class polar_worker:
-    def __init__(self):
-        return
-
-    def compose_Polarfilename_T1(self, Re, NCrit):
-        return ("T1_Re%d.%03d_M0.00_N%.1f.txt"\
-            % (round_Re(Re)/1000, round_Re(Re)%1000, NCrit))
+    def __init__(self, NCrit, xfoilWorkerCall):
+        self.NCrit = NCrit
+        self.xfoilWorkerCall = xfoilWorkerCall
 
 
-    def compose_Polarfilename_T2(self, ReSqrt_Cl, NCrit):
-        return ("T2_Re%d.%03d_M0.00_N%.1f.txt"\
-     % (round_Re(ReSqrt_Cl)/1000, round_Re(ReSqrt_Cl)%1000, NCrit))
-
-
-    def generate_PolarCreationFile(self, fileName, polarType, params, ReList):
+    def generate_PolarCreationFile(self, fileName, polarType, ReList):
         if polarType == 'T1':
-            inputFilename = get_PresetInputFileName(T1_polarInputFile, params)
+            inputFilename = get_PresetInputFileName(T1_polarInputFile)
         elif polarType == 'T2':
-            inputFilename = get_PresetInputFileName(T2_polarInputFile, params)
+            inputFilename = get_PresetInputFileName(T2_polarInputFile)
         else:
             ErrorMsg("unknown polarType : %s" % polarType)
 
@@ -3593,46 +3584,62 @@ class polar_worker:
         f90nml.write(fileContent, fileName, True)
 
 
-    def get_missingPolars(self, params, airfoilName, ReList_T1, ReList_T2):
+    def get_polarfileName_T1(self, Re):
+
+        # create polar-file-Name T1-polar from Re-Number
+        polarfileName_T1 = "T1_Re%d.%03d_M0.00_N%.1f.txt"\
+                          % (round_Re(Re)/1000, round_Re(Re)%1000, self.NCrit)
+
+        return polarfileName_T1
+
+
+    def get_polarfileName_T2(self, ReSqrt_Cl):
+        # create polar-file-Name T2-polar from Re-Number
+        polarfileName_T2 = "T2_Re%d.%03d_M0.00_N%.1f.txt"\
+                 % (round_Re(ReSqrt_Cl)/1000, round_Re(ReSqrt_Cl)%1000, self.NCrit)
+
+        return polarfileName_T2
+
+
+    def get_missingPolars(self, airfoilName, ReList_T1, ReList_T2):
         # compose polar-dir
         polarDir = '..' + bs + buildPath + bs + airfoilName + '_polars'
         ReList_T1_missing = []
         ReList_T2_missing = []
 
         for Re in ReList_T1:
-            # create polar-file-Name T1-polar from Re-Number
-            polarFileName_T1 = self.compose_Polarfilename_T1(Re, params.NCrit)
-            polarFileNameAndPath_T1 = polarDir + bs + polarFileName_T1
-
-            if (not exists(polarFileNameAndPath_T1)):
+            fileName = polarDir + bs + self.get_polarfileName_T1(Re)
+            if (not exists(fileName)):
                 ReList_T1_missing.append(Re)
 
         for Re in ReList_T2:
-            # create polar-file-Name T2-polar from Re-Number
-            polarFileName_T2 = self.compose_Polarfilename_T2(Re, params.NCrit)
-            polarFileNameAndPath_T2 = polarDir + bs + polarFileName_T2
-
-            if (not exists(polarFileNameAndPath_T2)):
+            fileName = polarDir + bs + self.get_polarfileName_T2(Re)
+            if (not exists(fileName)):
                 ReList_T2_missing.append(Re)
 
         return (ReList_T1_missing, ReList_T2_missing)
 
 
-    def generate_Polars(self, params, airfoilName, ReList_T1, ReList_T2):
-        # generate polars for airfoil:
+    def import_Polars(self, airfoilName, ReList_T1, ReList_T2):
+        # import polars of airfoil
+        my_print("Importing polars for airfoil %s..." % airfoilName)
+
+
+    def generate_Polars(self, airfoilName, ReList_T1, ReList_T2):
+        # generate polars for airfoil
         my_print("Generating polars for airfoil %s..." % airfoilName)
 
         # get list of T1 polars that have to be generated
         (ReList_T1_missing, ReList_T2_missing) =\
-             self.get_missingPolars(params, airfoilName, ReList_T1, ReList_T2)
+             self.get_missingPolars(airfoilName, ReList_T1, ReList_T2)
 
         if (len(ReList_T1_missing) > 0):
             # create inputfile for worker
             T1_fileName = 'iPolars_T1_%s.txt' % airfoilName
-            generate_PolarCreationFile(T1_fileName, 'T1', params, ReList_T1_missing)
+            self.generate_PolarCreationFile(T1_fileName, 'T1', ReList_T1_missing)
 
             # compose string for system-call of XFOIL-worker for T1-polar generation
-            systemString = params.xfoilWorkerCall + " -i \"%s\" -w polar -a \"%s\"" %\
+            systemString = self.xfoilWorkerCall + " -i \"%s\" -w polar -a \"%s\"" %\
                                   (T1_fileName, airfoilName+'.dat')
             system(systemString)
 
@@ -3640,10 +3647,10 @@ class polar_worker:
         if (len(ReList_T2_missing) > 0):
             # create inputfile for worker
             T2_fileName = 'iPolars_T2_%s.txt' % airfoilName
-            generate_PolarCreationFile(T2_fileName, 'T2', params, ReList_T2_missing)
+            self.generate_PolarCreationFile(T2_fileName, 'T2', ReList_T2_missing)
 
             # compose string for system-call of XFOIL-worker for T1-polar generation
-            systemString = params.xfoilWorkerCall + " -i \"%s\" -w polar -a \"%s\"" %\
+            systemString = self.xfoilWorkerCall + " -i \"%s\" -w polar -a \"%s\"" %\
                                   (T2_fileName, airfoilName+'.dat')
             system(systemString)
 
@@ -3741,7 +3748,7 @@ class strak_machine:
         # get current working dir again
         self.params.buildDir = getcwd()
 
-        # generate rootfoil from seedfoil
+        # generate rootfoil from seedfoil (will perform airfoil assessment)
         rootfoilName = self.generate_rootfoil()
 
         # copy root-foil to airfoil-folder, as it can be used
@@ -3758,16 +3765,11 @@ class strak_machine:
         # check if all seedfoils are there, generate missing seedfoils
         self.check_andGenerateSeedfoils()
 
-        # create polar worker
-        self.polarWorker = polar_worker()
+        # check existing polars and create them, if missing
+        self.check_andGeneratePolars()
 
-        # create all necessary polars of root airfoil
-        self.polarWorker.generate_Polars(self.params, self.params.airfoilNames[0],
-                          self.params.maxReNumbers, self.params.ReNumbers)
-
-        # generate polars of root-airfoil, also analyze
-        generate_Polars(self.params, rootfoilName)
-
+        # import existing polars
+        self.import_polars()
         # import polars of strak-airfoils, if they exist
         import_strakPolars(self.params)
 
@@ -3828,12 +3830,58 @@ class strak_machine:
 
     def check_andGenerateSeedfoils(self):
         num = len(self.params.ReNumbers)
+        self.params.seedfoilNames = []
+
         for idx in range(1, num):
             Re = self.params.ReNumbers[idx]
-            seedfoilName = 'seed_%s.dat' % get_ReString(Re)
+            seedfoilName = 'seed_%s' % get_ReString(Re)
+            self.params.seedfoilNames.append(seedfoilName)
 
-            if (not exists(seedfoilName)):
+            if (not exists(seedfoilName + '.dat')):
                 self.generate_seedfoil(idx)
+
+
+    def check_andGeneratePolars(self):
+        # create polar worker
+        self.polarWorker = polar_worker(self.params.NCrit,
+                                        self.params.xfoilWorkerCall)
+
+        # create all necessary polars of root airfoil
+        self.polarWorker.generate_Polars(self.params.airfoilNames[0],
+                          self.params.maxReNumbers, self.params.ReNumbers)
+
+
+        # generate polars of root-airfoil, also analyze
+        generate_Polars(self.params, self.params.airfoilNames[0]) # FIXME migrate to polar worker
+
+        # generate polars of seedfoils
+        num = len(self.params.ReNumbers)
+
+        for idx in range(1, num):
+            Re_T1 = [self.params.maxReNumbers[idx]]
+            Re_T2 = [self.params.ReNumbers[idx]]
+
+            self.polarWorker.generate_Polars(self.params.seedfoilNames[idx-1],
+                                             Re_T1, Re_T2)
+
+
+    def import_polars(self):
+        # import polars of root airfoil
+        self.polarWorker.import_Polars(self.params.airfoilNames[0],
+                          self.params.maxReNumbers, self.params.ReNumbers)
+
+        # import polars of seedfoils
+        num = len(self.params.ReNumbers)
+
+        for idx in range(1, num):
+            Re_T1 = [self.params.maxReNumbers[idx]]
+            Re_T2 = [self.params.ReNumbers[idx]]
+
+            self.polarWorker.import_Polars(self.params.seedfoilNames[idx-1],
+                                           Re_T1, Re_T2)
+
+        # import polars of strak-airfoils, if they exist
+        import_strakPolars(self.params) #FIXME migrate to polar worker
 
 
     def generate_MultiPassInputFiles(self, airfoilIdx, writeToDisk, inputFile):
