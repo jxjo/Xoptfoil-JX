@@ -2432,6 +2432,8 @@ class polarData:
     def restore_mergeData(self, CL_merge, maxRe):
         self.CL_merge = CL_merge
         self.maxRe = maxRe
+        self.polarName = 'merged_polar_%s' % get_ReString(self.Re)
+
         for idx in range(len(self.CL)):
             if (self.CL[idx] <= CL_merge):
                 self.T2_T1_switchIdx = idx
@@ -2572,8 +2574,8 @@ class polarData:
         self.alpha_maxSpeed = self.alpha[self.maxSpeed_idx]
         self.CL_CD_maxSpeed = self.CL_maxSpeed / self.CD_maxSpeed
 
-        my_print("max Speed, CD = %f @ CL = %f" %\
-                                  (self.CD_maxSpeed, self.CL_maxSpeed))
+        #my_print("max Speed, CD = %f @ CL = %f" %\
+        #                         (self.CD_maxSpeed, self.CL_maxSpeed))
 
 
     def determine_preMaxSpeed(self, params):
@@ -2582,8 +2584,8 @@ class polarData:
         self.CD_preMaxSpeed = self.CD[self.preMaxSpeed_idx]
         self.alpha_preMaxSpeed = self.alpha[self.preMaxSpeed_idx]
         self.CL_CD_preMaxSpeed = self.CL_preMaxSpeed / self.CD_preMaxSpeed
-        my_print("pre max Speed, CD = %f @ CL = %f" %\
-                                  (self.CD_preMaxSpeed, self.CL_preMaxSpeed))
+        #my_print("pre max Speed, CD = %f @ CL = %f" %\
+        #                          (self.CD_preMaxSpeed, self.CL_preMaxSpeed))
 
 
     # determines the overall max-value for Cl/Cd (max glide) of a given polar
@@ -2595,8 +2597,8 @@ class polarData:
         self.CD_maxGlide = self.CD[self.maxGlide_idx]
         self.alpha_maxGlide = self.alpha[self.maxGlide_idx]
 
-        my_print("max Glide, CL/CD = %f @ CL = %f" %
-                                  (self.CL_CD_maxGlide, self.CL_maxGlide))
+        #my_print("max Glide, CL/CD = %f @ CL = %f" %
+        #                          (self.CL_CD_maxGlide, self.CL_maxGlide))
 
     def determine_CLmin(self, params):
         self.CL_min = params.CL_min
@@ -2620,11 +2622,11 @@ class polarData:
         self.CD_pre_maxLift = self.CD[self.pre_maxLift_idx]
         self.alpha_pre_maxLift = self.alpha[self.pre_maxLift_idx]
 
-        my_print("max Lift, CL = %f @ alpha = %f" %
-                                  (self.CL_maxLift, self.alpha_maxLift))
-        my_print("last op-point before max Lift will be set to CL = %f @ alpha"\
-              " = %f, keeping a CL-distance of %f" %\
-          (self.CL_pre_maxLift, self.alpha_pre_maxLift, params.maxLiftDistance))
+        #my_print("max Lift, CL = %f @ alpha = %f" %
+        #                          (self.CL_maxLift, self.alpha_maxLift))
+        #my_print("last op-point before max Lift will be set to CL = %f @ alpha"\
+        #      " = %f, keeping a CL-distance of %f" %\
+        #  (self.CL_pre_maxLift, self.alpha_pre_maxLift, params.maxLiftDistance))
 
     # determines alpha @ CL = 0
     def determine_alpha_CL0(self, params):
@@ -2640,7 +2642,7 @@ class polarData:
         # also determine CD @ CL = 0
         self.CD_CL0 = self.find_CD_From_CL(0.0)
 
-        my_print("alpha_CL0 = %f" % self.alpha_CL0)
+        #my_print("alpha_CL0 = %f" % self.alpha_CL0)
 
     # local helper-functions
     def find_index_From_CL(self, CL):
@@ -3273,32 +3275,6 @@ def compose_Polarfilename_T2(ReSqrt_Cl, NCrit):
  % (round_Re(ReSqrt_Cl)/1000, round_Re(ReSqrt_Cl)%1000, NCrit))
 
 
-def import_strakPolars(params):
-    params.strak_polars = []
-
-    # append two dummy entries, one for root polar, one for first strak airfoil
-    # the first strak airfoil uses the polar of root airfoil as a reference
-    params.strak_polars.append(None)
-    params.strak_polars.append(None)
-
-    for i in range(1, len(params.ReNumbers)-1):
-        # get name of the strak-airfoil
-        strakFoilName = params.airfoilNames[i]
-
-        # compose polar-dir of strak-airfoil-polars
-        polarDir = '.' + bs + strakFoilName + '_polars'
-        fileName = "merged_polar_%s.txt" % get_ReString(params.ReNumbers[i+1])
-        polarFileNameAndPath = polarDir + bs + fileName
-
-        try:
-            newPolar = polarData()
-            newPolar.import_FromFile(polarFileNameAndPath)
-            params.strak_polars.append(newPolar)
-        except:
-            params.strak_polars.append(None)
-            pass
-
-
 def set_PolarDataFromInputFile(polarData, rootPolar, inputFile,
                               airfoilname, Re, idx):
     # set some variables in the polar-header
@@ -3512,7 +3488,7 @@ class polar_worker:
 
     def import_polars(self, airfoilName, ReList_T1, ReList_T2):
         # import polars of airfoil
-        my_print("Importing polars for airfoil %s..." % airfoilName)
+        NoteMsg("importing polars for airfoil %s..." % airfoilName)
 
         merged_polars = []
         num = len(ReList_T1)
@@ -3568,14 +3544,12 @@ class polar_worker:
 
 
     def generate_polars(self, airfoilName, ReList_T1, ReList_T2):
-        # generate polars for airfoil
-        my_print("Generating polars for airfoil %s..." % airfoilName)
-
         # get list of T1 polars that have to be generated
         (ReList_T1_missing, ReList_T2_missing) =\
              self.get_missingPolars(airfoilName, ReList_T1, ReList_T2)
 
         if (len(ReList_T1_missing) > 0):
+            my_print("generating missing T2 polars for airfoil %s..." % airfoilName)
             # create inputfile for worker
             T1_fileName = 'iPolars_T1_%s.txt' % airfoilName
             self.generate_PolarCreationFile(T1_fileName, 'T1', ReList_T1_missing)
@@ -3584,9 +3558,11 @@ class polar_worker:
             systemString = self.xfoilWorkerCall + " -i \"%s\" -w polar -a \"%s\"" %\
                                   (T1_fileName, airfoilName+'.dat')
             system(systemString)
+            DoneMsg()
 
 
         if (len(ReList_T2_missing) > 0):
+            my_print("generating missing T2 polars for airfoil %s..." % airfoilName)
             # create inputfile for worker
             T2_fileName = 'iPolars_T2_%s.txt' % airfoilName
             self.generate_PolarCreationFile(T2_fileName, 'T2', ReList_T2_missing)
@@ -3595,34 +3571,38 @@ class polar_worker:
             systemString = self.xfoilWorkerCall + " -i \"%s\" -w polar -a \"%s\"" %\
                                   (T2_fileName, airfoilName+'.dat')
             system(systemString)
+            DoneMsg()
 
-        DoneMsg()
 
+    def import_strakPolars(self):
+        NoteMsg("trying to import polars of previous strak airfoils as a reference")
 
-    def import_strakPolars(self, params):
-        params.strak_polars = []
-
-        # append two dummy entries, one for root polar, one for first strak airfoil
+        # the first two are entries are dummy entries, one for root polar,
+        # one for first strak airfoil
         # the first strak airfoil uses the polar of root airfoil as a reference
-        params.strak_polars.append(None)
-        params.strak_polars.append(None)
+        strak_polars = [None, None]
 
-        for i in range(1, len(params.ReNumbers)-1):
+        for i in range(1, len(self.params.ReNumbers)-1):
             # get name of the strak-airfoil
-            strakFoilName = params.airfoilNames[i]
+            strakFoilName = self.params.airfoilNames[i]
 
             # compose polar-dir of strak-airfoil-polars
             polarDir = '.' + bs + strakFoilName + '_polars'
-            fileName = "merged_polar_%s.txt" % get_ReString(params.ReNumbers[i+1])
+            fileName = "merged_polar_%s.txt" % get_ReString(self.params.ReNumbers[i+1])
             polarFileNameAndPath = polarDir + bs + fileName
 
             try:
                 newPolar = polarData()
                 newPolar.import_FromFile(polarFileNameAndPath)
-                params.strak_polars.append(newPolar)
+                strak_polars.append(newPolar)
+                DoneMsg()
             except:
-                params.strak_polars.append(None)
+                strak_polars.append(None)
+                my_print("failed")
                 pass
+
+        DoneMsg()
+        return strak_polars
 
 
 class reference_GeoParameters:
@@ -3836,7 +3816,7 @@ class strak_machine:
             self.params.seedfoilPolars.append(merged_polar)
 
         # import polars of strak-airfoils, if they exist
-        import_strakPolars(self.params) #FIXME migrate to polar worker
+        self.params.strak_polars = self.polarWorker.import_strakPolars()
 
 
     def generate_MultiPassInputFiles(self, airfoilIdx, writeToDisk, inputFile):
