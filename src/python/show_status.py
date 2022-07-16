@@ -329,7 +329,7 @@ class show_status():
     def abort_optimization(self):
         dialog = ctk.CTkInputDialog(master=None,
                        text="To abort the optimization, type 'stop'",
-                        title = 'Stop Optimization')
+                        title = 'Abort Optimization')
         inputstring = dialog.get_input()
 
         if inputstring == 'stop':
