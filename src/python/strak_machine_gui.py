@@ -73,15 +73,19 @@ class control_frame():
                                             corner_radius=0)
 
         self.canvas = tk.Canvas(self.container, background=bg_color_scrollableFrame_dark)
-        self.scrollbar = ttk.Scrollbar(self.container, orient="vertical", command=self.canvas.yview)
+        self.scrollbar_v = ttk.Scrollbar(self.container, orient="vertical", command=self.canvas.yview)
+        self.scrollbar_h = ttk.Scrollbar(self.container, orient="horizontal", command=self.canvas.xview)
         #self.frame_bottom  = customtkinter.CTkFrame(self.canvas, width=180, corner_radius=0, background = "#000000")
         self.frame_bottom  = tk.Frame(self.canvas, width=180, background = bg_color_scrollableFrame_dark)
         self.frame_bottom.bind("<Configure>", self.OnFrameConfigure)
 
         self.canvas.create_window((10, 10), window=self.frame_bottom , anchor="nw")
-        self.canvas.configure(yscrollcommand=self.scrollbar.set)
+        self.canvas.configure(yscrollcommand=self.scrollbar_v.set)
+        self.canvas.configure(xscrollcommand=self.scrollbar_h.set)
+        self.scrollbar_h.pack(side="top", fill="both", expand=True)
         self.canvas.pack(side="left", fill="both", expand=True)
-        self.scrollbar.pack(side="right", fill="y")
+        self.scrollbar_v.pack(side="right", fill="y")
+
 
         # init nextRow (where to place next widget)
         self.nextRow = 0
@@ -92,13 +96,14 @@ class control_frame():
         # add different widgets to upper frame (not scrollable)
         self.add_label(self.frame_top)
         self.add_buttons(self.frame_top, left_Buttons, right_Buttons)
-        self.add_appearanceModeMenu(self.frame_top)
+        #self.add_appearanceModeMenu(self.frame_top) #FIXME not supported at the moment
         self.add_airfoilChoiceMenu(self.frame_top)
         self.add_visiblePolarsCheckboxes(self.frame_top)
         self.add_referencePolarsCheckbox(self.frame_top)
 
         # add geo-entries to lower frame (scrollable)
         self.add_geoEntries(self.frame_bottom)
+        self.nextRow = self.nextRow + 1
 
         # add entries to lower frame (scrollable)
         self.add_entries(self.frame_bottom)
@@ -166,10 +171,14 @@ class control_frame():
             ErrorMsg("undefined oppoint type %s" % mode)
             return (None, None, None)
 
-        return (mode, oppoint, target)
+        weighting = targetValue["weighting"]
+        if weighting != None:
+            weighting = round(weighting, 1)
+
+        return (mode, oppoint, target, weighting)
 
 
-    def write_valuesToDict(self, idx, mode, oppoint, target):
+    def write_valuesToDict(self, idx, mode, oppoint, target, weighting):
         targetValue = self.targetValues[idx]
 
         if (mode == 'spec-cl'):
@@ -188,6 +197,11 @@ class control_frame():
 
         targetValue["oppoint"] = oppoint
         targetValue["target"] = target
+
+        if (weighting != None):
+            weighting = round(weighting, 1)
+        targetValue["weighting"] = weighting
+
         #targetValue["type"] = mode # FIXME We do not support changing mode at the moment
         self.targetValues[idx] = targetValue
 
@@ -208,16 +222,16 @@ class control_frame():
         # create entries
         self.thicknessEntry = customtkinter.CTkEntry(frame, show=None,
              textvariable = self.thickness_txt, text_font=('Roboto Medium', 11),
-             width=100, height=16)
+             width=55, height=16)
         self.thicknessPositionEntry = customtkinter.CTkEntry(frame, show=None,
              textvariable = self.thicknessPosition_txt, text_font=('Roboto Medium', 11),
-             width=100, height=16)
+             width=55, height=16)
         self.camberEntry = customtkinter.CTkEntry(frame, show=None,
              textvariable = self.camber_txt, text_font=('Roboto Medium', 11),
-             width=100, height=16)
+             width=55, height=16)
         self.camberPositionEntry = customtkinter.CTkEntry(frame, show=None,
              textvariable = self.camberPosition_txt, text_font=('Roboto Medium', 11),
-             width=100, height=16)
+             width=55, height=16)
 
 
         # bind entries to "Enter"-Message
@@ -227,20 +241,20 @@ class control_frame():
         self.camberPositionEntry.bind('<Return>', self.update_geoParams)
 
         # add labels
-        self.geometryParams_label = customtkinter.CTkLabel(master=frame,
-                       text="Geometry parameters", text_font=("Roboto Medium", 13))
+        #self.geometryParams_label = customtkinter.CTkLabel(master=frame,
+        #               text="Geometry parameters", text_font=("Roboto Medium", 13))
         self.thickness_label = customtkinter.CTkLabel(master=frame,
-                       text="max Thickness", text_font=("Roboto Medium", 11))
+                       text="Thick.", text_font=("Roboto Medium", 11))
         self.thicknessPosition_label = customtkinter.CTkLabel(master=frame,
-                       text="max Thickness position", text_font=("Roboto Medium", 11))
+                       text="Thick. @", text_font=("Roboto Medium", 11))
         self.camber_label = customtkinter.CTkLabel(master=frame,
-                       text="max Camber", text_font=("Roboto Medium", 11))
+                       text="Camber", text_font=("Roboto Medium", 11))
         self.camberPosition_label = customtkinter.CTkLabel(master=frame,
-                       text="max Camber position", text_font=("Roboto Medium", 11))
+                       text="Camber @", text_font=("Roboto Medium", 11))
 
         # place widgets inside frame
-        self.geometryParams_label.grid(row=self.nextRow, columnspan=2, pady=0, padx=0)
-        self.nextRow = self.nextRow + 1
+        #self.geometryParams_label.grid(row=self.nextRow, columnspan=2, pady=0, padx=0)
+        #self.nextRow = self.nextRow + 1
         self.place_widgets(self.thickness_label, self.thicknessEntry)
         self.place_widgets(self.thicknessPosition_label, self.thicknessPositionEntry)
         self.place_widgets(self.camber_label, self.camberEntry)
@@ -268,7 +282,10 @@ class control_frame():
         target_label = customtkinter.CTkLabel(master=frame,
                                               text="CD",
                                               text_font=("Roboto Medium", 13))
-        self.place_widgets(oppoint_label, target_label)
+        weighting_label = customtkinter.CTkLabel(master=frame,
+                                              text="weighting",
+                                              text_font=("Roboto Medium", 13))
+        self.place_3_widgets(oppoint_label, target_label, weighting_label)
 
         # create entries and assign values
         for i in range(num_entries):
@@ -276,7 +293,7 @@ class control_frame():
             targetValue = self.targetValues[i]
 
             # get values from dictinory
-            (mode, oppoint, target) = self.get_valuesFromDict(targetValue)
+            (mode, oppoint, target, weighting) = self.get_valuesFromDict(targetValue)
             if (mode == None):
                 # error, continue with next entry
                 continue
@@ -285,13 +302,14 @@ class control_frame():
             type_txt = tk.StringVar(frame, value=mode)
             oppoint_txt = tk.StringVar(frame, value=oppoint)
             target_txt = tk.StringVar(frame, value=target)
+            weighting_txt = tk.StringVar(frame, value=weighting)
 
-            self.textVars.append((type_txt, oppoint_txt, target_txt))
+            self.textVars.append((type_txt, oppoint_txt, target_txt, weighting_txt))
 
             # create entry for oppoint
             oppoint_entry = customtkinter.CTkEntry(frame, show=None,
              textvariable = oppoint_txt, text_font=('Roboto Medium', 11),
-             width=100, height=16)
+             width=80, height=16)
 
              # bind to "Enter"-Message
             oppoint_entry.bind('<Return>', self.update_TargetValues)
@@ -299,35 +317,48 @@ class control_frame():
             # create entry for target
             target_entry = customtkinter.CTkEntry(frame, show=None,
              textvariable = target_txt, text_font=('Roboto Medium', 11),
-             width=100, height=16)
+             width=80, height=16)
 
             # bind to "Enter"-Message
             target_entry.bind('<Return>', self.update_TargetValues)
 
-            # append both entries to list
-            self.entries.append((oppoint_entry, target_entry))
+            # create entry for weighting
+            weighting_entry = customtkinter.CTkEntry(frame, show=None,
+             textvariable = weighting_txt, text_font=('Roboto Medium', 11),
+             width=80, height=16)
+
+            # bind to "Enter"-Message
+            weighting_entry.bind('<Return>', self.update_TargetValues)
+
+
+            # append all entries to list
+            self.entries.append((oppoint_entry, target_entry, weighting_entry))
 
             # if oppoint is 'spec-cl' place widget now
             if (mode == 'spec-cl'):
-                self.place_widgets(oppoint_entry, target_entry)
+                self.place_3_widgets(oppoint_entry, target_entry, weighting_entry)
             elif (mode == 'spec-al'):
                 # append to list of spec-al entries
-                spec_al_entries.append((oppoint_entry, target_entry))
+                spec_al_entries.append((oppoint_entry, target_entry, weighting_entry))
+
 
         # Add Label
         oppoint_label = customtkinter.CTkLabel(master=frame,
                                               text="Alpha",
-                                              text_font=("Roboto Medium", -16))
+                                              text_font=("Roboto Medium", 13))
         target_label = customtkinter.CTkLabel(master=frame,
                                               text="CL",
-                                              text_font=("Roboto Medium", -16))
+                                              text_font=("Roboto Medium", 13))
+        weighting_label = customtkinter.CTkLabel(master=frame,
+                                              text="weighting",
+                                              text_font=("Roboto Medium", 13))
+        self.place_3_widgets(oppoint_label, target_label, weighting_label)
 
-        self.place_widgets(oppoint_label, target_label)
         # now place spec-al entries
         for entryTuple in spec_al_entries:
             # unpack tuple
-            (oppoint_entry, target_entry) = entryTuple
-            self.place_widgets(oppoint_entry, target_entry)
+            (oppoint_entry, target_entry, weighting_entry) = entryTuple
+            self.place_3_widgets(oppoint_entry, target_entry, weighting_entry)
 
 
     def update_GeoEntries(self, airfoilIdx):
@@ -356,19 +387,24 @@ class control_frame():
         idx = 0
         for element in self.textVars:
             # unpack tuple
-            (type_txt, oppoint_txt, target_txt) = element
+            (type_txt, oppoint_txt, target_txt, weighting_txt) = element
 
             # check idx
             if (idx > maxIdx):
                 ErrorMsg("idx %d > maxIdx %d" % (idx, maxIdx))
             else:
                  # get values from dictinory
-                (mode, oppoint, target) = self.get_valuesFromDict(self.targetValues[idx])
+                (mode, oppoint, target, weighting) = self.get_valuesFromDict(self.targetValues[idx])
 
                 # copy values to textvars
                 type_txt.set(str(mode))
                 oppoint_txt.set(str(oppoint))
                 target_txt.set(str(target))
+
+                if (weighting != None):
+                    weighting_txt.set(str(weighting))
+                else:
+                    weighting_txt.set('')
 
             idx = idx+1
 
@@ -376,10 +412,10 @@ class control_frame():
         if idx == None:
             return
 
-        # read current value to get the mode
-        (mode, oppoint, target) = self.get_valuesFromDict(self.targetValues[idx])
+        # read current value to get the mode and weighting
+        (mode, oppoint, target, weighting) = self.get_valuesFromDict(self.targetValues[idx])
         # FIXME check: evaluate mode ?
-        self.write_valuesToDict(idx, mode, y, x)
+        self.write_valuesToDict(idx, mode, y, x, weighting)
 
         # writeback dictionary to strakmachine
         self.strak_machine.set_targetValues(self.master.airfoilIdx,
@@ -401,22 +437,40 @@ class control_frame():
         idx = 0
 
         for entryTuple in self.entries:
-            (oppoint_entry, target_entry) = entryTuple
+            (oppoint_entry, target_entry, weighting_entry) = entryTuple
 
             # unpack tuple
             oppoint_entry = oppoint_entry.get()
             target_entry = target_entry.get()
+            weighting_entry = weighting_entry.get()
 
             # get dictionary containing oppoint / type / target value
             targetValue = self.targetValues[idx]
 
             # get values from dictinory
-            (mode, oppoint, target) = self.get_valuesFromDict(targetValue)
+            (mode, oppoint, target, weighting) = self.get_valuesFromDict(targetValue)
+
+            # conversion of None to empty string
+            try:
+                str_weighting = str(weighting)
+            except:
+                str_weighting = ''
+
 
             # compare if something has changed
-            if ((oppoint_entry != str(oppoint)) or (target_entry != str(target))):
+            if ((oppoint_entry   != str(oppoint)) or
+                (target_entry    != str(target))  or
+                (weighting_entry != str_weighting)):
+
+                # coversion of empty string to None
+                try:
+                    weighting_value = float(weighting_entry)
+                except:
+                    weighting_value = None
+
                 # write values to dictionary
-                self.write_valuesToDict(idx, mode, float(oppoint_entry), float(target_entry))
+                self.write_valuesToDict(idx, mode, float(oppoint_entry),
+                                        float(target_entry), weighting_value)
                 # set notification variable
                 writeback_needed = True
 
@@ -466,6 +520,18 @@ class control_frame():
         if widget2 != None:
             widget2.grid(row=self.nextRow, column=1, pady=5, padx=5, sticky="w")
 
+        self.nextRow = self.nextRow + 1
+
+
+    def place_3_widgets(self, widget1, widget2, widget3):
+        if widget1 != None:
+            widget1.grid(row=self.nextRow, column=0, pady=0, padx=0, sticky="e")
+
+        if widget2 != None:
+            widget2.grid(row=self.nextRow, column=1, pady=0, padx=0, sticky="e")
+
+        if widget3 != None:
+            widget3.grid(row=self.nextRow, column=2, pady=0, padx=0, sticky="e")
         self.nextRow = self.nextRow + 1
 
 
