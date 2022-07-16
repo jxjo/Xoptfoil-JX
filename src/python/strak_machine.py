@@ -253,7 +253,6 @@ class inputFile:
         my_print("reading input-file %s..." % fileName)
         currentDir = getcwd()#FIXME Debug
         self.values = f90nml.read(fileName)
-        DoneMsg()
 
 
     # deletes all existing op-points in operating-conditions, but keeps
@@ -1141,7 +1140,7 @@ class strak_machineParams:
                  "parameters for %d airfoils were found" % (num, len(thickness)))
                 return None
 
-        NoteMsg("geo parameters for %d airfoils were successfully read" % num)
+        my_print("geo parameters for %d airfoils were successfully read" % num)
         return (thickness, thicknessPosition, camber, camberPosition)
 
 
@@ -1226,7 +1225,7 @@ class strak_machineParams:
     ################################################################################
     # function that gets parameters from dictionary
     def get_Parameters(self, fileContent):
-        my_print("getting parameters..\n")
+        NoteMsg("getting parameters..")
 
         # get mandatory parameters first
         self.quality = self.get_MandatoryParameterFromDict(fileContent, 'quality')
@@ -1251,7 +1250,6 @@ class strak_machineParams:
 
         self.smoothStrakFoils = self.get_booleanParameterFromDict(fileContent,
                                  "smoothStrakFoils", self.smoothStrakFoils)
-        DoneMsg()
 
         # perform parameter-checks now
         my_print("checking validity of all parameters..")
@@ -1261,14 +1259,14 @@ class strak_machineParams:
 
 
     def read_geoParameters(self):
-        my_print("getting geo parameters..\n")
+        NoteMsg("getting geo parameters..")
         # read root geo parameters first
         self.read_rootGeoParameters()
 
        # get geoParameters from dictionary
         self.geoParams = self.get_geoParamsFromDict(self.fileContent)
         if (self.geoParams == None):
-            NoteMsg("No geo parameters were found. Setting default values.")
+            my_print("Setting default values for geo parameters.")
             # set geoParameters to default values
             self.set_defaultGeoParams(self.fileContent)
             result = self.write_paramsToFile('..' + bs + self.fileName, self.fileContent)
@@ -1473,7 +1471,7 @@ class strak_machineParams:
             ErrorMsg("number of reversals could not be determined")
             return (0, 0, smoothingNecessary)
 
-        my_print("airfoil has %d reversals on top and %d reversals on bottom\n"\
+        my_print("airfoil has %d reversals on top and %d reversals on bottom"\
                    %(reversals_top, reversals_bot))
         DoneMsg()
 
@@ -2380,7 +2378,6 @@ class polarData:
                     self.Bot_Xtr.insert(idx, Bot_Xtr)
 
         fileHandle.close()
-        DoneMsg()
 
 
     # write polar to file with a given filename (and -path)
@@ -2435,7 +2432,6 @@ class polarData:
             % (alpha[i], CL[i], CD[i], CDp[i], Cm[i], Top_Xtr[i], Bot_Xtr[i]))
 
         fileHandle.close()
-        DoneMsg()
 
 
     # analyses a polar
@@ -2448,7 +2444,7 @@ class polarData:
         self.determine_preMaxSpeed(params)
         self.determine_MaxLift(params)
         self.determine_alpha_CL0(params)
-        DoneMsg()
+
 
     # this function must be called after reading a merged polar from file
     def restore_mergeData(self, CL_merge, maxRe):
@@ -2892,7 +2888,7 @@ def progressfile_preamble(commandLines, progressFileName):
 # function that generates commandlines to run Xoptfoil, create and merge polars
 # etc.
 def generate_Commandlines(params):
-    my_print("Generating commandlines...")
+    NoteMsg("Generating commandlines...")
 
     # create an empty list of commandlines
     commandLines = []
@@ -3270,7 +3266,7 @@ def copyAndSmooth_Airfoil(xfoilWorkerCall, inputFilename, srcName, srcPath, dest
     srcfoilNameAndPath = srcPath + bs + srcName + '.dat'
 
     # first always rename and copy the airfoil
-    NoteMsg("Renaming airfoil \'%s\' to \'%s\'\n" % (srcName, destName))
+    NoteMsg("Renaming airfoil \'%s\' to \'%s\'" % (srcName, destName))
     change_airfoilname.change_airfoilName(srcfoilNameAndPath, destName + '.dat')
 
     if (smooth):
@@ -3375,7 +3371,7 @@ def generate_TargetPolars(params, writeToDisk):
 
     # get name of the root-airfoil
     airfoilName = params.airfoilNames[0]
-    my_print("Generating target polars for airfoil %s..." % airfoilName)
+    NoteMsg("Generating target polars for airfoil %s..." % airfoilName)
 
     for i in range(numTargetPolars):
 
@@ -3559,6 +3555,7 @@ class polar_worker:
             # add merged polar to list
             merged_polars.append(mergedPolar)
 
+        DoneMsg()
         return merged_polars
 
 
@@ -3617,7 +3614,7 @@ class polar_worker:
                 DoneMsg()
             except:
                 strak_polars.append(None)
-                my_print("failed")
+                ErrorMsg("failed")
                 pass
 
         DoneMsg()
@@ -3728,11 +3725,10 @@ class strak_machine:
         chdir(".." + bs)
 
         if (self.params.generateBatch == True):
-            my_print ('generating batchfile \'%s\'' % self.params.batchfileName)
+            NoteMsg('Generating batchfiles')
             generate_Batchfile(self.params.batchfileName, commandlines)
-
-            my_print ('generating batchfiles for each single airfoil of the strak')
             generate_StrakBatchfiles(self.params, commandlines)
+            DoneMsg()
 
         # change working-directory to output-directory
         chdir(self.params.workingDir + bs + buildPath)
@@ -3740,7 +3736,7 @@ class strak_machine:
         # create an instance of polar graph
         self.graph = polarGraph()
 
-        DoneMsg()
+        NoteMsg('Strak Machine was successfully started!\n')
 
         # disable further console print output
         print_disabled = True
