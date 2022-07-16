@@ -755,18 +755,17 @@ class diagram(customtkinter.CTkFrame):
         # check type of active diagram
         if (self.controller.activeDiagram == "CL_CD_diagram"):
             edit_mode = 'spec-cl'
-            mouse_target = event.xdata
-            mouse_oppoint = event.ydata
+            mouse_target = event.xdata  # target  -> CD
+            mouse_oppoint = event.ydata # oppoint -> CL
         elif (self.controller.activeDiagram == "CLCD_CL_diagram"):
             edit_mode = 'spec-cl'
-            mouse_oppoint = event.xdata
+            mouse_oppoint = event.xdata # oppoint -> CL
             # convert y-coordinates, CL/CD -> CD
-            mouse_target = event.xdata / event.ydata
+            mouse_target = event.xdata / event.ydata # target  -> CL/CD
         elif (self.controller.activeDiagram == "CL_alpha_diagram"):
-            edit_mode == 'spec-al'
-            # FIXME check if this is correct or must be swapped
-            mouse_target = event.xdata
-            mouse_oppoint = event.ydata
+            edit_mode = 'spec-al'
+            mouse_target = event.ydata  # target  -> CL
+            mouse_oppoint = event.xdata # oppoint -> alpha
 
 
         # check visibility of editable polar
@@ -839,6 +838,8 @@ class diagram(customtkinter.CTkFrame):
                 # convert coordinates
                 x, y = event.ydata, event.xdata
                 x = y/x
+            elif (self.controller.activeDiagram == "CL_alpha_diagram"):
+                x, y = event.ydata, event.xdata
             else:
                 x, y = event.xdata, event.ydata
                     # set new target value
