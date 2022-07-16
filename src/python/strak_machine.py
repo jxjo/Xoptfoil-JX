@@ -4092,8 +4092,11 @@ class strak_machine:
             oppoint = operatingConditions['op_point'][idx]
             # target value of op-point
             target = operatingConditions['target_value'][idx]
-            # weighting of op-point
-            weighting = operatingConditions['weighting'][idx]
+            try:
+                # weighting of op-point
+                weighting = operatingConditions['weighting'][idx]
+            except:
+                weighting = None
 
             targetValues.append({"type": mode, "oppoint" : oppoint,
                                  "target" : target, "weighting" : weighting})

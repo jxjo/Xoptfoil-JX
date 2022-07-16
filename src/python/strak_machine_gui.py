@@ -74,15 +74,15 @@ class control_frame():
 
         self.canvas = tk.Canvas(self.container, background=bg_color_scrollableFrame_dark)
         self.scrollbar_v = ttk.Scrollbar(self.container, orient="vertical", command=self.canvas.yview)
-        self.scrollbar_h = ttk.Scrollbar(self.container, orient="horizontal", command=self.canvas.xview)
+        #self.scrollbar_h = ttk.Scrollbar(self.container, orient="horizontal", command=self.canvas.xview)  # FIXME horizontal scrolling
         #self.frame_bottom  = customtkinter.CTkFrame(self.canvas, width=180, corner_radius=0, background = "#000000")
         self.frame_bottom  = tk.Frame(self.canvas, width=180, background = bg_color_scrollableFrame_dark)
         self.frame_bottom.bind("<Configure>", self.OnFrameConfigure)
 
-        self.canvas.create_window((10, 10), window=self.frame_bottom , anchor="nw")
+        self.canvas.create_window((10, 10), window=self.frame_bottom , anchor="ne")
         self.canvas.configure(yscrollcommand=self.scrollbar_v.set)
-        self.canvas.configure(xscrollcommand=self.scrollbar_h.set)
-        self.scrollbar_h.pack(side="top", fill="both", expand=True)
+        #self.canvas.configure(xscrollcommand=self.scrollbar_h.set) # FIXME horizontal scrolling
+        #self.scrollbar_h.pack(side="top", fill="x")  # FIXME horizontal scrolling
         self.canvas.pack(side="left", fill="both", expand=True)
         self.scrollbar_v.pack(side="right", fill="y")
 
@@ -525,13 +525,13 @@ class control_frame():
 
     def place_3_widgets(self, widget1, widget2, widget3):
         if widget1 != None:
-            widget1.grid(row=self.nextRow, column=0, pady=0, padx=0, sticky="e")
+            widget1.grid(row=self.nextRow, column=0, pady=0, padx=1, sticky="e")
 
         if widget2 != None:
-            widget2.grid(row=self.nextRow, column=1, pady=0, padx=0, sticky="e")
+            widget2.grid(row=self.nextRow, column=1, pady=0, padx=1, sticky="e")
 
         if widget3 != None:
-            widget3.grid(row=self.nextRow, column=2, pady=0, padx=0, sticky="e")
+            widget3.grid(row=self.nextRow, column=2, pady=0, padx=1, sticky="e")
         self.nextRow = self.nextRow + 1
 
 
