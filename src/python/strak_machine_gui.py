@@ -245,13 +245,13 @@ class control_frame():
         #self.geometryParams_label = customtkinter.CTkLabel(master=frame,
         #               text="Geometry parameters", text_font=("Roboto Medium", 13))
         self.thickness_label = customtkinter.CTkLabel(master=frame,
-                       text="Thick.", text_font=("Roboto Medium", 11))
+                text="Thickness", text_font=("Roboto Medium", 11), anchor="e")
         self.thicknessPosition_label = customtkinter.CTkLabel(master=frame,
-                       text="Thick. @", text_font=("Roboto Medium", 11))
+              text="Thickness @", text_font=("Roboto Medium", 11), anchor="e")
         self.camber_label = customtkinter.CTkLabel(master=frame,
-                       text="Camber", text_font=("Roboto Medium", 11))
+               text="Camber", text_font=("Roboto Medium", 11), anchor="e")
         self.camberPosition_label = customtkinter.CTkLabel(master=frame,
-                       text="Camber @", text_font=("Roboto Medium", 11))
+              text="Camber @", text_font=("Roboto Medium", 11), anchor="e")
 
         # place widgets inside frame
         #self.geometryParams_label.grid(row=self.nextRow, columnspan=2, pady=0, padx=0)
@@ -278,14 +278,11 @@ class control_frame():
 
         # Add Label
         oppoint_label = customtkinter.CTkLabel(master=frame,
-                                              text="CL",
-                                              text_font=("Roboto Medium", 13))
+                text="CL", text_font=("Roboto Medium", 13), anchor="e")
         target_label = customtkinter.CTkLabel(master=frame,
-                                              text="CD",
-                                              text_font=("Roboto Medium", 13))
+                text="CD", text_font=("Roboto Medium", 13), anchor="e")
         weighting_label = customtkinter.CTkLabel(master=frame,
-                                              text="weighting",
-                                              text_font=("Roboto Medium", 13))
+                text="weighting", text_font=("Roboto Medium", 13), anchor="e")
         self.place_3_widgets(oppoint_label, target_label, weighting_label)
 
         # create entries and assign values
@@ -345,14 +342,11 @@ class control_frame():
 
         # Add Label
         oppoint_label = customtkinter.CTkLabel(master=frame,
-                                              text="Alpha",
-                                              text_font=("Roboto Medium", 13))
+                  text="Alpha", text_font=("Roboto Medium", 13), anchor="e")
         target_label = customtkinter.CTkLabel(master=frame,
-                                              text="CL",
-                                              text_font=("Roboto Medium", 13))
+                  text="CL", text_font=("Roboto Medium", 13), anchor="e")
         weighting_label = customtkinter.CTkLabel(master=frame,
-                                              text="weighting",
-                                              text_font=("Roboto Medium", 13))
+                  text="weighting", text_font=("Roboto Medium", 13), anchor="e")
         self.place_3_widgets(oppoint_label, target_label, weighting_label)
 
         # now place spec-al entries
