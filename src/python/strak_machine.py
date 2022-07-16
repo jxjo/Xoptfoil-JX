@@ -1435,9 +1435,9 @@ class strak_machineParams:
 
 
     def read_AssessmentData(self, airfoilName):
+        NoteMsg ("reading assessment data of airfoil %s" % airfoilName)
         reversals = []
         smoothingNecessary = True
-
         filepath = airfoilName+'_temp' + bs
         assessfilename = filepath + AssessmentResultsName
 
@@ -1445,16 +1445,39 @@ class strak_machineParams:
             file = open(assessfilename)
             lines = file.readlines()
             file.close()
+        else:
+            ErrorMsg("unable to read assessment data of airfoil %s"  % airfoilName)
+            return (0, 0, smoothingNecessary)
 
         for line in lines:
             if line.find('perfect surface quality')>=0:
                 smoothingNecessary = False
             elif line.find('Reversals')>=0:
                 splitlines = line.split('Reversals')
-                value = int(splitlines[1][0:3])
+                reversalString = splitlines[1]
+                splitlines = reversalString.split('Curvature ')
+                reversalString = splitlines[0].strip()
+                value = int(reversalString)
                 reversals.append(value)
 
-        return (reversals[1], reversals[3], smoothingNecessary)
+        # check how many reversal values were found (with or withou smoothing)
+        if (len(reversals) == 2):
+            # airfoil not smoothed
+            reversals_top = reversals[0]
+            reversals_bot = reversals[1]
+        elif (len(reversals) == 4):
+            # airfoil smoothed
+            reversals_top = reversals[1]
+            reversals_bot = reversals[3]
+        else:
+            ErrorMsg("number of reversals could not be determined")
+            return (0, 0, smoothingNecessary)
+
+        my_print("airfoil has %d reversals on top and %d reversals on bottom\n"\
+                   %(reversals_top, reversals_bot))
+        DoneMsg()
+
+        return (reversals_top, reversals_bot, smoothingNecessary)
 
 
     def get_rootReversals(self):

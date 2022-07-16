@@ -3,10 +3,10 @@ xoptfoil-dev.code-workspace
 src/.vscode/launch.json
 .~lock.Xoptfoil-JX Reference.odt#
 Releases
-strak_machine
 tmp
 packager*.bat
 src/.vscode/settings.json
 doc/readme.pdf
 doc/ChangeLog.pdf
 make-Visualizer-EXE.bat
+!*.exe
