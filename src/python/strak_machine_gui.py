@@ -766,6 +766,8 @@ class diagram(customtkinter.CTkFrame):
             edit_mode = 'spec-al'
             mouse_target = event.ydata  # target  -> CL
             mouse_oppoint = event.xdata # oppoint -> alpha
+            catching_range_oppoint = 0.1 * zoom_factor
+            catching_range_targetValue = 0.01 * zoom_factor
 
 
         # check visibility of editable polar
