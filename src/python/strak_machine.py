@@ -84,6 +84,8 @@ fs_axes = 20
 fs_ticks = 10
 lw_targetPolar = 0.6
 lw_referencePolar  = 0.4
+ms_oppoint = 7
+ms_target = 5
 scaled = False
 
 # colours
@@ -1735,6 +1737,29 @@ class polarGraph:
         visibleFlags = params.get_visibleFlags()
         return (visibleFlags[polarIdx])
 
+
+    def get_alphaTargetsFroInputfile(self, inputFile):
+        x = []
+        y = []
+
+        # get operating-conditions from inputfile
+        operatingConditions = inputFile.get_OperatingConditions()
+        target_values = operatingConditions["target_value"]
+        op_points = operatingConditions["op_point"]
+        op_modes =  operatingConditions["op_mode"]
+
+        # get the number of op-points
+        numOpPoints = len(op_points)
+
+        for i in range(numOpPoints):
+            # check if the op-mode is 'spec-al'
+            if (op_modes[i] == 'spec-al'):
+                x.append(op_points[i])     # alpha
+                y.append(target_values[i]) # CL
+
+        return (x, y)
+
+
     def check_onlyRootPolarVisible(self, params):
         visibleFlags = params.get_visibleFlags()
         if visibleFlags[0] == False:
@@ -1831,22 +1856,26 @@ class polarGraph:
                 # plot CD @CL = 0
                 x_CL0 = polar.CD_CL0
                 y_CL0 = 0.0
-                ax.plot(x_CL0, y_CL0, 'o', color=cl_infotext)
+                ax.plot(x_CL0, y_CL0, marker='.',
+                    markersize=ms_oppoint, color=cl_infotext)
 
                 # plot max_speed
                 x_maxSpeed = polar.CD[polar.maxSpeed_idx]
                 y_maxSpeed = polar.CL[polar.maxSpeed_idx]
-                ax.plot(x_maxSpeed, y_maxSpeed, marker='o',color=cl_infotext)
+                ax.plot(x_maxSpeed, y_maxSpeed, marker='.',
+                        markersize=ms_oppoint, color=cl_infotext)
 
                 # plot max_glide
                 x_maxGlide = polar.CD[polar.maxGlide_idx]
                 y_maxGlide = polar.CL[polar.maxGlide_idx]
-                ax.plot(x_maxGlide, y_maxGlide, marker='o', color=cl_infotext)
+                ax.plot(x_maxGlide, y_maxGlide, marker='.',
+                        markersize=ms_oppoint, color=cl_infotext)
 
                 # plot max lift
                 x_maxLift = polar.CD[polar.maxLift_idx]
                 y_maxLift = polar.CL[polar.maxLift_idx]
-                ax.plot(x_maxLift, y_maxLift, marker='o', color=cl_infotext)
+                ax.plot(x_maxLift, y_maxLift, marker='.',
+                         markersize=ms_oppoint, color=cl_infotext)
 
                 # Is this the only visible polar ?
                 if self.check_onlyRootPolarVisible(params):
@@ -1900,7 +1929,7 @@ class polarGraph:
                 y.pop()
 
                 ax.plot(x, y, style, linestyle = ls_targetPolar,
-                            linewidth = linewidth, label = label)
+                     linewidth = linewidth, markersize=ms_target, label = label)
 
         # plot strak-polars
         if params.showReferencePolars:
@@ -1958,9 +1987,13 @@ class polarGraph:
                 # do not plot this polar
                 continue
 
-            #  get polar and target-polar to plot
+            #  get polar to plot
             polar = polars[polarIdx]
-            targetPolar = targetPolars[polarIdx]
+            #targetPolar = targetPolars[polarIdx]
+
+            # get inputfile. We can only determine the alpha targets
+            # from the inputfile, not the target polar.
+            inputFile = params.inputFiles[polarIdx]
 
             # set label only once
             if (T1T2_labelOk == False):
@@ -1990,7 +2023,7 @@ class polarGraph:
                  # plot alpha @CL = 0
                 x = polar.alpha_CL0
                 y = 0.0
-                ax.plot(x, y, 'o', color=cl_infotext)
+                ax.plot(x, y, '.', markersize=ms_oppoint, color=cl_infotext)
 
                 # Is this the only polar ?
                 rootPolarOnly = self.check_onlyRootPolarVisible(params)
@@ -2002,7 +2035,7 @@ class polarGraph:
                 # plot max Speed
                 x = polar.alpha[polar.maxSpeed_idx]
                 y = polar.CL[polar.maxSpeed_idx]
-                ax.plot(x, y, 'o', color=cl_infotext)
+                ax.plot(x, y, '.', markersize=ms_oppoint, color=cl_infotext)
 
                 # Is this the only polar ?
                 if rootPolarOnly:
@@ -2014,7 +2047,7 @@ class polarGraph:
                 # plot max Glide
                 x = polar.alpha[polar.maxGlide_idx]
                 y = polar.CL[polar.maxGlide_idx]
-                ax.plot(x, y, 'o', color=cl_infotext)
+                ax.plot(x, y, '.', markersize=ms_oppoint, color=cl_infotext)
 
                 # Is this the only polar ?
                 if rootPolarOnly:
@@ -2026,7 +2059,7 @@ class polarGraph:
                 # plot max lift
                 x = polar.alpha[polar.maxLift_idx]
                 y = polar.CL[polar.maxLift_idx]
-                ax.plot(x, y, 'o', color=cl_infotext)
+                ax.plot(x, y, '.', markersize=ms_oppoint, color=cl_infotext)
 
                 # Is this the only polar ?
                 if rootPolarOnly:
@@ -2044,21 +2077,12 @@ class polarGraph:
 
                 # is this the selected target polar for editing ?
                 if (polarIdx == params.activeTargetPolarIdx):
-                    style = opt_point_style_root
-                else:
-                    style = opt_point_style_strak
+                    # get the x,y values
+                    (x, y) = self.get_alphaTargetsFroInputfile(inputFile)
 
-                linewidth = lw_targetPolar
-
-                # remove last dummy-values
-                x = deepcopy(targetPolar.alpha)
-                x.pop()
-                y = deepcopy(targetPolar.CL)
-                y.pop()
-
-                # plot
-                ax.plot(x, y, style, linestyle = ls_targetPolar,
-                        linewidth = linewidth, label = label)
+                    # plot
+                    ax.plot(x, y, opt_point_style_root,
+                          markersize=ms_oppoint, label = label)
 
         if (T1T2_labelOk):
             ax.legend(loc='upper left', fontsize = fs_legend)
@@ -2128,7 +2152,7 @@ class polarGraph:
                 # plot Cl/CD @CL = 0
                 x = 0.0
                 y = 0.0
-                ax.plot(x, y, 'o', color=cl_infotext)
+                ax.plot(x, y, '.', markersize=ms_oppoint, color=cl_infotext)
 
                 # Is this the only polar ?
                 rootPolarOnly = self.check_onlyRootPolarVisible(params)
@@ -2142,7 +2166,7 @@ class polarGraph:
                 # plot max_speed
                 x = polar.CL[polar.maxSpeed_idx]
                 y = polar.CL_CD[polar.maxSpeed_idx]
-                ax.plot(x, y, 'o', color=cl_infotext)
+                ax.plot(x, y, '.', markersize=ms_oppoint, color=cl_infotext)
 
                  # Is this the only polar ?
                 if rootPolarOnly:
@@ -2155,7 +2179,7 @@ class polarGraph:
                 # plot max_glide
                 x = polar.CL[polar.maxGlide_idx]
                 y = polar.CL_CD[polar.maxGlide_idx]
-                ax.plot(x, y, 'o', color=cl_infotext)
+                ax.plot(x, y, '.', markersize=ms_oppoint, color=cl_infotext)
 
                 # Is this the only polar ?
                 if rootPolarOnly:
@@ -2168,7 +2192,7 @@ class polarGraph:
                 # plot max Lift
                 x = polar.CL[polar.maxLift_idx]
                 y = polar.CL_CD[polar.maxLift_idx]
-                ax.plot(x, y, 'o', color=cl_infotext)
+                ax.plot(x, y, '.', markersize=ms_oppoint, color=cl_infotext)
 
                  # Is this the only polar ?
                 if rootPolarOnly:
@@ -2200,7 +2224,7 @@ class polarGraph:
 
                 # plot
                 ax.plot(x, y, style, linestyle = ls_targetPolar,
-                        linewidth = linewidth, label = label)
+                    linewidth = linewidth, markersize=ms_target, label = label)
 
         # plot strak-polars
         if params.showReferencePolars:
@@ -4174,6 +4198,8 @@ class strak_machine:
         global fs_ticks
         global lw_targetPolar
         global lw_referencePolar
+        global ms_oppoint
+        global ms_target
         global scaled
 
         if (scaled == False):
@@ -4188,6 +4214,8 @@ class strak_machine:
             fs_ticks = fs_ticks * scaleFactor
             lw_targetPolar = lw_targetPolar * scaleFactor
             lw_referencePolar = lw_referencePolar * scaleFactor
+            ms_oppoint = ms_oppoint * scaleFactor
+            ms_target = ms_target * scaleFactor
 
             self.params.scaleFactor = scaleFactor
             scaled = True
