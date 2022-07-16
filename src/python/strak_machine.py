@@ -234,8 +234,6 @@ class inputFile:
         operatingConditionsBackup = operatingConditions.copy()
         try:
             del(operatingConditions['name'])
-            #FIXME Xoptfoil does not accept dynamic weighting in combination with certain sonstant weighting values anymore (!) --> talk to Jochen
-            del(operatingConditions['weighting'])
         except:
             pass
 
@@ -650,7 +648,7 @@ class inputFile:
         op_mode = 'spec-cl'
         optimization_type = 'target-drag'
         target_value = 0.0
-        weighting = 1.0
+        weighting = None #1.0
         reynolds = None
 
         # now build up new opPoints
@@ -686,7 +684,7 @@ class inputFile:
 
             # insert new op-Point, get index
             idx = self.insert_OpPoint(name, 'spec-cl', opPoint, 'target-drag',
-                                     0.0, 1.0, None)
+                                     0.0, None, None)
 
             # correct idx of main op-points
             if (idx <= self.idx_CL0):
@@ -719,7 +717,7 @@ class inputFile:
 
         # insert op-Point, get index
         idx = self.insert_OpPoint('alpha0', 'spec-al', alpha, 'target-lift',
-                                     0.0, 2.0, maxRe)
+                                     0.0, params.weight_spec_al, maxRe)
 
 
     def insert_alphaMaxGlide_oppoint(self, params, i):
@@ -733,7 +731,7 @@ class inputFile:
 
         # insert op-Point, get index
         idx = self.insert_OpPoint('alphaMaxGlide', 'spec-al', alpha, 'target-lift',
-                                     CL, 2.0, None)
+                                     CL, params.weight_spec_al, None)
 
     def insert_alphaMaxLift_oppoint(self, params, i):
         # get maxRe
@@ -746,7 +744,7 @@ class inputFile:
 
         # insert op-Point, get index
         idx = self.insert_OpPoint('alphaMaxLift', 'spec-al', alpha, 'target-lift',
-                                     CL, 2.0, None)
+                                     CL, params.weight_spec_al, None)
 
 
     # All op-points between start and end shall be distributed equally.
@@ -851,7 +849,7 @@ class inputFile:
 
         # always insert CL0 as new oppoint
         self.idx_CL0 = self.insert_OpPoint('CL0', 'spec-cl', CL0, 'target-drag',
-                                           CD0, 1.0, None)
+                                           CD0, None, None)
         # correct idx of main op-points
         if (self.idx_CL0 <= self.idx_maxSpeed):
             self.idx_maxSpeed = self.idx_maxSpeed + 1
@@ -928,6 +926,7 @@ class strak_machineParams:
         self.optimizationPasses = 2
         self.activeTargetPolarIdx = 1
         self.scaleFactor = 1.0
+        self.weight_spec_al = None# 2.0
         self.generateBatch = True
         self.showTargetPolars = True
         self.adaptInitialPerturb = True
