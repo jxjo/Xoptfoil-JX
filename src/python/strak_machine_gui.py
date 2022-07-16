@@ -77,6 +77,7 @@ class control_frame():
         #self.scrollbar_h = ttk.Scrollbar(self.container, orient="horizontal", command=self.canvas.xview)  # FIXME horizontal scrolling
         #self.frame_bottom  = customtkinter.CTkFrame(self.canvas, width=180, corner_radius=0, background = "#000000")
         self.frame_bottom  = tk.Frame(self.canvas, width=180, background = bg_color_scrollableFrame_dark)
+        #self.frame_bottom  = customtkinter.CTkFrame(self.canvas, width=180) # FIXME CTKframe
         self.frame_bottom.bind("<Configure>", self.OnFrameConfigure)
 
         self.canvas.create_window((10, 10), window=self.frame_bottom , anchor="ne")
@@ -101,9 +102,9 @@ class control_frame():
         self.add_visiblePolarsCheckboxes(self.frame_top)
         self.add_referencePolarsCheckbox(self.frame_top)
 
+        self.nextRow = 0
         # add geo-entries to lower frame (scrollable)
         self.add_geoEntries(self.frame_bottom)
-        self.nextRow = self.nextRow + 1
 
         # add entries to lower frame (scrollable)
         self.add_entries(self.frame_bottom)
@@ -255,10 +256,10 @@ class control_frame():
         # place widgets inside frame
         #self.geometryParams_label.grid(row=self.nextRow, columnspan=2, pady=0, padx=0)
         #self.nextRow = self.nextRow + 1
-        self.place_widgets(self.thickness_label, self.thicknessEntry)
-        self.place_widgets(self.thicknessPosition_label, self.thicknessPositionEntry)
-        self.place_widgets(self.camber_label, self.camberEntry)
-        self.place_widgets(self.camberPosition_label, self.camberPositionEntry)
+        self.place_3_widgets(self.thickness_label, self.thicknessEntry, None)
+        self.place_3_widgets(self.thicknessPosition_label, self.thicknessPositionEntry, None)
+        self.place_3_widgets(self.camber_label, self.camberEntry, None)
+        self.place_3_widgets(self.camberPosition_label, self.camberPositionEntry, None)
 
 
     def add_entries(self, frame):
@@ -782,7 +783,7 @@ class diagram(customtkinter.CTkFrame):
         idx = 0
         for targetValue in controlFrame.targetValues:
             # get values from dictinory
-            (mode, oppoint, target) = controlFrame.get_valuesFromDict(targetValue)
+            (mode, oppoint, target, weighting) = controlFrame.get_valuesFromDict(targetValue)
 
             if (mode != edit_mode):
                 # not graphically editable in this diagram
