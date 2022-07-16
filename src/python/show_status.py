@@ -160,8 +160,8 @@ class show_status():
 
         # change the text of the progressbar,
         # the trailing spaces are here to properly center the text
-        self.s_main.configure("MainProgressbar", text="0 %      ", background = "DeepSkyBlue")
-        self.s_sub.configure("SubProgressbar", text="0 %      ", background = 'DeepSkyBlue')
+        self.s_main.configure("MainProgressbar", text="0 %      ", background = "steel blue")
+        self.s_sub.configure("SubProgressbar", text="0 %      ", background = 'steel blue')
 
         # create a scrollbar
         scrollbar = tk.Scrollbar(self.root)
@@ -172,11 +172,15 @@ class show_status():
         self.progressLog.pack(pady = 10)
         scrollbar.config( command = self.progressLog.yview )
 
-        # This button will start the visualizer
-        ctk.CTkButton(self.root, text = 'Start Visualizer', command = self.start_visualizer).pack(pady = 10)
+        # This button will abort the optimizationQuit the application
+        abort_button = ctk.CTkButton(self.root, text = 'Abort Optimization',
+         fg_color='MAROON', hover_color='red', command = self.abort_optimization)
+        abort_button.pack(padx = 40, pady = 10, side=tk.LEFT)
 
-        # This button will Quit the application
-        #Button(self.root, text = 'Quit', command = self.quit).pack(pady = 10)
+        # This button will start the visualizer
+        visuStart_button = ctk.CTkButton(self.root, text = 'Start Visualizer',
+                                 command = self.start_visualizer)
+        visuStart_button.pack(padx = 40, pady = 10, side=tk.RIGHT)
 
         # update with actual values
         self.update_progressbars()
@@ -321,6 +325,17 @@ class show_status():
 
         # now open subprocess
         p = subprocess.Popen(cmd, shell=True)
+
+    def abort_optimization(self):
+        dialog = ctk.CTkInputDialog(master=None,
+                       text="To abort the optimization, type 'stop'",
+                        title = 'Stop Optimization')
+        inputstring = dialog.get_input()
+
+        if inputstring == 'stop':
+            runcontrol = open('run_control', 'w+')
+            runcontrol.write(inputstring)
+            runcontrol.close()
 
 
     def quit(self):
