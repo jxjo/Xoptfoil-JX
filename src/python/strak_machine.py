@@ -1204,7 +1204,7 @@ class strak_machineParams:
 
         if self.quality == 'default':
             # single-pass optimization, hicks-henne
-            self.maxIterations = [600]
+            self.maxIterations = [350]
             self.numberOfCompetitors = [1]
             self.shape_functions = ['hicks-henne']
         else:

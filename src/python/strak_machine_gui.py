@@ -976,7 +976,7 @@ class diagram_frame():
         self.zoom_factors_old[self.activeDiagram] = zoom_factor
 
         # change zoom factor, steps is either -1.0 (scroll down) or +1.0 (scroll up)
-        zoom_factor = zoom_factor - (step/zoomsteps)
+        zoom_factor = zoom_factor + (step/zoomsteps)
 
         # limit zoom_factor
         if (zoom_factor > max_zoom):
