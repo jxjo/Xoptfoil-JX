@@ -72,18 +72,17 @@ class control_frame():
         self.container = customtkinter.CTkFrame(master=master, width=180,
                                             corner_radius=0)
 
-        self.canvas = tk.Canvas(self.container, background=bg_color_scrollableFrame_dark)
-        self.scrollbar_v = ttk.Scrollbar(self.container, orient="vertical", command=self.canvas.yview)
-        #self.scrollbar_h = ttk.Scrollbar(self.container, orient="horizontal", command=self.canvas.xview)  # FIXME horizontal scrolling
-        #self.frame_bottom  = customtkinter.CTkFrame(self.canvas, width=180, corner_radius=0, background = "#000000")
-        self.frame_bottom  = tk.Frame(self.canvas, width=180, background = bg_color_scrollableFrame_dark)
-        #self.frame_bottom  = customtkinter.CTkFrame(self.canvas, width=180) # FIXME CTKframe
+        self.canvas = tk.Canvas(self.container, bg=bg_color_scrollableFrame_dark)
+        self.scrollbar_v = customtkinter.CTkScrollbar(self.container,
+                                                command=self.canvas.yview)
+
+        self.frame_bottom  = tk.Frame(self.canvas, width=180,
+                                         bg = bg_color_scrollableFrame_dark)
+
         self.frame_bottom.bind("<Configure>", self.OnFrameConfigure)
 
         self.canvas.create_window((10, 10), window=self.frame_bottom , anchor="ne")
         self.canvas.configure(yscrollcommand=self.scrollbar_v.set)
-        #self.canvas.configure(xscrollcommand=self.scrollbar_h.set) # FIXME horizontal scrolling
-        #self.scrollbar_h.pack(side="top", fill="x")  # FIXME horizontal scrolling
         self.canvas.pack(side="left", fill="both", expand=True)
         self.scrollbar_v.pack(side="right", fill="y")
 
