@@ -72,7 +72,8 @@ class control_frame():
         self.container = customtkinter.CTkFrame(master=master, width=180,
                                             corner_radius=0)
 
-        self.canvas = tk.Canvas(self.container, bg=bg_color_scrollableFrame_dark)
+        self.canvas = tk.Canvas(self.container, bg=bg_color_scrollableFrame_dark,
+                                 highlightthickness=0)
         self.scrollbar_v = customtkinter.CTkScrollbar(self.container,
                                                 command=self.canvas.yview)
 
