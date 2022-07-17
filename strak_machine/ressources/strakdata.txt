@@ -1,6 +1,6 @@
 {
-    "quality": "high", 
-    "seedFoilName": "airfoil-138k", 
+    "quality": "default", 
+    "seedFoilName": "airfoils\\airfoil-138k", 
     "NCrit": 7.0, 
     "reynolds": [
         138000, 
@@ -14,31 +14,6 @@
         "airfoil-060k", 
         "airfoil-040k"
     ], 
-    "geoParams": {
-    "thickness": [ 
-        7.55,
-        7.41,
-        7.10,
-        6.90
-    ],
-    "thicknessPosition": [ 
-        27.83,
-        26.83,
-        25.03,
-        23.22
-    ],
-    "camber": [ 
-        1.46,
-        1.47,
-        1.47,
-        1.49
-    ],
-    "camberPosition": [ 
-        39.54,
-        36.34,
-        32.63,
-        28.63
-    ]},
     "additionalOpPoints": [
         0.014, 
         0.042

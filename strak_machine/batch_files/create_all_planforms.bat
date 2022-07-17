@@ -1,5 +1,5 @@
-start python scripts\planform_creator.py -p ressources/planformdata_wing 
+python scripts\planform_creator.py -p ressources/planformdata_tail 
 copy build\planforms\XFLR5_wing.xml ressources\XFLR5_wing.xml 
 copy build\planforms\FLZ_wing.flz ressources\FLZ_wing.flz 
-start python scripts\planform_creator.py -p ressources/planformdata_tail 
+python scripts\planform_creator.py -p ressources/planformdata_wing 
 

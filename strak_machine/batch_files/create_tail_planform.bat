@@ -1,1 +1,1 @@
-start python scripts\planform_creator.py -p ressources/planformdata_tail
+python scripts\planform_creator.py -p ressources/planformdata_tail
