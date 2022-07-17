@@ -82,6 +82,7 @@ fs_infotext = 9
 fs_legend = 8
 fs_axes = 20
 fs_ticks = 10
+fs_weightings = 6
 lw_targetPolar = 0.6
 lw_referencePolar  = 0.4
 ms_oppoint = 7
@@ -357,6 +358,64 @@ class inputFile:
                 # return op_point
                 return operatingConditions['op_point'][idx]
             idx = idx + 1
+
+
+    # get all targets, filtered by 'op_mode'
+    def get_xyTargets(self, op_mode):
+        x = []
+        y = []
+
+        # get operating-conditions from inputfile
+        operatingConditions = self.get_OperatingConditions()
+        target_values = operatingConditions["target_value"]
+        op_points = operatingConditions["op_point"]
+        op_modes =  operatingConditions["op_mode"]
+
+        # get the number of op-points
+        numOpPoints = len(op_points)
+
+        for i in range(numOpPoints):
+            # check if the oppoint has the requested op-mode
+            if (op_modes[i] == op_mode):
+                if (op_mode == 'spec-cl'):
+                    # get CL, CD
+                    x.append(target_values[i]) # CD
+                    y.append(op_points[i])     # CL
+                # check if the op-mode is 'spec-al'
+                elif (op_modes[i] == 'spec-al'):
+                    x.append(op_points[i])     # alpha
+                    y.append(target_values[i]) # CL
+
+        return (x, y)
+
+
+    # get all weightings, filtered by 'op_mode'
+    def get_weightings(self, op_mode):
+        weightings = []
+
+        # get operating-conditions from inputfile
+        operatingConditions = self.get_OperatingConditions()
+        op_modes =  operatingConditions["op_mode"]
+        try:
+            weightingList = operatingConditions["weighting"]
+        except:
+            # no weightings found
+            pass
+
+        # get the number of op-points
+        numOpPoints = len(op_modes)
+
+        for i in range(numOpPoints):
+            # check if the oppoint has the requested op-mode
+            if (op_modes[i] == op_mode):
+                try:
+                    weightings.append(weightingList[i])
+                except:
+                    # found no weighting for this oppoint
+                    weightings.append(None)
+                    pass
+
+        return (weightings)
 
 
     # returns name and index of the last op-point of operating-conditions
@@ -1733,31 +1792,10 @@ class polarGraph:
         self.visibleFlags = []
         return
 
+
     def check_polarVisibility(self, params, polarIdx):
         visibleFlags = params.get_visibleFlags()
         return (visibleFlags[polarIdx])
-
-
-    def get_alphaTargetsFroInputfile(self, inputFile):
-        x = []
-        y = []
-
-        # get operating-conditions from inputfile
-        operatingConditions = inputFile.get_OperatingConditions()
-        target_values = operatingConditions["target_value"]
-        op_points = operatingConditions["op_point"]
-        op_modes =  operatingConditions["op_mode"]
-
-        # get the number of op-points
-        numOpPoints = len(op_points)
-
-        for i in range(numOpPoints):
-            # check if the op-mode is 'spec-al'
-            if (op_modes[i] == 'spec-al'):
-                x.append(op_points[i])     # alpha
-                y.append(target_values[i]) # CL
-
-        return (x, y)
 
 
     def check_onlyRootPolarVisible(self, params):
@@ -1788,6 +1826,28 @@ class polarGraph:
         # customize grid
         ax.grid(True, color='dimgrey',  linestyle='dotted', linewidth=0.4)
 
+
+    def plot_weightings(self, params, ax, weightings, x, y):
+        if (weightings == None):
+            return
+
+        for i in range(len(weightings)):
+            weight = weightings[i]
+            if weight == None:
+                continue
+
+            # determine colour
+            if (weight >= 1.0):
+                cl = 'green'
+            else:
+                cl = 'red'
+            try:
+                x_off = 10 * params.scaleFactor
+                ax.annotate('%.2f' % weight, xy=(x[i], y[i]),
+                        fontsize = fs_weightings, color='white', bbox=dict(facecolor=cl),
+                        xytext=(x_off, 0), textcoords='offset points', arrowprops=dict(arrowstyle="->"))
+            except:
+                pass
 
 
     # plots lift/drag-polars (Xfoil-worker-polars and target-polars)
@@ -1917,8 +1977,12 @@ class polarGraph:
                 # is this the selected target polar for editing ?
                 if (polarIdx == params.activeTargetPolarIdx):
                     style = opt_point_style_root
+                    # get inputfile for the weightings
+                    inputFile = params.inputFiles[polarIdx]
+                    weightings = inputFile.get_weightings('spec-cl')
                 else:
                     style = opt_point_style_strak
+                    weightings = None
 
                 linewidth = lw_targetPolar
 
@@ -1930,6 +1994,9 @@ class polarGraph:
 
                 ax.plot(x, y, style, linestyle = ls_targetPolar,
                      linewidth = linewidth, markersize=ms_target, label = label)
+
+                # plot weightings, if any
+                self.plot_weightings(params, ax, weightings, x, y)
 
         # plot strak-polars
         if params.showReferencePolars:
@@ -1989,10 +2056,9 @@ class polarGraph:
 
             #  get polar to plot
             polar = polars[polarIdx]
-            #targetPolar = targetPolars[polarIdx]
 
             # get inputfile. We can only determine the alpha targets
-            # from the inputfile, not the target polar.
+            # from the inputfile, not the target polar. Also get weightings from here
             inputFile = params.inputFiles[polarIdx]
 
             # set label only once
@@ -2078,11 +2144,15 @@ class polarGraph:
                 # is this the selected target polar for editing ?
                 if (polarIdx == params.activeTargetPolarIdx):
                     # get the x,y values
-                    (x, y) = self.get_alphaTargetsFroInputfile(inputFile)
+                    (x, y) = inputFile.get_xyTargets('spec-al')
+                    weightings = inputFile.get_weightings('spec-al')
 
                     # plot
                     ax.plot(x, y, opt_point_style_root,
                           markersize=ms_oppoint, label = label)
+
+                    # plot weightings, if any
+                    self.plot_weightings(params, ax, weightings, x, y)
 
         if (T1T2_labelOk):
             ax.legend(loc='upper left', fontsize = fs_legend)
@@ -2122,7 +2192,7 @@ class polarGraph:
             polar = polars[polarIdx]
             targetPolar = targetPolars[polarIdx]
 
-             # set label only once
+            # set label only once
             if (T1T2_labelOk == False):
                 T1_label = 'T1-polar'
                 T2_label = 'T2-polar'
@@ -2212,8 +2282,13 @@ class polarGraph:
                 # is this the selected target polar for editing ?
                 if (polarIdx == params.activeTargetPolarIdx):
                     style = opt_point_style_root
+                    # get inputfile for the weightings
+                    inputFile = params.inputFiles[polarIdx]
+                    # get all weightings of 'spec-cl' oppoints
+                    weightings = inputFile.get_weightings('spec-cl')
                 else:
                     style = opt_point_style_strak
+                    weightings = None
 
                 linewidth = lw_targetPolar
 
@@ -2225,6 +2300,9 @@ class polarGraph:
                 # plot
                 ax.plot(x, y, style, linestyle = ls_targetPolar,
                     linewidth = linewidth, markersize=ms_target, label = label)
+
+                # plot weightings, if any
+                self.plot_weightings(params, ax, weightings, x, y)
 
         # plot strak-polars
         if params.showReferencePolars:
@@ -4196,6 +4274,7 @@ class strak_machine:
         global fs_legend
         global fs_axes
         global fs_ticks
+        global fs_weightings
         global lw_targetPolar
         global lw_referencePolar
         global ms_oppoint
@@ -4212,6 +4291,7 @@ class strak_machine:
             fs_legend = fs_legend * scaleFactor
             fs_axes = fs_axes * scaleFactor
             fs_ticks = fs_ticks * scaleFactor
+            fs_weightings = fs_weightings * scaleFactor
             lw_targetPolar = lw_targetPolar * scaleFactor
             lw_referencePolar = lw_referencePolar * scaleFactor
             ms_oppoint = ms_oppoint * scaleFactor
