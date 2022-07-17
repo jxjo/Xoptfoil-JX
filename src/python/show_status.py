@@ -46,7 +46,7 @@ finishSound = 'fanfare.wav'
 update_rate = 0.2
 
 # colour of the backgound
-bg_colour = 'gray3'
+bg_colour = "#222222"
 
 # variable to store the number of lines of the update-cycles
 old_length = 0
@@ -126,51 +126,35 @@ class show_status():
         self.s_main = Style(self.root)
         self.s_sub = Style(self.root)
 
-        # add the label to the progressbar style
-        self.s_main.layout("MainProgressbar",
-             [('MainProgressbar.trough',
-               {'children': [('MainProgressbar.pbar',
-                              {'side': 'left', 'sticky': 'ns'}),
-                             ("MainProgressbar.label",
-                              {"sticky": ""})],
-               'sticky': 'nswe'})])
-
-        # add the label to the progressbar style
-        self.s_sub.layout("SubProgressbar",
-             [('SubProgressbar.trough',
-               {'children': [('SubProgressbar.pbar',
-                              {'side': 'left', 'sticky': 'ns'}),
-                             ("SubProgressbar.label",
-                              {"sticky": ""})],
-               'sticky': 'nswe'})])
-
         # length of progress bars
-        scaled_length = int(400 * scaleFactor)
+        scaled_length = int(220 * scaleFactor)
 
         # main-Progress bar widget
-        self.main_progressBar = Progressbar(self.root, orient="horizontal",
-         length=scaled_length, mode = 'determinate',  style="MainProgressbar")
+        self.main_progressText = ctk.CTkLabel(self.root, text="all airfoils")
+        self.main_progressBar = ctk.CTkProgressBar(self.root, width=scaled_length)
 
         # sub-Progress bar widget
-        self.sub_progressBar = Progressbar(self.root, orient="horizontal",
-         length=scaled_length, mode = 'determinate',  style="SubProgressbar")
+        self.sub_progressText = ctk.CTkLabel(self.root, text="current airfoil")
+        self.sub_progressBar = ctk.CTkProgressBar(self.root, width=scaled_length)
 
-        self.main_progressBar.pack(pady = 10)
-        self.sub_progressBar.pack(pady = 10)
-
-        # change the text of the progressbar,
-        # the trailing spaces are here to properly center the text
-        self.s_main.configure("MainProgressbar", text="0 %      ", background = "steel blue")
-        self.s_sub.configure("SubProgressbar", text="0 %      ", background = 'steel blue')
-
-        # create a scrollbar
-        scrollbar = tk.Scrollbar(self.root)
-        scrollbar.pack( side = 'right', fill='y' )
+        self.main_progressText.pack(side = "top", padx = 0, pady = 0, anchor = 'sw')
+        self.main_progressBar.pack(side = "top", padx = 20, pady = 0, anchor = 'nw')
+        self.sub_progressText.pack(side = "top", padx = 0, pady = 0, anchor = 'sw')
+        self.sub_progressBar.pack(side = "top", padx = 20, pady = 0, anchor = 'nw')
 
         # create textbox to display content of progress-file
-        self.progressLog = tk.Listbox(self.root, height=10, width=200, yscrollcommand = scrollbar.set)
-        self.progressLog.pack(pady = 10)
-        scrollbar.config( command = self.progressLog.yview )
+        #self.progressLog = tk.Listbox(self.root, height=10, width=200)
+        self.progressLog = tk.Text(self.root, highlightthickness=0,
+                          bg = bg_colour, foreground = 'lightgray',
+                          font = "default_theme", height=10, width=200)
+
+        # create a scrollbar
+        scrollbar = ctk.CTkScrollbar(self.root, command = self.progressLog.yview)
+        scrollbar.pack( side = 'right', fill='y', pady = 10 )
+
+        # configure testbox
+        self.progressLog.configure(yscrollcommand=scrollbar.set)
+        self.progressLog.pack( side = 'top', padx = 5, pady = 10, anchor = 'nw')
 
         # This button will abort the optimizationQuit the application
         abort_button = ctk.CTkButton(self.root, text = 'Abort Optimization',
@@ -278,10 +262,11 @@ class show_status():
         new_length = len(content)
 
         # update progress-bars
-        self.main_progressBar['value'] = main_progress
-        self.sub_progressBar['value'] = sub_progress
-        self.s_main.configure("MainProgressbar", text="all airfoils: {0} %      ".format(main_progress))
-        self.s_sub.configure("SubProgressbar", text="current airfoil: {0} %      ".format(sub_progress))
+        self.main_progressText.set_text("all airfoils: %.2f %%" % main_progress)
+        self.main_progressBar.set(main_progress/100.0)
+        self.sub_progressText.set_text("current airfoil: %.2f %%" % sub_progress)
+        self.sub_progressBar.set(sub_progress/100.0)
+
 
         # update progress-log-widget (only the new lines)
         for idx in range (old_length, new_length):
@@ -328,7 +313,7 @@ class show_status():
 
     def abort_optimization(self):
         dialog = ctk.CTkInputDialog(master=None,
-                       text="To abort the optimization, type 'stop'",
+                       text="To abort the optimization of\n the current airfoil, type 'stop'",
                         title = 'Abort Optimization')
         inputstring = dialog.get_input()
 
