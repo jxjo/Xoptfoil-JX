@@ -1938,7 +1938,7 @@ def update_seedfoilName(wingData, strakdata):
     seedFoilName = wingData.airfoilNames[0]
 
     # set the new seedfoilname
-    strakdata["seedFoilName"] = remove_suffix(seedFoilName, ".dat")
+    strakdata["seedFoilName"] = airfoilPath + bs + remove_suffix(seedFoilName, ".dat")
 
 
 def update_airfoilNames(wingData, strakdata):
@@ -2094,8 +2094,10 @@ def update_strakdata(wingData):
     try:
         strakdata = json.load(strakDataFile)
         strakDataFile.close()
-    except:
+    except ValueError as e:
+        ErrorMsg('invalid json: %s' % e)
         ErrorMsg('failed to read data from file %s' % strakDataFileName)
+        strakDataFile.close()
         return
 
     # update data coming from planform-creator
@@ -2231,7 +2233,8 @@ if __name__ == "__main__":
     try:
         planformData = json.load( planform)
         planform.close()
-    except:
+    except ValueError as e:
+        ErrorMsg('invalid json: %s' % e)
         ErrorMsg('Error, failed to read data from file %s' % planformDataFileName)
         planform.close()
         exit(-1)
