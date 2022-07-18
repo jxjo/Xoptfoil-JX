@@ -990,7 +990,7 @@ class strak_machineParams:
         self.generateBatch = True
         self.showTargetPolars = True
         self.adaptInitialPerturb = True
-        self.smoothSeedfoil = False
+        self.smoothSeedfoil = True
         self.smoothStrakFoils = True
         self.showReferencePolars = True
         self.ReNumbers = []
@@ -4082,18 +4082,18 @@ class strak_machine:
         # get name of root-airfoil
         rootfoilName = self.params.airfoilNames[0]
 
-        # generate assessment data of seedfoil to find out, if smoothing is necessary
-        self.params.generate_CoordsAndAssessFile(seedFoilName)
-        (reversals_top, reversals_bot, smooth) = self.params.read_AssessmentData(seedFoilName)
+##        # generate assessment data of seedfoil to find out, if smoothing is necessary
+##        self.params.generate_CoordsAndAssessFile(seedFoilName)
+##        (reversals_top, reversals_bot, smooth) = self.params.read_AssessmentData(seedFoilName)
 
         # get the path where the seed-airfoil can be found
-        srcPath = "." + bs# + airfoilPath
+        srcPath = "." + bs
 
         inputFilename = ".." + bs + ressourcesPath + bs + smoothInputFile
 
         # copy and smooth the airfoil, also rename
         copyAndSmooth_Airfoil(self.params.xfoilWorkerCall, inputFilename,
-           seedFoilName, srcPath, rootfoilName, smooth)
+           seedFoilName, srcPath, rootfoilName, self.params.smoothSeedfoil)
 
         return rootfoilName
 
