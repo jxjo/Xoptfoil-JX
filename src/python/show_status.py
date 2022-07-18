@@ -122,10 +122,6 @@ class show_status():
         # The Pack geometry manager packs widgets in rows or columns.
         panel.pack(side = "top", fill = "both", expand = "yes")
 
-        # configure progress-bars
-        self.s_main = Style(self.root)
-        self.s_sub = Style(self.root)
-
         # length of progress bars
         scaled_length = int(220 * scaleFactor)
 
@@ -143,7 +139,6 @@ class show_status():
         self.sub_progressBar.pack(side = "top", padx = 20, pady = 0, anchor = 'nw')
 
         # create textbox to display content of progress-file
-        #self.progressLog = tk.Listbox(self.root, height=10, width=200)
         self.progressLog = tk.Text(self.root, highlightthickness=0,
                           bg = bg_colour, foreground = 'lightgray',
                           font = "default_theme", height=10, width=200)
