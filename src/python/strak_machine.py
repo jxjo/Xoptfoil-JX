@@ -977,6 +977,8 @@ class strak_machineParams:
         self.ReSqrtCl = 150000
         self.NCrit = NCrit_Default
         self.numOpPoints = 17
+        self.alphaMin = -8.0
+        self.alphaMax = 16.0
         self.CL_min = -0.1
         self.CL_preMaxSpeed = 0.2
         self.CL_merge = 0.05
@@ -2410,6 +2412,15 @@ class polarData:
         self.T2_T1_switchIdx = 0
 
 
+    # function to get alpha @ CL_min and alpha @ CL_maxLift
+    def get_alphaMin_alphaMaxLift(self):
+        return (self.alpha_min, self.alpha_maxLift)
+
+
+    def get_alphaMerge(self):
+        return (self.alpha[self.T2_T1_switchIdx])
+
+
     def import_FromFile(self, fileName):
         BeginOfDataSectionTag = "-------"
         airfoilNameTag = "Calculated polar for:"
@@ -2685,11 +2696,23 @@ class polarData:
         #my_print("Ready")#Debug
 
 
-    # determines the overall minimum CL-value of a given polar and some
-    # corresponding values
+    # determines the first minimum CD-value of a given polar, starting at
+    # the point of highest lift coefficent, descending
     def determine_MaxSpeed(self):
-        self.CD_maxSpeed = min(self.CD)
-        self.maxSpeed_idx = self.find_index_From_CD(self.CD_maxSpeed)
+        # initialize minimum
+        minimum = self.CD[-1]
+
+        # find the first minimum CD starting from the highest lift coefficient
+        for idx in reversed(range(len(self.CD)-1)):
+            if (self.CD[idx] <= minimum):
+                # found new minimum
+                minimum = self.CD[idx]
+            else:
+                # CD starts incresing again, so we have found the first minimum
+                break
+
+        self.CD_maxSpeed = minimum
+        self.maxSpeed_idx = idx
         self.CL_maxSpeed = self.CL[self.maxSpeed_idx]
         self.alpha_maxSpeed = self.alpha[self.maxSpeed_idx]
         self.CL_CD_maxSpeed = self.CL_maxSpeed / self.CD_maxSpeed
@@ -2844,40 +2867,39 @@ class polarData:
 
 ################################################################################
 # function that generates commandlines to create and merge polars
-def generate_polarCreationCommandLines(commandlines, params, strakFoilName, maxRe, Re):
+def generate_polarCreationCommandLines(commandlines, params, strakFoilName, ReT1, ReT2):
+    airfoilName = remove_suffix(strakFoilName, '.dat')
+    polarDir = airfoilName + '_polars'
+    T1_fileName = 'iPolars_T1_%s.txt' % airfoilName
+    T2_fileName = 'iPolars_T2_%s.txt' % airfoilName
+    num = len(ReT1)
 
-    polarDir = remove_suffix(strakFoilName, '.dat') + '_polars'
-
-    polarFileName_T1 = compose_Polarfilename_T1(maxRe, params.NCrit)
-    polarFileNameAndPath_T1 = polarDir + bs + polarFileName_T1
-
-    polarFileName_T2 = compose_Polarfilename_T2(Re, params.NCrit)
-    polarFileNameAndPath_T2 = polarDir + bs + polarFileName_T2
-
-    mergedPolarFileName =  polarDir + bs +\
-                 ('merged_polar_%s.txt' % get_ReString(Re))
-
-    # T1-polar
-    inputFilename = get_PresetInputFileName('iPolars_T1')
-    commandline = params.xfoilWorkerCall + " -i \"%s\" -a \"%s\" -w polar -o \"%s\" -r %d\n" %\
-                             (inputFilename, strakFoilName,
-                             remove_suffix(strakFoilName, '.dat'),
-                              maxRe)
+    # worker call T1-polar (multiple polars with one call)
+    commandline = params.xfoilWorkerCall +  " -i \"%s\" -w polar -a \"%s\"\n" %\
+                                  (T1_fileName, airfoilName+'.dat')
     commandlines.append(commandline)
 
-    # T2-polar
-    inputFilename = get_PresetInputFileName('iPolars_T2')
-    commandline = params.xfoilWorkerCall + " -i \"%s\" -a \"%s\" -w polar -o \"%s\" -r %d\n" %\
-                             (inputFilename, strakFoilName,
-                              remove_suffix(strakFoilName, '.dat'), Re)
+    # worker call T2-polar (multiple polars with one call)
+    commandline = params.xfoilWorkerCall +  " -i \"%s\" -w polar -a \"%s\"\n" %\
+                                  (T2_fileName, airfoilName+'.dat')
     commandlines.append(commandline)
 
-    # merge polars
-    commandline = params.strakMachineCall + " -w merge -p1 \"%s\"  -p2 \"%s\""\
+    # merge command (only one merged polar with one call)
+    for i in range(num):
+        polarFileName_T1 = compose_Polarfilename_T1(ReT1[i], params.NCrit)
+        polarFileNameAndPath_T1 = polarDir + bs + polarFileName_T1
+
+        polarFileName_T2 = compose_Polarfilename_T2(ReT2[i], params.NCrit)
+        polarFileNameAndPath_T2 = polarDir + bs + polarFileName_T2
+
+        mergedPolarFileName =  polarDir + bs +\
+                 ('merged_polar_%s.txt' % get_ReString(ReT2[i]))
+
+        commandline = params.strakMachineCall + " -w merge -p1 \"%s\"  -p2 \"%s\""\
                  " -m \"%s\" -c %f\n" %\
               (polarFileNameAndPath_T1, polarFileNameAndPath_T2,
                mergedPolarFileName, params.CL_merge)
-    commandlines.append(commandline)
+        commandlines.append(commandline)
 
 
 def delete_progressFile(commandLines, filename):
@@ -3130,18 +3152,21 @@ def generate_Commandlines(params):
         # insert message for polar-calculation
         insert_calculate_polars(commandLines, progressFileName, strakFoilName)
 
+        # if not being the last strak-airfoil, also create T1 / T2 / merged
+        # polars for the Re-numbers that were specified for the next
+        # strak-airfoil, to have a kind of "benchmark" or at least
+        # orientation for the next strak-airfoil
+        if (i<(numFoils-1)):
+            ReT1 = [maxReList[i], maxReList[i+1]]
+            ReT2 = [ReList[i], ReList[i+1]]
+        else:
+            ReT1 = [maxReList[i]]
+            ReT2 = [ReList[i]]
+
         # create T1 / T2 / merged polars for the specified Re-numbers of the
         # generated strak-airfoil
         generate_polarCreationCommandLines(commandLines, params, strakFoilName,
-                                           maxReList[i], ReList[i])
-
-        if ((i<numFoils-1)):
-            # if not being the last strak-airfoil, also create T1 / T2 / merged
-            # polars for the Re-numbers that were specified for the next
-            # strak-airfoil, to have a kind of "benchmark" or at least
-            # orientation for the next strak-airfoil
-            generate_polarCreationCommandLines(commandLines, params, strakFoilName,
-                                               maxReList[i+1], ReList[i+1])
+                                           ReT1, ReT2)
 
         # insert message for polar-calculation
         insert_calculate_polars_finished(commandLines, progressFileName)
@@ -3545,22 +3570,49 @@ class polar_worker:
         self.NCrit = params.NCrit
         self.xfoilWorkerCall = params.xfoilWorkerCall
         self.alpha_Resolution = params.alpha_Resolution
+        self.alphaMin_T1 = params.alphaMin
+        self.alphaMin_T2 = params.alphaMin
+        self.alphaMax_T1 = params.alphaMax
+        self.alphaMax_T2 = params.alphaMax
         self.CL_merge = params.CL_merge
+
+
+    def set_alphaMinMax(self, alphaMin_T1, alphaMax_T1, alphaMin_T2, alphaMax_T2):
+        self.alphaMin_T1 = alphaMin_T1
+        self.alphaMax_T1 = alphaMax_T1
+        self.alphaMin_T2 = alphaMin_T2
+        self.alphaMax_T2 = alphaMax_T2
 
 
     def generate_PolarCreationFile(self, fileName, polarType, ReList):
         if polarType == 'T1':
             inputFilename = get_PresetInputFileName(T1_polarInputFile)
+            alphaMin = self.alphaMin_T1
+            alphaMax = self.alphaMax_T1
         elif polarType == 'T2':
             inputFilename = get_PresetInputFileName(T2_polarInputFile)
+            alphaMin = self.alphaMin_T2
+            alphaMax = self.alphaMax_T2
         else:
             ErrorMsg("unknown polarType : %s" % polarType)
 
         # read template file
         fileContent = f90nml.read(inputFilename)
 
-        # add list of Re-numbers
+        # get polar generation options from dictionary
         polarGenerationOptions = fileContent['polar_generation']
+
+        # get oppoint range, example: op_point_range = -4, 12, 0.1
+        op_point_range = polarGenerationOptions['op_point_range']
+
+        # set alpha min/max
+        op_point_range[0] = alphaMin
+        op_point_range[1] = alphaMax
+
+        # writeback
+        polarGenerationOptions['op_point_range'] = op_point_range
+
+        # add list of Re-numbers
         polarGenerationOptions['polar_reynolds'] = ReList
 
         # write new file
@@ -3661,13 +3713,25 @@ class polar_worker:
         return merged_polars
 
 
+    def generate_initialPolar(self, airfoilName, Re_T1, Re_T2):
+        initial_airfoilName = 'initial_' + airfoilName
+
+        # create a dummy airfoil, which is a copy of the root-airfoil
+        # just to have the polars in a different folder
+        change_airfoilname.change_airfoilName(airfoilName + '.dat',
+                                          initial_airfoilName + '.dat')
+
+        # generate missing polars now
+        generate_polars(self, initial_airfoilName, [Re_T1], [Re_T2])
+
+
     def generate_polars(self, airfoilName, ReList_T1, ReList_T2):
         # get list of T1 polars that have to be generated
         (ReList_T1_missing, ReList_T2_missing) =\
              self.get_missingPolars(airfoilName, ReList_T1, ReList_T2)
 
         if (len(ReList_T1_missing) > 0):
-            my_print("generating missing T2 polars for airfoil %s..." % airfoilName)
+            my_print("generating missing T1 polars for airfoil %s..." % airfoilName)
             # create inputfile for worker
             T1_fileName = 'iPolars_T1_%s.txt' % airfoilName
             self.generate_PolarCreationFile(T1_fileName, 'T1', ReList_T1_missing)
@@ -3802,6 +3866,10 @@ class strak_machine:
         # data of root airfoil
         self.params.read_geoParameters()
 
+        # afer we have the root-airfiol and, we can init polar generation and
+        # get more specific alpha min/max for generating further polars
+        self.init_polarGeneration()
+
         # check if all seedfoils are there, generate missing seedfoils
         self.check_andGenerateSeedfoils()
 
@@ -3893,11 +3961,55 @@ class strak_machine:
                 self.generate_seedfoil(idx)
 
 
-    def check_andGeneratePolars(self):
+    # this function will initialize the polar worker, create and import the
+    # first polar of the root airfoil and determine alpha min and max values for
+    # further polar generation
+    def init_polarGeneration(self):
         # create polar worker
         self.polarWorker = polar_worker(self.params)
 
-        # create all necessary polars of root airfoil
+        # some local variables
+        rootfoilName = self.params.airfoilNames[0]
+        dummy_airfoilName = 'dummy'
+        Re_T1 = [self.params.maxReNumbers[0]]
+        Re_T2 = [self.params.ReNumbers[0]]
+
+        # create a dummy airfoil, which is a copy of the root-airfoil with
+        # another name, just to have the polars in a different folder
+        change_airfoilname.change_airfoilName(rootfoilName + '.dat',
+                                              dummy_airfoilName + '.dat')
+
+        # generate missing polars for this airfoil now
+        self.polarWorker.generate_polars(dummy_airfoilName, Re_T1, Re_T2)
+
+        # import polar and analyse (caution, return value is a list!)
+        polarList =\
+            self.polarWorker.import_polars(dummy_airfoilName, Re_T1, Re_T2)
+
+        # get polar from list
+        initialPolar = polarList[0]
+
+        # determine alphaMin/-Max of the initial polar
+        (alphaMin, alphaMax) = initialPolar.get_alphaMin_alphaMaxLift()
+
+        # expand alpha min/max
+        alphaMinExpand = (alphaMax - alphaMin) * 0.05
+        alphaMaxExpand = (alphaMax - alphaMin) * 0.08
+        alphaMerge = initialPolar.get_alphaMerge()
+
+        # set min/max alpha for T1 / T2
+        alphaMin_T1 = round((alphaMin - alphaMinExpand), 1)
+        alphaMin_T2 = round((alphaMerge - alphaMinExpand), 1)
+        alphaMax_T1 = round((alphaMerge + alphaMaxExpand), 1)
+        alphaMax_T2 = round((alphaMax + alphaMaxExpand), 1)
+
+        # set new values in polar worker for further polar generation
+        self.polarWorker.set_alphaMinMax(alphaMin_T1, alphaMax_T1,
+                                         alphaMin_T2, alphaMax_T2)
+
+
+    def check_andGeneratePolars(self):
+        # create further necessary polars of root airfoil
         self.polarWorker.generate_polars(self.params.airfoilNames[0],
                           self.params.maxReNumbers, self.params.ReNumbers)
 
@@ -3910,6 +4022,26 @@ class strak_machine:
 
             self.polarWorker.generate_polars(self.params.seedfoilNames[idx-1],
                                              Re_T1, Re_T2)
+
+        # generate polar-creation files of strakfoils that will be used
+        # later in the commandlines
+        num = len(self.params.ReNumbers)
+        for i in range(1, num):
+            airfoilName = self.params.airfoilNames[i]
+            T1_fileName = 'iPolars_T1_%s.txt' % airfoilName
+            T2_fileName = 'iPolars_T2_%s.txt' % airfoilName
+
+            if (i<(num-1)):
+                # generate two polars
+                Re_T1 = [self.params.maxReNumbers[i], self.params.maxReNumbers[i+1]]
+                Re_T2 = [self.params.ReNumbers[i], self.params.ReNumbers[i+1]]
+            else:
+                # generate one polar
+                Re_T1 = [self.params.maxReNumbers[i]]
+                Re_T2 = [self.params.ReNumbers[i]]
+
+            self.polarWorker.generate_PolarCreationFile(T1_fileName, 'T1', Re_T1)
+            self.polarWorker.generate_PolarCreationFile(T2_fileName, 'T2', Re_T2)
 
 
     def import_polars(self):
@@ -4081,10 +4213,6 @@ class strak_machine:
 
         # get name of root-airfoil
         rootfoilName = self.params.airfoilNames[0]
-
-##        # generate assessment data of seedfoil to find out, if smoothing is necessary
-##        self.params.generate_CoordsAndAssessFile(seedFoilName)
-##        (reversals_top, reversals_bot, smooth) = self.params.read_AssessmentData(seedFoilName)
 
         # get the path where the seed-airfoil can be found
         srcPath = "." + bs
