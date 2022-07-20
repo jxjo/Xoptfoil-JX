@@ -177,15 +177,15 @@ subroutine run_op_points (foil, geom_options, xfoil_options,         &
 
 
 ! init statistics for out lier detection the first time and when polar changes
-!$omp critical
   if (detect_outlier) then 
+!$omp critical
     if (.not. allocated(drag_stats)) then
       call init_statistics (noppoint)
     else if (size(drag_stats) /= noppoint) then 
       call init_statistics (noppoint)
     end if
-  end if
 !$omp end critical
+  end if
 
 
 ! Set default Xfoil parameters 
@@ -383,7 +383,6 @@ subroutine run_op_points (foil, geom_options, xfoil_options,         &
 
     ! Support Type 1 and 2 re numbers - cl may not be negative  
       if ((op_spec%re%type == 2) .and. (op%cl <= 0d0)) then 
-        write (*,*)
         write(*,'(15x,A,I2,A, F6.2)') "Warning: Negative lift for Re-Type 2 at" // &
         " op",i," - cl:",op%cl
       end if 
@@ -1077,8 +1076,11 @@ subroutine xfoil_scale_thickness_camber (infoil, f_thick, d_xthick, f_camb, d_xc
 
   IF ((f_thick /= 1.d0) .or. (f_camb /= 1.d0))  &
     call THKCAM (f_thick, f_camb)
-  IF ((d_xcamb /= 0.d0) .or. (d_xthick /= 0.d0))  &
+
+  IF ((d_xcamb /= 0.d0) .or. (d_xthick /= 0.d0))  then
     call HIPNT  (xcamb + d_xcamb, xthick + d_xthick)
+    call correct_HIPNT_artefacts (infoil)
+  end if 
 
                 
 ! retrieve outfoil from xfoil buffer
@@ -1177,12 +1179,9 @@ subroutine xfoil_set_thickness_camber (infoil, maxt, xmaxt, maxc, xmaxc, outfoil
 
 ! Run xfoil to change highpoint of thickness and camber 
 
-  if((xmaxc > 0d0) .and. (xmaxt > 0d0)) then
+  if((xmaxc > 0d0) .or. (xmaxt > 0d0)) then
     call HIPNT (xmaxc, xmaxt)
-  elseif((xmaxc > 0d0) .and. (xmaxt == 0d0)) then
-    call HIPNT (xmaxc, xthick)
-  elseif((xmaxc == 0d0) .and. (xmaxt > 0d0)) then
-    call HIPNT (xcamb, xmaxt)
+    call correct_HIPNT_artefacts (infoil)
   end if 
 
 ! THKCAM may have changed te gap 
@@ -1190,17 +1189,76 @@ subroutine xfoil_set_thickness_camber (infoil, maxt, xmaxt, maxc, xmaxc, outfoil
   if (old_te_gap /= xfoil_te_gap()) then 
   ! Run xfoil to set TE gap 
     call TGAP(old_te_gap,0.8d0)
-    ! write (*,*) "te old", old_te_gap, "   te new", xfoil_te_gap()
+    write (*,*) "THKCAM TE change encountered: te old ", old_te_gap, "   te new ", xfoil_te_gap()
   end if 
-
-! Recalc values ...
-  call xfoil_get_geometry_info (thick, xthick, camb, xcamb) 
 
 ! retrieve outfoil from xfoil buffer
   call xfoil_reload_airfoil(outfoil)
 
 end subroutine xfoil_set_thickness_camber
 
+
+!------------------------------------------------------------------------------
+! Corrects artefacts of xfoils HIPNT (change max thickness or camper position) 
+!
+! - de-rotate if needed
+! - set LE to 0,0 
+! - set TE to old value
+!     
+! In:
+!   infoil      - foil prior to HIPNT 
+! Modifies:
+!   xfoil buffer airfoil
+!------------------------------------------------------------------------------
+subroutine correct_HIPNT_artefacts (infoil)
+
+  use xfoil_inc, only : XB, YB, NB
+  use vardef,    only : airfoil_type
+
+  type(airfoil_type), intent(in) :: infoil
+
+  integer           :: i
+  double precision, parameter ::EPSILON = 1d-10   ! ... when coordinate will be 0.0
+  double precision  :: in_angle, out_angle, cosa, sina
+
+
+! HIPNT may have changed LE from 0,0 
+  do i = 1, NB
+    if ((XB(i) == 0d0 ) .and. &
+        ((abs(YB(i)) < EPSILON ) .and. ( abs(YB(i)) /= 0d0 ))) then 
+      ! write (*,*) "HIPNT LE change encountered: ", i, XB(i), YB(i)
+      XB(i) = 0d0
+      YB(i) = 0d0
+    end if 
+  end do   
+
+! HIPNT may have rotated the airfoil - 
+! Rotate the airfoil so chord is on x-axis 
+
+  in_angle  = atan2 ((infoil%z(1) +infoil%z(NB ))/2.d0,(infoil%x(1) +infoil%x(NB) )/2.d0)
+  out_angle = atan2 ((YB(1)+YB(NB))/2.d0,(XB(1)+XB(NB))/2.d0)
+  if (in_angle /= out_angle) then
+    !write (*,*) "HIPNT rotated airfoil: before ",in_angle, "   after ", out_angle
+  
+    cosa  = cos (in_angle - out_angle) 
+    sina  = sin (in_angle - out_angle) 
+    do i = 1, NB
+      ! outfoil%x(i) = outfoil%x(i) * cosa - outfoil%z(i) * sina
+      YB(i) = XB(i) * sina + YB(i) * cosa
+    end do
+  end if 
+
+! HIPNT may have changed TE from 0,0 
+  if (infoil%z(1)  /= YB(1)) then
+    !write (*,*) "HIPNT upper TE change: z before ",infoil%z(1), "   after ", YB(1)
+    YB(1)   = infoil%z(1) 
+  end if 
+  if (infoil%z(NB) /= YB(NB)) then 
+    !write (*,*) "HIPNT lower TE change: z before ",infoil%z(NB), "   after ", YB(NB)
+    YB(NB)  = infoil%z(NB)
+  end if 
+
+end subroutine correct_HIPNT_artefacts 
 
 
 !------------------------------------------------------------------------------

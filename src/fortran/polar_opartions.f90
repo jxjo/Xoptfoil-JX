@@ -118,7 +118,7 @@ subroutine generate_polar_files (show_details, subdirectory, foil, xfoil_geom_op
 
     open(unit=13, file= trim(polars_subdirectory)//trim(polars(i)%file_name), status='replace')
     call write_polar_header (13, polars(i))
-    call write_polar_data   (13, op_points_result)
+    call write_polar_data   (show_details, 13, op_points_result)
 !    call write_polar_data_csv  (13, foil, op_points_result)
     close (13)
 
@@ -163,10 +163,13 @@ subroutine generate_polar_set (show_details, subdirectory, foil, xfoil_geom_opti
   character (255) :: polars_subdirectory,  polar_label
 
   flap_spec%use_flap  = .false. 
+  allocate (flap_degrees(polars(i)%n_op_points))
+  flap_degrees (:)    = 0.d0 
 
   local_xfoil_options = xfoil_options
   local_xfoil_options%exit_if_unconverged = .false.  ! we need all op points
   local_xfoil_options%detect_outlier      = .false.  ! makes no sense for polar calcualtion being excuted only once
+  local_xfoil_options%maxit               = 100       ! increase default value of xfoil iterations
 
   if (npolars == 1) then
     local_xfoil_options%show_details = show_details
@@ -180,39 +183,38 @@ subroutine generate_polar_set (show_details, subdirectory, foil, xfoil_geom_opti
     polars_subdirectory = trim(subdirectory) // '\'
   end if
 
-  call xfoil_cleanup()                                ! if xfoil_init was done already
-
-!$omp parallel default(shared) private(i, flap_degrees,op_points_result, polar_label) 
-
-  call xfoil_init()
-
-!$omp do schedule(static) 
+! Print ordered out 
   do i = 1, npolars
-
-    if (.not. allocated (flap_degrees)) allocate (flap_degrees(polars(i)%n_op_points))
-    flap_degrees (:)    = 0.d0 
-
     write (polar_label,'(A,I1,A, I7)') 'Type ',polars(i)%re%type,', Re=',  int(polars(i)%re%number)
     call print_note_only ('- Generating polar ' // trim(polar_label) // '  ')
+  end do 
 
+  call xfoil_cleanup()                                ! if xfoil_init was done already
+
+! Multi threaded polars   
+
+!$omp parallel do schedule(static) private(i, flap_degrees,op_points_result, polar_label) 
+  do i = 1, npolars
+
+    call xfoil_init()
     call run_op_points (foil, xfoil_geom_options, local_xfoil_options,        &
                         flap_spec, flap_degrees, &
-                        polars(i)%op_points_spec, op_points_result)
+                        polars(i)%op_points_spec, op_points_result) 
+    call xfoil_cleanup()
   
 !$omp critical (file_write)
-    call print_colored (COLOR_NOTE,' - Writing polar ' // trim(polar_label) &
+    write (polar_label,'(A,I1,A, I7)') 'Type ',polars(i)%re%type,', Re=',  int(polars(i)%re%number)
+
+    call print_colored (COLOR_NORMAL,' - Writing polar ' // trim(polar_label) &
                                    //' to '//trim(polars_subdirectory) //'   ')
     open(unit=13, file= trim(polars_subdirectory)//trim(polars(i)%file_name), status='replace')
     call write_polar_header (13, polars(i))
-    call write_polar_data   (13, op_points_result)
+    call write_polar_data   (show_details, 13, op_points_result)
     close (13)
 !$omp end critical (file_write)
 
   end do 
-
-!$omp end do
-  call xfoil_cleanup()
-!$omp end parallel
+!$omp end parallel do
 
 end subroutine generate_polar_set
 
@@ -444,10 +446,11 @@ end subroutine set_polar_info
 !------------------------------------------------------------------------------
 ! Write polar data in xfoil format to out_unit
 !------------------------------------------------------------------------------
-subroutine write_polar_data (out_unit, op_points_result)
+subroutine write_polar_data (show_details, out_unit, op_points_result)
 
   use xfoil_driver,       only : op_point_result_type, op_point_specification_type
 
+  logical, intent(in)            :: show_details
   type (op_point_result_type), dimension (:), intent (in) :: op_points_result
   integer,           intent (in) :: out_unit
 
@@ -475,13 +478,15 @@ subroutine write_polar_data (out_unit, op_points_result)
       write (out_unit,  "(   F8.3,   F9.5,    F10.6,    F10.5,    F9.5,   F8.4,   F8.4)") &
                           op%alpha, op%cl, op%cd,    0d0,  op%cm,op%xtrt,op%xtrb
     else
-      if (.not. has_warned) then 
-        write(text_out,'(A,F5.2)') "alpha =",op%alpha
-      else 
-        write(text_out,'(A,F5.2)') ",",op%alpha
-      end if 
-      call print_colored (COLOR_NOTE, trim(text_out))
-      has_warned = .true. 
+      if (show_details) then
+        if (.not. has_warned) then 
+          write(text_out,'(A)') "alpha =" // strf('(F5.2)',op%alpha)
+        else 
+          write(text_out,'(A)') "," // strf('(F5.2)',op%alpha)
+        end if 
+        call print_colored (COLOR_NOTE, trim(text_out))
+        has_warned = .true. 
+      end if
     end if
 
   end do 

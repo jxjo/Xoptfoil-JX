@@ -207,7 +207,7 @@ subroutine set_geometry_value (input_file, outname_auto, output_prefix, seed_foi
   type (airfoil_type), intent (inout)  :: seed_foil
   logical, intent(in)          :: visualizer, outname_auto
 
-  type (airfoil_type) :: foil, foil_smoothed
+  type (airfoil_type) :: foil, foil_smoothed, foil_tmp
   type (xfoil_geom_options_type)  :: geom_options
   character (20)      :: value_str
   character (2)       :: value_type
@@ -234,24 +234,22 @@ subroutine set_geometry_value (input_file, outname_auto, output_prefix, seed_foi
       call xfoil_set_thickness_camber (seed_foil, (value_number / 100d0), 0d0, 0d0, 0d0, foil)
 
     case ('xt') 
-      write (*,'(" - ",A)') 'Setting max. thickness position to '//trim(adjustl(value_str))//'%'
       call repanel_and_normalize_airfoil (seed_foil, geom_options, .false., foil_smoothed)
-      call smooth_foil (.true., 0.1d0, foil_smoothed)
+      call smooth_foil (.false., 0.1d0, foil_smoothed)
 
+      write (*,'(" - ",A)') 'Setting max thickness position to '//trim(adjustl(value_str))//'%'
       call xfoil_set_thickness_camber (foil_smoothed, 0d0, (value_number / 100d0), 0d0, 0d0, foil)
-      call smooth_foil (.false., 0.1d0, foil)
 
     case ('c') 
       write (*,'(" - ",A)') 'Setting camber to '//trim(adjustl(value_str))//'%'
       call xfoil_set_thickness_camber (seed_foil, 0d0, 0d0, (value_number / 100d0), 0d0, foil)
 
     case ('xc') 
-      write (*,'(" - ",A)') 'Setting max. camber position to '//trim(adjustl(value_str))//'%'
       call repanel_and_normalize_airfoil (seed_foil, geom_options, .false., foil_smoothed)
-      call smooth_foil (.true., 0.1d0, foil_smoothed)
+      call smooth_foil (.false., 0.1d0, foil_smoothed)
 
+      write (*,'(" - ",A)') 'Setting max camber position to '//trim(adjustl(value_str))//'%'
       call xfoil_set_thickness_camber (foil_smoothed, 0d0, 0d0, 0d0, (value_number / 100d0), foil)
-      call smooth_foil (.false., 0.1d0, foil)
 
     case ('te') 
       write (*,'(" - ",A)') 'Setting trailing edge gap to '//trim(adjustl(value_str))
@@ -339,6 +337,7 @@ subroutine check_foil_curvature (input_file, output_prefix, seed_foil, visualize
 !  ------------ analyze & smooth  -----
 
   ! do checks on repanel foil - also needed for LE point handling (!)
+  write (*,*) 
   call repanel_and_normalize_airfoil (tmp_foil, geom_options, .false., norm_foil)
 
   write(*,'(" - ",A)', advance='no') "Check_curvature and smooth."
@@ -423,6 +422,7 @@ subroutine repanel_smooth (input_file, outname_auto, output_prefix, seed_foil, v
 
 ! Prepare airfoil  - Repanel and split 
 
+  write (*,*) 
   call repanel_and_normalize_airfoil (seed_foil, geom_options, .false., foil)
 
 ! Smooth it 
@@ -521,6 +521,7 @@ subroutine blend_foils (input_file, outname_auto, output_prefix, seed_foil_in, b
 
 ! Prepare - Repanel both airfoils 
 
+  write (*,*) 
   call repanel_and_normalize_airfoil (seed_foil_in,  geom_options, .false., in_foil)
   call repanel_and_normalize_airfoil (blend_foil_in, geom_options, .false., blend_foil)
 
@@ -638,6 +639,7 @@ subroutine set_flap (input_file, outname_auto, output_prefix, seed_foil, visuali
 
 ! Repanel seed airfoil with xfoil PANGEN 
 
+  write (*,*) 
   call repanel_and_normalize_airfoil (seed_foil, geom_options, .false., foil)
 
   call xfoil_set_airfoil(foil)

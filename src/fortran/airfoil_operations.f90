@@ -499,7 +499,7 @@ subroutine repanel_and_normalize_airfoil (in_foil, xfoil_geom_options, symmetric
     foil%z(i+pointst) = foil%zb(i+1)
   end do
 
-  write (*,'(/," - ",A)', advance = 'no') 'Repaneling and normalizing.'
+  write (*,'(" - ",A)', advance = 'no') 'Repaneling and normalizing.'
 
   if (foil%addpoint_loc /= 0) then 
     call print_colored (COLOR_NOTE, '   Leading edge added.')
