@@ -39,7 +39,10 @@ Also have a look into [ChangeLog](https://github.com/jxjo/Xoptfoil/blob/master/d
 
 The development of a high end F3F airfoil using Xoptfoil-JX is described in the arctivle [Entwicklung eines F3F-Profils](http://www.rc-network.de/forum/showthread.php/769110-Entwicklung-eines-F3F-Profils) - sorry, it's in German.
 
-Various ready to run examples can be found in the ./examples folder including a brief description of the features used.
+Various ready to run examples can be found in the [examples folder](examples) including a brief description of the features used.
+
+A collection of high end airfoil families generated with Xoptfoil-JX are available in the Github repo [jxjo/Airfoils](https://github.com/jxjo/Airfoils).
+
 
 ## Installation
 
