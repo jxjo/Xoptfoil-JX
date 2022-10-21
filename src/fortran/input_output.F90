@@ -1478,8 +1478,8 @@ subroutine read_curvature_constraints_inputs  (input_file, or_iunit, &
   spec = curv_bot_spec
 
   if (spec%max_te_curvature == NOT_DEF_D) spec%max_te_curvature = max_te_curvature
-  if (spec%max_curv_reverse == NOT_DEF_I) spec%max_curv_reverse = max_curv_reverse_top
-  if (spec%max_spikes       == NOT_DEF_I) spec%max_spikes       = max_spikes_top
+  if (spec%max_curv_reverse == NOT_DEF_I) spec%max_curv_reverse = max_curv_reverse_bot
+  if (spec%max_spikes       == NOT_DEF_I) spec%max_spikes       = max_spikes_bot
   if (spec%curv_threshold   == NOT_DEF_D) spec%curv_threshold   = curv_threshold
   if (spec%spike_threshold  == NOT_DEF_D) spec%spike_threshold  = spike_threshold
 

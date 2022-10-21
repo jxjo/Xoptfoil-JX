@@ -322,6 +322,7 @@ subroutine read_init_polar_inputs  (input_file, or_iunit, re_default, ncrit, foi
     if (polar_reynolds(i) > 1000d0) then 
       npolars = npolars + 1
       polars(npolars)%airfoil_name    = trim(foil_name)
+      polars(npolars)%add_info        = ''
       polars(npolars)%spec_cl         = (op_mode == 'spec-cl')
       polars(npolars)%start_value     = op_point_range (1)
       polars(npolars)%end_value       = op_point_range (2)
