@@ -106,7 +106,6 @@ module xfoil_driver
   end type value_statistics_type
 
   type (value_statistics_type), dimension(:), allocatable, private :: drag_stats
-  type (value_statistics_type), dimension(:), allocatable, private :: drag_stats_saved
 
   contains
 
@@ -1399,7 +1398,7 @@ subroutine xfoil_get_geometry_info (maxt, xmaxt, maxc, xmaxc)
   use xfoil_inc
   double precision, intent(out) :: maxt, xmaxt, maxc, xmaxc
 
-  Real*8 :: rmaxt, rxmaxt, rmaxc, rxmaxc
+  Real*8 :: rxmaxt, rmaxc, rxmaxc
   Real*8 :: TYMAX
   
 ! find the current buffer airfoil camber and thickness
