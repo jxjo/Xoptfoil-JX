@@ -41,6 +41,9 @@ module polar_operations
   integer, parameter :: MAXPOLARS = 30            ! max number of polars
   integer, parameter :: MAXOPS    = 100           ! max number of operating points of a polar 
 
+  character(1), parameter    :: DELIMITER = ','
+
+
    ! Parms for operating point specification
   integer, private :: npolars
   type (polar_type), dimension (MAXPOLARS), private :: polars
@@ -141,7 +144,8 @@ end subroutine generate_polar_files
 ! The name of the file is aligned to xflr5 polar file naming
 !=============================================================================
 
-subroutine generate_polar_set (show_details, subdirectory, foil, xfoil_geom_options, xfoil_options)
+subroutine generate_polar_set (show_details, csv_format, subdirectory, foil, &
+                               xfoil_geom_options, xfoil_options)
 
   use vardef,             only : airfoil_type, flap_spec_type
   use os_util,            only : make_directory
@@ -151,6 +155,7 @@ subroutine generate_polar_set (show_details, subdirectory, foil, xfoil_geom_opti
 
   type (airfoil_type), intent (in)  :: foil
   logical, intent(in)               :: show_details
+  logical, intent(in)               :: csv_format
   character (*), intent(in)         :: subdirectory
   type (xfoil_geom_options_type), intent(in) :: xfoil_geom_options
   type (xfoil_options_type), intent(in)      :: xfoil_options
@@ -160,7 +165,8 @@ subroutine generate_polar_set (show_details, subdirectory, foil, xfoil_geom_opti
   type(flap_spec_type) :: flap_spec               ! dummy - no flaps used
   type(op_point_result_type), dimension(:), allocatable :: op_points_result
   integer :: i
-  character (255) :: polars_subdirectory,  polar_label
+  character (255) :: polars_subdirectory,  polar_label, polar_action, polar_path
+  logical :: exist
 
   flap_spec%use_flap  = .false. 
   allocate (flap_degrees(polars(i)%n_op_points))
@@ -204,13 +210,28 @@ subroutine generate_polar_set (show_details, subdirectory, foil, xfoil_geom_opti
   
 !$omp critical (file_write)
     write (polar_label,'(A,I1,A, I7)') 'Type ',polars(i)%re%type,', Re=',  int(polars(i)%re%number)
+    polar_path   = trim(polars_subdirectory) // trim(polars(i)%file_name)
+    polar_action = 'Writing'
 
-    call print_colored (COLOR_NORMAL,' - Writing polar ' // trim(polar_label) &
-                                   //' to '//trim(polars_subdirectory) //'   ')
-    open(unit=13, file= trim(polars_subdirectory)//trim(polars(i)%file_name), status='replace')
-    call write_polar_header (13, polars(i))
-    call write_polar_data   (show_details, 13, op_points_result)
+    if (.not. csv_format) then 
+      open(unit=13, file= trim(polar_path), status='replace')
+      call write_polar_header (13, polars(i))
+      call write_polar_data   (show_details, 13, op_points_result)
+    else 
+      inquire(file=trim(polar_path), exist=exist)
+      if (exist) then       ! append other polars to the file 
+        open(unit=13, file= trim(polar_path), status='old', position='append')
+        polar_action = 'Appending'
+      else                  ! csv Header only for new file at the beginning
+        open(unit=13, file= trim(polar_path), status='new')
+        call write_polar_header_csv (13)
+      end if
+      call write_polar_data_csv   (show_details, 13, polars(i), op_points_result)
+    end if 
     close (13)
+    call print_colored (COLOR_NORMAL,' - '// trim(polar_action)//' ' // trim(polar_label) // &
+                                     ' to '//trim(polar_path) // ' ')
+
 !$omp end critical (file_write)
 
   end do 
@@ -230,7 +251,7 @@ end subroutine generate_polar_set
 !=============================================================================
 
 subroutine read_init_polar_inputs  (input_file, or_iunit, re_default, ncrit, foil_name, &
-                                    generate_polar)
+                                    csv_format, generate_polar) 
 
 !  use input_output,       only : namelist_check
   use xfoil_driver,       only : xfoil_options_type
@@ -239,7 +260,8 @@ subroutine read_init_polar_inputs  (input_file, or_iunit, re_default, ncrit, foi
   type (re_type), intent(in)    :: re_default
   double precision, intent(in)  :: ncrit 
   character(*), intent(in)      :: input_file, foil_name
-  logical, intent(out)          :: generate_polar            ! .true. .false. 
+  logical, intent(in)           :: csv_format         
+  logical, intent(out)          :: generate_polar           
 
   integer         :: type_of_polar                           ! 1 or 2 
   character (7)   :: op_mode                                 ! 'spec-al' 'spec_cl'
@@ -332,6 +354,14 @@ subroutine read_init_polar_inputs  (input_file, or_iunit, re_default, ncrit, foi
       polars(npolars)%re%number       = polar_reynolds(i)
       polars(npolars)%re%type         = type_of_polar
       polars(npolars)%ncrit           = ncrit
+
+      if (csv_format) then
+        polars(npolars)%file_name = trim(polars(npolars)%airfoil_name)//'.csv'
+      else
+      ! build this special xflr5 filename  T1_Re0.400_M0.00_N9.0.txt 
+        polars(npolars)%file_name = build_filename (polars(npolars))
+      end if
+
     end if
   end do
 
@@ -367,10 +397,6 @@ subroutine init_polars ()
       write (*,*) "Error: No valid value boundaries for polar"
       stop
     endif
-
-  ! build this special xflr5 filename  T1_Re0.400_M0.00_N9.0.txt 
-
-    polars(ipol)%file_name = build_filename (polars(ipol))
 
   ! init op data points of polar
   !
@@ -433,12 +459,12 @@ subroutine set_polar_info (foil_name, file_name, add_info)
 
   if (size(polars) > 0) then 
     do i = 1, size(polars)
-      polars(i)%airfoil_name = trim(foil_name)
-      polars(i)%file_name = trim(file_name)
-      polars(i)%add_info  = trim(add_info)
+      if (trim(foil_name) /= '') polars(i)%airfoil_name = trim(foil_name)
+      if (trim(file_name) /= '') polars(i)%file_name = trim(file_name)
+      if (trim(add_info)  /= '') polars(i)%add_info  = trim(add_info)
     end do 
   else
-    call my_stop("Internal error: No polar initilaized for generate_polar.")
+    call my_stop("Internal error: No polar initialized for generate_polar.")
   end if 
 
 end subroutine set_polar_info
@@ -501,39 +527,78 @@ end subroutine write_polar_data
 !------------------------------------------------------------------------------
 ! Write polar data of foil in csv format to out_unit
 !------------------------------------------------------------------------------
-subroutine write_polar_data_csv (out_unit, foil, op_points_result)
+subroutine write_polar_data_csv (show_details, out_unit, polar, op_points_result)
 
-  use xfoil_driver,       only : op_point_result_type, op_point_specification_type
-  use vardef,             only : airfoil_type
+  use xfoil_driver,       only : op_point_result_type
 
+  logical,              intent(in)  :: show_details
   integer,              intent (in) :: out_unit
-  type (airfoil_type),  intent (in) :: foil
+  type (polar_type),    intent (in) :: polar
+
   type (op_point_result_type), dimension (:), intent (in) :: op_points_result
 
-  type (op_point_result_type) :: op
+  type (op_point_result_type)         :: op
+
   integer              :: i 
   character (100)      :: text_out
   logical              :: has_warned = .false.
 
-  write (out_unit,'(A)') "  Airfoil,  alpha,   cl,   cd,  cm, Top Xtr, Bot Xtr "
-
   do i = 1, size(op_points_result)
 
     op = op_points_result(i)
+
     if (op%converged) then
-      write (out_unit,'(A,",",F8.3,",",F9.5,",",F10.6,",",F9.5, ",",F8.4,",",F8.4)') &
-                    trim(foil%name),  op%alpha, op%cl, op%cd, op%cm,op%xtrt,op%xtrb
+      write (out_unit,'(A,A,F7.0,A,F4.1,A,F7.2,A, F7.3,A,F7.5,A,F6.2,A,F7.4,A,F6.3,A,F6.3)') &
+                    trim(polar%airfoil_name), DELIMITER, & 
+                    polar%re%number,          DELIMITER, & 
+                    polar%ncrit,              DELIMITER, & 
+                    op%alpha,                 DELIMITER, &      
+                    op%cl,                    DELIMITER, &      
+                    op%cd,                    DELIMITER, &      
+                    op%cl / op%cd,            DELIMITER, &      
+                    op%cm,                    DELIMITER, &      
+                    op%xtrt,                  DELIMITER, &      
+                    op%xtrb    
     else
-      write(text_out,'(A,F5.2,A)') "alpha =",op%alpha," not converged in polar generation. Skipping op point"
-      call print_warning (trim(text_out),3)
-      has_warned = .true. 
+      if (show_details) then
+        if (.not. has_warned) then 
+          write(text_out,'(A)') "alpha =" // strf('(F5.2)',op%alpha)
+        else 
+          write(text_out,'(A)') "," // strf('(F5.2)',op%alpha)
+        end if 
+        call print_colored (COLOR_NOTE, trim(text_out))
+        has_warned = .true. 
+      end if
     end if
 
   end do 
 
-  if (has_warned) write (*,*) 
+  if (has_warned) call print_colored (COLOR_NOTE," not converged - skipped in output")
+
+  write (*,*) 
   
 end subroutine write_polar_data_csv
+
+
+!------------------------------------------------------------------------------
+! Write polar header csv d
+!------------------------------------------------------------------------------
+subroutine write_polar_header_csv (out_unit)
+
+  integer,           intent (in) :: out_unit
+
+  write (out_unit,'(A)')  "Airfoil"   // DELIMITER //&
+                          "Re"        // DELIMITER //&
+                          "ncrit"     // DELIMITER //&
+                          "alpha"     // DELIMITER //&
+                          "cl"        // DELIMITER //&
+                          "cd"        // DELIMITER //&
+                          "cl/cd"     // DELIMITER //&
+                          "cm"        // DELIMITER //&
+                          "xtr top"   // DELIMITER //&
+                          "xtr bot"      
+
+end subroutine write_polar_header_csv
 
 
 !------------------------------------------------------------------------------

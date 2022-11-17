@@ -79,9 +79,13 @@ program xfoil_worker
 
   select case (trim(action)) 
 
-    case ('polar')        ! Generate polars in subdirectory ".\<output_prefix>_polars\*.*
+    case ('polar')        ! Generate polars in subdirectory ".\<output_prefix>_polars\*.*"
 
-      call check_and_do_polar_generation (input_file, output_prefix, foil)
+      call check_and_do_polar_generation (input_file, .false., output_prefix, foil)
+
+    case ('polar-csv')    ! Generate polars in csv format "<output_prefix>.csv"
+
+      call check_and_do_polar_generation (input_file, .true., output_prefix, foil)
 
     case ('norm')         ! Repanel, Normalize into "<output_prefix>.dat"
 
@@ -136,17 +140,18 @@ end program xfoil_worker
 ! - write each polar to a file 
 !-------------------------------------------------------------------------
 
-subroutine check_and_do_polar_generation (input_file, output_prefix, foil)
+subroutine check_and_do_polar_generation (input_file, csv_format, output_prefix, foil)
 
   use vardef,             only : airfoil_type
   use xfoil_driver,       only : xfoil_geom_options_type, xfoil_options_type, re_type
   use input_output,       only : read_xfoil_options_inputs, read_xfoil_paneling_inputs
   use input_output,       only : read_cl_re_default
-  use polar_operations,   only : read_init_polar_inputs, generate_polar_set
+  use polar_operations,   only : read_init_polar_inputs, generate_polar_set, set_polar_info
   use os_util
 
  
-  character(*), intent(in)          :: input_file, output_prefix
+  character(*), intent(in)        :: input_file, output_prefix
+  logical, intent(in)             :: csv_format
   type (airfoil_type), intent (in)  :: foil
 
   type (xfoil_geom_options_type) :: xfoil_geom_options
@@ -155,16 +160,18 @@ subroutine check_and_do_polar_generation (input_file, output_prefix, foil)
   logical                        :: generate_polar
   character (255)                :: polars_subdirectory
 
- 
+  if (trim(input_file) == '') &
+    call my_stop ("Missing input file (option -i) for polar definition") 
+
   call read_xfoil_options_inputs  (input_file, 0, xfoil_options)
 
 ! Read and set options for polar generation for each new design (generate_polar = .true.) 
 
-  re_default%number = read_cl_re_default (0d0) 
+  re_default%number = read_cl_re_default (0d0)  
   re_default%type   = 1
 
   call read_init_polar_inputs (input_file, 0, re_default, xfoil_options%ncrit, &
-                              foil%name, generate_polar)
+                              foil%name, csv_format, generate_polar)
 
 
   if (generate_polar) then
@@ -174,12 +181,17 @@ subroutine check_and_do_polar_generation (input_file, output_prefix, foil)
     write (*,*)
     write (*,*)
 
-    ! Create subdir for polar files if not exist
-    polars_subdirectory = trim(output_prefix)//'_polars'
-    call make_directory (trim(polars_subdirectory))
-
+    if (csv_format) then
+      polars_subdirectory = ''
+      ! if output prefix specified take this a filename of polar file.csv
+      if (trim(output_prefix) /= '') call set_polar_info ("", trim(output_prefix)//".csv", "")
+    else
+      ! Create subdir for polar files if not exist
+      polars_subdirectory = trim(output_prefix)//'_polars'
+      call make_directory (trim(polars_subdirectory))
+    end if
     ! Generate polars in this subdir 
-    call generate_polar_set (.true., trim(polars_subdirectory), foil, xfoil_geom_options, xfoil_options)
+    call generate_polar_set (.true., csv_format, trim(polars_subdirectory), foil, xfoil_geom_options, xfoil_options)
 
   end if
 
@@ -207,7 +219,7 @@ subroutine set_geometry_value (input_file, outname_auto, output_prefix, seed_foi
   type (airfoil_type), intent (inout)  :: seed_foil
   logical, intent(in)          :: visualizer, outname_auto
 
-  type (airfoil_type) :: foil, foil_smoothed, foil_tmp
+  type (airfoil_type) :: foil, foil_smoothed
   type (xfoil_geom_options_type)  :: geom_options
   character (20)      :: value_str
   character (2)       :: value_type
@@ -302,7 +314,7 @@ subroutine check_foil_curvature (input_file, output_prefix, seed_foil, visualize
   type (xfoil_geom_options_type)  :: geom_options
   logical, intent(in)          :: visualizer
 
-  type (airfoil_type)          :: foil, tmp_foil, norm_foil, smooth_foil
+  type (airfoil_type)          :: tmp_foil, norm_foil, smooth_foil
   integer                      :: overall_quality, is, ie, nreversals
   double precision             :: curv_threshold, maxt, xmaxt, maxc, xmaxc
 
@@ -899,7 +911,8 @@ subroutine print_worker_usage()
   write(*,'(A)')
   write(*,'(A)') "Usage: Xfoil_worker -w worker_action [Options]"
   write(*,'(A)')
-  write(*,'(A)') "  -w polar          Generate polars of 'airfoil_file'"
+  write(*,'(A)') "  -w polar          Generate polars of 'airfoil_file' in xfoil format"
+  write(*,'(A)') "  -w polar-csv      Generate polars of 'airfoil_file' in csv format"
   write(*,'(A)') "  -w norm           Repanel, normalize 'airfoil_file'"
   write(*,'(A)') "  -w smooth         Repanel, normalize, smooth 'airfoil_file'"
   write(*,'(A)') "  -w flap           Set flap of 'airfoil_file'"

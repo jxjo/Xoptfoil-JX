@@ -548,7 +548,7 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
 ! Read and set options for polar generation for each new design (generate_polar = .true.) 
 
   call read_init_polar_inputs ('', iunit, re_default, xfoil_options%ncrit, &
-                               '', generate_polar)
+                               '', .false., generate_polar)
 
 ! Close the input file
 
