@@ -541,17 +541,26 @@ subroutine write_polar_data_csv (show_details, out_unit, polar, op_points_result
 
   integer              :: i 
   character (100)      :: text_out
-  logical              :: has_warned = .false.
+  character (5  )      :: spec
+  logical              :: has_warned
+
+  has_warned = .false.
 
   do i = 1, size(op_points_result)
 
     op = op_points_result(i)
 
     if (op%converged) then
-      write (out_unit,'(A,A,F7.0,A,F4.1,A,F7.2,A, F7.3,A,F7.5,A,F6.2,A,F7.4,A,F6.3,A,F6.3)') &
+      if (polar%spec_cl) then 
+        spec = 'cl'
+      else 
+        spec = 'alpha'
+      end if 
+      write (out_unit,'(A,A, F7.0,A, F4.1,A, A,A, F7.2,A, F7.3,A, F7.5,A, F6.2,A, F7.4,A, F6.3,A, F6.3)') &
                     trim(polar%airfoil_name), DELIMITER, & 
                     polar%re%number,          DELIMITER, & 
                     polar%ncrit,              DELIMITER, & 
+                    trim(spec),               DELIMITER, &      
                     op%alpha,                 DELIMITER, &      
                     op%cl,                    DELIMITER, &      
                     op%cd,                    DELIMITER, &      
@@ -590,6 +599,7 @@ subroutine write_polar_header_csv (out_unit)
   write (out_unit,'(A)')  "Airfoil"   // DELIMITER //&
                           "Re"        // DELIMITER //&
                           "ncrit"     // DELIMITER //&
+                          "spec"      // DELIMITER //&
                           "alpha"     // DELIMITER //&
                           "cl"        // DELIMITER //&
                           "cd"        // DELIMITER //&
