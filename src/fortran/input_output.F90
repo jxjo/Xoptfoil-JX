@@ -1201,33 +1201,32 @@ end subroutine read_op_points_spec
 ! Read xoptfoil input file to get flap setting options
 !=============================================================================
 
-subroutine read_flap_inputs  (input_file, or_iunit, flap_spec, flap_degrees, flap_selection) 
+subroutine read_flap_inputs  (input_file, or_iunit, flap_spec) 
 
   use vardef,             only : flap_spec_type
 
   character(*), intent(in)      :: input_file
   integer, intent(in)           :: or_iunit
   type(flap_spec_type), intent(out) :: flap_spec
-  double precision, dimension(:), intent(inout) :: flap_degrees
-  character(8),     dimension(:), intent(inout) :: flap_selection
 
-  double precision              :: x_flap, y_flap
-  character(3)                  :: y_flap_spec
-  integer                       :: iostat1, iunit, i, ioerr
-  logical                       :: use_flap
+
+  double precision, dimension(size(flap_spec%degrees)) :: flap_degrees
+  double precision               :: x_flap, y_flap
+  character(3)                   :: y_flap_spec
+  integer                        :: iostat1, iunit, i, ioerr, ndegrees
+  logical                        :: use_flap
 
   namelist /operating_conditions/ use_flap, x_flap, y_flap, y_flap_spec, &
-                                  flap_degrees, flap_selection
+                                  flap_degrees
 
   ! Init default values 
 
-  use_flap     = .false.                !currently dummy
+  use_flap     = .false.                
   x_flap       = 0.75d0
   y_flap       = 0.d0
   y_flap_spec  = 'y/c'
 
   flap_degrees      = 0d0
-  flap_selection    = 'specify'
 
   ! Open input file and read namelist from file
 
@@ -1257,15 +1256,31 @@ subroutine read_flap_inputs  (input_file, or_iunit, flap_spec, flap_degrees, fla
   do i = 1, size(flap_degrees)
     if (abs(flap_degrees(i)) > 70d0) &
       call my_stop ('Flap angle must be less than 70 degrees')
-    if ((flap_selection(i) /= 'specify') .and. (flap_selection(i) /= 'optimize')) then
-      call my_stop ("Flap selection must be 'spcify' or 'optimize')")
-    end if 
+  end do
+
+  ndegrees = 0
+
+  do i = size(flap_degrees), 1, -1
+    if (flap_degrees(i) /= 0d0) then
+      ndegrees = i
+      exit
+    end if
   end do
 
   flap_spec%use_flap    = use_flap
   flap_spec%x_flap      = x_flap
   flap_spec%y_flap      = y_flap
   flap_spec%y_flap_spec = y_flap_spec
+  flap_spec%ndegrees    = ndegrees
+
+  if (ndegrees == 0) then 
+    flap_spec%use_flap    = .false.
+    flap_spec%degrees     = 0d0
+  else
+    flap_spec%use_flap    = use_flap
+    flap_spec%degrees     = flap_degrees
+  end if 
+
 
 end subroutine read_flap_inputs
 

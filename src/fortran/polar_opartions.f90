@@ -145,7 +145,7 @@ end subroutine generate_polar_files
 !=============================================================================
 
 subroutine generate_polar_set (show_details, csv_format, subdirectory, foil, &
-                               xfoil_geom_options, xfoil_options)
+                               flap_spec, xfoil_geom_options, xfoil_options)
 
   use vardef,             only : airfoil_type, flap_spec_type
   use os_util,            only : make_directory
@@ -157,20 +157,23 @@ subroutine generate_polar_set (show_details, csv_format, subdirectory, foil, &
   logical, intent(in)               :: show_details
   logical, intent(in)               :: csv_format
   character (*), intent(in)         :: subdirectory
+  type(flap_spec_type), intent(in)           :: flap_spec  
   type (xfoil_geom_options_type), intent(in) :: xfoil_geom_options
   type (xfoil_options_type), intent(in)      :: xfoil_options
 
   type(xfoil_options_type)          :: local_xfoil_options
   double precision, dimension(:), allocatable :: flap_degrees
-  type(flap_spec_type) :: flap_spec               ! dummy - no flaps used
   type(op_point_result_type), dimension(:), allocatable :: op_points_result
-  integer :: i
+  integer :: i, j, nflap_degress
   character (255) :: polars_subdirectory,  polar_label, polar_action, polar_path
   logical :: exist
 
-  flap_spec%use_flap  = .false. 
-  allocate (flap_degrees(polars(i)%n_op_points))
-  flap_degrees (:)    = 0.d0 
+! Init flap handling - if no flap set dummy
+  if (flap_spec%use_flap) then
+    nflap_degress = flap_spec%ndegrees
+  else
+    nflap_degress = 1
+  end if 
 
   local_xfoil_options = xfoil_options
   local_xfoil_options%exit_if_unconverged = .false.  ! we need all op points
@@ -189,51 +192,65 @@ subroutine generate_polar_set (show_details, csv_format, subdirectory, foil, &
     polars_subdirectory = trim(subdirectory) // '\'
   end if
 
-! Print ordered out 
-  do i = 1, npolars
-    write (polar_label,'(A,I1,A, I7)') 'Type ',polars(i)%re%type,', Re=',  int(polars(i)%re%number)
-    call print_note_only ('- Generating polar ' // trim(polar_label) // '  ')
-  end do 
-
   call xfoil_cleanup()                                ! if xfoil_init was done already
 
+
 ! Multi threaded polars   
+!$omp parallel do schedule(static) collapse(2) private(i, j, flap_degrees,op_points_result, polar_label) 
 
-!$omp parallel do schedule(static) private(i, flap_degrees,op_points_result, polar_label) 
-  do i = 1, npolars
+  do j = 1, nflap_degress
+    do i = 1, npolars
 
-    call xfoil_init()
-    call run_op_points (foil, xfoil_geom_options, local_xfoil_options,        &
-                        flap_spec, flap_degrees, &
-                        polars(i)%op_points_spec, op_points_result) 
-    call xfoil_cleanup()
+      if (allocated(flap_degrees)) deallocate (flap_degrees)
+      allocate (flap_degrees(polars(i)%n_op_points))
+      flap_degrees = flap_spec%degrees(j)
+
+      if (flap_spec%use_flap) then 
+        write (polar_label,'(A, F4.1, A,I1,A, I7)') 'for Flap', flap_spec%degrees(j), &
+                           '  Type ',polars(i)%re%type,', Re=',  int(polars(i)%re%number)
+      else
+        write (polar_label,'(A,I1,A, I7)') 'Type ',polars(i)%re%type,', Re=',  int(polars(i)%re%number)
+      endif 
+
+      call print_note_only ('- Generating polar ' // trim(polar_label) // '  ')
+
+
+      call xfoil_init()
+      call run_op_points (foil, xfoil_geom_options, local_xfoil_options,        &
+                          flap_spec, flap_degrees, &
+                          polars(i)%op_points_spec, op_points_result) 
+      call xfoil_cleanup()
   
 !$omp critical (file_write)
-    write (polar_label,'(A,I1,A, I7)') 'Type ',polars(i)%re%type,', Re=',  int(polars(i)%re%number)
-    polar_path   = trim(polars_subdirectory) // trim(polars(i)%file_name)
-    polar_action = 'Writing'
 
-    if (.not. csv_format) then 
-      open(unit=13, file= trim(polar_path), status='replace')
-      call write_polar_header (13, polars(i))
-      call write_polar_data   (show_details, 13, op_points_result)
-    else 
-      inquire(file=trim(polar_path), exist=exist)
-      if (exist) then       ! append other polars to the file 
-        open(unit=13, file= trim(polar_path), status='old', position='append')
-        polar_action = 'Appending'
-      else                  ! csv Header only for new file at the beginning
-        open(unit=13, file= trim(polar_path), status='new')
-        call write_polar_header_csv (13)
-      end if
-      call write_polar_data_csv   (show_details, 13, polars(i), op_points_result)
-    end if 
-    close (13)
-    call print_colored (COLOR_NORMAL,' - '// trim(polar_action)//' ' // trim(polar_label) // &
-                                     ' to '//trim(polar_path) // ' ')
+      polar_path   = trim(polars_subdirectory) // trim(polars(i)%file_name)
+      polar_action = 'Writing polar'
 
+      if (.not. csv_format) then 
+        call print_colored (COLOR_NORMAL,' - '// trim(polar_action)//' ' // trim(polar_label) // &
+                                        ' to '//trim(polar_path) // ' ')
+        open(unit=13, file= trim(polar_path), status='replace')
+        call write_polar_header (13, polars(i))
+        call write_polar_data   (show_details, 13, op_points_result)
+
+      else 
+
+        inquire(file=trim(polar_path), exist=exist)
+        if (exist) then       ! append other polars to the file 
+          open(unit=13, file= trim(polar_path), status='old', position='append')
+          polar_action = 'Appending polar'
+        else                  ! csv Header only for new file at the beginning
+          open(unit=13, file= trim(polar_path), status='new')
+          call write_polar_header_csv (13)
+        end if
+        call print_colored (COLOR_NORMAL,' - '// trim(polar_action)//' ' // trim(polar_label) // &
+                                        ' to '//trim(polar_path) // ' ')
+        call write_polar_data_csv   (show_details, 13, flap_spec%degrees(j), polars(i), op_points_result)
+      end if 
+      close (13)
 !$omp end critical (file_write)
 
+    end do 
   end do 
 !$omp end parallel do
 
@@ -527,12 +544,13 @@ end subroutine write_polar_data
 !------------------------------------------------------------------------------
 ! Write polar data of foil in csv format to out_unit
 !------------------------------------------------------------------------------
-subroutine write_polar_data_csv (show_details, out_unit, polar, op_points_result)
+subroutine write_polar_data_csv (show_details, out_unit, flap_degree, polar, op_points_result)
 
   use xfoil_driver,       only : op_point_result_type
 
   logical,              intent(in)  :: show_details
   integer,              intent (in) :: out_unit
+  double precision,     intent(in)  :: flap_degree
   type (polar_type),    intent (in) :: polar
 
   type (op_point_result_type), dimension (:), intent (in) :: op_points_result
@@ -556,8 +574,9 @@ subroutine write_polar_data_csv (show_details, out_unit, polar, op_points_result
       else 
         spec = 'alpha'
       end if 
-      write (out_unit,'(A,A, F7.0,A, F4.1,A, A,A, F7.2,A, F7.3,A, F7.5,A, F6.2,A, F7.4,A, F6.3,A, F6.3)') &
+      write (out_unit,'(A,A, F5.1, A, F7.0,A, F4.1,A, A,A, F7.2,A, F7.3,A, F7.5,A, F6.2,A, F7.4,A, F6.3,A, F6.3)') &
                     trim(polar%airfoil_name), DELIMITER, & 
+                    flap_degree,              DELIMITER, & 
                     polar%re%number,          DELIMITER, & 
                     polar%ncrit,              DELIMITER, & 
                     trim(spec),               DELIMITER, &      
@@ -597,6 +616,7 @@ subroutine write_polar_header_csv (out_unit)
   integer,           intent (in) :: out_unit
 
   write (out_unit,'(A)')  "Airfoil"   // DELIMITER //&
+                          "Flap"      // DELIMITER //&
                           "Re"        // DELIMITER //&
                           "ncrit"     // DELIMITER //&
                           "spec"      // DELIMITER //&

@@ -142,10 +142,10 @@ end program xfoil_worker
 
 subroutine check_and_do_polar_generation (input_file, csv_format, output_prefix, foil)
 
-  use vardef,             only : airfoil_type
+  use vardef,             only : airfoil_type, flap_spec_type
   use xfoil_driver,       only : xfoil_geom_options_type, xfoil_options_type, re_type
   use input_output,       only : read_xfoil_options_inputs, read_xfoil_paneling_inputs
-  use input_output,       only : read_cl_re_default
+  use input_output,       only : read_flap_inputs, read_cl_re_default
   use polar_operations,   only : read_init_polar_inputs, generate_polar_set, set_polar_info
   use os_util
 
@@ -156,6 +156,7 @@ subroutine check_and_do_polar_generation (input_file, csv_format, output_prefix,
 
   type (xfoil_geom_options_type) :: xfoil_geom_options
   type (xfoil_options_type)      :: xfoil_options
+  type (flap_spec_type)          :: flap_spec
   type (re_type)                 :: re_default
   logical                        :: generate_polar
   character (255)                :: polars_subdirectory
@@ -176,22 +177,29 @@ subroutine check_and_do_polar_generation (input_file, csv_format, output_prefix,
 
   if (generate_polar) then
 
+    call read_flap_inputs (input_file, 0, flap_spec)        ! csv supports flaps
     call read_xfoil_paneling_inputs (input_file, 0, xfoil_geom_options)
     xfoil_options%show_details = .true.
     write (*,*)
     write (*,*)
 
     if (csv_format) then
+
       polars_subdirectory = ''
       ! if output prefix specified take this a filename of polar file.csv
       if (trim(output_prefix) /= '') call set_polar_info ("", trim(output_prefix)//".csv", "")
+
     else
+
+      flap_spec%use_flap = .false.                      ! xfoil file doesn't support flap
+
       ! Create subdir for polar files if not exist
       polars_subdirectory = trim(output_prefix)//'_polars'
       call make_directory (trim(polars_subdirectory))
     end if
     ! Generate polars in this subdir 
-    call generate_polar_set (.true., csv_format, trim(polars_subdirectory), foil, xfoil_geom_options, xfoil_options)
+    call generate_polar_set (.true., csv_format, trim(polars_subdirectory), foil, &
+                             flap_spec, xfoil_geom_options, xfoil_options)
 
   end if
 
@@ -493,7 +501,7 @@ subroutine blend_foils (input_file, outname_auto, output_prefix, seed_foil_in, b
   use vardef,             only : airfoil_type
   use math_deps,          only : interp_vector
   use xfoil_driver,       only : xfoil_geom_options_type
-  use xfoil_driver,       only : xfoil_apply_flap_deflection, xfoil_reload_airfoil
+  use xfoil_driver,       only : xfoil_reload_airfoil
   use xfoil_driver,       only : xfoil_set_airfoil
   use airfoil_operations, only : airfoil_write
   use airfoil_operations, only : rebuild_airfoil
@@ -614,36 +622,25 @@ subroutine set_flap (input_file, outname_auto, output_prefix, seed_foil, visuali
   type (airfoil_type)             :: foil, foil_flapped
   type (flap_spec_type)           :: flap_spec
   type (xfoil_geom_options_type)  :: geom_options
-  double precision, dimension(50) :: flap_degrees
-  character(8), dimension(50)     :: flap_selection
 
   character(20)       :: text_degrees
-  integer             :: ndegrees
+  double precision    :: flap_degree
   character (255)     :: outname, text_out
 
 
 ! Read inputs file to get xfoil paneling options  
 
   call read_xfoil_paneling_inputs  (input_file, 0, geom_options)
-  call read_flap_inputs            (input_file, 0, flap_spec, flap_degrees, flap_selection)
+  call read_flap_inputs            (input_file, 0, flap_spec)
 
 ! flap set? 
 
-  ndegrees = 0
-
-  do i = size(flap_degrees), 1, -1
-    if (flap_degrees(i) /= 0d0) then
-      ndegrees = i
-      exit
-    end if
-  end do
-
-  if (ndegrees == 0) then 
+  if (flap_spec%ndegrees == 0) then 
     call my_stop ('No flap angles defined in input file')
-  elseif (ndegrees == 1) then 
+  elseif (flap_spec%ndegrees == 1) then 
     write (*,'(A)', advance = 'no') 'Setting one flap position'
   else
-    write (*,'(A,I2,A)', advance = 'no') 'Setting',ndegrees,' flap positions'
+    write (*,'(A,I2,A)', advance = 'no') 'Setting',flap_spec%ndegrees,' flap positions'
   end if
   write (*,'(1x,A,I2,A,F4.1,A)') 'at ', int (flap_spec%x_flap*1d2), &
                 '% ('//flap_spec%y_flap_spec//'=', flap_spec%y_flap,')'
@@ -672,19 +669,21 @@ subroutine set_flap (input_file, outname_auto, output_prefix, seed_foil, visuali
 
 ! Now set flap to all requested angles
 
-  do i = 1, ndegrees
+  do i = 1, flap_spec%ndegrees
 
-    if (int(flap_degrees(i))*10  == int(flap_degrees(i)*10d0)) then  !degree having decimal?
-      write (text_degrees,'(SP,I3)') int (flap_degrees(i))
+    flap_degree = flap_spec%degrees(i)
+
+    if (int(flap_degree)*10  == int(flap_degree*10d0)) then  !degree having decimal?
+      write (text_degrees,'(SP,I3)') int (flap_degree)
     else
-      write (text_degrees,'(SP,F6.1)') flap_degrees(i)
+      write (text_degrees,'(SP,F6.1)') flap_degree
     end if
 
     write (text_out,'(A,F4.1,A)') 'Setting flaps to '//trim(adjustl(text_degrees))//' degrees'
     call print_note_only ('- '//trim(text_out))
 
     call xfoil_set_airfoil(foil)
-    call xfoil_apply_flap_deflection(flap_spec, flap_degrees(i))
+    call xfoil_apply_flap_deflection(flap_spec, flap_degree)
     call xfoil_reload_airfoil(foil_flapped)
 
     if (outname_auto) then 

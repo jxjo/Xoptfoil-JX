@@ -37,6 +37,8 @@ module vardef
     logical          :: use_flap
     double precision :: x_flap, y_flap 
     character(3)     :: y_flap_spec
+    integer          :: ndegrees                   ! Number of flap degree settings
+    double precision, dimension(50) :: degrees     ! used for xfoil_worker 
   end type flap_spec_type
   
 ! --------------------------------------------------------------------------------

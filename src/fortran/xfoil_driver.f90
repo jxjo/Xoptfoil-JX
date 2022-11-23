@@ -170,7 +170,8 @@ subroutine run_op_points (foil, geom_options, xfoil_options,         &
   prev_op_delta   = 0d0
   prev_op_spec_cl = op_points_spec(1)%spec_cl
   flap_changed = .false.
-  prev_flap_degree = flap_degrees (1) 
+  prev_flap_degree = 999d0 
+!  prev_flap_degree =   flap_degrees (1) 
   show_details = xfoil_options%show_details
   detect_outlier = xfoil_options%detect_outlier
 
@@ -224,7 +225,7 @@ subroutine run_op_points (foil, geom_options, xfoil_options,         &
     if(flap_spec%use_flap .and. (flap_degrees(i) /= prev_flap_degree)) then 
       flap_changed = .true.
       prev_flap_degree = flap_degrees(i)
-      drag_stats%no_check = .true.           !deactivate outlier detection when flapping
+      if (allocated(drag_stats)) drag_stats%no_check = .true.  !deactivate outlier detection when flapping
     else
       flap_changed = .false.
     end if 
