@@ -503,7 +503,7 @@ subroutine blend_foils (input_file, outname_auto, output_prefix, seed_foil_in, b
   use xfoil_driver,       only : xfoil_geom_options_type
   use xfoil_driver,       only : xfoil_reload_airfoil
   use xfoil_driver,       only : xfoil_set_airfoil
-  use airfoil_operations, only : airfoil_write
+  use airfoil_operations, only : airfoil_write, is_normalized, split_foil_at_00
   use airfoil_operations, only : rebuild_airfoil
   use airfoil_operations, only : repanel_and_normalize_airfoil
   use input_output,       only : read_xfoil_paneling_inputs
@@ -539,11 +539,28 @@ subroutine blend_foils (input_file, outname_auto, output_prefix, seed_foil_in, b
 
   call read_xfoil_paneling_inputs  (input_file, 0, geom_options)
 
-! Prepare - Repanel both airfoils 
+! Prepare - Repanel both airfoils? 
 
   write (*,*) 
-  call repanel_and_normalize_airfoil (seed_foil_in,  geom_options, .false., in_foil)
-  call repanel_and_normalize_airfoil (blend_foil_in, geom_options, .false., blend_foil)
+
+  if (is_normalized (seed_foil_in, geom_options)) then 
+    in_foil = seed_foil_in
+    call split_foil_at_00 (in_foil)
+    call print_note_only ('- Airfoil '//trim(in_foil%name) //' is already normalized with '//& 
+                          stri(size(in_foil%x)) //' points')
+  else
+    call repanel_and_normalize_airfoil (seed_foil_in,  geom_options, .false., in_foil)
+  end if 
+
+  if (is_normalized (blend_foil_in, geom_options)) then 
+    blend_foil = blend_foil_in
+    call split_foil_at_00 (blend_foil)
+    call print_note_only ('- Airfoil '//trim(blend_foil%name) //' is already normalized with '//& 
+                          stri(size(blend_foil%x)) //' points')
+  else
+    call repanel_and_normalize_airfoil (blend_foil_in,  geom_options, .false., blend_foil)
+  end if 
+
 
 ! Now split  in upper & lower side 
 

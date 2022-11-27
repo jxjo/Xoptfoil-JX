@@ -386,6 +386,47 @@ subroutine le_find(x, z, le, xle, zle, addpoint_loc)
 
 end subroutine le_find
 
+
+!-----------------------------------------------------------------------------
+!
+! Checks if foil is normalized 
+!  - Leading edge at 0,0 
+!  - Trailing edge at 1,0 (upper and lower side may have a gap) 
+!  - Number of panels equal npan (xfoil_geo_options) or npan + 1 (LE was added)
+! !
+!-----------------------------------------------------------------------------
+function is_normalized (foil, xfoil_geom_options) result(is_norm)
+
+  use vardef,             only : airfoil_type         
+  use xfoil_driver,       only : xfoil_geom_options_type         
+
+  type(airfoil_type), intent(in)   :: foil
+  type(xfoil_geom_options_type), intent(in)   :: xfoil_geom_options
+
+  logical                :: is_norm
+  integer                :: le, addpoint_loc
+  double precision       :: xle, zle
+
+  is_norm = .true. 
+
+! Check TE 
+
+  if (foil%x(1) /= 1d0 .or. foil%x(size(foil%x)) /= 1d0)    is_norm = .false.  
+  if ((foil%z(1)+foil%z(size(foil%x))) /= 0d0)              is_norm = .false.
+
+! Check LE 
+
+  call le_find(foil%x, foil%z, le, xle, zle, addpoint_loc)
+  if (addpoint_loc /= 0)                                    is_norm = .false.
+
+! Check npan 
+
+  if ((size(foil%x) /= xfoil_geom_options%npan) .and. & 
+      (size(foil%x) /= xfoil_geom_options%npan + 1))        is_norm = .false.  
+
+end function 
+
+
 !-----------------------------------------------------------------------------
 !
 ! Repanel an airfoil with npoints and normalize it to get LE at 0,0 and
