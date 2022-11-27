@@ -139,7 +139,7 @@ subroutine run_op_points (foil, geom_options, xfoil_options,         &
   double precision :: prev_op_delta, op_delta, prev_flap_degree, prev_op_spec_value
   logical:: point_fixed, show_details, flap_changed, prev_op_spec_cl, detect_outlier
   type(op_point_specification_type) :: op_spec, tmp_op_spec
-  type(op_point_result_type)        :: op
+  type(op_point_result_type)        :: op, tmp_op
 
   noppoint = size(op_points_spec,1) 
 
@@ -312,14 +312,14 @@ subroutine run_op_points (foil, geom_options, xfoil_options,         &
       tmp_op_spec%re%number = tmp_op_spec%re%number * 1.001d0
       call xfoil_init_BL (show_details .and. (.not. xfoil_options%reinitialize))
       call run_op_point  (tmp_op_spec, xfoil_options%viscous_mode, xfoil_options%maxit, &
-                          show_details , op)
+                          show_details , tmp_op)
 
 !     If this intermediate point converged
 !       try to run again at the old operating point decreasing RE a little ...
 
       point_fixed = .false.
 
-      if (op%converged) then 
+      if (tmp_op%converged) then 
 
         iretry = 1
         nretry = 1              ! only 1 retry - early fail of critical design is better

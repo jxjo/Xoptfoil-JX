@@ -31,6 +31,7 @@ module polar_operations
     double precision :: start_value     ! polar starting from ...
     double precision :: end_value       ! ... to end value ...
     double precision :: increment       ! ... incremented by 
+    logical          :: skip_unconverged ! when writing to file skip unconverged ops
     integer :: n_op_points              ! number of all op_poins of this polar
     type(op_point_specification_type), dimension (:), allocatable :: &
                         op_points_spec  !array with specified op_points
@@ -121,8 +122,7 @@ subroutine generate_polar_files (show_details, subdirectory, foil, xfoil_geom_op
 
     open(unit=13, file= trim(polars_subdirectory)//trim(polars(i)%file_name), status='replace')
     call write_polar_header (13, polars(i))
-    call write_polar_data   (show_details, 13, op_points_result)
-!    call write_polar_data_csv  (13, foil, op_points_result)
+    call write_polar_data   (show_details, 13, polars(i), op_points_result)
     close (13)
 
   end do 
@@ -231,7 +231,7 @@ subroutine generate_polar_set (show_details, csv_format, subdirectory, foil, &
                                         ' to '//trim(polar_path) // ' ')
         open(unit=13, file= trim(polar_path), status='replace')
         call write_polar_header (13, polars(i))
-        call write_polar_data   (show_details, 13, op_points_result)
+        call write_polar_data   (show_details, 13, polars(i), op_points_result)
 
       else 
 
@@ -245,7 +245,7 @@ subroutine generate_polar_set (show_details, csv_format, subdirectory, foil, &
         end if
         call print_colored (COLOR_NORMAL,' - '// trim(polar_action)//' ' // trim(polar_label) // &
                                         ' to '//trim(polar_path) // ' ')
-        call write_polar_data_csv   (show_details, 13, flap_spec%degrees(j), polars(i), op_points_result)
+        call write_polar_data_csv (show_details, 13, flap_spec%degrees(j), polars(i), op_points_result)
       end if 
       close (13)
 !$omp end critical (file_write)
@@ -285,11 +285,12 @@ subroutine read_init_polar_inputs  (input_file, or_iunit, re_default, ncrit, foi
   double precision, dimension (MAXPOLARS) :: polar_reynolds  ! 40000, 70000, 100000
   double precision, dimension (3)  :: op_point_range         ! -1.0, 10.0, 0.5
   logical                          :: generate_polars        ! compatibility to older version 
+  logical                          :: skip_unconverged       ! skip during wrting file  
 
   integer :: istat, iunit, i
 
   namelist /polar_generation/ generate_polar, generate_polars, type_of_polar, polar_reynolds,   &
-                              op_mode, op_point_range
+                              op_mode, op_point_range, skip_unconverged
 
 ! Init default values for polars
 
@@ -300,6 +301,7 @@ subroutine read_init_polar_inputs  (input_file, or_iunit, re_default, ncrit, foi
   op_mode         = 'spec-al'
   op_point_range  = (/ -2d0, 10d0 , 1.0d0 /)
   polar_reynolds  = 0d0
+  skip_unconverged = .true.
 
   istat           = 0
 
@@ -371,6 +373,7 @@ subroutine read_init_polar_inputs  (input_file, or_iunit, re_default, ncrit, foi
       polars(npolars)%re%number       = polar_reynolds(i)
       polars(npolars)%re%type         = type_of_polar
       polars(npolars)%ncrit           = ncrit
+      polars(npolars)%skip_unconverged = skip_unconverged
 
       if (csv_format) then
         polars(npolars)%file_name = trim(polars(npolars)%airfoil_name)//'.csv'
@@ -490,17 +493,18 @@ end subroutine set_polar_info
 !------------------------------------------------------------------------------
 ! Write polar data in xfoil format to out_unit
 !------------------------------------------------------------------------------
-subroutine write_polar_data (show_details, out_unit, op_points_result)
+subroutine write_polar_data (show_details, out_unit, polar, op_points_result)
 
   use xfoil_driver,       only : op_point_result_type, op_point_specification_type
 
-  logical, intent(in)            :: show_details
+  logical,              intent(in)  :: show_details
   type (op_point_result_type), dimension (:), intent (in) :: op_points_result
-  integer,           intent (in) :: out_unit
+  integer,              intent (in) :: out_unit
+  type (polar_type),    intent (in) :: polar
+
 
   type (op_point_result_type) :: op
   integer              :: i 
-  character (100)      :: text_out
   logical              :: has_warned
 
   has_warned = .false.
@@ -518,24 +522,20 @@ subroutine write_polar_data (show_details, out_unit, op_points_result)
   do i = 1, size(op_points_result)
 
     op = op_points_result(i)
-    if (op%converged) then
+    if (op%converged .or. (.not. polar%skip_unconverged)) then
       write (out_unit,  "(   F8.3,   F9.5,    F10.6,    F10.5,    F9.5,   F8.4,   F8.4)") &
                           op%alpha, op%cl, op%cd,    0d0,  op%cm,op%xtrt,op%xtrb
-    else
-      if (show_details) then
-        if (.not. has_warned) then 
-          write(text_out,'(A)') "alpha =" // strf('(F5.2)',op%alpha)
-        else 
-          write(text_out,'(A)') "," // strf('(F5.2)',op%alpha)
-        end if 
-        call print_colored (COLOR_NOTE, trim(text_out))
-        has_warned = .true. 
-      end if
     end if
+
+    if ((.not. op%converged) .and. show_details) &
+      call print_failed_op_value (op, polar%spec_cl, has_warned)
 
   end do 
 
-  if (has_warned) call print_colored (COLOR_NOTE," not converged - skipped in output")
+  if (has_warned) then 
+    call print_colored (COLOR_NOTE," not converged")
+    if (polar%skip_unconverged) call print_colored (COLOR_NOTE," - skipped in output")
+  end if 
   write (*,*) 
   
 end subroutine write_polar_data
@@ -549,17 +549,14 @@ subroutine write_polar_data_csv (show_details, out_unit, flap_degree, polar, op_
   use xfoil_driver,       only : op_point_result_type
 
   logical,              intent(in)  :: show_details
-  integer,              intent (in) :: out_unit
+  integer,              intent(in)  :: out_unit
   double precision,     intent(in)  :: flap_degree
-  type (polar_type),    intent (in) :: polar
-
+  type (polar_type),    intent(in)  :: polar
   type (op_point_result_type), dimension (:), intent (in) :: op_points_result
 
-  type (op_point_result_type)         :: op
-
+  type (op_point_result_type)       :: op
   integer              :: i 
-  character (100)      :: text_out
-  character (5  )      :: spec
+  character (5  )      :: spec, conv
   logical              :: has_warned
 
   has_warned = .false.
@@ -568,17 +565,23 @@ subroutine write_polar_data_csv (show_details, out_unit, flap_degree, polar, op_
 
     op = op_points_result(i)
 
-    if (op%converged) then
+    if (op%converged .or. (.not. polar%skip_unconverged)) then
       if (polar%spec_cl) then 
         spec = 'cl'
       else 
         spec = 'alpha'
       end if 
-      write (out_unit,'(A,A, F5.1, A, F7.0,A, F4.1,A, A,A, F7.2,A, F7.3,A, F7.5,A, F6.2,A, F7.4,A, F6.3,A, F6.3)') &
+      if (op%converged) then 
+        conv = 'Ok'
+      else 
+        conv = 'No'
+      end if 
+      write (out_unit,'(A,A, F5.1, A, F7.0,A, F4.1,A, A,A, A,A, F7.2,A, F7.3,A, F7.5,A, F6.2,A, F7.4,A, F6.3,A, F6.3)') &
                     trim(polar%airfoil_name), DELIMITER, & 
                     flap_degree,              DELIMITER, & 
                     polar%re%number,          DELIMITER, & 
                     polar%ncrit,              DELIMITER, & 
+                    trim(conv),               DELIMITER, &      
                     trim(spec),               DELIMITER, &      
                     op%alpha,                 DELIMITER, &      
                     op%cl,                    DELIMITER, &      
@@ -587,26 +590,56 @@ subroutine write_polar_data_csv (show_details, out_unit, flap_degree, polar, op_
                     op%cm,                    DELIMITER, &      
                     op%xtrt,                  DELIMITER, &      
                     op%xtrb    
-    else
-      if (show_details) then
-        if (.not. has_warned) then 
-          write(text_out,'(A)') "alpha =" // strf('(F5.2)',op%alpha)
-        else 
-          write(text_out,'(A)') "," // strf('(F5.2)',op%alpha)
-        end if 
-        call print_colored (COLOR_NOTE, trim(text_out))
-        has_warned = .true. 
-      end if
     end if
+
+    if ((.not. op%converged) .and. show_details) &
+      call print_failed_op_value (op, polar%spec_cl, has_warned)
 
   end do 
 
-  if (has_warned) call print_colored (COLOR_NOTE," not converged - skipped in output")
+  if (has_warned) then 
+    call print_colored (COLOR_NOTE," not converged")
+    if (polar%skip_unconverged) call print_colored (COLOR_NOTE," - skipped in output")
+  end if 
 
   write (*,*) 
   
 end subroutine write_polar_data_csv
 
+!------------------------------------------------------------------------------
+! Print the value of failed op during writing output data 
+!------------------------------------------------------------------------------
+subroutine print_failed_op_value (op, spec_cl, has_warned)
+
+  use xfoil_driver,       only : op_point_result_type
+
+  type (op_point_result_type),intent (in) :: op
+  logical,              intent(in)     :: spec_cl
+  logical,              intent(inout)  :: has_warned
+
+  character (100)       :: text_out
+  character (5  )       :: spec
+  double precision      :: val
+
+  if (spec_cl) then 
+    spec = "cl"
+    val  = op%cl
+  else
+    spec = "alpha"
+    val  = op%alpha
+  end if
+
+  if (.not. op%converged) then
+    if (.not. has_warned) then 
+      write(text_out,'(A)') trim(spec) // "="    // strf('(F5.2)',val)
+    else 
+      write(text_out,'(A)') "," // strf('(F5.2)',val)
+    end if 
+    call print_colored (COLOR_NOTE, trim(text_out))
+    has_warned = .true. 
+  end if
+  
+end subroutine print_failed_op_value
 
 !------------------------------------------------------------------------------
 ! Write polar header csv d
@@ -619,6 +652,7 @@ subroutine write_polar_header_csv (out_unit)
                           "Flap"      // DELIMITER //&
                           "Re"        // DELIMITER //&
                           "ncrit"     // DELIMITER //&
+                          "converged" // DELIMITER //&
                           "spec"      // DELIMITER //&
                           "alpha"     // DELIMITER //&
                           "cl"        // DELIMITER //&

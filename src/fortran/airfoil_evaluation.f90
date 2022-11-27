@@ -2052,6 +2052,7 @@ subroutine show_optimization_progress (op_points_result, geo_result, &
   integer             :: i, intent
   character (30)      :: s
   doubleprecision     :: val
+  doubleprecision     :: template_drag_initial, template_drag
 
   intent = 10
   call print_colored (COLOR_PALE, repeat(' ',intent))
@@ -2072,10 +2073,22 @@ subroutine show_optimization_progress (op_points_result, geo_result, &
 
 ! All op points - one per line -------------------------
 
+
+  template_drag_initial = 0d0
+  template_drag         = 0d0
+
   do i = 1, size(op_points_result)
 
     op      = op_points_result(i)
     op_spec = op_points_spec(i)
+
+  ! #experimental: All op points with min-drag define with their weightings 
+  !                a flight template which has to be reached by the optimizer
+  !                Seems to work quite well ....
+    if (trim(op_spec%optimization_type) == 'min-drag') then 
+      template_drag_initial = template_drag_initial + op_spec%weighting / op_spec%scale_factor
+      template_drag         = template_drag         + op_spec%weighting * op%cd
+    end if 
 
     call print_colored (COLOR_PALE, repeat(' ',intent))
 
@@ -2119,6 +2132,27 @@ subroutine show_optimization_progress (op_points_result, geo_result, &
 
     write (*,*)
   end do
+
+
+  ! #experimental Flight template
+
+  if (.false.) then
+  write (*,*) 
+    call print_colored (COLOR_PALE, repeat(' ',intent))
+    call print_colored (COLOR_PALE, repeat(' ',5))
+    call print_colored (COLOR_PALE, 'Template')
+    call print_colored (COLOR_PALE, repeat(' ',10))
+    write (s,'(F6.5)') template_drag
+    call print_colored (COLOR_PALE, trim(s)//'  ')
+    call print_colored (COLOR_PALE, repeat(' ',9))
+    call print_colored (COLOR_PALE, 'min  cd')
+    call print_colored (COLOR_PALE, repeat(' ',4))
+    write (s,'(F7.5)') (template_drag - template_drag_initial)
+    call print_colored (COLOR_PALE, trim(s)//'  ')
+    write (s,'(F4.1)') (template_drag - template_drag_initial) * 100d0/ template_drag_initial
+    call print_colored (COLOR_PALE, trim(s)//'%')
+    write (*,*) 
+  end if 
 
 ! All Geo targets - one per line -------------------------
 
@@ -2784,7 +2818,7 @@ subroutine write_designvars (designcounter, designvars)
   integer, intent(in) :: designcounter
   double precision, dimension(:), intent(in) :: designvars
 
-  integer             :: i, nop, ngeo_targets
+  integer             :: i
   character(255)      :: filename
   integer             :: iunit, nvars
   integer             :: nmodes, counter1
@@ -2875,10 +2909,6 @@ subroutine write_designvars (designcounter, designvars)
 
   return 
 
-! Warning if there was an error opening design_coordinates file
-
-910 write(*,*) "Warning: unable to open "//trim(filename)//". Skipping ..."
-    return
 
 end subroutine write_designvars
 
@@ -2894,7 +2924,7 @@ subroutine print_designvars (designcounter, designvars)
   integer, intent(in) :: designcounter
   double precision, dimension(:), intent(in) :: designvars
 
-  integer             :: i, nop, ngeo_targets
+  integer             :: i
   integer             :: nvars
   integer             :: nmodes, counter1
   double precision    :: st, t1, t2, t1fact, t2fact
