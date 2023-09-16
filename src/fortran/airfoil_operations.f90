@@ -20,6 +20,7 @@ module airfoil_operations
 ! Performs transformations and other operations on airfoils
 
   use os_util 
+  use airfoil_shape_bezier, only : is_bezier_file, load_bezier_airfoil
 
   implicit none
 
@@ -34,20 +35,18 @@ module airfoil_operations
 ! Driver subroutine to read or create a seed airfoil
 !
 !=============================================================================80
-subroutine get_seed_airfoil (seed_airfoil, airfoil_file, naca_options, foil )
+subroutine get_seed_airfoil (seed_airfoil, airfoil_file, foil )
 
   use vardef,       only : airfoil_type
-  use naca,         only : naca_options_type, naca_456
 
   character(*), intent(in) :: seed_airfoil, airfoil_file
-  type(naca_options_type), intent(in) :: naca_options
   type(airfoil_type), intent(out) :: foil
 
-  integer :: pointsmcl
+  character (len=:), allocatable :: airfoil_name 
 
   if (trim(seed_airfoil) == 'from_file') then
 
-!   Read seed airfoil from file
+!   Read seed airfoil from .dat file
 
     write (*,'(/," - ", A)', advance = 'no') 'Reading airfoil '
     call print_colored (COLOR_HIGH,trim(airfoil_file))
@@ -55,16 +54,23 @@ subroutine get_seed_airfoil (seed_airfoil, airfoil_file, naca_options, foil )
 
     call load_airfoil(airfoil_file, foil)
 
-  elseif (trim(seed_airfoil) == 'naca') then
+  elseif (trim(seed_airfoil) == 'from_bezier') then
 
-!   Create NACA 4, 4M, 5, 6, or 6A series airfoil
+!   Read seed bezier control points from .bez file and generate airfoil
 
-    pointsmcl = 100
-    call naca_456(naca_options, pointsmcl, foil)
+    write (*,'(/," - ", A)', advance = 'no') 'Reading bezier curve definition '
+    call print_colored (COLOR_HIGH,trim(airfoil_file))
+    write (*,'(A)', advance = 'no') ' and generating airfoil coordinates'
 
+    foil%npoint = 201                   ! 201 points as default - will be repaneled anyway
+    call load_bezier_airfoil (airfoil_file, foil%npoint, airfoil_name, foil%x, foil%z, foil%bezier_spec) 
+    foil%name = airfoil_name 
+    foil%bezier_based = .true.
+    call split_foil_at_00 (foil)        ! upper and lower will be needed for input sanity
+ 
   else
 
-    write(*,*) "Error: seed_airfoil should be 'from_file' or 'naca'."
+    write(*,*) "Error: seed_airfoil should be 'from_file' or 'from_bezier'."
     write(*,*)
     stop
 
@@ -88,7 +94,6 @@ subroutine load_airfoil(filename, foil)
 
   logical :: labeled
 
-  ! jx-mod additional check
   if (trim(filename) == '') then
     write (*,*) 
     call print_error ('Error: No airfoil file defined either in input file nor as command line argument')
@@ -388,6 +393,36 @@ end subroutine le_find
 
 
 !-----------------------------------------------------------------------------
+! Checks if foil is normalized - only looking at coordinates (no real LE check)
+!  - Leading edge at 0,0 
+!  - Trailing edge at 1,0 (upper and lower side may have a gap) 
+!-----------------------------------------------------------------------------
+function is_normalized_coord (foil) result(is_norm)
+
+  use vardef,             only : airfoil_type         
+
+  type(airfoil_type), intent(in)  :: foil
+
+  logical       :: is_norm
+  integer       :: x_min_at
+
+  is_norm = .true. 
+
+! Check TE 
+
+  if (foil%x(1) /= 1d0 .or. foil%x(size(foil%x)) /= 1d0)    is_norm = .false.  
+  if ((foil%z(1) + foil%z(size(foil%x))) /= 0d0)            is_norm = .false.
+
+! Check LE 
+
+  x_min_at = (minloc (foil%x,1))
+  if (foil%x(x_min_at) /= 0d0)                              is_norm = .false.
+  if (foil%z(x_min_at) /= 0d0)                              is_norm = .false.
+
+end function is_normalized_coord
+
+
+!-----------------------------------------------------------------------------
 !
 ! Checks if foil is normalized 
 !  - Leading edge at 0,0 
@@ -395,36 +430,32 @@ end subroutine le_find
 !  - Number of panels equal npan (xfoil_geo_options) or npan + 1 (LE was added)
 ! !
 !-----------------------------------------------------------------------------
-function is_normalized (foil, xfoil_geom_options) result(is_norm)
+function is_normalized (foil, npan) result(is_norm)
 
   use vardef,             only : airfoil_type         
-  use xfoil_driver,       only : xfoil_geom_options_type         
 
-  type(airfoil_type), intent(in)   :: foil
-  type(xfoil_geom_options_type), intent(in)   :: xfoil_geom_options
+  type(airfoil_type), intent(in)  :: foil
+  integer, intent(in)             :: npan
 
   logical                :: is_norm
   integer                :: le, addpoint_loc
   double precision       :: xle, zle
 
-  is_norm = .true. 
+  is_norm = is_normalized_coord (foil)
 
-! Check TE 
+  if (.not. is_norm) return 
 
-  if (foil%x(1) /= 1d0 .or. foil%x(size(foil%x)) /= 1d0)    is_norm = .false.  
-  if ((foil%z(1)+foil%z(size(foil%x))) /= 0d0)              is_norm = .false.
-
-! Check LE 
+! Check LE - use xfoil to find the real, splined LE
 
   call le_find(foil%x, foil%z, le, xle, zle, addpoint_loc)
   if (addpoint_loc /= 0)                                    is_norm = .false.
 
 ! Check npan 
 
-  if ((size(foil%x) /= xfoil_geom_options%npan) .and. & 
-      (size(foil%x) /= xfoil_geom_options%npan + 1))        is_norm = .false.  
+  if ((size(foil%x) /= npan) .and. & 
+      (size(foil%x) /= npan + 1))                           is_norm = .false.  
 
-end function 
+end function is_normalized
 
 
 !-----------------------------------------------------------------------------
@@ -443,7 +474,7 @@ subroutine repanel_and_normalize_airfoil (in_foil, xfoil_geom_options, symmetric
 
   use vardef,       only : airfoil_type         
   use math_deps,    only : norm_2
-  use xfoil_driver, only : smooth_paneling, xfoil_geom_options_type
+  use xfoil_driver, only : smooth_paneling, xfoil_geom_options_type, xfoil_set_airfoil
 
   type(airfoil_type), intent(in)    :: in_foil
   type(airfoil_type), intent(out)   :: foil
@@ -451,26 +482,27 @@ subroutine repanel_and_normalize_airfoil (in_foil, xfoil_geom_options, symmetric
   logical,            intent(in)    :: symmetrical
 
   type(airfoil_type)  :: tmp_foil
-  integer             :: i, pointst, pointsb
+  integer             :: i, pointst, pointsb, n
   logical             :: le_fixed
   double precision, dimension(2) :: p, p_next
 
   ! iteration thresholds
   double precision, parameter    :: EPSILON = 1.d-12          ! distance xfoil LE to 0,0
-  double precision, parameter    :: LE_PANEL_FACTOR = 0.4   ! lenght LE panel / length prev panel
+  double precision, parameter    :: EPSILON_TE = 1.d-8        ! z-value of TE to be zero 
+  double precision, parameter    :: LE_PANEL_FACTOR = 0.4     ! lenght LE panel / length prev panel
 
   tmp_foil%npoint = xfoil_geom_options%npan
   allocate (tmp_foil%x(tmp_foil%npoint))  
-  allocate (tmp_foil%z(tmp_foil%npoint))  
+  allocate (tmp_foil%z(tmp_foil%npoint))   
 
-  foil%name = in_foil%name
+  foil%name = in_foil%name 
 
   ! initial paneling to npoint_new
   call smooth_paneling(in_foil, 0, foil, xfoil_geom_options)
  
   call le_find(foil%x, foil%z, foil%leclose, foil%xle, foil%zle, foil%addpoint_loc)
   le_fixed = .false. 
-
+ 
   do i = 1,10
 
     call transform_airfoil(foil)
@@ -511,6 +543,14 @@ subroutine repanel_and_normalize_airfoil (in_foil, xfoil_geom_options, symmetric
     call print_warning ("Leading edge couln't be moved close to 0,0. Continuing ...",3)
     write (*,*)
   end if 
+
+  ! te could be non zero due to numerical issues 
+
+  n = size(foil%z)
+  if (abs(foil%z(1)) < EPSILON_TE) foil%z(1) = 0d0 
+  if (abs(foil%z(n)) < EPSILON_TE) foil%z(n) = 0d0 
+
+  if ((foil%z(1) + foil%z(n)) < EPSILON_TE) foil%z(n) = - foil%z(1)     ! make te gap symmetrical
 
   ! now split airfoil to get upper and lower polyline 
   !     if there is a new leading added it will be added to the polylines

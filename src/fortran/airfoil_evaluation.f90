@@ -28,7 +28,7 @@ module airfoil_evaluation
   implicit none 
   
   public
-
+ 
 ! Defines a geometric target eg thickness of the optimization 
 
   type geo_target_type  
@@ -94,6 +94,7 @@ module airfoil_evaluation
   public :: objective_function, objective_function_nopenalty
   public :: write_function 
   public :: create_airfoil_form_design, get_flap_degrees_from_design
+  public :: match_side_objective_function
   double precision, parameter    :: OBJ_XFOIL_FAIL = 55.55d0
   double precision, parameter    :: OBJ_GEO_FAIL   = 1000d0
 
@@ -136,6 +137,9 @@ module airfoil_evaluation
   type(airfoil_type) :: foil_to_match 
   logical :: match_foils
   double precision :: match_foils_scale_factor 
+
+! Bezier - adapt to airfoil side  
+  double precision, allocatable  :: side_to_match_x (:), side_to_match_y (:)
 
 ! Xfoil options
   type(xfoil_options_type)       :: xfoil_options
@@ -976,6 +980,83 @@ function matchfoil_objective_function(foil)
 
 end function matchfoil_objective_function
 
+
+!-----------------------------------------------------------------------------
+!
+! Objective function for matching a bezier curve to an airfoil side 
+!
+!-----------------------------------------------------------------------------
+function match_side_objective_function(dv, dummy)
+  !! objective function for adapt bezier to foil side
+  
+  use airfoil_shape_bezier, only : bezier_eval_y_on_x, dv_to_bezier
+
+  double precision, intent(in) :: dv(:)
+  logical, intent(in), optional :: dummy
+  double precision :: match_side_objective_function 
+
+  double precision, allocatable :: px(:), py(:), design_y(:), devi (:), base(:)
+  double precision :: te_gap , max_base
+  integer     :: i, ncoord
+  
+  ncoord = size(side_to_match_x)
+
+  ! remap bezier control points out of design variables 
+
+  te_gap = side_to_match_y (ncoord)                     ! last bezier point fixed to te gap 
+  call dv_to_bezier (dv, te_gap, px, py)
+
+  ! sanity check - nelder mead could have crossed to bounds or chnaged to order of control points 
+
+  if (minval(px) < 0d0 .or. maxval(px) > 1.0) then 
+    match_side_objective_function = 9999d0              ! penalty crossed bounds
+    return
+  end if 
+
+  do i = 2, size(px) - 1
+    if (((px(i+1) - px(i)) < 0d0) .or. (abs(px(i+1) - px(i)) < 0.05d0)) then  
+      match_side_objective_function = 9999d0            ! penalty changed order or too close 
+      return
+    end if 
+  end do 
+
+  ! evaluate bezier for all x coord of side to match 
+  !     in module: side_to_match_x (:), side_to_match_y (:)
+
+  allocate (design_y(ncoord))
+  allocate (devi(ncoord))
+  allocate (base(ncoord))
+  devi = 0d0
+  base = 0d0
+
+  do i = 1, ncoord
+    ! if (mod(i,2) == 0) then 
+    !   design_y(i) = bezier_eval_y_on_x (px, py, side_to_match_x(i))
+    ! else 
+    !   design_y(i) = side_to_match_y(i) 
+    ! end if 
+    design_y(i) = bezier_eval_y_on_x (px, py, side_to_match_x(i), epsilon=1d-9)
+
+  end do 
+  
+  ! absolute norm2
+  ! match_side_objective_function = norm2 (side_to_match_y - design_y)
+
+  ! relative / weighted norm2 
+
+  devi = abs (side_to_match_y - design_y)
+  base = abs (side_to_match_y)
+
+  ! move base so targets with a small base (at TE) don't become overweighted 
+  max_base = maxval (base)
+  base = base + max_base / 4d0
+
+  match_side_objective_function = norm2 (devi / base)
+ 
+end function match_side_objective_function
+
+
+
 !=============================================================================80
 !
 ! Generic function to write designs. Selects either 
@@ -1032,13 +1113,8 @@ subroutine create_airfoil_form_design (seed, designvars, foil)
 
 ! Set modes for top and bottom surfaces
 
-  if (trim(shape_functions) == 'naca') then
-    dvtbnd1 = 1
-    dvtbnd2 = nmodest
-    dvbbnd2 = nmodest + nmodesb
-    dvbbnd1 = dvtbnd2 + 1
-  else if ((trim(shape_functions) == 'camb-thick') .or. &
-           (trim(shape_functions) == 'camb-thick-plus')) then
+  if ((trim(shape_functions) == 'camb-thick') .or. &
+      (trim(shape_functions) == 'camb-thick-plus')) then
     dvtbnd1 = 1
     dvtbnd2 = nmodest
     dvbbnd1 = 1
@@ -1117,12 +1193,7 @@ subroutine get_flap_degrees_from_design (designvars, actual_flap_degrees)
 
 ! Set modes for top and bottom surfaces
 
-  if (trim(shape_functions) == 'naca') then
-    dvtbnd1 = 1
-    dvtbnd2 = nmodest
-    dvbbnd2 = nmodest + nmodesb
-    dvbbnd1 = dvtbnd2 + 1
-  else if ((trim(shape_functions) == 'camb-thick') .or. &
+  if ((trim(shape_functions) == 'camb-thick') .or. &
            (trim(shape_functions) == 'camb-thick-plus')) then
     dvtbnd1 = 1
     dvtbnd2 = nmodest
@@ -1158,203 +1229,6 @@ subroutine get_flap_degrees_from_design (designvars, actual_flap_degrees)
 
 end subroutine get_flap_degrees_from_design 
 
-
-!-----------------------------------------------------------------------------
-! Set airfoil thickness and camber according to defined geo targets 
-!   and/or thickness/camber constraints (in airfoil evaluation commons)
-!-----------------------------------------------------------------------------
-
-subroutine preset_airfoil_to_targets (show_detail, foil) 
-
-  use xfoil_driver,       only: xfoil_set_thickness_camber, xfoil_set_airfoil
-  use xfoil_driver,       only: xfoil_get_geometry_info
-
-  logical, intent (in)           :: show_detail
-  type (airfoil_type), intent (inout)  :: foil
-
-  type (airfoil_type) :: new_foil
-  doubleprecision     :: maxt, xmaxt, maxc, xmaxc, new_camber, new_thick
-  character (10)      :: cvalue
-  integer             :: i, nptt, nptb, ngeo_targets
-  logical             :: foil_changed 
-
-
-! Is presetting activated? 
-
-  if (.not. preset_seed_airfoil) return 
-
-  foil_changed = .false.
-  ngeo_targets = size(geo_targets)
-
-  new_thick  = 0d0
-  new_camber = 0d0
-
-  if (ngeo_targets > 0) then 
-
-  ! Set thickness / Camber of seed airfoil according geo targets, adjust constraints
-
-    do i= 1, ngeo_targets
-
-      select case (trim(geo_targets(i)%type))
-
-        case ('Thickness')                   
-
-          new_thick = geo_targets(i)%target_value
-          foil_changed = .true.
-
-          if (show_detail) then
-            write (cvalue,'(F6.2)')  (new_thick * 100)
-            call print_note_only ('- Scaling thickness to target value '// trim(adjustl(cvalue))//'%')
-          end if
-
-        case ('Camber')                      
-
-          new_camber = geo_targets(i)%target_value
-          foil_changed = .true.
-
-          if (show_detail) then
-            write (cvalue,'(F6.2)')  (new_camber * 100)
-            call print_note_only ('- Scaling camber to target value '// trim(adjustl(cvalue))//'%')
-          end if
-
-      end select
-
-    end do
-    call xfoil_set_thickness_camber (foil, new_thick, 0d0, new_camber, 0d0, new_foil)
-
-  else
-
-  ! Set thickness / Camber of seed airfoil according constraints
-
-    call xfoil_set_airfoil (foil)        
-    call xfoil_get_geometry_info (maxt, xmaxt, maxc, xmaxc)
-
-    if (maxt > max_thickness) then
-
-      new_thick = max_thickness *0.95d0
-      call xfoil_set_thickness_camber (foil, new_thick, 0d0, 0d0, 0d0, new_foil)
-      foil_changed = .true.
-
-      if (show_detail) then
-        write (cvalue,'(F6.2)')  (new_thick * 100)
-        call print_note_only ('- Scaling thickness according constraint to '// trim(adjustl(cvalue))//'%')
-      end if 
-
-    elseif (maxt < min_thickness) then 
-
-      new_thick = min_thickness *1.05d0
-      call xfoil_set_thickness_camber (foil, new_thick, 0d0, 0d0, 0d0, new_foil)
-      foil_changed = .true.
-
-      if (show_detail) then
-        write (cvalue,'(F6.2)')  (new_thick * 100)
-        call print_note_only ('- Scaling thickness according constraint to '// trim(adjustl(cvalue))//'%')
-      end if 
-
-    end if 
-
-    if (maxc > max_camber) then
-
-      new_camber = max_camber *0.95d0
-      call xfoil_set_thickness_camber (foil, 0d0, new_camber, 0d0, 0d0, new_foil)
-      foil_changed = .true.
-
-      if (show_detail) then
-        write (cvalue,'(F6.2)')  (new_camber * 100)
-        call print_note_only ('- Scaling camber according constraint to '// trim(adjustl(cvalue))//'%')
-      end if
-      
-    elseif (maxc < min_camber) then 
-
-      new_camber = min_camber *1.05d0
-      call xfoil_set_thickness_camber (foil, 0d0, new_camber, 0d0, 0d0, new_foil)
-      foil_changed = .true.
-
-      if (show_detail) then
-        write (cvalue,'(F6.2)')  (new_camber * 100)
-        call print_note_only ('- Scaling camber according constraint to '// trim(adjustl(cvalue))//'%')
-      end if
-
-    end if 
-
-  end if
-
-  if (foil_changed) then
-
-! Now rebuild foil out of new coordinates  ----------------------
-  ! Sanity check - new_foil may not have different number of points
-    if (foil%npoint /= new_foil%npoint) then
-      call my_stop ('Number of points changed during thickness/camber modification')
-    end if
-
-    foil%z = new_foil%z
-    nptt = size(foil%zt,1)
-    nptb = size(foil%zb,1)
-
-  ! get new upper and lower z-coordinates from modified airfoil 
-    do i = 1, nptt
-      foil%zt(i) = new_foil%z(nptt-i+1)      ! start from LE - top reverse - to LE
-    end do
-    do i = 1, nptb 
-      foil%zb(i) = new_foil%z(nptt+i-1)      ! start from LE - bottom - to TE
-    end do
-  end if
-  
-end subroutine preset_airfoil_to_targets
-
-
-!-----------------------------------------------------------------------------
-! Set airfoil trailing edge gap to new gap value in % of c
-!   A standard blending value x/c = 0.8 will be used 
-!-----------------------------------------------------------------------------
-
-subroutine preset_airfoil_te_gap (show_detail, foil, new_te_gap) 
-
-  use xfoil_driver,       only: xfoil_set_te_gap, get_te_gap
-
-  logical, intent (in)           :: show_detail
-  type (airfoil_type), intent (inout)  :: foil
-  double precision, intent(in) :: new_te_gap
-
-  type (airfoil_type) :: new_foil
-  integer             :: i, nptt, nptb
-
-  doubleprecision, parameter  :: X_BLEND = 0.8d0
-
-! Is there a trailing edge te gap? There should be ...
-
-  if ((get_te_gap (seed_foil) == 0d0) .and. (new_te_gap == -1d0) .and. show_detail) then 
-    write(*,*)    
-    call print_note ("The seed airfoil has no trailing edge gap." //&
-                      " Set a gap of at least 0.03% "//&
-                      "to improve xfoil viscous results.")
-  end if 
-
-! Should te gap changed? If no, return ... 
-  if ((new_te_gap == -1d0) .or. ((new_te_gap / 100) == get_te_gap (foil))) return 
-
-! Set te gap with xfoils TGAP
-
-  if(show_detail) &
-    call print_note_only ('- Setting trailing edge gap to '// strf('(F4.2)', new_te_gap)//'%')
-
-  call xfoil_set_te_gap (foil , (new_te_gap / 100), X_BLEND, new_foil)
-
-! Now rebuild foil out of new coordinates  ----------------------
-
-  foil%z = new_foil%z
-  nptt = size(foil%zt,1)
-  nptb = size(foil%zb,1)
-
-! get new upper and lower z-coordinates from modified airfoil 
-  do i = 1, nptt
-    foil%zt(i) = new_foil%z(nptt-i+1)      ! start from LE - top reverse - to LE
-  end do
-  do i = 1, nptb 
-    foil%zb(i) = new_foil%z(nptt+i-1)      ! start from LE - bottom - to TE
-  end do
-  
-end subroutine preset_airfoil_te_gap
 
 
 !=============================================================================80
@@ -2324,7 +2198,7 @@ subroutine print_improvement_info (intent, header, op_spec, op)
           opt_type = 'max'
           base = 'xtr'                                         ! scale_factor = seed value
           value_base = 1d0
-          dist = 0.5d0*(op%xtrt + op%xtrb) -  op_spec%scale_factor  
+          dist = 0.5d0*(op%xtrt + op%xtrb) + 0.1d0 -  op_spec%scale_factor  
           dev  = dist / op_spec%scale_factor * 100d0
           improv = dev                                         ! positive is good
         case default

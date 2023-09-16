@@ -18,6 +18,8 @@
 program main
 
 !         Main program for airfoil optimization
+!                 
+!                 Modules Hirarchy 
 !
 !                  main   / worker
 !  input_sanity    input_output   optimization_driver
@@ -26,6 +28,7 @@ program main
 !      airfoil_operations   polar_operations
 !                    memory_util
 !                  parametrization
+!                  airfoil_shape_bezier 
 !                    math_deps
 !                   xfoil_driver
 !             xfoil   os_util  vardef
@@ -35,14 +38,14 @@ program main
   use os_util
   use vardef
   use input_output,        only : read_inputs, read_clo
-  use naca,                only : naca_options_type
   use particle_swarm,      only : pso_options_type
   use genetic_algorithm,   only : ga_options_type
   use simplex_search,      only : ds_options_type
-  use airfoil_evaluation,  only : xfoil_geom_options, match_foils, preset_airfoil_to_targets
-  use airfoil_evaluation,  only : preset_airfoil_te_gap, airfoil_te_gap
+  use airfoil_preparation, only : preset_airfoil_to_targets, preset_airfoil_te_gap
+  use airfoil_evaluation,  only : xfoil_geom_options, match_foils, airfoil_te_gap
   use airfoil_operations,  only : get_seed_airfoil
   use airfoil_operations,  only : repanel_and_normalize_airfoil
+  use airfoil_operations,  only : split_foil_at_00
   use memory_util,         only : deallocate_airfoil, allocate_airfoil_data,   &
                                   deallocate_airfoil_data
   use input_sanity,        only : check_seed, check_inputs
@@ -59,7 +62,6 @@ program main
   character(80) :: search_type, global_search, local_search, seed_airfoil_type,  &
                    airfoil_file, matchfoil_file
   character(80) :: input_file, text
-  type(naca_options_type) :: naca_options
   type(pso_options_type) :: pso_options
   type(ga_options_type) :: ga_options
   type(ds_options_type) :: ds_options
@@ -96,7 +98,7 @@ program main
 
 ! Set default names and read command line arguments
   
-  input_file = 'inputs.txt'
+  input_file = 'inputs.inp'
   output_prefix = 'optfoil'
   call read_clo(input_file, output_prefix,'Xoptfoil-JX')
 
@@ -105,7 +107,7 @@ program main
   npan_fixed = 200                      ! for optimizing npan is fixed ...
   call read_inputs(input_file, search_type, global_search, local_search,       &
                    seed_airfoil_type, airfoil_file, nparams_top, nparams_bot,  &
-                   restart, restart_write_freq, constrained_dvs, naca_options, &
+                   restart, restart_write_freq, constrained_dvs,               &
                    pso_options, ga_options, ds_options, matchfoil_file,        &
                    symmetrical) 
 
@@ -113,21 +115,23 @@ program main
   call check_inputs(global_search, pso_options)
     
   
-! Load seed airfoil into memory, repanel, normalize, rotate
+! Load seed airfoil into memory, repanel, normalize, rotate if not bezier based 
 
-  call get_seed_airfoil (seed_airfoil_type, airfoil_file, naca_options, original_foil)
+  call get_seed_airfoil (seed_airfoil_type, airfoil_file, original_foil)
   write (*,*) 
-  call repanel_and_normalize_airfoil (original_foil, xfoil_geom_options, symmetrical, seed_foil)  
-                            !   ... to have run_xfoil results equal airfoil external results
+
+  if (.not. original_foil%bezier_based) then 
+    call repanel_and_normalize_airfoil (original_foil, xfoil_geom_options, symmetrical, seed_foil) 
+  else 
+    seed_foil = original_foil
+  end if
+                           !   ... to have run_xfoil results equal airfoil external results
   xfoil_geom_options%npan = seed_foil%npoint    ! will use this constant value now
 
-
+  
 ! Allocate optimal solution
 
-  if (trim(shape_functions) == 'naca') then
-    nshapedvtop = nparams_top
-    nshapedvbot = nparams_bot
-  else if (trim(shape_functions) == 'camb-thick') then
+  if (trim(shape_functions) == 'camb-thick') then
     !Use a fixed number of 6 designvariables for airfoil-generation.
     !These are camber, thickness, camber-location, thickness-location,
     !LE radius and blending-range

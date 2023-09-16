@@ -532,6 +532,16 @@ subroutine run_op_point (op_point_spec,        &
     end if
   end if
 
+! when xfoil doesn't converge, it tends to write invalid values in the original field ...
+  if (.not. op_point_result%converged) then
+    if (op_point_spec%spec_cl) then
+      op_point_result%cl    = op_point_spec%value
+    else 
+      op_point_result%alpha = op_point_spec%value 
+    end if
+  end if 
+
+
 end subroutine run_op_point
 
 

@@ -60,7 +60,7 @@ end subroutine deallocate_shape_functions
 !=============================================================================80
 !
 ! Creates shape functions for top and bottom surfaces
-! shapetype may be 'naca', 'camb-thick', 'camb-thick-plus' or 'hicks-henne'
+! shapetype may be 'camb-thick', 'camb-thick-plus' or 'hicks-henne'
 ! For Hicks-Henne shape functions, number of elements in modes must be a 
 ! multiple of 3.
 !=============================================================================80
@@ -76,11 +76,8 @@ subroutine create_shape_functions(xtop, xbot, modestop, modesbot, shapetype,   &
   ntop = size(xtop,1)
   nbot = size(xbot,1)
 
-  if (trim(shapetype) == 'naca') then
-    nmodestop = size(modestop,1)
-    nmodesbot = size(modesbot,1)
-  else if ((trim(shapetype) == 'camb-thick') .or. &
-           (trim(shapetype) == 'camb-thick-plus')) then
+  if ((trim(shapetype) == 'camb-thick') .or. &
+      (trim(shapetype) == 'camb-thick-plus')) then
     nmodestop = size(modestop,1)
     nmodesbot = 0
   else
@@ -101,7 +98,7 @@ subroutine create_shape_functions(xtop, xbot, modestop, modesbot, shapetype,   &
 
   end if
 
-  if ((.not. first_time) .or. (trim(shapetype) == 'naca')) then
+  if (.not. first_time) then
 
 !   Create shape functions for top
 
@@ -132,66 +129,15 @@ subroutine create_shape(x, modes, shapetype, shape_function)
   character(*), intent(in) :: shapetype
   double precision, dimension(:,:), intent(inout) :: shape_function
 
-  integer :: npt, nmodes, i, j, counter1, counter2
-  double precision :: power1, power2, dvscale, st, t1, t2, t1fact, t2fact, pi
+  integer :: npt, nmodes, i, j, counter1
+  double precision :: power1, st, t1, t2, t1fact, t2fact, pi
   double precision :: chord, xle, xs
 
   npt = size(x,1)
   chord = x(npt) - x(1)
   xle = x(1)
 
-  shape_switch: if (trim(shapetype) == 'naca') then
-
-    nmodes = size(modes,1)
-
-!   Create naca shape functions
-
-    do j = 1, npt
-      xs = (x(j)-xle)/chord
-      shape_function(1,j) = sqrt(xs) - xs
-    end do
-
-    counter1 = 1
-    counter2 = 1
-
-    do i = 2, nmodes
-
-!     Whole-powered shapes
-
-      if (counter2 == 1) then
-
-        power1 = dble(counter1)
-        do j = 1, npt
-          xs = (x(j)-xle)/chord
-          shape_function(i,j) = xs**(power1)*(1.d0 - xs)
-        end do
-        counter2 = 2
-
-!     Fractional-powered shapes
-
-      else
-
-        power1 = 1.d0/dble(counter1 + 2)
-        power2 = 1.d0/dble(counter1 + 1)
-        do j = 1, npt
-          xs = (x(j)-xle)/chord
-          shape_function(i,j) = xs**power1 - xs**power2
-        end do
-        counter2 = 1
-        counter1 = counter1 + 1
-       
-      end if
-
-    end do
-
-!   Normalize shape functions
-
-    do i = 1, nmodes
-      dvscale = 1.d0/abs(maxval(shape_function(i,:)))
-      shape_function(i,:) = shape_function(i,:)*dvscale
-    end do
-
-  elseif (trim(shapetype) == 'hicks-henne') then 
+  shape_switch: if (trim(shapetype) == 'hicks-henne') then 
       
     nmodes = size(modes,1)/3
     t1fact = initial_perturb/(1.d0 - 0.001d0)
@@ -262,11 +208,8 @@ subroutine create_airfoil(xt_seed, zt_seed, xb_seed, zb_seed, modest, modesb,  &
   integer :: i, nmodest, nmodesb, npointst, npointsb
   double precision :: strength
 
-  if (trim(shapetype) == 'naca') then
-    nmodest = size(modest,1)
-    nmodesb = size(modesb,1)
-  else if ((trim(shapetype) == 'camb-thick') .or. &
-           (trim(shapetype) == 'camb-thick-plus')) then
+  if ((trim(shapetype) == 'camb-thick') .or. &
+      (trim(shapetype) == 'camb-thick-plus')) then
     nmodest = size(modest,1)
     nmodesb = 0
   else
@@ -287,8 +230,7 @@ subroutine create_airfoil(xt_seed, zt_seed, xb_seed, zb_seed, modest, modesb,  &
 
   zt_new = zt_seed
   do i = 1, nmodest
-    if ((trim(shapetype) == 'naca') .or. &
-        (trim(shapetype) == 'camb-thick') .or. &
+    if ((trim(shapetype) == 'camb-thick') .or. &
         (trim(shapetype) == 'camb-thick-plus')) then
       strength = modest(i)
     else
@@ -302,11 +244,7 @@ subroutine create_airfoil(xt_seed, zt_seed, xb_seed, zb_seed, modest, modesb,  &
   if (.not. symmetrical) then
     zb_new = zb_seed
     do i = 1, nmodesb
-      if (trim(shapetype) == 'naca') then
-        strength = modesb(i)
-      else
-        strength = 1.d0   ! Hicks-Henne: strength is part of the shape function
-      end if
+      strength = 1.d0   ! Hicks-Henne: strength is part of the shape function
       zb_new = zb_new + strength*bot_shape_function(i,1:npointsb)
     end do
 

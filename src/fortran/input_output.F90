@@ -33,7 +33,7 @@ module input_output
 subroutine read_inputs(input_file, search_type, global_search, local_search,   &
                        seed_airfoil, airfoil_file, nfunctions_top,             &
                        nfunctions_bot, restart, restart_write_freq,            &
-                       constrained_dvs, naca_options, pso_options, ga_options, &
+                       constrained_dvs, pso_options, ga_options,               &
                        ds_options, matchfoil_file, symmetrical)
 
   use vardef
@@ -42,7 +42,6 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
   use genetic_algorithm,  only : ga_options_type
   use simplex_search,     only : ds_options_type
   use xfoil_driver,       only : xfoil_geom_options_type
-  use naca,               only : naca_options_type
   use math_deps,          only : sort_vector
   use polar_operations,   only : read_init_polar_inputs
 
@@ -53,7 +52,6 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
   integer, intent(out) :: nfunctions_top, nfunctions_bot
   logical, intent(out) :: symmetrical
   integer, dimension(:), allocatable, intent(inout) :: constrained_dvs
-  type(naca_options_type), intent(out) :: naca_options
   type(pso_options_type), intent(out) :: pso_options
   type(ga_options_type), intent(out) :: ga_options
   type(ds_options_type), intent(out) :: ds_options
@@ -62,12 +60,11 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
   integer, dimension(max_addthickconst) :: sort_idxs
   double precision, dimension(max_addthickconst) :: temp_thickmin, temp_thickmax
   logical :: feasible_init,        &
-             restart, write_designs, reflexed,                   &
+             restart, write_designs,                    &
              pso_write_particlefile, repanel
   integer :: restart_write_freq, pso_pop, pso_maxit, simplex_maxit,  &
              npan, feasible_init_attempts
   integer :: ga_pop, ga_maxit
-  double precision :: maxt, xmaxt, maxc, xmaxc, design_cl, a, leidx
   double precision :: pso_tol, simplex_tol
   double precision :: cvpar, cterat, ctrrat, xsref1, xsref2, xpref1, xpref2
   double precision :: feasible_limit
@@ -79,7 +76,6 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
   integer       :: i, iunit, ioerr, iostat1, counter, idx
   type(re_type) :: re_default
   character(30) :: text
-  character(3)  :: family
   character(20) :: pso_convergence_profile
   character(10) :: parents_selection_method
 
@@ -111,8 +107,6 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
                          curv_threshold, symmetrical, min_flap_degrees,        &
                          max_flap_degrees, min_camber, max_camber,             &
                          naddthickconst, addthick_x, addthick_min, addthick_max
-  namelist /naca_airfoil/ family, maxt, xmaxt, maxc, xmaxc, design_cl, a,      &
-                          leidx, reflexed
   namelist /initialization/ feasible_init, feasible_limit,                     &
                             feasible_init_attempts
   namelist /particle_swarm_options/ pso_pop, pso_tol, pso_maxit,               &
@@ -325,36 +319,6 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
   curv_bot_spec%max_curv_reverse = max_curv_reverse_bot  
 
 
-! Set defaults for naca airfoil options
- 
-  family = '4'
-  maxt = 0.1d0
-  xmaxt = 0.3d0
-  maxc = 0.d0
-  xmaxc = 0.3d0
-  design_cl = 0.3d0
-  a = 1.d0
-  leidx = 6.d0
-  reflexed = .false.
-
-! Read naca airfoil options and put them into derived type
-
-  if ( (seed_airfoil == 'naca') .or. (seed_airfoil == 'NACA') .or.             &
-       (seed_airfoil == 'Naca') ) then
-    rewind(iunit)
-    read(iunit, iostat=iostat1, nml=naca_airfoil)
-    call namelist_check('naca_airfoil', iostat1, 'warn')
-
-    naca_options%family = family
-    naca_options%maxt = maxt
-    naca_options%xmaxt = xmaxt
-    naca_options%maxc = maxc
-    naca_options%xmaxc = xmaxc
-    naca_options%design_cl = design_cl 
-    naca_options%a = a
-    naca_options%leidx = leidx
-    naca_options%reflexed = reflexed
-  end if
 
 ! Set default initialization options
 
@@ -414,11 +378,10 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
   
 !   Set design variables with side constraints
 
-    if ((trim(shape_functions) == 'naca')  .or. &
-        (trim(shape_functions) == 'camb-thick') .or. &
+    if ((trim(shape_functions) == 'camb-thick') .or. &
         (trim(shape_functions) == 'camb-thick-plus')) then
 
-!     For NACA / camb-thick, we will only constrain the flap deflection
+!     For camb-thick, we will only constrain the flap deflection
 
       allocate(constrained_dvs(nflap_optimize))
       counter = 0
@@ -651,20 +614,6 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
   write(*,'(A)') " /"
   write(*,*)
 
-! NACA namelist
-
-  write(*,'(A)') " &naca"
-  write(*,*) " family = "//trim(adjustl(family))
-  write(*,*) " maxt = ", maxt
-  write(*,*) " xmaxt = ", xmaxt
-  write(*,*) " maxc = ", maxc
-  write(*,*) " xmaxc = ", xmaxc
-  write(*,*) " design_cl = ", design_cl
-  write(*,*) " a = ", a
-  write(*,*) " leidx = ", leidx
-  write(*,*) " reflexed = ", reflexed
-  write(*,'(A)') " /"
-  write(*,*)
 
 ! Initialization namelist
 
@@ -768,14 +717,13 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
 ! Optimization settings
 
   if (trim(seed_airfoil) /= 'from_file' .and.                                  &
-      trim(seed_airfoil) /= 'naca')                                            &
-    call my_stop("seed_airfoil must be 'from_file' or 'naca'.")
+      trim(seed_airfoil) /= 'from_bezier' )                                    &
+    call my_stop("seed_airfoil must be 'from_file' or 'from_bezier'.")
   if (trim(shape_functions) /= 'hicks-henne' .and.                             &
       trim(shape_functions) /= 'camb-thick' .and.                              &
-      trim(shape_functions) /= 'camb-thick-plus' .and.                         &
-      trim(shape_functions) /= 'naca')                                         &
-    call my_stop("shape_functions must be 'hicks-henne', 'camb-thick',"//   &
-                 " 'camb-thick-plus' or 'naca'.")
+      trim(shape_functions) /= 'camb-thick-plus')                              &
+    call my_stop("shape_functions must be 'hicks-henne', 'camb-thick'"//   &
+                 " or 'camb-thick-plus'.")
   if ((nfunctions_top < 0) .and.   & 
       trim(shape_functions) /= 'camb-thick' .and.                              &
       trim(shape_functions) /= 'camb-thick-plus')                              &
@@ -854,23 +802,6 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
       call my_stop("Target_type must be 'Camber' or 'Thickness'.")
   end do   
 
-
-! Naca airfoil options
-
-  select case (adjustl(family))
-    case ('4', '4M', '5', '63', '64', '65', '66', '67', '63A', '64A', '65A')
-      continue
-    case default
-      call my_stop("Unrecognized NACA airfoil family.")
-  end select
-  if (maxt <= 0.d0) call my_stop("maxt must be > 0.")
-  if ( (xmaxt < 0.d0) .or. (xmaxt > 1.d0) )                                    &
-    call my_stop("xmaxt must be >= 0 and <= 1.")
-  if ( (xmaxc < 0.d0) .or. (xmaxc > 1.d0) )                                    &
-    call my_stop("xmaxc must be >= 0 and <= 1.")
-  if ( (a < 0.d0) .or. (a > 1.d0) )                                            &
-    call my_stop("a must be >= 0 and <= 1.")
-  if (leidx <= 0.d0) call my_stop("leidx must be > 0.")
 
 ! Initialization options
     
@@ -1116,7 +1047,7 @@ subroutine read_op_points_spec  (input_file, or_iunit, noppoint, re_def, &
 
   if (noppoint < 1) call my_stop("noppoint must be > 0")
   if (noppoint > max_op_points) then
-     write(text,*) max_op_points
+     write(text,'(I5)') max_op_points
      text = adjustl(text)
      call my_stop("noppoints must be <= "//trim(text)//".")
   end if
@@ -1195,6 +1126,68 @@ subroutine read_op_points_spec  (input_file, or_iunit, noppoint, re_def, &
   end do
 
 end subroutine read_op_points_spec
+
+
+
+!=============================================================================
+! Read xoptfoil input file for bezier options 
+!=============================================================================
+
+subroutine read_bezier_inputs  (input_file, or_iunit, bezier_spec)
+  !! read input file for bezier curve options 
+
+  use airfoil_shape_bezier,  only : bezier_spec_type
+
+  character(*), intent(in) :: input_file
+  integer, intent(in)      :: or_iunit
+  type(bezier_spec_type), intent(out) :: bezier_spec
+
+  integer :: ncpoints_top, ncpoints_bot
+  integer :: iunit, ioerr, iostat1
+
+  namelist /bezier_options/ ncpoints_top, ncpoints_bot
+
+! Init default values 
+
+  ncpoints_top = 6    
+  ncpoints_bot = 6    
+  
+! Open input file and read namelist from file
+
+  if (trim(input_file) == '') then
+    iunit = or_iunit
+    rewind(iunit)
+    read(iunit, iostat=iostat1, nml=bezier_options)
+  else
+    iunit = 12
+    open(unit=iunit, file=input_file, status='old', iostat=ioerr)
+    if (ioerr == 0) then
+      read(iunit, iostat=iostat1, nml=bezier_options)
+      close(iunit)
+    end if
+  end if
+  
+! Put options into derived types
+
+  if (ncpoints_top < 3 .or. ncpoints_top > 10) &
+    call my_stop("Number of Bezier control points must be >= 3 and <= 10.")
+  if (ncpoints_bot < 3 .or. ncpoints_bot > 10) &
+    call my_stop("Number of Bezier control points must be >= 3 and <= 10.")
+
+  bezier_spec%ncpoints_top = ncpoints_top
+  bezier_spec%ncpoints_bot = ncpoints_bot
+
+  allocate (bezier_spec%px_top(ncpoints_top))
+  allocate (bezier_spec%py_top(ncpoints_top))
+  allocate (bezier_spec%px_bot(ncpoints_bot))
+  allocate (bezier_spec%py_bot(ncpoints_bot))
+  bezier_spec%px_top = 0d0
+  bezier_spec%py_top = 0d0
+  bezier_spec%px_bot = 0d0
+  bezier_spec%py_bot = 0d0
+  
+end subroutine read_bezier_inputs
+
 
 
 !=============================================================================
@@ -1468,11 +1461,11 @@ subroutine read_curvature_constraints_inputs  (input_file, or_iunit, &
   call namelist_check('curvature', iostat1, 'no-warn')
 
   if (max_curv_highlow_top /= NOT_DEF_I) & 
-    call print_note ("'max_curv_highlow_top' is depricated and won't be considered") 
+    call print_note ("'max_curv_highlow_top' is deprecated and won't be considered") 
   if (max_curv_highlow_bot /= NOT_DEF_I) & 
-    call print_note ("'max_curv_highlow_bot' is depricated and won't be considered") 
+    call print_note ("'max_curv_highlow_bot' is deprecated and won't be considered") 
   if (highlow_threshold    /= NOT_DEF_D) & 
-    call print_note ("'highlow_threshold' is depricated and won't be considered") 
+    call print_note ("'highlow_threshold' is deprecated and won't be considered") 
 
   curv_spec%check_curvature      = check_curvature
   curv_spec%auto_curvature       = auto_curvature
@@ -1590,6 +1583,8 @@ subroutine read_xfoil_paneling_inputs  (input_file, or_iunit, geom_options)
   geom_options%xpref2 = xpref2
 
 end subroutine read_xfoil_paneling_inputs
+
+
 
 !=============================================================================
 ! Read xfoil_run_options input
@@ -1822,7 +1817,7 @@ subroutine print_usage(exeprint)
 
   write(*,'(A)') 
   write(*,'(A)') '         (c) 2017-2019 Daniel Prosser (original Xoptfoil)'
-  write(*,'(A)') '         (c) 2019-2021 Jochen Guenzel, Matthias Boese'
+  write(*,'(A)') '         (c) 2019-2023 Jochen Guenzel, Matthias Boese'
   write(*,'(A)')
   write(*,'(A)') "Usage: "//trim(exeprint)//" [OPTION]"
   write(*,'(A)')

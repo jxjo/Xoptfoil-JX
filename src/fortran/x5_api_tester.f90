@@ -30,7 +30,7 @@ program x5_api_tester
   integer                 :: i
 
 ! Read command line options
-  input_file        = 'inputs.txt'
+  input_file        = 'inputs.inp'
   action            = ''
   airfoil_filename  = 'JX-GS-15.dat'
   call read_tester_clo(input_file, airfoil_filename, action)
@@ -181,7 +181,7 @@ write(*,'(A)')
 write(*,'(A)') "Usage: Xfoil_worker [-w worker_action] Parameters"
 write(*,'(A)')
 write(*,'(A)') "Parameters:"
-write(*,'(A)') "  -i input_file     Specify an input file (default: 'inputs.txt')"
+write(*,'(A)') "  -i input_file     Specify an input file (default: 'inputs.inp')"
 write(*,'(A)') "  -a airfoil_file   Specify filename of seed airfoil"
 write(*,'(A)')
 write(*,'(A)') "  -w an_action      ... do a certain test'"

@@ -911,6 +911,7 @@ def plot_polars(seedfoil, designfoils, plotnum, firsttime=True, animation=False,
                 prefix=None):
 
   global plotoptions
+  from matplotlib.ticker import (MultipleLocator)
 
   # Set plot options ------
 
@@ -1081,7 +1082,9 @@ def plot_polars(seedfoil, designfoils, plotnum, firsttime=True, animation=False,
   axarr[1].set_xlabel('cd')
   axarr[1].set_ylabel('cl')
   axarr[1].set_xlim([cdmin,cdmax])
-  axarr[1].set_ylim([clmin,clmax])
+  axarr[1].xaxis.set_major_locator(MultipleLocator(0.002))  
+  axarr[1].xaxis.set_major_formatter('{x:.3f}')
+  plt.setp(axarr[1].get_xticklabels(), rotation=30, ha="right")
   axarr[1].set_ylim([clmin, 1])
   axarr[1].grid(True)
 
@@ -1702,11 +1705,12 @@ def main_menu(initialchoice, seedfoil, designfoils, prefix):
 
   exitchoice = False
   rcParams['toolbar'] = 'None'    # Turn on matplotlib toolbar
-  plt.style.use('seaborn-paper')
+#  plt.style.use('seaborn-paper')
+  plt.style.use('fast')
   plt.rc('lines', linewidth  = 1.0)
   plt.rc('font', size=8)
   plt.rc('axes', titlesize=9)     # fontsize of the axes title
-  plt.rc('axes', labelsize=9)     # fontsize of the x and y labels
+  plt.rc('axes', labelsize=8)     # fontsize of the x and y labels
   plt.rc('xtick', labelsize=8)    # fontsize of the tick labels
   plt.rc('ytick', labelsize=8)    # fontsize of the tick labels
   plt.rc('legend', fontsize=8)    # legend fontsize

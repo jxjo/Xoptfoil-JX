@@ -83,13 +83,14 @@ add_definitions(-DPACKAGE_VERSION=\"$ENV{XOPTFOIL_VERSION}\")
 
 # Set source files (exclude programs here)
 file(GLOB SOURCESDBLE "src/fortran/*.f90" "src/fortran/*.F90" "src/fortran/xfoil_deps/*.f90")
-file(GLOB SOURCESREAL "src/fortran/xfoil_deps/*.f" "src/fortran/naca456_deps/*.f90")
+file(GLOB SOURCESREAL "src/fortran/xfoil_deps/*.f")
 list(REMOVE_ITEM SOURCESDBLE "${CMAKE_SOURCE_DIR}/src/fortran/main.f90")
 #list(REMOVE_ITEM SOURCESDBLE "${CMAKE_SOURCE_DIR}/src/fortran/xfoil_only.f90")
 list(REMOVE_ITEM SOURCESDBLE "${CMAKE_SOURCE_DIR}/src/fortran/xfoil_worker.f90")
 list(REMOVE_ITEM SOURCESDBLE "${CMAKE_SOURCE_DIR}/src/fortran/x5_api_tester.f90")
+list(REMOVE_ITEM SOURCESDBLE "${CMAKE_SOURCE_DIR}/src/fortran/a_playground.f90")
 
-# Real-8 flag for xfoil and naca456 source files
+# Real-8 flag for xfoil source files
 set_source_files_properties(${SOURCESREAL} PROPERTIES COMPILE_FLAGS ${Fortran_REAL8_FLAG})
 
 # CMake "object libraries" which allow sharing object files for multiple executables
@@ -101,12 +102,13 @@ add_library(MYOBJLIB OBJECT ${SOURCESDBLE} ${SOURCESREAL})
 add_executable("xoptfoil-JX"   $<TARGET_OBJECTS:MYOBJLIB> "src/fortran/main.f90")
 add_executable("xfoil_worker"  $<TARGET_OBJECTS:MYOBJLIB> "src/fortran/xfoil_worker.f90")
 add_executable("x5_api_tester" $<TARGET_OBJECTS:MYOBJLIB> "src/fortran/x5_api_tester.f90")
+add_executable("a_playground"  $<TARGET_OBJECTS:MYOBJLIB> "src/fortran/a_playground.f90")
 
 # Build dll
 add_library(x5_api SHARED $<TARGET_OBJECTS:MYOBJLIB>)
 
 # Installation
-install(TARGETS xoptfoil-JX xfoil_worker x5_api_tester DESTINATION bin)
+install(TARGETS xoptfoil-JX xfoil_worker x5_api_tester a_playground DESTINATION bin)
 install(FILES src/python/xoptfoil_visualizer-jx.py
         PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE
                     GROUP_READ             GROUP_EXECUTE

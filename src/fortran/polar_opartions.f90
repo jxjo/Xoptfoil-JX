@@ -7,7 +7,7 @@
 !  (at your option) any later version.
 
 !  Copyright (C) XOPTFOIL 2017-2019 Daniel Prosser
-!  Copyright (C) XOPTFOIL-JX 2019-2020 Jochen Guenzel
+!  Copyright (C) XOPTFOIL-JX 2019-2023 Jochen Guenzel
 
 module polar_operations
 
@@ -31,7 +31,6 @@ module polar_operations
     double precision :: start_value     ! polar starting from ...
     double precision :: end_value       ! ... to end value ...
     double precision :: increment       ! ... incremented by 
-    logical          :: skip_unconverged ! when writing to file skip unconverged ops
     integer :: n_op_points              ! number of all op_poins of this polar
     type(op_point_specification_type), dimension (:), allocatable :: &
                         op_points_spec  !array with specified op_points
@@ -106,7 +105,7 @@ subroutine generate_polar_files (show_details, subdirectory, foil, xfoil_geom_op
     flap_degrees (:)    = 0.d0 
    
     if (show_details) then 
-      write (polar_label,'(A,I1,A, I7)') 'Type ',polars(i)%re%type,', Re=',  int(polars(i)%re%number)
+      write (polar_label,'(A, I7)') 'Re=',  int(polars(i)%re%number)
       call print_note_only ('- Generating polar ' // trim(polar_label) // '  ')
     end if 
 
@@ -206,8 +205,8 @@ subroutine generate_polar_set (show_details, csv_format, subdirectory, foil, &
       flap_degrees = flap_spec%degrees(j)
 
       if (flap_spec%use_flap) then 
-        write (polar_label,'(A, F4.1, A,I1,A, I7)') 'for Flap', flap_spec%degrees(j), &
-                           '  Type ',polars(i)%re%type,', Re=',  int(polars(i)%re%number)
+        write (polar_label,'(A, F4.1, A, I7)') 'for Flap', flap_spec%degrees(j), &
+                           '  Re=',  int(polars(i)%re%number)
       else
         write (polar_label,'(A,I1,A, I7)') 'Type ',polars(i)%re%type,', Re=',  int(polars(i)%re%number)
       endif 
@@ -285,12 +284,12 @@ subroutine read_init_polar_inputs  (input_file, or_iunit, re_default, ncrit, foi
   double precision, dimension (MAXPOLARS) :: polar_reynolds  ! 40000, 70000, 100000
   double precision, dimension (3)  :: op_point_range         ! -1.0, 10.0, 0.5
   logical                          :: generate_polars        ! compatibility to older version 
-  logical                          :: skip_unconverged       ! skip during wrting file  
 
   integer :: istat, iunit, i
+  character (20) :: out_string
 
   namelist /polar_generation/ generate_polar, generate_polars, type_of_polar, polar_reynolds,   &
-                              op_mode, op_point_range, skip_unconverged
+                              op_mode, op_point_range
 
 ! Init default values for polars
 
@@ -301,7 +300,6 @@ subroutine read_init_polar_inputs  (input_file, or_iunit, re_default, ncrit, foi
   op_mode         = 'spec-al'
   op_point_range  = (/ -2d0, 10d0 , 1.0d0 /)
   polar_reynolds  = 0d0
-  skip_unconverged = .true.
 
   istat           = 0
 
@@ -318,8 +316,10 @@ subroutine read_init_polar_inputs  (input_file, or_iunit, re_default, ncrit, foi
   if (istat == 0) then
 
     read (iunit, iostat=istat, nml=polar_generation)
-    if (generate_polar) then 
-      !call namelist_check('polar_generation', istat, 'warn')
+    if (istat > 2) then 
+      write (out_string,'(I5)') istat
+      out_string = ' (err='//trim(adjustl(out_string))//')'
+      call my_stop ('Error: unrecognized variable in namelist '//'polar_generation'//trim(out_string))
     end if
 
     if (trim(input_file) /= '') close (iunit)
@@ -373,7 +373,6 @@ subroutine read_init_polar_inputs  (input_file, or_iunit, re_default, ncrit, foi
       polars(npolars)%re%number       = polar_reynolds(i)
       polars(npolars)%re%type         = type_of_polar
       polars(npolars)%ncrit           = ncrit
-      polars(npolars)%skip_unconverged = skip_unconverged
 
       if (csv_format) then
         polars(npolars)%file_name = trim(polars(npolars)%airfoil_name)//'.csv'
@@ -502,12 +501,18 @@ subroutine write_polar_data (show_details, out_unit, polar, op_points_result)
   integer,              intent (in) :: out_unit
   type (polar_type),    intent (in) :: polar
 
-
+  type (op_point_result_type), dimension (:), allocatable  :: op_points_sorted
   type (op_point_result_type) :: op
   integer              :: i 
   logical              :: has_warned
 
   has_warned = .false.
+
+! Sort op points again ascending - they were spilt from 0 down and up 
+
+  call sort_op_points (show_details, polar%spec_cl, op_points_result, op_points_sorted, has_warned) 
+  if (has_warned) call print_colored (COLOR_NOTE," not converged - skipped")
+  write (*,*) 
 
 ! xflr5 example
 ! -
@@ -519,25 +524,12 @@ subroutine write_polar_data (show_details, out_unit, polar, op_points_result)
   write (out_unit,'(A)') "  alpha     CL        CD       CDp       Cm    Top Xtr Bot Xtr "
   write (out_unit,'(A)') " ------- -------- --------- --------- -------- ------- ------- "
 
-  do i = 1, size(op_points_result)
-
-    op = op_points_result(i)
-    if (op%converged .or. (.not. polar%skip_unconverged)) then
+  do i = 1, size(op_points_sorted)
+    op = op_points_sorted(i)
       write (out_unit,  "(   F8.3,   F9.5,    F10.6,    F10.5,    F9.5,   F8.4,   F8.4)") &
                           op%alpha, op%cl, op%cd,    0d0,  op%cm,op%xtrt,op%xtrb
-    end if
-
-    if ((.not. op%converged) .and. show_details) &
-      call print_failed_op_value (op, polar%spec_cl, has_warned)
-
   end do 
 
-  if (has_warned) then 
-    call print_colored (COLOR_NOTE," not converged")
-    if (polar%skip_unconverged) call print_colored (COLOR_NOTE," - skipped in output")
-  end if 
-  write (*,*) 
-  
 end subroutine write_polar_data
 
 
@@ -554,53 +546,57 @@ subroutine write_polar_data_csv (show_details, out_unit, flap_degree, polar, op_
   type (polar_type),    intent(in)  :: polar
   type (op_point_result_type), dimension (:), intent (in) :: op_points_result
 
-  type (op_point_result_type)       :: op
+  type (op_point_result_type), dimension (:), allocatable :: op_points_sorted
+  type (op_point_result_type)       :: op, op_iminus1
   integer              :: i 
-  character (5  )      :: spec, conv
+  character (5  )      :: spec
   logical              :: has_warned
+  double precision     :: at_cl, cd_invers
 
   has_warned = .false.
 
-  do i = 1, size(op_points_result)
+  
+! Sort op points again ascending - they were spilt from 0 down and up 
+! Remove not converged op oppoints
 
-    op = op_points_result(i)
-
-    if (op%converged .or. (.not. polar%skip_unconverged)) then
-      if (polar%spec_cl) then 
-        spec = 'cl'
-      else 
-        spec = 'alpha'
-      end if 
-      if (op%converged) then 
-        conv = 'Ok'
-      else 
-        conv = 'No'
-      end if 
-      write (out_unit,'(A,A, F5.1, A, F7.0,A, F4.1,A, A,A, A,A, F7.2,A, F7.3,A, F7.5,A, F6.2,A, F7.4,A, F6.3,A, F6.3)') &
-                    trim(polar%airfoil_name), DELIMITER, & 
-                    flap_degree,              DELIMITER, & 
-                    polar%re%number,          DELIMITER, & 
-                    polar%ncrit,              DELIMITER, & 
-                    trim(conv),               DELIMITER, &      
-                    trim(spec),               DELIMITER, &      
-                    op%alpha,                 DELIMITER, &      
-                    op%cl,                    DELIMITER, &      
-                    op%cd,                    DELIMITER, &      
-                    op%cl / op%cd,            DELIMITER, &      
-                    op%cm,                    DELIMITER, &      
-                    op%xtrt,                  DELIMITER, &      
-                    op%xtrb    
-    end if
-
-    if ((.not. op%converged) .and. show_details) &
-      call print_failed_op_value (op, polar%spec_cl, has_warned)
-
-  end do 
-
+  call sort_op_points (show_details, polar%spec_cl, op_points_result, op_points_sorted, has_warned) 
   if (has_warned) then 
-    call print_colored (COLOR_NOTE," not converged")
-    if (polar%skip_unconverged) call print_colored (COLOR_NOTE," - skipped in output")
+    call print_colored (COLOR_NOTE," not converged - skipped")
   end if 
+
+! Write to file 
+
+  do i = 2, size(op_points_sorted)
+
+    op = op_points_sorted(i)
+
+    if (polar%spec_cl) then 
+      spec = 'cl'
+    else 
+      spec = 'alpha'
+    end if 
+    op_iminus1 = op_points_sorted(i-1)
+    cd_invers  =  (op%cl - op_iminus1%cl) / ((op%cd + op_iminus1%cd) / 2d0) 
+    at_cl          = (op_iminus1%cl + op%cl) / 2d0
+
+    if (op_iminus1%cl > op%cl) exit       ! cl max reached
+
+    write (out_unit,'(A,A, F5.1, A, F7.0,A, F4.1,A, A,A, F7.2,A, F7.3,A, F7.5,A, F6.2,A, F7.4,A, F6.3,A, F6.3,A, F8.5,A, F7.3)') &
+                  trim(polar%airfoil_name), DELIMITER, & 
+                  flap_degree,              DELIMITER, & 
+                  polar%re%number,          DELIMITER, & 
+                  polar%ncrit,              DELIMITER, & 
+                  trim(spec),               DELIMITER, &      
+                  op%alpha,                 DELIMITER, &      
+                  op%cl,                    DELIMITER, &      
+                  op%cd,                    DELIMITER, &      
+                  op%cl / op%cd,            DELIMITER, &      
+                  op%cm,                    DELIMITER, &      
+                  op%xtrt,                  DELIMITER, &      
+                  op%xtrb,                  DELIMITER, & 
+                  cd_invers,                DELIMITER, & 
+                  at_cl
+  end do 
 
   write (*,*) 
   
@@ -652,7 +648,6 @@ subroutine write_polar_header_csv (out_unit)
                           "Flap"      // DELIMITER //&
                           "Re"        // DELIMITER //&
                           "ncrit"     // DELIMITER //&
-                          "converged" // DELIMITER //&
                           "spec"      // DELIMITER //&
                           "alpha"     // DELIMITER //&
                           "cl"        // DELIMITER //&
@@ -660,7 +655,9 @@ subroutine write_polar_header_csv (out_unit)
                           "cl/cd"     // DELIMITER //&
                           "cm"        // DELIMITER //&
                           "xtr top"   // DELIMITER //&
-                          "xtr bot"      
+                          "xtr bot"   // DELIMITER //&     
+                          "dcl/cd"    // DELIMITER //&     
+                          "at cl"          
 
 end subroutine write_polar_header_csv
 
@@ -786,6 +783,71 @@ function  get_n_op_points (polar)
     build_filename  = trim(build_filename)  // '.txt'
 
   end function build_filename
+
+
+!------------------------------------------------------------------------------
+! Sort op points of a polar ascending based on alpha or cl (spec-cl) 
+! - Removes all not converged op points 
+!------------------------------------------------------------------------------
+subroutine sort_op_points (show_details, spec_cl, op_points_result, op_points_sorted, has_warned)
+
+  use xfoil_driver,       only : op_point_result_type
+
+  logical,              intent(in)  :: show_details, spec_cl
+  type (op_point_result_type), dimension (:), intent (in)  :: op_points_result
+  type (op_point_result_type), dimension (:), intent (inout), allocatable :: op_points_sorted
+  logical,              intent(inout)  :: has_warned
+
+  type (op_point_result_type)       :: tmp_op
+  integer              :: i, j, nconverged
+  logical              :: bubble , has_bubbled
+
+  has_bubbled = .true.
+  nconverged = 0
+
+! Build initial result array without not converged op points
+
+  do i=1, size(op_points_result) 
+    if (op_points_result(i)%converged) nconverged = nconverged + 1
+  end do 
+
+  if (nconverged == 0) then 
+    return 
+  end if 
+  if (allocated(op_points_sorted))  deallocate (op_points_sorted)
+  allocate (op_points_sorted(nconverged))
+
+  j = 0 
+  do i=1, size(op_points_result)
+    if (op_points_result(i)%converged) then 
+      j = j + 1
+      op_points_sorted(j) = op_points_result(i)
+    else
+      if (show_details) call print_failed_op_value (op_points_result(i), spec_cl, has_warned)
+    end if 
+  end do 
+
+! Bubble sort of op_points 
+
+  do while (has_bubbled)
+    has_bubbled = .false. 
+    do i = 1, (size(op_points_sorted) - 1) 
+      bubble = .false.
+      if (spec_cl) then 
+        if (op_points_sorted(i)%cl > op_points_sorted(i+1)%cl) bubble = .true. 
+      else
+        if (op_points_sorted(i)%alpha > op_points_sorted(i+1)%alpha) bubble = .true. 
+      end if 
+      if (bubble) then
+        tmp_op = op_points_sorted(i)
+        op_points_sorted(i)   = op_points_sorted (i+1) 
+        op_points_sorted(i+1) = tmp_op
+        has_bubbled = .true. 
+      end if  
+    end do 
+  end do 
+    
+end subroutine sort_op_points
 
 !------------------------------------------------------------------------------
 end module polar_operations

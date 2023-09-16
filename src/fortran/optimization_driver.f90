@@ -38,20 +38,18 @@ subroutine matchfoils_preprocessing(matchfoil_file)
   use airfoil_operations, only : get_seed_airfoil,  rebuild_airfoil
   use airfoil_operations, only : repanel_and_normalize_airfoil, split_foil_at_00
   use math_deps,          only : interp_vector, transformed_arccos
-  use naca,               only : naca_options_type
   use xfoil_driver,       only : xfoil_set_thickness_camber, xfoil_get_geometry_info, xfoil_set_airfoil
   
   character(*), intent(in) :: matchfoil_file
 
   type(airfoil_type) :: original_foil_to_match
-  type(naca_options_type) :: dummy_naca_options
-  integer :: pointst, pointsb, npan_sav, i, n
+  integer :: pointst, pointsb
   double precision, dimension(:), allocatable :: zttmp, zbtmp, xmatcht, xmatchb, zmatcht, zmatchb
   double precision :: maxt, xmaxt, maxc, xmaxc
 
 ! Load airfoil to match
 
-  call get_seed_airfoil('from_file', matchfoil_file, dummy_naca_options, original_foil_to_match)
+  call get_seed_airfoil('from_file', matchfoil_file, original_foil_to_match)
 
   call print_note_only ('Preparing '//trim(original_foil_to_match%name)//' to be matched by '//&
                         trim(seed_foil%name),3)
@@ -184,10 +182,9 @@ subroutine optimize(search_type, global_search, local_search, constrained_dvs, &
 
 ! Set initial design
 
-  if ((trim(shape_functions) == 'naca') .or. &
-      (trim(shape_functions) == 'camb-thick') .or. &
+  if ((trim(shape_functions) == 'camb-thick') .or. &
       (trim(shape_functions) == 'camb-thick-plus')) then     
-  !----------naca / camb-thick ----------
+  !---------- camb-thick ----------
 
     nfuncs = ndv - nflap_optimize
 
@@ -262,8 +259,7 @@ subroutine optimize(search_type, global_search, local_search, constrained_dvs, &
 
 !   Set up mins and maxes
     
-    if ((trim(shape_functions) == 'naca') .or. &
-        (trim(shape_functions) == 'camb-thick') .or. &
+    if ((trim(shape_functions) == 'camb-thick') .or. &
         (trim(shape_functions) == 'camb-thick-plus')) then
 
       nfuncs = ndv - nflap_optimize
@@ -334,8 +330,7 @@ subroutine optimize(search_type, global_search, local_search, constrained_dvs, &
       end if
 
       call simplexsearch(optdesign, fmin, stepsl, fevalsl, objective_function, &
-                         x0, .true., f0_ref, ds_options, restart_temp,         &
-                         restart_write_freq, designcounter, stepsg,            &
+                         x0, .true., f0_ref, ds_options, designcounter, stepsg, &
                          write_function)
 
     end if

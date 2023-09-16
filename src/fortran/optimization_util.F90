@@ -451,7 +451,7 @@ subroutine read_run_control(commands, ncommands)
   integer, intent(out) :: ncommands
 
   character(80) :: buffer
-  integer :: rcunit, ioerr, i
+  integer :: rcunit, ioerr
   
   commands(:) = ""
   ncommands = 0
@@ -478,15 +478,15 @@ subroutine read_run_control(commands, ncommands)
   return
 501 close(rcunit)
 
-  open(unit=rcunit, file='run_control', status='replace', err=502)
-  do i = 1, ncommands
-    write(rcunit,'(A)') commands(ncommands)
-  end do
-  close(rcunit) 
+!   open(unit=rcunit, file='run_control', status='replace', err=502)
+!   do i = 1, ncommands
+!     write(rcunit,'(A)') commands(ncommands)
+!   end do
+!   close(rcunit) 
 
-  return
+!   return
 
-502 write(*,*) "Warning: error encountered while reading run_control. Skipping."
+! 502 write(*,*) "Warning: error encountered while reading run_control. Skipping."
 
 end subroutine read_run_control
 

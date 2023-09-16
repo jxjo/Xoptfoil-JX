@@ -1,4 +1,6 @@
-!-------------------------------------------------------------------------
+! MIT License
+! Copyright (c) 2023 jxjo
+!
 !
 !   Xfoil-Worker  
 !
@@ -7,128 +9,88 @@
 !   Xfoil-Worker uses an Xoptfoil input-file to get the paramters.
 !     only a few sections are needed
 !   
-!   This file is part of XOPTFOIL-JX.
-!                       Copyright (C) 2017-2019 Daniel Prosser
-!                       Copyright (C) 2021      Jochen Guenzel
 !-------------------------------------------------------------------------
 
-program xfoil_worker
 
-  use vardef,             only : airfoil_type 
-  use memory_util,        only : deallocate_airfoil
-  use os_util 
-  use airfoil_operations, only : load_airfoil, airfoil_write,le_find
-  use xfoil_driver,       only : xfoil_init, xfoil_cleanup, xfoil_options_type
-  use xfoil_driver,       only : xfoil_set_airfoil, xfoil_reload_airfoil, xfoil_defaults
+!-------------------------------------------------------------------------
+!   all worker functions 
+!-------------------------------------------------------------------------
+
+module worker_functions
+
+  use os_util
 
   implicit none
 
-#ifndef PACKAGE_VERSION
-#define PACKAGE_VERSION ""
-#endif
+contains
 
-  type(airfoil_type) :: foil, blend_foil
-  type (xfoil_options_type) :: xfoil_options
+!-------------------------------------------------------------------------
+! Transforms airfoil to a bezier based airfoil  
+!-------------------------------------------------------------------------
 
-  character(255)     :: input_file, output_prefix, airfoil_filename, second_airfoil_filename
-  character(20)      :: action, value_argument
-  logical            :: visualizer, outname_auto
+subroutine match_bezier (input_file, outname_auto, output_prefix, seed_foil)
+  !! adapt bezier curves to top and bot side and generate new airfoil 
 
-  write(*,'(A)') 
+  use vardef,               only : airfoil_type
+  use xfoil_driver,         only : xfoil_geom_options_type
+  use airfoil_operations,   only : airfoil_write
+  use airfoil_operations,   only : repanel_and_normalize_airfoil, is_normalized_coord, split_foil_at_00
+  use airfoil_preparation,  only : transform_to_bezier_based
+  use input_output,         only : read_bezier_inputs, read_xfoil_paneling_inputs
+  use airfoil_shape_bezier, only : bezier_spec_type, write_bezier_file
 
-! Set default names and read command line arguments
+  implicit none
 
-  input_file        = ''
-  output_prefix     = ''
-  action            = ''
-  airfoil_filename  = ''
-  second_airfoil_filename = ''
-  visualizer        = .false.
-  call read_worker_clo(input_file, output_prefix, airfoil_filename, action, & 
-                       second_airfoil_filename, value_argument, visualizer)
 
-  if (trim(action) == "") &
-    call my_stop("Must specify an action for the worker with -w option.")
-  if (trim(airfoil_filename) == "") &
-    call my_stop("Must specify an airfoil file with the -a option.")
+  character(*), intent(in)        :: input_file, output_prefix
+  type (airfoil_type), intent (inout)  :: seed_foil
+  logical, intent(in)             :: outname_auto
 
-! Let's start
+  type (airfoil_type)             :: foil
+  type (bezier_spec_type)         :: bezier_spec 
+  type (xfoil_geom_options_type)  :: geom_options
 
-  write (*,'(1x)', advance = 'no') 
-  call print_colored (COLOR_FEATURE,'Worker on '//trim(airfoil_filename))
+  double precision, allocatable   :: px_top(:), py_top(:), px_bot(:), py_bot(:)
+  character (255)                 :: outname
+ 
+  write (*,*) 'Find best bezier curves for the airfoils top and bot side'
 
-  write (*,'(3x,A,A,3x)', advance = 'no') '-',trim(action)  
+  ! Read inputs file to get options needed 
 
-! Load airfoil defined in command line 
-  call load_airfoil(airfoil_filename, foil)
+  call read_xfoil_paneling_inputs  (input_file, 0, geom_options)
+  call read_bezier_inputs          (input_file, 0, bezier_spec)
 
-! Allocate xfoil variables
-  call xfoil_init()
-  xfoil_options%silent_mode = .true.
-  call xfoil_defaults(xfoil_options)
-
-! Set name of output file - from command line or auto?  
-  if (trim(output_prefix) == '') then
-    output_prefix = airfoil_filename (1:(index (airfoil_filename,'.', back = .true.) - 1))
-    outname_auto = .true.
-  else
-    outname_auto = .false.
-  end if
-
-! Do actions according command line option
-
-  select case (trim(action)) 
-
-    case ('polar')        ! Generate polars in subdirectory ".\<output_prefix>_polars\*.*"
-
-      call check_and_do_polar_generation (input_file, .false., output_prefix, foil)
-
-    case ('polar-csv')    ! Generate polars in csv format "<output_prefix>.csv"
-
-      call check_and_do_polar_generation (input_file, .true., output_prefix, foil)
-
-    case ('norm')         ! Repanel, Normalize into "<output_prefix>.dat"
-
-      call repanel_smooth (input_file, outname_auto, output_prefix, foil, visualizer, .false.)
-
-    case ('smooth')       ! Repanel, Normalize and smooth into "<output_prefix>.dat"
-
-      call repanel_smooth (input_file, outname_auto, output_prefix, foil, visualizer, .true.)
-  
-    case ('flap')         ! Repaneland set flap into "<output_prefix>.dat"
-
-      call set_flap (input_file, outname_auto, output_prefix, foil, visualizer)
-
-    case ('check')        ! Check the curvature quality of airfoil surface
-
-      call check_foil_curvature (input_file, output_prefix, foil, visualizer)
-
-    case ('set')         ! set geometry value like thickness etc...
-      
-      call set_geometry_value (input_file, outname_auto, output_prefix, foil, value_argument, visualizer)
-
-    case ('blend')         ! blend two airfoils...
-      
-      if (trim(second_airfoil_filename) == "") &
-        call my_stop("Must specify a second airfoil file with the -a2 option.")
-
-      call load_airfoil(second_airfoil_filename, blend_foil)
-      call blend_foils (input_file, outname_auto, output_prefix, foil, blend_foil, value_argument, visualizer)
-
-    case default
-
-      write (*,*)
-      call print_error ("Unknown action '"//trim(action)//"' defined for paramter '-w'")
-      call print_worker_usage()
-
-  end select 
+  ! Prepare airfoil  - Repanel and split if not LE at 0,0 
  
   write (*,*) 
+  if (.not. is_normalized_coord(seed_foil)) then 
+    call repanel_and_normalize_airfoil (seed_foil, geom_options, .false., foil)
+  else
+    foil = seed_foil
+    call split_foil_at_00 (foil) 
+  end if  
 
-  call xfoil_cleanup()
-  call deallocate_airfoil (foil)
+  ! nelder mead for both sides  
 
-end program xfoil_worker
+  call transform_to_bezier_based (bezier_spec, geom_options%npan, foil)
+
+  if (outname_auto) then 
+    foil%name = trim(output_prefix) // '_bezier'
+  else
+    foil%name = trim(output_prefix)
+  end if
+
+  ! Output  
+
+  outname = foil%name
+  call airfoil_write   (trim(outname)//'.dat', trim(foil%name), foil)
+
+  write (*,'(" - ", A)', advance = 'no') 'Writing bezier control points to '
+  call print_colored (COLOR_HIGH,trim(outname)//'.bez')
+  write (*,*)
+  call write_bezier_file (trim(outname)//'.bez', trim(foil%name), bezier_spec)
+
+end subroutine match_bezier
 
 
 
@@ -147,8 +109,6 @@ subroutine check_and_do_polar_generation (input_file, csv_format, output_prefix,
   use input_output,       only : read_xfoil_options_inputs, read_xfoil_paneling_inputs
   use input_output,       only : read_flap_inputs, read_cl_re_default
   use polar_operations,   only : read_init_polar_inputs, generate_polar_set, set_polar_info
-  use os_util
-
  
   character(*), intent(in)        :: input_file, output_prefix
   logical, intent(in)             :: csv_format
@@ -215,7 +175,6 @@ subroutine set_geometry_value (input_file, outname_auto, output_prefix, seed_foi
                                value_argument, visualizer)
 
   use vardef,             only: airfoil_type
-  use os_util
   use xfoil_driver,       only : xfoil_set_thickness_camber, xfoil_set_te_gap
   use xfoil_driver,       only : xfoil_geom_options_type
   use airfoil_operations, only : airfoil_write
@@ -233,6 +192,7 @@ subroutine set_geometry_value (input_file, outname_auto, output_prefix, seed_foi
   character (2)       :: value_type
   character (255)     :: outname
   double precision    :: value_number
+  integer             :: ierr
 
   write (*,*) 'Max thickness, camber or trailing edge gap ' 
   write (*,*) 
@@ -314,7 +274,6 @@ subroutine check_foil_curvature (input_file, output_prefix, seed_foil, visualize
   use xfoil_driver,       only: xfoil_defaults, xfoil_options_type, xfoil_geom_options_type
   use xfoil_driver,       only: xfoil_set_airfoil, xfoil_get_geometry_info, get_te_gap
   use math_deps,          only: count_reversals, derivative2
-  use os_util
 
   character(*), intent(in)     :: input_file
   character(*), intent(in)     :: output_prefix
@@ -497,7 +456,6 @@ end subroutine repanel_smooth
 
 subroutine blend_foils (input_file, outname_auto, output_prefix, seed_foil_in, blend_foil_in, value_argument, visualizer)
 
-  use os_util
   use vardef,             only : airfoil_type
   use math_deps,          only : interp_vector
   use xfoil_driver,       only : xfoil_geom_options_type
@@ -516,7 +474,7 @@ subroutine blend_foils (input_file, outname_auto, output_prefix, seed_foil_in, b
   double precision, dimension(:), allocatable :: zttmp, zbtmp, zt_blended, zb_blended
   type (airfoil_type) :: blended_foil, in_foil, blend_foil
   type (xfoil_geom_options_type) :: geom_options
-  integer             :: pointst, pointsb
+  integer             :: pointst, pointsb, ierr
   double precision    :: blend_factor
   character (255)     :: outname
 
@@ -543,7 +501,7 @@ subroutine blend_foils (input_file, outname_auto, output_prefix, seed_foil_in, b
 
   write (*,*) 
 
-  if (is_normalized (seed_foil_in, geom_options)) then 
+  if (is_normalized (seed_foil_in, geom_options%npan)) then 
     in_foil = seed_foil_in
     call split_foil_at_00 (in_foil)
     call print_note_only ('- Airfoil '//trim(in_foil%name) //' is already normalized with '//& 
@@ -552,7 +510,7 @@ subroutine blend_foils (input_file, outname_auto, output_prefix, seed_foil_in, b
     call repanel_and_normalize_airfoil (seed_foil_in,  geom_options, .false., in_foil)
   end if 
 
-  if (is_normalized (blend_foil_in, geom_options)) then 
+  if (is_normalized (blend_foil_in, geom_options%npan)) then 
     blend_foil = blend_foil_in
     call split_foil_at_00 (blend_foil)
     call print_note_only ('- Airfoil '//trim(blend_foil%name) //' is already normalized with '//& 
@@ -622,7 +580,6 @@ end subroutine blend_foils
 
 subroutine set_flap (input_file, outname_auto, output_prefix, seed_foil, visualizer)
 
-  use os_util
   use vardef,             only : airfoil_type, flap_spec_type
   use xfoil_driver,       only : xfoil_geom_options_type
   use xfoil_driver,       only : xfoil_apply_flap_deflection, xfoil_reload_airfoil
@@ -643,7 +600,7 @@ subroutine set_flap (input_file, outname_auto, output_prefix, seed_foil, visuali
   character(20)       :: text_degrees
   double precision    :: flap_degree
   character (255)     :: outname, text_out
-
+  integer             :: i
 
 ! Read inputs file to get xfoil paneling options  
 
@@ -732,8 +689,6 @@ subroutine write_design_coordinates (output_prefix, designcounter, foil)
   use vardef,             only : airfoil_type, DESIGN_SUBDIR_POSTFIX
   use airfoil_operations, only : airfoil_write_to_unit
   use xfoil_driver,       only : xfoil_set_airfoil, xfoil_get_geometry_info
-  use os_util
-
 
   character(*), intent(in)          :: output_prefix
   integer, intent(in)               :: designcounter
@@ -742,7 +697,7 @@ subroutine write_design_coordinates (output_prefix, designcounter, foil)
   double precision :: maxt, xmaxt, maxc, xmaxc
   character(255) :: foilfile, text, title, design_subdir
   character(8)   :: maxtchar, xmaxtchar, maxcchar, xmaxcchar
-  integer :: foilunit
+  integer :: foilunit, write_airfoil_optimization_progress
              
 ! Get geometry info
 
@@ -827,8 +782,6 @@ end subroutine write_design_coordinates
 
 subroutine read_worker_clo(input_file, output_prefix, airfoil_name, action, &
                            second_airfoil_filename, value_argument, visualizer)
-
-  use os_util
 
   character(*), intent(inout) :: input_file, output_prefix, action, airfoil_name, value_argument
   character(*), intent(inout) :: second_airfoil_filename
@@ -922,6 +875,11 @@ end subroutine read_worker_clo
 
 subroutine print_worker_usage()
 
+
+#ifndef PACKAGE_VERSION
+#define PACKAGE_VERSION ""
+#endif
+    
   write(*,'(A)') 'Xfoil_Worker      Version '//trim(PACKAGE_VERSION)//  &
                  '              (c) 2021 Jochen Guenzel'
   write(*,'(A)')
@@ -932,7 +890,8 @@ subroutine print_worker_usage()
   write(*,'(A)') "  -w norm           Repanel, normalize 'airfoil_file'"
   write(*,'(A)') "  -w smooth         Repanel, normalize, smooth 'airfoil_file'"
   write(*,'(A)') "  -w flap           Set flap of 'airfoil_file'"
-  write(*,'(A)') "  -w check          Check the quality of surface curvature'"
+  write(*,'(A)') "  -w bezier         Create a Bezier based airfoil matching 'airfoil_file'"
+  write(*,'(A)') "  -w check          Check the quality of surface curvature"
   write(*,'(A)') "  -w set [arg]      Set geometry parameters where [arg]:"
   write(*,'(A)') "                       't=zz'  max. thickness in % chord"
   write(*,'(A)') "                       'xt=zz' max. thickness location in % chord"
@@ -942,7 +901,7 @@ subroutine print_worker_usage()
   write(*,'(A)') "  -w blend xx       Blend 'airfoil_file' with 'second_airfoil_file' by xx%"
   write(*,'(A)')
   write(*,'(A)') "Options:"
-  write(*,'(A)') "  -i input_file     Specify an input file (default: 'inputs.txt')"
+  write(*,'(A)') "  -i input_file     Specify an input file (default: 'inputs.inp')"
   write(*,'(A)') "  -o output_prefix  Specify an output prefix (default: 'foil')"
   write(*,'(A)') "  -r xxxxxx         Specify a default reynolds number (re_default)"
   write(*,'(A)') "  -a airfoil_file   Specify filename of seed airfoil"
@@ -1034,4 +993,130 @@ subroutine write_deriv_to_file (info, npoints, x, y, deriv2, deriv3, &
   return
 
 end subroutine write_deriv_to_file
+
+
+
+end module
+
+
+!-------------------------------------------------------------------------
+!   main  
+!-------------------------------------------------------------------------
+program xfoil_worker
+
+  use vardef,             only : airfoil_type 
+  use memory_util,        only : deallocate_airfoil
+  use os_util 
+  use airfoil_operations, only : load_airfoil, airfoil_write,le_find
+  use xfoil_driver,       only : xfoil_init, xfoil_cleanup, xfoil_options_type
+  use xfoil_driver,       only : xfoil_set_airfoil, xfoil_reload_airfoil, xfoil_defaults
+  use worker_functions
+
+  implicit none
+  type(airfoil_type) :: foil, blend_foil
+  type (xfoil_options_type) :: xfoil_options
+
+  character(255)     :: input_file, output_prefix, airfoil_filename, second_airfoil_filename
+  character(20)      :: action, value_argument
+  logical            :: visualizer, outname_auto
+
+  write(*,'(A)') 
+
+! Set default names and read command line arguments
+
+  input_file        = 'inputs.inp'
+  output_prefix     = ''
+  action            = ''
+  airfoil_filename  = ''
+  second_airfoil_filename = ''
+  visualizer        = .false.
+  call read_worker_clo(input_file, output_prefix, airfoil_filename, action, & 
+                       second_airfoil_filename, value_argument, visualizer)
+
+  if (trim(action) == "") &
+    call my_stop("Must specify an action for the worker with -w option.")
+  if (trim(airfoil_filename) == "") &
+    call my_stop("Must specify an airfoil file with the -a option.")
+
+! Let's start
+
+  write (*,'(1x)', advance = 'no') 
+  call print_colored (COLOR_FEATURE,'Worker on '//trim(airfoil_filename))
+
+  write (*,'(3x,A,A,3x)', advance = 'no') '-',trim(action)  
+
+! Load airfoil defined in command line 
+  call load_airfoil(airfoil_filename, foil)
+
+! Allocate xfoil variables
+  call xfoil_init()
+  xfoil_options%silent_mode = .true.
+  call xfoil_defaults(xfoil_options)
+
+! Set name of output file - from command line or auto?  
+  if (trim(output_prefix) == '') then
+    output_prefix = airfoil_filename (1:(index (airfoil_filename,'.', back = .true.) - 1))
+    outname_auto = .true.
+  else
+    outname_auto = .false.
+  end if
+
+! Do actions according command line option
+
+  select case (trim(action)) 
+
+    case ('bezier')       ! Generate bezier airfoil "<output_prefix>_bezier.dat" and "...bez"
+
+      call match_bezier (input_file, outname_auto, output_prefix, foil)
+
+    case ('polar')        ! Generate polars in subdirectory ".\<output_prefix>_polars\*.*"
+
+      call check_and_do_polar_generation (input_file, .false., output_prefix, foil)
+
+    case ('polar-csv')    ! Generate polars in csv format "<output_prefix>.csv"
+
+      call check_and_do_polar_generation (input_file, .true., output_prefix, foil)
+
+    case ('norm')         ! Repanel, Normalize into "<output_prefix>.dat"
+
+      call repanel_smooth (input_file, outname_auto, output_prefix, foil, visualizer, .false.)
+
+    case ('smooth')       ! Repanel, Normalize and smooth into "<output_prefix>.dat"
+
+      call repanel_smooth (input_file, outname_auto, output_prefix, foil, visualizer, .true.)
+  
+    case ('flap')         ! Repaneland set flap into "<output_prefix>.dat"
+
+      call set_flap (input_file, outname_auto, output_prefix, foil, visualizer)
+
+    case ('check')        ! Check the curvature quality of airfoil surface
+
+      call check_foil_curvature (input_file, output_prefix, foil, visualizer)
+
+    case ('set')         ! set geometry value like thickness etc...
+      
+      call set_geometry_value (input_file, outname_auto, output_prefix, foil, value_argument, visualizer)
+
+    case ('blend')         ! blend two airfoils...
+      
+      if (trim(second_airfoil_filename) == "") &
+        call my_stop("Must specify a second airfoil file with the -a2 option.")
+
+      call load_airfoil(second_airfoil_filename, blend_foil)
+      call blend_foils (input_file, outname_auto, output_prefix, foil, blend_foil, value_argument, visualizer)
+
+    case default
+
+      write (*,*)
+      call print_error ("Unknown action '"//trim(action)//"' defined for paramter '-w'")
+      call print_worker_usage()
+
+  end select 
+ 
+  write (*,*) 
+
+  call xfoil_cleanup()
+  call deallocate_airfoil (foil)
+
+end program xfoil_worker
 
