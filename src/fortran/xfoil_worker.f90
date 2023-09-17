@@ -367,7 +367,7 @@ subroutine repanel_smooth (input_file, outname_auto, output_prefix, seed_foil, v
   use vardef,             only : airfoil_type
   use airfoil_evaluation, only : curv_spec, curv_top_spec, curv_bot_spec
   use xfoil_driver,       only : xfoil_geom_options_type
-  use airfoil_operations, only : airfoil_write, transform_airfoil
+  use airfoil_operations, only : airfoil_write
   use input_sanity,       only : check_and_smooth_surface
 
   use airfoil_operations, only : repanel_and_normalize_airfoil, rebuild_airfoil
@@ -584,7 +584,7 @@ subroutine set_flap (input_file, outname_auto, output_prefix, seed_foil, visuali
   use xfoil_driver,       only : xfoil_geom_options_type
   use xfoil_driver,       only : xfoil_apply_flap_deflection, xfoil_reload_airfoil
   use xfoil_driver,       only : xfoil_set_airfoil
-  use airfoil_operations, only : airfoil_write, transform_airfoil, get_split_points
+  use airfoil_operations, only : airfoil_write, get_split_points
   use airfoil_operations, only : repanel_and_normalize_airfoil
   use input_output,       only : read_flap_inputs, read_xfoil_paneling_inputs
 
@@ -881,7 +881,7 @@ subroutine print_worker_usage()
 #endif
     
   write(*,'(A)') 'Xfoil_Worker      Version '//trim(PACKAGE_VERSION)//  &
-                 '              (c) 2021 Jochen Guenzel'
+                 '              (c) 2023 Jochen Guenzel'
   write(*,'(A)')
   write(*,'(A)') "Usage: Xfoil_worker -w worker_action [Options]"
   write(*,'(A)')
@@ -994,20 +994,19 @@ subroutine write_deriv_to_file (info, npoints, x, y, deriv2, deriv3, &
 
 end subroutine write_deriv_to_file
 
-
-
 end module
 
 
 !-------------------------------------------------------------------------
 !   main  
 !-------------------------------------------------------------------------
+
 program xfoil_worker
 
   use vardef,             only : airfoil_type 
   use memory_util,        only : deallocate_airfoil
   use os_util 
-  use airfoil_operations, only : load_airfoil, airfoil_write,le_find
+  use airfoil_operations, only : load_airfoil, airfoil_write
   use xfoil_driver,       only : xfoil_init, xfoil_cleanup, xfoil_options_type
   use xfoil_driver,       only : xfoil_set_airfoil, xfoil_reload_airfoil, xfoil_defaults
   use worker_functions
@@ -1093,7 +1092,7 @@ program xfoil_worker
 
       call check_foil_curvature (input_file, output_prefix, foil, visualizer)
 
-    case ('set')         ! set geometry value like thickness etc...
+    case ('set')          ! set geometry value like thickness etc...
       
       call set_geometry_value (input_file, outname_auto, output_prefix, foil, value_argument, visualizer)
 

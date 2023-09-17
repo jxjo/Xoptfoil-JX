@@ -996,7 +996,7 @@ function match_side_objective_function(dv, dummy)
   double precision :: match_side_objective_function 
 
   double precision, allocatable :: px(:), py(:), design_y(:), devi (:), base(:)
-  double precision :: te_gap , max_base
+  double precision :: te_gap , shift
   integer     :: i, ncoord
   
   ncoord = size(side_to_match_x)
@@ -1030,13 +1030,7 @@ function match_side_objective_function(dv, dummy)
   base = 0d0
 
   do i = 1, ncoord
-    ! if (mod(i,2) == 0) then 
-    !   design_y(i) = bezier_eval_y_on_x (px, py, side_to_match_x(i))
-    ! else 
-    !   design_y(i) = side_to_match_y(i) 
-    ! end if 
     design_y(i) = bezier_eval_y_on_x (px, py, side_to_match_x(i), epsilon=1d-9)
-
   end do 
   
   ! absolute norm2
@@ -1048,10 +1042,10 @@ function match_side_objective_function(dv, dummy)
   base = abs (side_to_match_y)
 
   ! move base so targets with a small base (at TE) don't become overweighted 
-  max_base = maxval (base)
-  base = base + max_base / 4d0
+  ! shift factor is empirical - the lower the more small y will be weighted
+  shift = maxval (base) * 0.3d0
 
-  match_side_objective_function = norm2 (devi / base)
+  match_side_objective_function = norm2 (devi / (base + shift))
  
 end function match_side_objective_function
 

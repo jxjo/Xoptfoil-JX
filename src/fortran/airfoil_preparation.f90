@@ -14,6 +14,7 @@ module airfoil_preparation
   public :: preset_airfoil_te_gap 
   public :: preset_airfoil_to_targets
   public :: transform_to_bezier_based
+  public :: matchfoils_preprocessing
     
 contains
 
@@ -330,5 +331,80 @@ subroutine match_bezier_for_side  (side, match_x, match_y, np, px, py)
 
 end subroutine match_bezier_for_side
 
+
+!-----------------------------------------------------------------------------
+ 
+subroutine matchfoils_preprocessing(matchfoil_file)
+
+  !! Preprocessing for non-aerodynamic optimization
+  !! Prepare foil to match 
+
+  use vardef,             only : airfoil_type, seed_foil
+  use airfoil_evaluation, only : foil_to_match, xfoil_geom_options
+  use airfoil_operations, only : get_seed_airfoil,  rebuild_airfoil
+  use airfoil_operations, only : repanel_and_normalize_airfoil, split_foil_at_00
+  use math_deps,          only : interp_vector, transformed_arccos
+  use xfoil_driver,       only : xfoil_set_thickness_camber, xfoil_get_geometry_info, xfoil_set_airfoil
+  
+  character(*), intent(in) :: matchfoil_file
+
+  type(airfoil_type) :: original_foil_to_match
+  integer :: pointst, pointsb
+  double precision, dimension(:), allocatable :: zttmp, zbtmp, xmatcht, xmatchb, zmatcht, zmatchb
+  double precision :: maxt, xmaxt, maxc, xmaxc
+
+  ! Load airfoil to match
+
+  call get_seed_airfoil('from_file', matchfoil_file, original_foil_to_match)
+
+  call print_note_only ('Preparing '//trim(original_foil_to_match%name)//' to be matched by '//&
+                        trim(seed_foil%name),3)
+
+  if(trim(seed_foil%name) == trim(original_foil_to_match%name)) then
+
+  ! Seed and match foil are equal. Reduce thickness ... 
+
+    call print_note ('Match foil and seed foil are the same. '// &
+                     'The thickness of the match foil will be reduced bei 10%.', 3)
+
+    call xfoil_set_airfoil (seed_foil)        
+    call xfoil_get_geometry_info (maxt, xmaxt, maxc, xmaxc)
+    call xfoil_set_thickness_camber (seed_foil, maxt * 0.9d0 , 0d0, 0d0, 0d0, foil_to_match)
+    call split_foil_at_00(foil_to_match)
+    foil_to_match%name = seed_foil%name
+
+  else
+
+  ! Repanel to npan_fixed points and normalize to get LE at 0,0 and TE (1,0) and split
+
+    write (*,*) 
+    call repanel_and_normalize_airfoil (original_foil_to_match, xfoil_geom_options, .false., foil_to_match)
+
+  ! Interpolate x-vals of foil to match to seed airfoil points to x-vals 
+  !    - so the z-values can later be compared
+
+    xmatcht = foil_to_match%xt
+    xmatchb = foil_to_match%xb
+    zmatcht = foil_to_match%zt
+    zmatchb = foil_to_match%zb
+  
+    pointst = size(seed_foil%xt,1)
+    pointsb = size(seed_foil%xb,1)
+    allocate(zttmp(pointst))
+    allocate(zbtmp(pointsb))
+    zttmp(pointst) = zmatcht(size(zmatcht,1))
+    zbtmp(pointsb) = zmatchb(size(zmatchb,1))
+    call interp_vector(xmatcht, zmatcht, seed_foil%xt(1:pointst-1),                    &
+                      zttmp(1:pointst-1))
+    call interp_vector(xmatchb, zmatchb, seed_foil%xb(1:pointsb-1),                    &
+                      zbtmp(1:pointsb-1))
+
+    ! Re-set coordinates of foil to match from interpolated points
+                      
+    call rebuild_airfoil(seed_foil%xt, seed_foil%xb, zttmp, zbtmp, foil_to_match)
+  
+  end if 
+
+end subroutine matchfoils_preprocessing
 
 end module 

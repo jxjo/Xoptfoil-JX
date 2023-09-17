@@ -23,6 +23,7 @@ program main
 !
 !                  main   / worker
 !  input_sanity    input_output   optimization_driver
+!                  airfoil_preparation
 ! particle_swarm  genectic_algorithm   simplex_search
 !                 airfoil_evaluation
 !      airfoil_operations   polar_operations
@@ -41,7 +42,6 @@ program main
   use particle_swarm,      only : pso_options_type
   use genetic_algorithm,   only : ga_options_type
   use simplex_search,      only : ds_options_type
-  use airfoil_preparation, only : preset_airfoil_to_targets, preset_airfoil_te_gap
   use airfoil_evaluation,  only : xfoil_geom_options, match_foils, airfoil_te_gap
   use airfoil_operations,  only : get_seed_airfoil
   use airfoil_operations,  only : repanel_and_normalize_airfoil
@@ -49,8 +49,9 @@ program main
   use memory_util,         only : deallocate_airfoil, allocate_airfoil_data,   &
                                   deallocate_airfoil_data
   use input_sanity,        only : check_seed, check_inputs
-  use optimization_driver, only : matchfoils_preprocessing, optimize,          &
-                                  write_final_design
+  use airfoil_preparation, only : preset_airfoil_to_targets, preset_airfoil_te_gap
+  use airfoil_preparation, only : matchfoils_preprocessing 
+  use optimization_driver, only : optimize, write_final_design
 
   implicit none
 
