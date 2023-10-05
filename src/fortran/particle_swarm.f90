@@ -40,17 +40,10 @@ module particle_swarm
     integer :: feasible_init_attempts
                                   ! Number of attempts to try to get a feasible
                                   !   initial design
-    logical :: write_designs      ! Whether to write best design each time it
-                                  !   changes
-    logical :: relative_fmin_report
-                                  ! If .true., reports improvement over seed
-                                  !   design. Otherwise, reports fmin itself.
     character(20) :: convergence_profile
                                   ! 'exhaustive' or 'quick' or 'quick_camb_thick
                                   ! exhaustive takes onger but finds better 
                                   ! solutions 
-    logical :: write_particlefile ! Whether to write particle-values for each
-                                  ! iteration to file
 
     integer :: max_retries = 1           ! max. number of retries a single 
                                          ! particle tries to get a valid geometry
@@ -68,22 +61,20 @@ module particle_swarm
 
   contains 
 
-!=============================================================================80
-!
-! Particle swarm optimization routine. Recommended as a first step to determine
-! the vicinity of the global optimum, followed by a local search to hone in.
-!
-!=============================================================================80
-subroutine particleswarm(xopt, fmin, step, fevals, objfunc, x0, xmin, xmax,    &
+subroutine particleswarm(xopt, fmin, step, fevals, objfunc, &
+                         x0, xmin, xmax,  initial_x0_based,  &
                          given_f0_ref, f0_ref, constrained_dvs, pso_options,   &
                          designcounter,           &
                          stop_reason, converterfunc)
 
-  use math_deps,         only : norm_2
-  use optimization_util, only : init_random_seed, initial_designs,             &
-                                design_radius, write_design, read_run_control
+  !! Particle swarm optimization routine. 
+                         
+  use math_deps,          only : norm_2
+  use optimization_util,  only : init_random_seed, initial_designs,             &
+                                 design_radius, write_design, read_run_control
+  use optimization_util,  only : write_history_header, write_history
   use airfoil_evaluation, only : OBJ_XFOIL_FAIL, OBJ_GEO_FAIL
-  use vardef,            only : design_subdir
+  use vardef,             only : design_subdir
 
 
   double precision, dimension(:), intent(inout) :: xopt
@@ -100,10 +91,10 @@ subroutine particleswarm(xopt, fmin, step, fevals, objfunc, x0, xmin, xmax,    &
   double precision, dimension(:), intent(in) :: x0, xmin, xmax
   double precision, intent(inout) :: f0_ref
   integer, dimension(:), intent(in) :: constrained_dvs
-  logical, intent(in) :: given_f0_ref
+  logical, intent(in) :: given_f0_ref, initial_x0_based
   type (pso_options_type), intent(in) :: pso_options
-  integer, intent(out) :: designcounter
-  character(14), intent(out) :: stop_reason
+  integer, intent(out)        :: designcounter
+  character(14), intent(out)  :: stop_reason
 
   optional :: converterfunc
   interface
@@ -113,21 +104,20 @@ subroutine particleswarm(xopt, fmin, step, fevals, objfunc, x0, xmin, xmax,    &
     end function
   end interface
 
-  integer :: nconstrained, i, j, fminloc, var, stat, iunit,    &
-             ioerr, k, ncommands, particleunit
-  double precision :: c1, c2, whigh, wlow, convrate, maxspeed, wcurr, mincurr, &
-                      f0, radius
-  double precision, dimension(pso_options%pop) :: objval, minvals, speed
+  double precision, dimension(pso_options%pop) :: objval, minvals, speed, particles_stucked
   double precision, dimension(size(xmin,1)) :: randvec1, randvec2
-  double precision, dimension(size(xmin,1),pso_options%pop) :: dv, vel,        &
-                                                               bestdesigns
-  logical :: use_x0, converged, signal_progress, new_history_file
-  character(11) :: stepchar
-  character(20) :: fminchar, radchar, text
-  character(25) :: relfminchar
-  character(80) :: histfile
-  character(80), dimension(20) :: commands
-  integer       :: i_retry, max_retries, ndone                      
+  double precision, dimension(size(xmin,1),pso_options%pop) :: dv, vel, bestdesigns
+  double precision              :: c1, c2, whigh, wlow, convrate, maxspeed, wcurr, mincurr, &
+                                   f0, radius, brake_factor 
+  logical                       :: use_x0, converged, signal_progress
+  character(:), allocatable     :: histfile
+  character(80), dimension(20)  :: commands
+  integer                       :: nconstrained, i, j, fminloc, var, stat, iunit, k, ncommands
+  integer                       :: i_retry, max_retries, ndone      
+  
+  integer, parameter            :: STUCKED_THRESHOLD = 5              ! no of steps particle failed 
+  integer, parameter            :: RESCUE_FREQUENCY  = 10             ! who often particle resuce action is done  
+  
   
   nconstrained = size(constrained_dvs,1)
 
@@ -149,20 +139,13 @@ subroutine particleswarm(xopt, fmin, step, fevals, objfunc, x0, xmin, xmax,    &
     wlow = 0.8d0       ! ending inertial parameter
     convrate = 0.02d0  ! inertial parameter reduction rate
 
-!    c1 = 2.0d0         ! particle-best trust factor
-!    c2 = 1.0d0         ! swarm-best trust factor
-!    whigh = 1.5d0      ! starting inertial parameter
-!    wlow = 0.7d0       ! ending inertial parameter
-!    convrate = 0.03d0  ! inertial parameter reduction rate
-
   else if (trim(pso_options%convergence_profile) == "quick_camb_thick") then
 
     c1 = 1.0d0         ! particle-best trust factor
     c2 = 1.6d0         ! swarm-best trust factor
     whigh = 1.2d0      ! starting inertial parameter
-    wlow = 0.02d0       ! ending inertial parameter
-!    convrate = 0.01d0   ! inertial parameter reduction rate
-    convrate = 0.025d0   ! inertial parameter reduction rate
+    wlow = 0.02d0      ! ending inertial parameter
+    convrate = 0.025d0 ! inertial parameter reduction rate
 
   else
     write(*,*) "Error in particleswarm: convergence mode should be"//          &
@@ -170,14 +153,14 @@ subroutine particleswarm(xopt, fmin, step, fevals, objfunc, x0, xmin, xmax,    &
     stop
   end if
 
-! experimental: to allow direct manipulation of parms in inputs 
+! allow direct manipulation of parms in inputs 
   if (pso_options%c1 > 0d0)       c1        = pso_options%c1
   if (pso_options%c2 > 0d0)       c2        = pso_options%c2
   if (pso_options%whigh > 0d0)    whigh     = pso_options%whigh
   if (pso_options%wlow > 0d0)     wlow      = pso_options%wlow
   if (pso_options%convrate > 0d0) convrate  = pso_options%convrate
-! Speed limits
 
+! Speed limits
   maxspeed = abs(pso_options%maxspeed)
   if (maxspeed > maxval(xmax - xmin)) then
     maxspeed = maxval(xmax - xmin)
@@ -194,31 +177,34 @@ subroutine particleswarm(xopt, fmin, step, fevals, objfunc, x0, xmin, xmax,    &
     f0_ref = f0
   end if
 
-! Open particle file
-  call pso_open_particlefile(pso_options%write_particlefile, particleunit)
+! Testing - write design variables - insert if needed ...
+  
+  ! call pso_open_particlefile(.true., particleunit)
+  ! call pso_write_particlefile(particleunit, dv, vel)
+  ! call pso_close_particlefile(particleunit)
 
-!$omp parallel default(shared) private(i, j, var, i_retry)
 
-! Initialize a random seed
-
+! Initialize a random seed for random number generation 
   call init_random_seed()
 
 ! Set up initial designs
 
   use_x0 = .true.
-  call initial_designs(dv, objval, fevals, objfunc, xmin, xmax, use_x0, x0,  &
+  call initial_designs(dv, objval, fevals, objfunc, &
+                        xmin, xmax, initial_x0_based, x0,  &
                         pso_options%feasible_init, pso_options%feasible_limit,&
                         pso_options%feasible_init_attempts)
 
-!$omp master
   
 ! Set up initialization data
 
-
 ! Initial velocities which may be positive or negative
 
-  call random_number(vel)
-  vel = 2.d0*maxspeed*(vel - 0.5d0)
+  call random_number(vel)                     ! velocity of all particles for all dv
+  vel = maxspeed*(vel - 0.5d0) ! 2.d0*maxspeed*(vel - 0.5d0)   ?? why is there 2d0? 
+  do i = 1, pso_options%pop
+      speed(i) = norm_2(vel(:,i))             ! .. overall of all velocities of a particle 
+  end do
 
 ! Matrix of best designs for each particle and vector of their values
 
@@ -236,62 +222,33 @@ subroutine particleswarm(xopt, fmin, step, fevals, objfunc, x0, xmin, xmax,    &
   
   step = 0
   designcounter = 0
+  particles_stucked = 0                        ! identify particles stucked in solution space
 
 ! Inertial parameter
 
   wcurr = whigh
-
-
-
-! Write initial design-values to file
-  call pso_write_particlefile(particleunit, dv, vel)
   
 ! Open file for writing iteration history
 
-  histfile  = trim(design_subdir)//'Optimization_History.dat'
-
+  histfile  = design_subdir//'Optimization_History.csv'
   iunit = 17
-  new_history_file = .false.
-  if (step == 0) then
-    new_history_file = .true.
-  else
-    open(unit=iunit, file=trim(histfile), status='old',            &
-         position='append', iostat=ioerr)
-    if (ioerr /= 0) then
-      write(*,*) 
-      write(*,*) "Warning: did not find "//trim(histfile)//" file."
-      write(*,*) "A new one will be written, but old data will be lost."
-      write(*,*)
-      new_history_file = .true.
-    end if
-  end if
-  if (new_history_file) then
-    open(unit=iunit, file=trim(histfile), status='replace')
-    if (pso_options%relative_fmin_report) then
-      write(iunit,'(A)') "Iteration  % Improvement over seed  Design radius"
-    else
-      write(iunit,'(A)') "Iteration  Objective function  Design radius"
-    end if
-    flush(iunit)
-  end if
+  open(unit=iunit, file=histfile, status='replace')
+  call write_history_header (iunit) 
 
 ! Begin optimization
 
   converged = .false.
-
   max_retries = initial_max_retries (pso_options) 
 
   write(*,*)
   write(*,*)
   call  print_colored (COLOR_FEATURE, ' - Particle swarm ')
-  write (text,'(I3)') pso_options%pop
-  call  print_colored (COLOR_NORMAL, 'with '//trim(adjustl(text))// ' members will now try its best ...')
+  call  print_colored (COLOR_NORMAL, 'with '//stri(pso_options%pop)// ' members will now try its best ...')
   write(*,*)
   write(*,*)
   call show_optimization_header  (pso_options, max_retries)
 
-!$omp end master
-!$omp barrier
+!$omp parallel default(shared) private(i, j, var, i_retry)
 
   optimization_loop: do while (.not. converged)
 
@@ -313,62 +270,69 @@ subroutine particleswarm(xopt, fmin, step, fevals, objfunc, x0, xmin, xmax,    &
 
 !   Use OMP DYNAMIC (and not STATIC which is default) so every thread will take a new "i" 
 !   when it finished its task. In summary this is much faster as calculation time differs
-!   very much depending if a xfoil calculation will be made or not (geo constraints!)      
+!   very much depending if a xfoil calculation will be made or not (geo constraints!)     
 !$omp do SCHEDULE(DYNAMIC)
 
-!   Update each particle's position, evaluate objective function, etc.
+    ! Update each particle's position, evaluate objective function, etc.
 
     do i = 1, pso_options%pop
 
-!     Impose speed limit
+      ! Impose speed limit
       if (speed(i) > maxspeed) then
         vel(:,i) = maxspeed*vel(:,i)/speed(i)
       end if
 
       i_retry = 0
 
-!     Evaluate objecte function - if this returns a geometry violation retry to get a valid
-!                                 evaluation 
+      ! Evaluate objecte function - retry if geometry is violated
 
       do                            ! ... max_retries  
 
         ! Update position and bring back to side constraints if necessary
+
         dv(:,i) = dv(:,i) + vel(:,i)
 
-        do j = 1, nconstrained
+        do j = 1, nconstrained                                  ! array of dv constrains (bounds) 
           var = constrained_dvs(j)
           if (dv(var,i) < xmin(var)) then
             dv(var,i) = xmin(var)
-            call random_number(speed(i))
-            vel(var,i) = -speed(i)*vel(var,i)
+            call random_number(brake_factor)
+            vel(var,i) = -brake_factor * vel(var,i)             ! braked - opposite direction
           elseif (dv(var,i) > xmax(var)) then
             dv(var,i) = xmax(var)
-            call random_number(speed(i))
-            vel(var,i) = -speed(i)*vel(var,i)
+            call random_number(brake_factor)
+            vel(var,i) = -brake_factor * vel(var,i)             ! braked - opposite direction
           end if
         end do
 
-  !     Evaluate objective function
+        ! Evaluate objective function
+
         objval(i) = objfunc(dv(:,i))
 
-  !     Valid result --> proceed
-        if (objval(i) < OBJ_GEO_FAIL) exit
-
-!        if (i_retry >= pso_options%max_retries) exit
-        if (i_retry >= max_retries) exit
+        ! Valid result --> proceed
+        if (objval(i) < OBJ_GEO_FAIL) then 
+          exit
+        ! Retry if possible 
+        elseif (i_retry >= max_retries) then 
+          exit
+        end if 
 
         i_retry = i_retry + 1
 
-  !     Invalid result - particles violated geometry - try again with new velocity
+        ! Invalid result - particle violated geometry - try again with new velocity
    
         dv(:,i) = dv(:,i) - vel(:,i)
-        call random_number(speed(i))
-        vel(:,i) = speed(i) * vel(:,i) 
+        call random_number(brake_factor)
+        vel(:,i) = brake_factor * vel(:,i) 
   
       end do 
 
-!     Display some info about success of single particle 
-      !call show_particle_info (fmin,  minvals(i), objval(i))        
+      ! is particle stucked in solution space? 
+      if (objval(i) == OBJ_XFOIL_FAIL) then 
+        particles_stucked(i) = particles_stucked(i) + 1         ! increase 'stucked' counter
+      else
+        particles_stucked(i) = 0                                ! reset 'get stucked' detect 
+      end if 
 
 !$OMP ATOMIC  
       ndone = ndone + 1
@@ -380,11 +344,11 @@ subroutine particleswarm(xopt, fmin, step, fevals, objfunc, x0, xmin, xmax,    &
 
 !$omp master
 
-!   Display some info about success of single particle 
+  ! Display some info about success of single particle 
 
-    call show_particles_info (fmin, minvals, objval)        
+    call show_particles_info (fmin, minvals, particles_stucked, objval)        
 
-!   Update best overall design, if appropriate
+  ! Update best overall design, if appropriate
 
     mincurr = minval(objval,1)
     fminloc = minloc(objval,1)
@@ -396,12 +360,42 @@ subroutine particleswarm(xopt, fmin, step, fevals, objfunc, x0, xmin, xmax,    &
       signal_progress = .false.
     end if
 
+
+  ! Display and write progress 
+
+    radius = design_radius(dv)
+    call show_iteration_result (radius, fmin, f0, signal_progress)
+
+  ! Write design to file - converterfunc is an optional function to convert design variables
+  !                        into something more useful.  
+
+    if (signal_progress) then
+      designcounter = designcounter + 1
+      if (present(converterfunc)) then
+        stat = converterfunc(xopt, designcounter)
+      else
+        call write_design('particleswarm_designs.dat', 'old', xopt, designcounter)
+      end if
+    else
+      write (*,*)
+    end if
+
+    call write_history         (iunit, step, signal_progress, designcounter, radius, fmin, f0)
+
+
+  ! Now and then rescue stucked particles before updating particle 
+  
+    if ((maxval(particles_stucked) >= STUCKED_THRESHOLD) .and. &
+        (mod(step, RESCUE_FREQUENCY) == 0)) then 
+      call rescue_stucked_particles (particles_stucked, STUCKED_THRESHOLD, dv, fminloc, bestdesigns)
+    end if 
+
 !$omp end master
 !$omp barrier
 
 !$omp do
 
-!   Update velocity of each particle
+  ! Update velocity of each particle
 
     do i = 1, pso_options%pop
 
@@ -424,49 +418,11 @@ subroutine particleswarm(xopt, fmin, step, fevals, objfunc, x0, xmin, xmax,    &
 
 !$omp master
 
-!   Reduce inertial parameter
+  ! Reduce inertial parameter
 
     wcurr = wcurr - convrate*(wcurr - wlow)
-
-!   Display progress 
-
-    radius = design_radius(dv)
-
-    call show_iteration_result (radius, fmin, f0, signal_progress, & 
-                                pso_options%relative_fmin_report)
-
-!   Write design to file if requested
-!   converterfunc is an optional function supplied to convert design variables
-!     into something more useful.  If not supplied, the design variables
-!     themselves are written to a file.
-
-    if ( (signal_progress) .and. (pso_options%write_designs) ) then
-      designcounter = designcounter + 1
-      if (present(converterfunc)) then
-        stat = converterfunc(xopt, designcounter)
-      else
-        call write_design('particleswarm_designs.dat', 'old', xopt, designcounter)
-      end if
-    else
-      write (*,*)
-    end if
-
-!   Write iteration history
-
-    write(stepchar,'(I11)') step
-    write(fminchar,'(F14.10)') fmin
-    write(radchar,'(ES14.6)') radius
-    if (pso_options%relative_fmin_report) then
-      write(relfminchar,'(F14.10)') (f0 - fmin)/f0*100.d0
-      write(iunit,'(A11,A20,A25,A20)') adjustl(stepchar), adjustl(fminchar),   &
-                                       adjustl(relfminchar), adjustl(radchar)
-    else
-      write(iunit,'(A11,2A20)') adjustl(stepchar), adjustl(fminchar),          &
-                                adjustl(radchar)
-    end if
-    flush(iunit)
-    
-!   Evaluate convergence
+ 
+  ! Evaluate convergence
 
     if ( (radius > pso_options%tol) .and. (step < pso_options%maxit) ) then
       converged = .false.
@@ -479,10 +435,7 @@ subroutine particleswarm(xopt, fmin, step, fevals, objfunc, x0, xmin, xmax,    &
       end if
     end if 
 
-!   Write particle-values to file
-    call pso_write_particlefile(particleunit, dv, vel)
-
-!   Check for commands in run_control file
+  ! Check for commands in run_control file
 
     call read_run_control(commands, ncommands)
     do k = 1, ncommands
@@ -504,24 +457,17 @@ subroutine particleswarm(xopt, fmin, step, fevals, objfunc, x0, xmin, xmax,    &
       
   fevals = fevals + step*pso_options%pop
 
-! Close iteration history file
+! Close history file
 
   close(iunit)
-
- ! Close particle file
-  call pso_close_particlefile(particleunit)
 
 
 end subroutine particleswarm
 
  
 
-!=============================================================================80
-!
-! Opens a particle file
-! WORK IN PROGRESS
-!=============================================================================80
 subroutine pso_open_particlefile(write_particlefile, particleunit)
+  !! testing helper - write all dvs of all particles
   
   logical, intent(in) ::write_particlefile
   integer, intent(inout) :: particleunit
@@ -529,7 +475,6 @@ subroutine pso_open_particlefile(write_particlefile, particleunit)
   integer :: ioerr
 
   if (write_particlefile) then
-
     ! Set particle file name and identifiers
     particleunit = 20
     particlefile = 'particles.csv'
@@ -545,57 +490,47 @@ subroutine pso_open_particlefile(write_particlefile, particleunit)
     particleunit = 0
   end if
 
-  end subroutine pso_open_particlefile
+end subroutine pso_open_particlefile
 
-!=============================================================================80
-!
-! Writes particle values to file
-! WORK IN PROGRESS
-!=============================================================================80
+
 subroutine pso_write_particlefile(particleunit, dv, vel)
-
+  !! testing helper - write all dvs of all particles
   double precision, dimension(:,:), intent(in) :: dv, vel
   integer, intent(inout) :: particleunit
   integer:: nvars, pop, count1, count2
 
-if (particleunit == 20) then
-  nvars = size(dv,1)
-  pop = size(dv,2)
-  do count1 = 1, pop
-    do count2 = 1, nvars
-      ! Write all particle-values without linefeed 
-      write(particleunit,'(2F12.6)', advance='NO') dv(count2,count1)
-      write(particleunit, '(A)', advance='NO') ";"
-      write(particleunit,'(2F12.6)', advance='NO') vel(count2,count1)
-      !Separator between particle-values
+  if (particleunit == 20) then
+    nvars = size(dv,1)
+    pop = size(dv,2)
+    do count1 = 1, pop
+      do count2 = 1, nvars
+        ! Write all particle-values without linefeed 
+        write(particleunit,'(2F12.6)', advance='NO') dv(count2,count1)
+        write(particleunit, '(A)', advance='NO') ";"
+        write(particleunit,'(2F12.6)', advance='NO') vel(count2,count1)
+        !Separator between particle-values
+        write(particleunit, '(A)', advance='NO') ";"
+      end do
+      ! Separator between particles
       write(particleunit, '(A)', advance='NO') ";"
     end do
-    ! Separator between particles
-    write(particleunit, '(A)', advance='NO') ";"
-  end do
-  ! Write linefeed
-  write(particleunit, *) ""
-end if
+    ! Write linefeed
+    write(particleunit, *) ""
+  end if
 
 end subroutine pso_write_particlefile
 
-!=============================================================================80
-! 
-! Closes a particle file
-! WORK IN PROGRESS
-!=============================================================================80
-subroutine pso_close_particlefile(particleunit)
 
+subroutine pso_close_particlefile(particleunit)
+  !! testing helper - write all dvs of all particles
   integer, intent(inout) :: particleunit
      
-  ! Close file
   if (particleunit == 20) then
     flush(particleunit)
     close(particleunit)
     particleunit = 0
-  end if
-    
-  end subroutine pso_close_particlefile
+  end if    
+end subroutine pso_close_particlefile
 
 
 !------------------------------------------------------------------------------
@@ -667,24 +602,26 @@ subroutine  show_optimization_header  (pso_options, max_retries)
   type (pso_options_type), intent(in) :: pso_options
   integer, intent(in) :: max_retries           
 
-  logical            :: show_improvement, auto_retry
+  logical            :: auto_retry
   integer            :: nparticles           
   character(200)     :: blanks = ' '
   character (1)      :: s1
   character (5)      :: s5
   character(:), allocatable     :: var_string
 
-  show_improvement = pso_options%relative_fmin_report
   auto_retry       = pso_options%auto_retry
   nparticles       = pso_options%pop
 
   write(*,'(3x)', advance = 'no')
-  call  print_colored (COLOR_NOTE, "Particle result:  '")
-  call  print_colored (COLOR_GOOD, "+")
-  call  print_colored (COLOR_NOTE, "' new swarm best  '+' personal best"//&
-                                   "  '-' not better  '")
+  call  print_colored (COLOR_NOTE,  "Particle result:  '")
+  call  print_colored (COLOR_GOOD,  "+")
+  call  print_colored (COLOR_NOTE,  "' new swarm best  '+' personal best   '-' not better  '")
+  write(*,'(/,3x)', advance = 'no')
+  call  print_colored (COLOR_NOTE,  "                  '")
   call  print_colored (COLOR_ERROR, "x")
-  call  print_colored (COLOR_NOTE, "' xfoil no conv  ' ' geometry failed")
+  call  print_colored (COLOR_NOTE,  "' xfoil no conv   '")
+  call  print_colored (COLOR_ERROR, "#")
+  call  print_colored (COLOR_NOTE,  "' stucked no conv ' ' geometry failed")
   write (*,*)
 
   write (s1,'(I1)') max_retries
@@ -707,17 +644,50 @@ subroutine  show_optimization_header  (pso_options, max_retries)
   write(*,'(3x,A6,3x, A, A,          1x,A6,   5x)', advance ='no') &
           'Iterat','Progress   ', var_string,'Radius'
   
-  if (show_improvement) then
-    write(*,'(A11)') 'Improvement'
-  else
-    write(*,'(A9)') 'Objective'
-    write (*,*)
-  end if
+  write(*,'(A11)') 'Improvement'
 
 end subroutine show_optimization_header
 
 
-!------------------------------------------------------------------------------
+subroutine  rescue_stucked_particles (particles_stucked, threshold, dv, fminloc, bestdesigns)
+  !! single particles cannot achieve to get out of a xfoil failure situation 
+  !!    Set these stucked particles to swarms best (still having different velocity)
+
+  double precision, dimension (:),   intent(inout) :: particles_stucked 
+  double precision, dimension (:,:), intent(inout) :: dv, bestdesigns   
+  integer, intent(in)          :: threshold, fminloc
+
+  integer       :: i, color  
+  character (1) :: sign 
+
+  write (*,*) 
+  call print_colored (COLOR_FEATURE,' - Rescuing stucked particles ')
+
+  do i = 1, size(particles_stucked)
+
+    if (particles_stucked(i) >= threshold) then 
+      ! stucked will get new prime position von swarm best 
+      dv(:,i) = dv(:, fminloc)
+      bestdesigns(:,i) =  bestdesigns(:,fminloc)
+      ! reset stuck counter
+      particles_stucked(i) = 0 
+      color = COLOR_FEATURE                               ! mark as rescued
+      sign  = '#'
+    else  
+      color = COLOR_NOTE                                  ! nothing done 
+      sign  = '-'
+    end if 
+
+    call print_colored (color, sign)      
+  end do 
+  
+  write(*,*) 
+  write(*,*) 
+  
+end subroutine rescue_stucked_particles 
+
+
+!-------------------------------------------------------------------
 ! Shows user info about result of a single iteration 
 !------------------------------------------------------------------------------
 
@@ -742,10 +712,10 @@ end subroutine  show_iteration_header
 ! Shows user info about result of a single iteration 
 !------------------------------------------------------------------------------
 
-subroutine  show_iteration_result (radius, fmin, f0, improved, show_improvement)
+subroutine  show_iteration_result (radius, fmin, f0, improved)
 
   double precision, intent(in)  :: radius ,fmin, f0 
-  logical, intent(in)           :: show_improvement, improved
+  logical, intent(in)           :: improved
   character(25)                 :: outstring
 
   write (outstring,'(ES9.1)') radius
@@ -755,71 +725,26 @@ subroutine  show_iteration_result (radius, fmin, f0, improved, show_improvement)
     call  print_colored (COLOR_NOTE,   trim(outstring))
   end if
 
-  if (show_improvement) then
-    write (outstring,'(SP, 3x, F9.5,A1)') (f0 - fmin)/f0*100.d0, '%'
-    if (improved) then 
-      call  print_colored (COLOR_GOOD, trim(outstring))
-    else 
-      call  print_colored (COLOR_NOTE, trim(outstring))
-    end if
-  else
-    write (outstring,'(3x,F9.6,A1)') fmin
-    if (improved) then 
-      call  print_colored (COLOR_NORMAL, trim(outstring))
-    else
-      call  print_colored (COLOR_NOTE,   trim(outstring))
-    end if
-  end if 
+  write (outstring,'(SP, 3x, F9.5,A1)') (f0 - fmin)/f0*100.d0, '%'
+  if (improved) then 
+    call  print_colored (COLOR_GOOD, trim(outstring))
+  else 
+    call  print_colored (COLOR_NOTE, trim(outstring))
+  end if
 
 end subroutine  show_iteration_result
 
 
-!------------------------------------------------------------------------------
-! Shows user info about sucess of a single particle
-!------------------------------------------------------------------------------
 
-subroutine  show_particle_info (overall_best, personal_best, objval)
-
-  use airfoil_evaluation, only : OBJ_XFOIL_FAIL, OBJ_GEO_FAIL
-
-  double precision, intent(in)  :: overall_best, personal_best, objval
-  integer       :: color 
-  Character (1) :: sign 
-
-  if (objval < overall_best) then 
-    color = COLOR_GOOD                           ! better then current best
-    sign  = '+'
-  else if (objval == OBJ_XFOIL_FAIL) then     
-    color = COLOR_ERROR                          ! no xfoil convergence
-    sign  = 'x'
-  else if (objval < personal_best) then 
-    color = COLOR_NOTE                         ! best of particle up to now
-    sign  = '+'
-  else if (objval >= OBJ_GEO_FAIL) then 
-    color = COLOR_NOTE                           ! no valid design 
-    sign  = '.'
-  else  
-    color = COLOR_NOTE                         ! no improvement
-    sign  = '-'
-  end if 
-
-  call print_colored (color, sign)            
-  
-end subroutine show_particle_info
-
-
-!------------------------------------------------------------------------------
-! Shows user info about sucess of a single particle
-!------------------------------------------------------------------------------
-
-subroutine  show_particles_info (overall_best, personal_best, objval)
+subroutine  show_particles_info (overall_best, personal_best, particles_stucked, objval)
+  !! Shows user info about sucess of a single particle
 
   use airfoil_evaluation, only : OBJ_XFOIL_FAIL, OBJ_GEO_FAIL
 
   double precision, intent(in)  :: overall_best
-  double precision, dimension (:), intent(in)  :: personal_best, objval
+  double precision, dimension (:), intent(in)  :: personal_best, particles_stucked, objval
   integer       :: color, i, ibest 
-  Character (1) :: sign 
+  character (1) :: sign 
 
   call print_colored (COLOR_NOTE, ' ')
 
@@ -831,9 +756,13 @@ subroutine  show_particles_info (overall_best, personal_best, objval)
       sign  = '+'
     else if (objval(i) == OBJ_XFOIL_FAIL) then     
       color = COLOR_ERROR                          ! no xfoil convergence
-      sign  = 'x'
+      if (particles_stucked(i) > 5) then           ! ... and stcuked for a while 
+        sign = '#'
+      else 
+        sign = 'x'
+      end if 
     else if (objval(i) < personal_best(i)) then 
-      color = COLOR_NOTE                         ! best of particle up to now
+      color = COLOR_NOTE                           ! best of particle up to now
       sign  = '+'
     else if (objval(i) >= OBJ_GEO_FAIL) then 
       color = COLOR_NOTE                           ! no valid design 
@@ -850,16 +779,16 @@ subroutine  show_particles_info (overall_best, personal_best, objval)
 end subroutine show_particles_info
 
 
-!------------------------------------------------------------------------------
-! Shows user info about progress of particles work 
-!------------------------------------------------------------------------------
 
 subroutine  show_particles_progress (nparticles, ndone)
-
+  !! print a single '.' as progress indicator 
   integer, intent(in)  :: nparticles, ndone
 
-  if (mod(ndone,(nparticles/10)) == 0) call print_colored (COLOR_NOTE, '.') 
+  if ((nparticles < 10) .or. (mod(ndone,(nparticles/10)) == 0)) then 
+    call print_colored (COLOR_NOTE, '.') 
+  end if 
   
 end subroutine show_particles_progress
+
 
 end module particle_swarm

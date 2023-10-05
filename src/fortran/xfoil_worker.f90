@@ -33,11 +33,10 @@ subroutine match_bezier (input_file, outname_auto, output_prefix, seed_foil)
 
   use vardef,               only : airfoil_type
   use xfoil_driver,         only : xfoil_geom_options_type
-  use airfoil_operations,   only : airfoil_write
   use airfoil_operations,   only : repanel_and_normalize_airfoil, is_normalized_coord, split_foil_at_00
   use airfoil_preparation,  only : transform_to_bezier_based
   use input_output,         only : read_bezier_inputs, read_xfoil_paneling_inputs
-  use airfoil_shape_bezier, only : bezier_spec_type, write_bezier_file
+  use airfoil_shape_bezier, only : bezier_spec_type
 
   implicit none
 
@@ -50,9 +49,6 @@ subroutine match_bezier (input_file, outname_auto, output_prefix, seed_foil)
   type (bezier_spec_type)         :: bezier_spec 
   type (xfoil_geom_options_type)  :: geom_options
 
-  double precision, allocatable   :: px_top(:), py_top(:), px_bot(:), py_bot(:)
-  character (255)                 :: outname
- 
   write (*,*) 'Find best bezier curves for the airfoils top and bot side'
 
   ! Read inputs file to get options needed 
@@ -70,25 +66,16 @@ subroutine match_bezier (input_file, outname_auto, output_prefix, seed_foil)
     call split_foil_at_00 (foil) 
   end if  
 
+  if (outname_auto) then 
+    foil%name = output_prefix // '_bezier'
+  else
+    foil%name = output_prefix
+  end if
+
   ! nelder mead for both sides  
 
   call transform_to_bezier_based (bezier_spec, geom_options%npan, foil)
 
-  if (outname_auto) then 
-    foil%name = trim(output_prefix) // '_bezier'
-  else
-    foil%name = trim(output_prefix)
-  end if
-
-  ! Output  
-
-  outname = foil%name
-  call airfoil_write   (trim(outname)//'.dat', trim(foil%name), foil)
-
-  write (*,'(" - ", A)', advance = 'no') 'Writing bezier control points to '
-  call print_colored (COLOR_HIGH,trim(outname)//'.bez')
-  write (*,*)
-  call write_bezier_file (trim(outname)//'.bez', trim(foil%name), bezier_spec)
 
 end subroutine match_bezier
 
@@ -147,14 +134,14 @@ subroutine check_and_do_polar_generation (input_file, csv_format, output_prefix,
 
       polars_subdirectory = ''
       ! if output prefix specified take this a filename of polar file.csv
-      if (trim(output_prefix) /= '') call set_polar_info ("", trim(output_prefix)//".csv", "")
+      if (output_prefix /= '') call set_polar_info ("", output_prefix//".csv", "")
 
     else
 
       flap_spec%use_flap = .false.                      ! xfoil file doesn't support flap
 
       ! Create subdir for polar files if not exist
-      polars_subdirectory = trim(output_prefix)//'_polars'
+      polars_subdirectory = output_prefix//'_polars'
       call make_directory (trim(polars_subdirectory))
     end if
     ! Generate polars in this subdir 
@@ -241,9 +228,9 @@ subroutine set_geometry_value (input_file, outname_auto, output_prefix, seed_foi
   end select
 
   if (outname_auto) then 
-    outname = trim(output_prefix) // '_' // (trim(value_type)) // "=" //trim(adjustl(value_str))
+    outname = output_prefix // '_' // (trim(value_type)) // "=" //trim(adjustl(value_str))
   else
-    outname = trim(output_prefix)
+    outname = output_prefix
   end if
 
   foil%name = trim(outname) 
@@ -409,9 +396,9 @@ subroutine repanel_smooth (input_file, outname_auto, output_prefix, seed_foil, v
   if (do_smoothing) then 
 
     if (outname_auto) then 
-      outname = trim(output_prefix) // '-smoothed'
+      outname = output_prefix // '-smoothed'
     else
-      outname = trim(output_prefix)
+      outname = output_prefix
     end if
 
     foil_smoothed = foil
@@ -425,9 +412,9 @@ subroutine repanel_smooth (input_file, outname_auto, output_prefix, seed_foil, v
   else                        ! no smoothing write repaneld foil 
 
     if (outname_auto) then 
-      outname = trim(output_prefix) // '-norm'
+      outname = output_prefix // '-norm'
     else
-      outname = trim(output_prefix)
+      outname = output_prefix
     end if
 
     foil%name   = trim(outname)
@@ -504,7 +491,7 @@ subroutine blend_foils (input_file, outname_auto, output_prefix, seed_foil_in, b
   if (is_normalized (seed_foil_in, geom_options%npan)) then 
     in_foil = seed_foil_in
     call split_foil_at_00 (in_foil)
-    call print_note_only ('- Airfoil '//trim(in_foil%name) //' is already normalized with '//& 
+    call print_text ('- Airfoil '//trim(in_foil%name) //' is already normalized with '//& 
                           stri(size(in_foil%x)) //' points')
   else
     call repanel_and_normalize_airfoil (seed_foil_in,  geom_options, .false., in_foil)
@@ -513,7 +500,7 @@ subroutine blend_foils (input_file, outname_auto, output_prefix, seed_foil_in, b
   if (is_normalized (blend_foil_in, geom_options%npan)) then 
     blend_foil = blend_foil_in
     call split_foil_at_00 (blend_foil)
-    call print_note_only ('- Airfoil '//trim(blend_foil%name) //' is already normalized with '//& 
+    call print_text ('- Airfoil '//trim(blend_foil%name) //' is already normalized with '//& 
                           stri(size(blend_foil%x)) //' points')
   else
     call repanel_and_normalize_airfoil (blend_foil_in,  geom_options, .false., blend_foil)
@@ -557,9 +544,9 @@ subroutine blend_foils (input_file, outname_auto, output_prefix, seed_foil_in, b
 ! Write airfoil to using Xoptfoil format for visualizer
 
   if (outname_auto) then 
-    outname = trim(output_prefix) // '-blend'
+    outname = output_prefix // '-blend'
   else
-    outname = trim(output_prefix)
+    outname = output_prefix
   end if
 
   blended_foil%name = trim(outname)
@@ -630,9 +617,9 @@ subroutine set_flap (input_file, outname_auto, output_prefix, seed_foil, visuali
 ! Write airfoil to _design_coordinates using Xoptfoil format for visualizer
 
   if (outname_auto) then 
-    outname = trim(output_prefix) // '-f' 
+    outname = output_prefix // '-f' 
   else
-    outname = trim(output_prefix)
+    outname = output_prefix
   end if
 
 
@@ -654,16 +641,16 @@ subroutine set_flap (input_file, outname_auto, output_prefix, seed_foil, visuali
     end if
 
     write (text_out,'(A,F4.1,A)') 'Setting flaps to '//trim(adjustl(text_degrees))//' degrees'
-    call print_note_only ('- '//trim(text_out))
+    call print_text ('- '//trim(text_out))
 
     call xfoil_set_airfoil(foil)
     call xfoil_apply_flap_deflection(flap_spec, flap_degree)
     call xfoil_reload_airfoil(foil_flapped)
 
     if (outname_auto) then 
-      outname = trim(output_prefix) // '-f' // trim(adjustl(text_degrees))
+      outname = output_prefix // '-f' // trim(adjustl(text_degrees))
     else
-      outname = trim(output_prefix)
+      outname = output_prefix
     end if
   
     foil_flapped%name   = trim(outname) 
@@ -695,7 +682,8 @@ subroutine write_design_coordinates (output_prefix, designcounter, foil)
   type (airfoil_type), intent (in)  :: foil
 
   double precision :: maxt, xmaxt, maxc, xmaxc
-  character(255) :: foilfile, text, title, design_subdir
+  character(255) :: foilfile, text, title
+  character (:), allocatable :: design_subdir
   character(8)   :: maxtchar, xmaxtchar, maxcchar, xmaxcchar
   integer :: foilunit, write_airfoil_optimization_progress
              
@@ -717,11 +705,11 @@ subroutine write_design_coordinates (output_prefix, designcounter, foil)
 
 ! Create subdirectory for all the design files 
 
-  design_subdir = trim(output_prefix) // DESIGN_SUBDIR_POSTFIX
-  call make_directory (trim(design_subdir))
-  design_subdir = trim(design_subdir) // '/'
+  design_subdir = output_prefix // DESIGN_SUBDIR_POSTFIX
+  call make_directory (design_subdir)
+  design_subdir = design_subdir // '/'
 
-  foilfile = trim(design_subdir)//'Design_Coordinates.dat'
+  foilfile = design_subdir//'Design_Coordinates.dat'
   foilunit = 13
 
 ! Open files and write headers, if necessary
@@ -730,7 +718,7 @@ subroutine write_design_coordinates (output_prefix, designcounter, foil)
 
 !   Header for coordinate file
 
-    call print_note_only ("- Writing coordinates for visualizer to "//trim(design_subdir)//'...')
+    call print_text ("- Writing coordinates for visualizer to "//design_subdir//'...')
 
     open(unit=foilunit, file=foilfile, status='replace')
     write(foilunit,'(A)') 'title="Airfoil coordinates"'
@@ -759,7 +747,7 @@ subroutine write_design_coordinates (output_prefix, designcounter, foil)
 
 ! Write coordinates to file
 
-  call  airfoil_write_to_unit (foilunit, title, foil, .True.)
+  call  airfoil_write_to_unit (foilunit, title, foil)
 
 ! Close output files
 
@@ -783,11 +771,11 @@ end subroutine write_design_coordinates
 subroutine read_worker_clo(input_file, output_prefix, airfoil_name, action, &
                            second_airfoil_filename, value_argument, visualizer)
 
-  character(*), intent(inout) :: input_file, output_prefix, action, airfoil_name, value_argument
-  character(*), intent(inout) :: second_airfoil_filename
+  character(:), allocatable, intent(inout) :: input_file, output_prefix, action, value_argument
+  character(:), allocatable, intent(inout) :: airfoil_name, second_airfoil_filename
   logical,      intent(inout) :: visualizer
 
-  character(80) :: arg
+  character(100) :: arg
   integer i, nargs
   logical getting_args
 
@@ -806,14 +794,16 @@ subroutine read_worker_clo(input_file, output_prefix, airfoil_name, action, &
       if (i == nargs) then
         call my_stop("Must specify an input file with -i option.")
       else
-        call getarg(i+1, input_file)
+        call getarg(i+1, arg)
+        input_file = trim(arg)
         i = i+2
       end if
     else if (trim(arg) == "-o") then
       if (i == nargs) then
         call my_stop("Must specify an output prefix with -o option.")
       else
-        call getarg(i+1, output_prefix)
+        call getarg(i+1, arg)
+        output_prefix = trim(arg)
         i = i+2
       end if
     else if (trim(arg) == "-r") then
@@ -827,27 +817,32 @@ subroutine read_worker_clo(input_file, output_prefix, airfoil_name, action, &
       if (i == nargs) then
         call my_stop("Must specify filename of seed airfoil for -a option.")
       else
-        call getarg(i+1, airfoil_name)
+        call getarg(i+1, arg)
+        airfoil_name = trim(arg)
         i = i+2
       end if
     else if (trim(arg) == "-a2") then
       if (i == nargs) then
         call my_stop("Must specify filename of second airfoil for -a2 option.")
       else
-        call getarg(i+1, second_airfoil_filename)
+        call getarg(i+1, arg)
+        second_airfoil_filename = trim(arg)
         i = i+2
       end if
     else if (trim(arg) == "-w") then
       if (i == nargs) then
         call my_stop("Must specify an action for the worker e.g. polar")
       else
-        call getarg(i+1, action)
+        call getarg(i+1, arg)
+        action = trim(arg)
         i = i+2
         if (trim(action) == 'set') then
-          call getarg(i, value_argument)
+          call getarg(i, arg)
+          value_argument = trim(arg)
           i = i+1
         elseif (trim(action) == 'blend') then
-          call getarg(i, value_argument)
+          call getarg(i, arg)
+          value_argument = trim(arg)
           i = i+1
         end if 
       end if
@@ -1004,7 +999,6 @@ end module
 program xfoil_worker
 
   use vardef,             only : airfoil_type 
-  use memory_util,        only : deallocate_airfoil
   use os_util 
   use airfoil_operations, only : load_airfoil, airfoil_write
   use xfoil_driver,       only : xfoil_init, xfoil_cleanup, xfoil_options_type
@@ -1015,8 +1009,8 @@ program xfoil_worker
   type(airfoil_type) :: foil, blend_foil
   type (xfoil_options_type) :: xfoil_options
 
-  character(255)     :: input_file, output_prefix, airfoil_filename, second_airfoil_filename
-  character(20)      :: action, value_argument
+  character(:), allocatable  :: input_file, output_prefix, airfoil_filename, second_airfoil_filename
+  character(:), allocatable  :: action, value_argument
   logical            :: visualizer, outname_auto
 
   write(*,'(A)') 
@@ -1053,7 +1047,7 @@ program xfoil_worker
   call xfoil_defaults(xfoil_options)
 
 ! Set name of output file - from command line or auto?  
-  if (trim(output_prefix) == '') then
+  if (output_prefix == '') then
     output_prefix = airfoil_filename (1:(index (airfoil_filename,'.', back = .true.) - 1))
     outname_auto = .true.
   else
@@ -1115,7 +1109,6 @@ program xfoil_worker
   write (*,*) 
 
   call xfoil_cleanup()
-  call deallocate_airfoil (foil)
 
 end program xfoil_worker
 

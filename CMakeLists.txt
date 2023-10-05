@@ -45,7 +45,7 @@ set(DATADIR ${CMAKE_INSTALL_PREFIX}/share
 get_filename_component(Fortran_COMPILER_NAME ${CMAKE_Fortran_COMPILER} NAME)
 message(STATUS "Fortran compiler: " ${CMAKE_Fortran_COMPILER})
 
-# Option to build with/without OpenMP support
+# Option to build with/without OpenMP support - overwrites Release and Debug
 set(ENABLE_OPENMP TRUE
     CACHE BOOL "Whether to build with OpenMP support."
 )

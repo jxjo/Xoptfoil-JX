@@ -34,9 +34,9 @@ subroutine check_inputs(global_search, pso_options)
   use vardef
   use airfoil_evaluation 
   use particle_swarm
-  use xfoil_driver,       only : op_point_specification_type
-  use xfoil_driver,       only : xfoil_options_type
-  use particle_swarm,     only : pso_options_type
+  use xfoil_driver,         only : op_point_specification_type
+  use xfoil_driver,         only : xfoil_options_type
+  use particle_swarm,       only : pso_options_type
 
   type (pso_options_type), intent(inout) :: pso_options
   character(80), intent(in)              :: global_search
@@ -47,7 +47,8 @@ subroutine check_inputs(global_search, pso_options)
 ! Shape functions and geomtry / curvature checks
 
   if ((trim(shape_functions) == 'camb-thick') .or. &
-  (trim(shape_functions) == 'camb-thick-plus')) then
+      (trim(shape_functions) == 'camb-thick-plus')) then
+
     ! in case of camb_thick checking of curvature makes no sense
     if (curv_spec%check_curvature) then 
       call print_note ("Because of shape function 'camb-thick' curvature ckecking "// &
@@ -60,13 +61,21 @@ subroutine check_inputs(global_search, pso_options)
                        "to ensure good results.")
       curv_spec%do_smoothing = .true. 
     end if 
+  
+  elseif (trim(shape_functions) == 'bezier' ) then
+
+    if (curv_spec%do_smoothing) then 
+      curv_spec%do_smoothing = .false. 
+      call print_note ("Smoothing switched off for 'bezier' shape type")
+    end if 
+
   elseif (trim(shape_functions) == 'hicks-henne' ) then
+
     if (.not. curv_spec%check_curvature .and. (.not. match_foils)) then 
       call print_warning ("When using shape function 'hicks-henne', curvature ckecking "// &
                        "should be switched on to avoid bumps.")
     end if 
   end if 
-
 
 ! Ask about removing turbulent trips for max-xtr optimization
 
@@ -95,11 +104,17 @@ subroutine check_inputs(global_search, pso_options)
   end do 
 
 
-! in case of camb_thick a re-paneling is not needed and
-! not good for high cl
+! Repanel option depending on shape type 
+
   if ((trim(shape_functions) == 'camb-thick') .or. &
       (trim(shape_functions) == 'camb-thick-plus')) then
-        xfoil_geom_options%repanel = .false. 
+    ! re-paneling is not needed and not good for high cl
+    xfoil_geom_options%repanel = .false. 
+
+  elseif (trim(shape_functions) == 'bezier') then
+    ! paneling master is bezier curve
+    xfoil_geom_options%repanel = .false. 
+      
   end if 
 
 
@@ -140,10 +155,11 @@ subroutine check_inputs(global_search, pso_options)
 
 ! PSO auto_retry  --------------------------------------------------
 
-  if ((trim(shape_functions) /= 'hicks-henne') .and. & 
+  if ((trim(shape_functions) /= 'hicks-henne')  .and. & 
+      (trim(shape_functions) /= 'bezier')       .and. &
       (trim(global_search) == 'particle_swarm')) then 
     if (pso_options%max_retries >= 0) then 
-      call print_note ('Particle retry switched off (meaningful only for Hicks-Henne shape_type)')
+      call print_note ('Particle retry switched off (only for Hicks-Henne or Bezier shape_type)')
       pso_options%max_retries = 0
       pso_options%auto_retry = .false.
     end if 
@@ -162,6 +178,8 @@ subroutine check_inputs(global_search, pso_options)
 
   end subroutine check_inputs
 
+
+
 !=============================================================================80
 !
 ! Checks that the seed airfoil passes all constraints, sets scale factors for
@@ -174,7 +192,7 @@ subroutine check_seed()
   use airfoil_evaluation 
   use math_deps,          only : interp_vector, curvature, derv1f1, derv1b1, norm_2
   use math_deps,          only : interp_point, derivation_at_point, smooth_it
-  use xfoil_driver,       only : run_op_points, op_point_result_type
+  use xfoil_driver,       only : run_op_points, op_point_result_type, xfoil_defaults
   use xfoil_driver,       only : xfoil_geometry_amax, xfoil_set_airfoil, &
                                  xfoil_get_geometry_info, get_te_gap
   use airfoil_evaluation, only : xfoil_options, xfoil_geom_options
@@ -207,20 +225,13 @@ subroutine check_seed()
   penaltyval = 0.d0
   pi = acos(-1.d0)
 
-
-! Smooth surfaces of airfoil *before* other checks are made
-!     save original seed surface before smoothing
-!     to show original data later in visualizer 
-
-  seed_foil_not_smoothed = seed_foil
-
 ! Check curvature constraints like reversals -------------------------
-
   if(curv_spec%check_curvature) then
 
-    write(*,'(/," - ",A)') "Check_curvature if it's suitable for Hicks-Henne shape type"
-
-    call check_and_smooth_surface (show_details, .false., curv_spec%do_smoothing, seed_foil, overall_quality)
+    if (trim(shape_functions) == 'hicks-henne' ) then
+      write(*,'(/," - ",A)') "Check_curvature if it's suitable for Hicks-Henne shape type"
+      call check_and_smooth_surface (show_details, .false., curv_spec%do_smoothing, seed_foil, overall_quality)
+    end if 
 
   ! Get best values fur surface constraints 
     if (curv_spec%auto_curvature) then 
@@ -230,10 +241,16 @@ subroutine check_seed()
         call auto_curvature_constraints ('Bot side', show_details, seed_foil%xb, seed_foil%zb, curv_bot_spec)
     end if
 
-    write (*,*)
-    call info_check_curvature ('Top side', seed_foil%xt, seed_foil%zt, curv_top_spec)
-    if (.not. seed_foil%symmetrical) & 
-      call info_check_curvature ('Bot side', seed_foil%xb, seed_foil%zb, curv_bot_spec)
+  ! Bump detection only for Hicks Henne 
+    if (trim(shape_functions) == 'hicks-henne' ) then
+      write (*,*)
+      call info_check_curvature ('Top side', seed_foil%xt, seed_foil%zt, curv_top_spec)
+      if (.not. seed_foil%symmetrical) & 
+        call info_check_curvature ('Bot side', seed_foil%xb, seed_foil%zb, curv_bot_spec)
+    else
+      curv_top_spec%check_curvature_bumps = .false.
+      curv_bot_spec%check_curvature_bumps = .false.
+    end if 
 
   ! Final check for curvature reversals
     call check_handle_curve_violations ('Top side', seed_foil%xt, seed_foil%zt, curv_top_spec)
@@ -248,7 +265,7 @@ subroutine check_seed()
   elseif (curv_spec%do_smoothing) then
 
   ! In case of 'camb-thick' smoothing was activated 
-    call print_note_only ('- Smoothing airfoil to prepare for Camb-Thick shape type')
+    call print_text ('- Smoothing airfoil to prepare for Camb-Thick shape type')
     call smooth_foil (.false., 0.05d0, seed_foil)
 
   end if
@@ -271,6 +288,9 @@ subroutine check_seed()
     match_foils_scale_factor = 1.d0 / match_delta
     return        ! end here with checks as it becomes aero specific, calc scale
   end if 
+
+  ! init xfoil - will be used also for geometry
+  call xfoil_defaults (xfoil_options)
 
 
   if(check_geometry) then
@@ -307,6 +327,16 @@ subroutine check_seed()
       len1 = len2
     end do
 
+
+  ! Te gap recommendation 
+
+    if ((get_te_gap (seed_foil) == 0d0) .and. show_details) then 
+      write(*,*)    
+      call print_note ("The seed airfoil has no trailing edge gap." //&
+                        " Set a gap of at least 0.03% "//&
+                        "to improve xfoil viscous results.")
+    end if 
+  
     
   ! Too blunt or sharp leading edge
 
@@ -470,9 +500,10 @@ subroutine check_seed()
 
 ! Re-Init boundary layer at each op point to ensure convergence (slower)
   local_xfoil_options = xfoil_options
-  local_xfoil_options%reinitialize        = .true.  
+  local_xfoil_options%reinitialize = .false.    ! strange: reinit leeds sometimes to not converged
+  local_xfoil_options%show_details = .false.
 
-  call run_op_points (seed_foil, xfoil_geom_options, xfoil_options,        &
+  call run_op_points (seed_foil, xfoil_geom_options, local_xfoil_options,        &
                       flap_spec, flap_degrees, &
                       op_points_spec, op_points_result)
 
@@ -863,11 +894,15 @@ subroutine auto_curvature_constraints (info, show_details, x,y , c_spec)
   double precision, dimension (:), intent(in) :: x,y 
   type (curvature_polyline_specification_type), intent (inout)  :: c_spec
   
-  if (show_details) call print_note_only ('- '//trim(info),3)
+  if (show_details) call print_text ('- '//trim(info),3)
 
   call auto_curvature_threshold_polyline (info, show_details, x, y, c_spec)
-  call auto_spike_threshold_polyline     (      show_details, x, y, c_spec)
-  call auto_te_curvature_polyline        (      show_details, x, y, c_spec)
+
+  if (c_spec%check_curvature_bumps) then 
+    call auto_spike_threshold_polyline (show_details, x, y, c_spec)
+  end if 
+  
+  call auto_te_curvature_polyline (show_details, x, y, c_spec)
    
 end subroutine auto_curvature_constraints
 
@@ -921,9 +956,9 @@ subroutine auto_curvature_threshold_polyline (info, show_details, x,y , c_spec)
     call print_warning ( &
         'The current seed airfoil has '// stri(nreversals) // ' reversals on '//trim(info)//&
         ' - but max_curv_reverse is set to '//stri(max_curv_reverse), 9)
-    call print_note_only ( &
+    call print_text ( &
         'This will lead to a high curvature threshold value to fulfil this constraint.', 9)
-    call print_note_only (& 
+    call print_text (& 
         'Better choose another seed airfoil which fits to the reversal constraints.', 9)
     write (*,*)  
   end if 
@@ -946,9 +981,9 @@ subroutine auto_curvature_threshold_polyline (info, show_details, x,y , c_spec)
     call print_colored (COLOR_PALE, '         '//label//' =') 
     call print_colored_r (5,'(F5.2)', quality_threshold, curv_threshold) 
     if (quality_threshold > Q_BAD) then
-      call print_note_only ('The contour will have some reversals within this high treshold', 3)
+      call print_text ('The contour will have some reversals within this high treshold', 3)
     else
-      call print_note_only ('Optimal value based on seed airfoil for '//stri(max_curv_reverse)//&
+      call print_text ('Optimal value based on seed airfoil for '//stri(max_curv_reverse)//&
                             ' reversals',3)
     end if 
   end if 
@@ -1085,12 +1120,12 @@ subroutine auto_te_curvature_polyline (show_details, x,y , c_spec)
     call print_colored_r (5,'(F5.2)', quality_te, c_spec%max_te_curvature) 
     if (auto) then
       if (quality_te > Q_BAD) then
-        call print_note_only ('Like seed airfoil the airfoil will have a geometric spoiler at TE', 3)
+        call print_text ('Like seed airfoil the airfoil will have a geometric spoiler at TE', 3)
       else
-        call print_note_only ('Smallest value based on seed airfoil trailing edge curvature',3)
+        call print_text ('Smallest value based on seed airfoil trailing edge curvature',3)
       end if 
     else 
-      call print_note_only ('User defined',3)
+      call print_text ('User defined',3)
     end if 
   end if 
 
@@ -1230,7 +1265,7 @@ subroutine  info_check_curvature (info, x, y, c_spec)
     call print_colored (COLOR_NOTE, ' for max '//stri(c_spec%max_spikes)//' bump(s).')
     write (*,*)
   else
-    call print_note_only ("Spike values not good enough for bump detetction", 1)
+    call print_text ("Spike values not good enough for bump detetction", 1)
   end if
 
 end subroutine info_check_curvature

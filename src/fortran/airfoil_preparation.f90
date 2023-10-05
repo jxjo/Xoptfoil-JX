@@ -11,7 +11,6 @@ module airfoil_preparation
   implicit none
   private
 
-  public :: preset_airfoil_te_gap 
   public :: preset_airfoil_to_targets
   public :: transform_to_bezier_based
   public :: matchfoils_preprocessing
@@ -22,58 +21,6 @@ contains
 !-----------------------------------------------------------------------------
 
 
-subroutine preset_airfoil_te_gap (show_detail, foil, new_te_gap) 
-
-  !! Set airfoil trailing edge gap to new gap value in % of c
-  !!   A standard blending value x/c = 0.8 will be used 
-
-  use vardef,             only: airfoil_type
-  use xfoil_driver,       only: xfoil_set_te_gap, get_te_gap
-
-  logical, intent (in)                :: show_detail
-  type (airfoil_type), intent (inout) :: foil
-  double precision, intent(in)        :: new_te_gap
-
-  type (airfoil_type) :: new_foil
-  integer             :: i, nptt, nptb
-
-  doubleprecision, parameter  :: X_BLEND = 0.8d0
-
-  ! Is there a trailing edge te gap? There should be ...
-
-  if ((get_te_gap (foil) == 0d0) .and. (new_te_gap == -1d0) .and. show_detail) then 
-    write(*,*)    
-    call print_note ("The seed airfoil has no trailing edge gap." //&
-                      " Set a gap of at least 0.03% "//&
-                      "to improve xfoil viscous results.")
-  end if 
-
-  ! Should te gap changed? If no, return ... 
-  if ((new_te_gap == -1d0) .or. ((new_te_gap / 100) == get_te_gap (foil))) return 
-
-  ! Set te gap with xfoils TGAP
-
-  if(show_detail) &
-    call print_note_only ('- Setting trailing edge gap to '// strf('(F4.2)', new_te_gap)//'%')
-
-  call xfoil_set_te_gap (foil , (new_te_gap / 100), X_BLEND, new_foil)
-
-  ! Now rebuild foil out of new coordinates  ----------------------
-
-  foil%z = new_foil%z
-  nptt = size(foil%zt,1)
-  nptb = size(foil%zb,1)
-
-  ! get new upper and lower z-coordinates from modified airfoil 
-  do i = 1, nptt
-    foil%zt(i) = new_foil%z(nptt-i+1)      ! start from LE - top reverse - to LE
-  end do
-  do i = 1, nptb 
-    foil%zb(i) = new_foil%z(nptt+i-1)      ! start from LE - bottom - to TE
-  end do
-  
-end subroutine preset_airfoil_te_gap
-
 
 !-----------------------------------------------------------------------------
 
@@ -83,10 +30,12 @@ subroutine preset_airfoil_to_targets (show_detail, foil)
   !! Set airfoil thickness and camber according to defined geo targets 
   !!   and/or thickness/camber constraints (in airfoil evaluation commons)
 
+  ! * deactivated as it's difficult to fit into initialization (xfoil) within main 
+
   use vardef,             only: airfoil_type
   use xfoil_driver,       only: xfoil_set_thickness_camber, xfoil_set_airfoil
   use xfoil_driver,       only: xfoil_get_geometry_info
-  use airfoil_evaluation, only: preset_seed_airfoil, geo_targets
+  use airfoil_evaluation, only: geo_targets
   use airfoil_evaluation, only: max_thickness, min_thickness, max_camber, min_camber
 
   logical, intent (in)           :: show_detail
@@ -100,7 +49,7 @@ subroutine preset_airfoil_to_targets (show_detail, foil)
 
   ! Is presetting activated? 
 
-  if (.not. preset_seed_airfoil) return 
+  if (.true.) return 
 
   foil_changed = .false.
   ngeo_targets = size(geo_targets)
@@ -123,7 +72,7 @@ subroutine preset_airfoil_to_targets (show_detail, foil)
 
           if (show_detail) then
             write (cvalue,'(F6.2)')  (new_thick * 100)
-            call print_note_only ('- Scaling thickness to target value '// trim(adjustl(cvalue))//'%')
+            call print_text ('- Scaling thickness to target value '// trim(adjustl(cvalue))//'%')
           end if
 
         case ('Camber')                      
@@ -133,7 +82,7 @@ subroutine preset_airfoil_to_targets (show_detail, foil)
 
           if (show_detail) then
             write (cvalue,'(F6.2)')  (new_camber * 100)
-            call print_note_only ('- Scaling camber to target value '// trim(adjustl(cvalue))//'%')
+            call print_text ('- Scaling camber to target value '// trim(adjustl(cvalue))//'%')
           end if
 
       end select
@@ -156,7 +105,7 @@ subroutine preset_airfoil_to_targets (show_detail, foil)
 
       if (show_detail) then
         write (cvalue,'(F6.2)')  (new_thick * 100)
-        call print_note_only ('- Scaling thickness according constraint to '// trim(adjustl(cvalue))//'%')
+        call print_text ('- Scaling thickness according constraint to '// trim(adjustl(cvalue))//'%')
       end if 
 
     elseif (maxt < min_thickness) then 
@@ -167,7 +116,7 @@ subroutine preset_airfoil_to_targets (show_detail, foil)
 
       if (show_detail) then
         write (cvalue,'(F6.2)')  (new_thick * 100)
-        call print_note_only ('- Scaling thickness according constraint to '// trim(adjustl(cvalue))//'%')
+        call print_text ('- Scaling thickness according constraint to '// trim(adjustl(cvalue))//'%')
       end if 
 
     end if 
@@ -180,7 +129,7 @@ subroutine preset_airfoil_to_targets (show_detail, foil)
 
       if (show_detail) then
         write (cvalue,'(F6.2)')  (new_camber * 100)
-        call print_note_only ('- Scaling camber according constraint to '// trim(adjustl(cvalue))//'%')
+        call print_text ('- Scaling camber according constraint to '// trim(adjustl(cvalue))//'%')
       end if
       
     elseif (maxc < min_camber) then 
@@ -191,7 +140,7 @@ subroutine preset_airfoil_to_targets (show_detail, foil)
 
       if (show_detail) then
         write (cvalue,'(F6.2)')  (new_camber * 100)
-        call print_note_only ('- Scaling camber according constraint to '// trim(adjustl(cvalue))//'%')
+        call print_text ('- Scaling camber according constraint to '// trim(adjustl(cvalue))//'%')
       end if
 
     end if 
@@ -232,8 +181,8 @@ subroutine transform_to_bezier_based (bez_spec, npan, foil)
   !! Transform foil to bezier based using simplex optimization for best fit of bezier curves  
 
   use vardef,               only : airfoil_type
-  use airfoil_operations,   only : is_normalized_coord, split_foil_at_00
-  use airfoil_shape_bezier, only : bezier_eval_airfoil
+  use airfoil_operations,   only : is_normalized_coord, split_foil_at_00, airfoil_write
+  use airfoil_shape_bezier, only : bezier_eval_airfoil, write_bezier_file
   use airfoil_shape_bezier, only : bezier_spec_type
 
   type (bezier_spec_type), intent (inout) :: bez_spec
@@ -248,16 +197,31 @@ subroutine transform_to_bezier_based (bez_spec, npan, foil)
     call split_foil_at_00 (foil) 
   end if  
 
+  write (*,'(" - ", A)') 'Create Bezier based airfoil'
+
   ! Simplex optimization (nelder mead) for both sides  
 
-    call match_bezier_for_side  ('Top', foil%xt, foil%zt, bez_spec%ncpoints_top, bez_spec%px_top, bez_spec%py_top)
-    call match_bezier_for_side  ('Bot', foil%xb, foil%zb, bez_spec%ncpoints_bot, bez_spec%px_bot, bez_spec%py_bot)
+  call match_bezier_for_side  ('Top', foil%xt, foil%zt, bez_spec%ncpoints_top, bez_spec%px_top, bez_spec%py_top)
+  call match_bezier_for_side  ('Bot', foil%xb, foil%zb, bez_spec%ncpoints_bot, bez_spec%px_bot, bez_spec%py_bot)
 
   ! build airfoil out of Bezier curves 
 
-  call bezier_eval_airfoil (bez_spec, npan, foil%x, foil%z)
+  call bezier_eval_airfoil (bez_spec, (npan+1), foil%x, foil%z)
 
   foil%npoint = size(foil%x)
+  call split_foil_at_00 (foil)                  ! prepare for further need 
+  foil%bezier_spec = bez_spec
+  foil%bezier_based = .true.
+
+  ! Write new foil and Bezier definition to file  
+
+  call airfoil_write   (trim(foil%name)//'.dat', trim(foil%name), foil)
+
+  call print_colored (COLOR_NOTE, "   Writing bezier  to ")
+  call print_colored (COLOR_HIGH,trim(foil%name)//'.bez')
+  write (*,*)
+  call write_bezier_file (trim(foil%name)//'.bez', trim(foil%name), bez_spec)
+
 
 end subroutine transform_to_bezier_based
 
@@ -292,7 +256,6 @@ subroutine match_bezier_for_side  (side, match_x, match_y, np, px, py)
 
   ds_options%tol   = 1d-5
   ds_options%maxit = 5000
-  ds_options%write_designs = .false.
 
   ! --- setup targets in module airfoil_evaluation for objective function 
   
@@ -306,8 +269,10 @@ subroutine match_bezier_for_side  (side, match_x, match_y, np, px, py)
   call bezier_to_dv (px, py, dv0)
 
   ndv = size(dv0)
-  write (*,'(" - ",A,A,A,I2,A,I2,A)') 'Bezier nelder mead optimization for ',side,' side (', &
-                                       np, ' points,', ndv, ' variables)'
+  ! write (*,'(" - ",A,A,A,I2,A,I2,A)') 'Bezier nelder mead optimization for ',side,' side (', &
+  !                                      np, ' points,', ndv, ' variables)'
+  write(*,'(3x)', advance = 'no')
+  call  print_colored (COLOR_NOTE, 'Matching Bezier for '//side//' side ('//stri(np)//' points): ')
 
   xmin = dv0                                      ! just for allocation 
   xmin = 0d0                                      ! result array 
@@ -325,9 +290,11 @@ subroutine match_bezier_for_side  (side, match_x, match_y, np, px, py)
   dev_norm2  = norm2 (deviation)
   dev_max    = maxval(abs(deviation))
   dev_max_at = match_x(maxloc (abs(deviation),1))
-  write (*,'("   ",A,I4,A,A,f8.6,A,f8.6,A,f6.4)') '... ', steps, ' iterations', & 
-                                                  ' - norm2 deviation: ', dev_norm2, &
-                                                  ', max deviation: ', dev_max,' at x/c: ', dev_max_at
+  ! write (*,'("   ",A,I4,A,A,f8.6,A,f8.6,A,f6.4)') '... ', steps, ' iterations', & 
+  !                                                 ' - norm2 deviation: ', dev_norm2, &
+  !                                                 ', max deviation: ', dev_max,' at x/c: ', dev_max_at
+  call  print_colored (COLOR_NOTE, '... '//stri(steps)//' iterations'//' - deviation: '//strf('(f8.6)',dev_norm2))
+  write(*,*)
 
 end subroutine match_bezier_for_side
 
@@ -357,7 +324,7 @@ subroutine matchfoils_preprocessing(matchfoil_file)
 
   call get_seed_airfoil('from_file', matchfoil_file, original_foil_to_match)
 
-  call print_note_only ('Preparing '//trim(original_foil_to_match%name)//' to be matched by '//&
+  call print_text ('Preparing '//trim(original_foil_to_match%name)//' to be matched by '//&
                         trim(seed_foil%name),3)
 
   if(trim(seed_foil%name) == trim(original_foil_to_match%name)) then

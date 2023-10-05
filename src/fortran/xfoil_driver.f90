@@ -491,13 +491,13 @@ subroutine run_op_point (op_point_spec,        &
   op_point_result%alpha = ALFA/DTOR
 
   if (viscous_mode) then 
-    op_point_result%cd   = CD
-    op_point_result%xtrt = XOCTR(1)
+    op_point_result%cd   = CD 
+    op_point_result %xtrt = XOCTR(1)
     op_point_result%xtrb = XOCTR(2)
     if (op_point_result%converged) then 
-      call detect_bubble (op_point_result%bubblet, op_point_result%bubbleb)
-    ! op_point_result%bubblet%found = .false.
-    ! op_point_result%bubbleb%found = .false.
+      ! call detect_bubble (op_point_result%bubblet, op_point_result%bubbleb)
+      op_point_result%bubblet%found = .false.
+      op_point_result%bubbleb%found = .false.
     end if
   else
     op_point_result%cd   = CDP
@@ -764,6 +764,8 @@ subroutine smooth_paneling(foilin, npoint, foilout, opt_geom_options)
     foilout%z(i) = Y(i)
   end do
 
+  foilout%name = trim(foilin%name)
+  
 ! Deallocate memory that is not needed anymore
 
   if (needs_cleanup) then

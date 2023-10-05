@@ -67,15 +67,14 @@ module vardef
   character(16)    :: shape_functions
 
 ! Airfoils
-  type(airfoil_type) :: seed_foil, seed_foil_not_smoothed
+  type(airfoil_type) :: seed_foil
 
 ! Show more infos during optimization
   logical :: show_details
 
 ! Subdirectory for all the mep design files
-  character (*), parameter :: DESIGN_SUBDIR_POSTFIX = '_temp'
-  character (255)          :: design_subdir
-  character (80)           :: output_prefix
+  character (*), parameter    :: DESIGN_SUBDIR_POSTFIX = '_temp'
+  character (:), allocatable  :: design_subdir, output_prefix
 
 
 ! Global Constants

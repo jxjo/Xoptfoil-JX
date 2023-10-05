@@ -25,45 +25,36 @@ module input_output
 
   contains
 
-!=============================================================================80
-!
-! Subroutine to read inputs from namelist file
-!
-!=============================================================================80
-subroutine read_inputs(input_file, search_type, global_search, local_search,   &
-                       seed_airfoil, airfoil_file, nfunctions_top,             &
-                       nfunctions_bot, restart, restart_write_freq,            &
-                       constrained_dvs, pso_options, ga_options,               &
-                       ds_options, matchfoil_file, symmetrical)
+
+  subroutine read_inputs(input_file, global_search,                            &
+                       seed_airfoil, airfoil_file,                             &
+                       nfunctions_top, nfunctions_bot,                         &
+                       pso_options, ga_options, matchfoil_file, symmetrical)
+!! read the input file with all the parameters
+!     - first checks of params (see also check_inputs) 
 
   use vardef
   use airfoil_evaluation
-  use particle_swarm,     only : pso_options_type
-  use genetic_algorithm,  only : ga_options_type
-  use simplex_search,     only : ds_options_type
-  use xfoil_driver,       only : xfoil_geom_options_type
-  use math_deps,          only : sort_vector
-  use polar_operations,   only : read_init_polar_inputs
+  use particle_swarm,       only : pso_options_type
+  use genetic_algorithm,    only : ga_options_type
+  use simplex_search,       only : ds_options_type
+  use xfoil_driver,         only : xfoil_geom_options_type
+  use math_deps,            only : sort_vector
+  use airfoil_shape_bezier, only : bezier_spec_type, ndv_to_ncp, ncp_to_ndv
 
-
-  character(*), intent(in) :: input_file 
-  character(80), intent(out) :: search_type, global_search, local_search,      &
-                                seed_airfoil, airfoil_file, matchfoil_file
+  character(*), intent(in)   :: input_file 
+  character(80), intent(out) :: global_search, seed_airfoil, airfoil_file, matchfoil_file
   integer, intent(out) :: nfunctions_top, nfunctions_bot
   logical, intent(out) :: symmetrical
-  integer, dimension(:), allocatable, intent(inout) :: constrained_dvs
   type(pso_options_type), intent(out) :: pso_options
-  type(ga_options_type), intent(out) :: ga_options
-  type(ds_options_type), intent(out) :: ds_options
+  type(ga_options_type),  intent(out) :: ga_options
 
 
+  type(bezier_spec_type) :: bezier_spec
   integer, dimension(max_addthickconst) :: sort_idxs
   double precision, dimension(max_addthickconst) :: temp_thickmin, temp_thickmax
-  logical :: feasible_init,        &
-             restart, write_designs,                    &
-             pso_write_particlefile, repanel
-  integer :: restart_write_freq, pso_pop, pso_maxit, simplex_maxit,  &
-             npan, feasible_init_attempts
+  logical :: feasible_init, repanel
+  integer :: pso_pop, pso_maxit, simplex_maxit, npan, feasible_init_attempts
   integer :: ga_pop, ga_maxit
   double precision :: pso_tol, simplex_tol
   double precision :: cvpar, cterat, ctrrat, xsref1, xsref2, xpref1, xpref2
@@ -72,8 +63,7 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
                       tournament_fraction, crossover_range_factor,             &
                       mutant_probability, chromosome_mutation_rate,            &
                       mutation_range_factor
-  integer       :: nbot_actual
-  integer       :: i, iunit, ioerr, iostat1, counter, idx
+  integer       :: i, iunit, ioerr, iostat1
   type(re_type) :: re_default
   character(30) :: text
   character(20) :: pso_convergence_profile
@@ -90,14 +80,12 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
   integer :: max_curv_reverse_top, max_curv_reverse_bot
   double precision :: curv_threshold
 
-  ! jx-mod show/suppress extensive echo of input parms
+  ! show/suppress extensive echo of input parms
   logical :: echo_input_parms
   
-  namelist /optimization_options/ search_type, global_search, local_search,    &
+  namelist /optimization_options/ global_search,                               &
             seed_airfoil, airfoil_file, shape_functions, nfunctions_top,       &
-            preset_seed_airfoil, airfoil_te_gap,                               &
-            nfunctions_bot, initial_perturb, min_bump_width, restart,          &
-            restart_write_freq, write_designs,                                 &
+            nfunctions_bot, initial_perturb, min_bump_width,                   &
             show_details, echo_input_parms
 
   namelist /constraints/ min_thickness, max_thickness, moment_constraint_type, &
@@ -111,7 +99,6 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
                             feasible_init_attempts
   namelist /particle_swarm_options/ pso_pop, pso_tol, pso_maxit,               &
                                     pso_convergence_profile,                   &
-                                    pso_write_particlefile,                    &
                                     pso_options       ! allow direct manipulation
   namelist /genetic_algorithm_options/ ga_pop, ga_tol, ga_maxit,               &
             parents_selection_method, parent_fraction,                         &
@@ -135,21 +122,14 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
 
 ! Set defaults for main namelist options
 
-  search_type = 'global'
   global_search = 'particle_swarm'
-  local_search = 'simplex'
   seed_airfoil = 'from_file'
-  preset_seed_airfoil = .true.        ! default: presetting to geo targets active
-  airfoil_te_gap = -1d0               ! = default: no changes of te gap 
   airfoil_file = ''
   shape_functions = 'hicks-henne'
   min_bump_width = 0.1d0
   nfunctions_top = 4
   nfunctions_bot = 4
   initial_perturb = 0.003d0
-  restart = .false.
-  restart_write_freq = 0              ! default: switch off write restart files
-  write_designs = .true.
 
 ! Show more infos  / supress echo
   show_details = .false. 
@@ -161,13 +141,6 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
   read(iunit, iostat=iostat1, nml=optimization_options)
   call namelist_check('optimization_options', iostat1, 'warn')
 
-! Error checking and setting search algorithm options
-
-  if (trim(search_type) /= 'global_and_local' .and. trim(search_type) /=       &
-      'global' .and. trim(search_type) /= 'local')                             &
-    call my_stop("search_type must be 'global_and_local', 'global', "//   &
-                 "or 'local'.")
-
 ! In case of 'camb-thick' set number of top functions to a fixed number of 6
   if (trim(shape_functions) == 'camb-thick' ) then
     nfunctions_top = 6
@@ -178,7 +151,20 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
     nfunctions_bot = 0
   end if
 
-! jx-mod get seed airfoil file from command file 
+! Read bezier options 
+
+  if (trim(shape_functions) == 'bezier' ) then
+    
+    call read_bezier_inputs  ('', iunit, bezier_spec)
+ 
+    ! take bezier control point x and y as 'function' 
+    ! - LE, TE are fixed, 2nd point only vertical movement   
+    nfunctions_top = ncp_to_ndv (bezier_spec%ncpoints_top)
+    nfunctions_bot = ncp_to_ndv (bezier_spec%ncpoints_bot)
+
+  end if 
+
+! Optional seed airfoil file from command file 
 
   airfoil_file = read_cl_airfoil_file (airfoil_file)
 
@@ -319,7 +305,6 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
   curv_bot_spec%max_curv_reverse = max_curv_reverse_bot  
 
 
-
 ! Set default initialization options
 
   feasible_init = .true. 
@@ -337,7 +322,6 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
   pso_pop = 40
   pso_tol = 1.D-04
   pso_maxit = 600
-  pso_write_particlefile = .false.
 
   if ((trim(shape_functions) == 'camb-thick' ) .or. &
       (trim(shape_functions) == 'camb-thick-plus')) then
@@ -365,153 +349,61 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
   simplex_tol = 1.0D-05
   simplex_maxit = 1000
 
-  if (trim(search_type) == 'global_and_local' .or. trim(search_type) ==        &
-      'global') then
 
-!   The number of bottom shape functions actually used (0 for symmetrical)
 
-    if (symmetrical) then
-      nbot_actual = 0
-    else
-      nbot_actual = nfunctions_bot
-    end if
-  
-!   Set design variables with side constraints
 
-    if ((trim(shape_functions) == 'camb-thick') .or. &
-        (trim(shape_functions) == 'camb-thick-plus')) then
+  if (trim(global_search) == 'particle_swarm') then
 
-!     For camb-thick, we will only constrain the flap deflection
+  ! Read PSO options and put them into derived type
 
-      allocate(constrained_dvs(nflap_optimize))
-      counter = 0
-      do i = nfunctions_top + nbot_actual + 1,                                 &
-             nfunctions_top + nbot_actual + nflap_optimize
-        counter = counter + 1
-        constrained_dvs(counter) = i
-      end do
-          
-    else
+    rewind(iunit)
+    read(iunit, iostat=iostat1, nml=particle_swarm_options)
+    call namelist_check('particle_swarm_options', iostat1, 'no-warn')
+    pso_options%pop = pso_pop
+    pso_options%tol = pso_tol
+    pso_options%maxspeed = initial_perturb
+    pso_options%maxit = pso_maxit
+    pso_options%convergence_profile = pso_convergence_profile
 
-!     For Hicks-Henne, also constrain bump locations and width
- 
-      allocate(constrained_dvs(2*nfunctions_top + 2*nbot_actual +              &
-                               nflap_optimize))
-      counter = 0
-      do i = 1, nfunctions_top + nbot_actual
-        counter = counter + 1
-        idx = 3*(i-1) + 2      ! DV index of bump location, shape function i
-        constrained_dvs(counter) = idx
-        counter = counter + 1
-        idx = 3*(i-1) + 3      ! Index of bump width, shape function i
-        constrained_dvs(counter) = idx
-      end do
-      do i = 3*(nfunctions_top + nbot_actual) + 1,                             &
-             3*(nfunctions_top + nbot_actual) + nflap_optimize
-        counter = counter + 1
-        constrained_dvs(counter) = i
-      end do
+    pso_options%feasible_init = feasible_init
+    pso_options%feasible_limit = feasible_limit
+    pso_options%feasible_init_attempts = feasible_init_attempts
 
-    end if
+  else if (trim(global_search) == 'genetic_algorithm') then
 
-    if (trim(global_search) == 'particle_swarm') then
+  ! Read genetic algorithm options and put them into derived type
 
-!     Read PSO options and put them into derived type
+    rewind(iunit)
+    read(iunit, iostat=iostat1, nml=genetic_algorithm_options)
+    call namelist_check('genetic_algorithm_options', iostat1, 'warn')
+    ga_options%pop = ga_pop
+    ga_options%tol = ga_tol
+    ga_options%maxit = ga_maxit
+    ga_options%parents_selection_method = parents_selection_method
+    ga_options%parent_fraction = parent_fraction
+    ga_options%roulette_selection_pressure = roulette_selection_pressure
+    ga_options%tournament_fraction = tournament_fraction
+    ga_options%crossover_range_factor = crossover_range_factor
+    ga_options%mutant_probability = mutant_probability
+    ga_options%chromosome_mutation_rate = chromosome_mutation_rate
+    ga_options%mutation_range_factor = mutation_range_factor
+    ga_options%feasible_init = feasible_init
+    ga_options%feasible_limit = feasible_limit
+    ga_options%feasible_init_attempts = feasible_init_attempts
 
-      rewind(iunit)
-      read(iunit, iostat=iostat1, nml=particle_swarm_options)
-      call namelist_check('particle_swarm_options', iostat1, 'no-warn')
-      pso_options%pop = pso_pop
-      pso_options%tol = pso_tol
-      pso_options%maxspeed = initial_perturb
-      pso_options%maxit = pso_maxit
-      pso_options%write_particlefile= pso_write_particlefile
-      pso_options%convergence_profile = pso_convergence_profile
-
-      pso_options%feasible_init = feasible_init
-      pso_options%feasible_limit = feasible_limit
-      pso_options%feasible_init_attempts = feasible_init_attempts
-      pso_options%write_designs = write_designs
-      if (.not. match_foils) then
-        pso_options%relative_fmin_report = .true.
-      else
-        pso_options%relative_fmin_report = .true.
-      end if
- 
-    else if (trim(global_search) == 'genetic_algorithm') then
-
-!     Read genetic algorithm options and put them into derived type
-
-      rewind(iunit)
-      read(iunit, iostat=iostat1, nml=genetic_algorithm_options)
-      call namelist_check('genetic_algorithm_options', iostat1, 'warn')
-      ga_options%pop = ga_pop
-      ga_options%tol = ga_tol
-      ga_options%maxit = ga_maxit
-      ga_options%parents_selection_method = parents_selection_method
-      ga_options%parent_fraction = parent_fraction
-      ga_options%roulette_selection_pressure = roulette_selection_pressure
-      ga_options%tournament_fraction = tournament_fraction
-      ga_options%crossover_range_factor = crossover_range_factor
-      ga_options%mutant_probability = mutant_probability
-      ga_options%chromosome_mutation_rate = chromosome_mutation_rate
-      ga_options%mutation_range_factor = mutation_range_factor
-      ga_options%feasible_init = feasible_init
-      ga_options%feasible_limit = feasible_limit
-      ga_options%feasible_init_attempts = feasible_init_attempts
-      ga_options%write_designs = write_designs
-      if (.not. match_foils) then
-        ga_options%relative_fmin_report = .true.
-      else
-        ga_options%relative_fmin_report = .false.
-      end if
-
-    else
-      call my_stop("Global search type '"//trim(global_search)//               &
-                   "' is not available.")
-    end if
+  else
+    call my_stop("Global search type '"//trim(global_search)//               &
+                  "' is not available.")
   end if
 
-  if (trim(search_type) == 'global_and_local' .or. trim(search_type) ==        &
-      'local') then
-
-    if (trim(local_search) == 'simplex') then
-
-!     Read simplex search options and put them into derived type
-
-      rewind(iunit)
-      read(iunit, iostat=iostat1, nml=simplex_options)
-      call namelist_check('simplex_options', iostat1, 'warn')
-      ds_options%tol = simplex_tol
-      ds_options%maxit = simplex_maxit
-      ds_options%write_designs = write_designs
-      if (.not. match_foils) then
-        ds_options%relative_fmin_report = .true.
-      else
-        ds_options%relative_fmin_report = .false.
-      end if
-
-    else
-      call my_stop("Local search type '"//trim(local_search)//   &
-                   "' is not available.")
-    end if
-
-  end if 
 
 ! Read and set default xfoil run options
 
   call  read_xfoil_options_inputs  ('', iunit, xfoil_options)
 
-
 ! Set default xfoil  paneling options
 
   call read_xfoil_paneling_inputs  ('', iunit, xfoil_geom_options)
-
-
-! Read and set options for polar generation for each new design (generate_polar = .true.) 
-
-  call read_init_polar_inputs ('', iunit, re_default, xfoil_options%ncrit, &
-                               '', .false., generate_polar)
 
 ! Close the input file
 
@@ -533,9 +425,7 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
 ! Optimization options namelist
 
   write(*,'(A)') " &optimization_options"
-  write(*,*) " search_type = '"//trim(search_type)//"'"
   write(*,*) " global_search = '"//trim(global_search)//"'"
-  write(*,*) " local_search = '"//trim(local_search)//"'"
   write(*,*) " seed_airfoil = '"//trim(seed_airfoil)//"'"
   write(*,*) " airfoil_file = '"//trim(airfoil_file)//"'"
   write(*,*) " shape_functions = '"//trim(shape_functions)//"'"
@@ -543,12 +433,7 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
   write(*,*) " nfunctions_top = ", nfunctions_top
   write(*,*) " nfunctions_bot = ", nfunctions_bot
   write(*,*) " initial_perturb = ", initial_perturb
-  write(*,*) " restart = ", restart
-  write(*,*) " restart_write_freq = ", restart_write_freq
-  write(*,*) " write_designs = ", write_designs
-! jx-mod Show more infos during optimization
   write(*,*) " show_details = ", show_details
-! jx-mod     
   write(*,*) " echo_input_parms = ", echo_input_parms 
 
   write(*,'(A)') " /"
@@ -626,61 +511,40 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
 
 ! Optimizer namelists
 
-  if (trim(search_type) == 'global_and_local' .or. trim(search_type) ==        &
-      'global') then
 
-    if (trim(global_search) == 'particle_swarm') then
+  if (trim(global_search) == 'particle_swarm') then
 
 !     Particle swarm namelist
 
-      write(*,'(A)') " &particle_swarm_options"
-      write(*,*) " pso_pop = ", pso_options%pop
-      write(*,*) " pso_tol = ", pso_options%tol
-      write(*,*) " pso_maxit = ", pso_options%maxit
-      write(*,*) " pso_convergence_profile = ", pso_options%convergence_profile
-      write(*,'(A)') " /"
-      write(*,*)
+    write(*,'(A)') " &particle_swarm_options"
+    write(*,*) " pso_pop = ", pso_options%pop
+    write(*,*) " pso_tol = ", pso_options%tol
+    write(*,*) " pso_maxit = ", pso_options%maxit
+    write(*,*) " pso_convergence_profile = ", pso_options%convergence_profile
+    write(*,'(A)') " /"
+    write(*,*)
 
-    else if (trim(global_search) == 'genetic_algorithm') then
+  else if (trim(global_search) == 'genetic_algorithm') then
 
 !     Genetic algorithm options
 
-      write(*,'(A)') " &genetic_algorithm_options"
-      write(*,*) " ga_pop = ", ga_options%pop
-      write(*,*) " ga_tol = ", ga_options%tol
-      write(*,*) " ga_maxit = ", ga_options%maxit
-      write(*,*) " parents_selection_method = ",                               &
-                 ga_options%parents_selection_method
-      write(*,*) " parent_fraction = ", ga_options%parent_fraction 
-      write(*,*) " roulette_selection_pressure = ",                            &
-                 ga_options%roulette_selection_pressure
-      write(*,*) " tournament_fraction = " , ga_options%tournament_fraction
-      write(*,*) " crossover_range_factor = ", ga_options%crossover_range_factor
-      write(*,*) " mutant_probability = ", ga_options%mutant_probability
-      write(*,*) " chromosome_mutation_rate = ",                               &
-                 ga_options%chromosome_mutation_rate
-      write(*,*) " mutation_range_factor = ", ga_options%mutation_range_factor
-      write(*,'(A)') " /"
-      write(*,*)
-
-    end if
-
-  end if
-
-  if (trim(search_type) == 'global_and_local' .or. trim(search_type) ==        &
-      'local') then
-
-    if(trim(local_search) == 'simplex') then
-
-!     Simplex search namelist
-
-      write(*,'(A)') " &simplex_options"
-      write(*,*) " simplex_tol = ", ds_options%tol
-      write(*,*) " simplex_maxit = ", ds_options%maxit
-      write(*,'(A)') " /"
-      write(*,*)
-
-    end if
+    write(*,'(A)') " &genetic_algorithm_options"
+    write(*,*) " ga_pop = ", ga_options%pop
+    write(*,*) " ga_tol = ", ga_options%tol
+    write(*,*) " ga_maxit = ", ga_options%maxit
+    write(*,*) " parents_selection_method = ",                               &
+                ga_options%parents_selection_method
+    write(*,*) " parent_fraction = ", ga_options%parent_fraction 
+    write(*,*) " roulette_selection_pressure = ",                            &
+                ga_options%roulette_selection_pressure
+    write(*,*) " tournament_fraction = " , ga_options%tournament_fraction
+    write(*,*) " crossover_range_factor = ", ga_options%crossover_range_factor
+    write(*,*) " mutant_probability = ", ga_options%mutant_probability
+    write(*,*) " chromosome_mutation_rate = ",                               &
+                ga_options%chromosome_mutation_rate
+    write(*,*) " mutation_range_factor = ", ga_options%mutation_range_factor
+    write(*,'(A)') " /"
+    write(*,*)
 
   end if
 
@@ -720,10 +584,11 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
       trim(seed_airfoil) /= 'from_bezier' )                                    &
     call my_stop("seed_airfoil must be 'from_file' or 'from_bezier'.")
   if (trim(shape_functions) /= 'hicks-henne' .and.                             &
+      trim(shape_functions) /= 'bezier' .and.                                  &
       trim(shape_functions) /= 'camb-thick' .and.                              &
       trim(shape_functions) /= 'camb-thick-plus')                              &
-    call my_stop("shape_functions must be 'hicks-henne', 'camb-thick'"//   &
-                 " or 'camb-thick-plus'.")
+    call my_stop("shape_functions must be 'hicks-henne', 'bezier',"//          &
+                 "'camb-thick' or 'camb-thick-plus'.")
   if ((nfunctions_top < 0) .and.   & 
       trim(shape_functions) /= 'camb-thick' .and.                              &
       trim(shape_functions) /= 'camb-thick-plus')                              &
@@ -735,18 +600,10 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
   if (initial_perturb <= 0.d0)                                                 &
     call my_stop("initial_perturb must be > 0.")
   if ((min_bump_width <= 0.d0) .and.                                           &
+      trim(shape_functions) /= 'bezier' .and.                                  &
       trim(shape_functions) /= 'camb-thick' .and.                              &
       trim(shape_functions) /= 'camb-thick-plus')                              &
     call my_stop("min_bump_width must be > 0.")
-
-
-! No more restart
-  if (restart) &
-    call my_stop("The restart option is no more supported in Xoptfoil-JX. "//  &
-    "Please remove this option from input file.")
-
-
-
 
 ! Constraints
 
@@ -757,8 +614,6 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
     if (curv_bot_spec%max_curv_reverse < 0)  call my_stop("max_curv_reverse_bot must be >= 0")
     if (curv_top_spec%max_te_curvature < 0.d0) call my_stop("max_te_curvature must be >= 0")
   end if 
-
-
 
   if (min_thickness <= 0.d0) call my_stop("min_thickness must be > 0.")
   if (max_thickness <= 0.d0) call my_stop("max_thickness must be > 0.")
@@ -812,63 +667,43 @@ subroutine read_inputs(input_file, search_type, global_search, local_search,   &
 
 ! Optimizer options
 
-  if (trim(search_type) == 'global' .or.                                       &
-       trim(search_type) == 'global_and_local') then
+  if (trim(global_search) == 'particle_swarm') then
 
-    if (trim(global_search) == 'particle_swarm') then
+    if (pso_pop < 1) call my_stop("pso_pop must be > 0.")
+    if (pso_tol <= 0.d0) call my_stop("pso_tol must be > 0.")
+    if (pso_maxit < 1) call my_stop("pso_maxit must be > 0.")  
+    if ( (trim(pso_convergence_profile) /= "quick") .and.                    &
+          (trim(pso_convergence_profile) /= "exhaustive") .and.               &
+          (trim(pso_convergence_profile) /= "quick_camb_thick"))                       &
+      call my_stop("pso_convergence_profile must be 'exhaustive' "//&
+                    "or 'quick' or 'quick_camb_thick'.")
 
-!     Particle swarm options
+  else if (trim(global_search) == 'genetic_algorithm') then
 
-      if (pso_pop < 1) call my_stop("pso_pop must be > 0.")
-      if (pso_tol <= 0.d0) call my_stop("pso_tol must be > 0.")
-      if (pso_maxit < 1) call my_stop("pso_maxit must be > 0.")  
-      if ( (trim(pso_convergence_profile) /= "quick") .and.                    &
-           (trim(pso_convergence_profile) /= "exhaustive") .and.               &
-           (trim(pso_convergence_profile) /= "quick_camb_thick"))                       &
-        call my_stop("pso_convergence_profile must be 'exhaustive' "//&
-                     "or 'quick' or 'quick_camb_thick'.")
-
-    else if (trim(global_search) == 'genetic_algorithm') then
-
-!     Genetic algorithm options
-
-      if (ga_pop < 1) call my_stop("ga_pop must be > 0.")
-      if (ga_tol <= 0.d0) call my_stop("ga_tol must be > 0.")
-      if (ga_maxit < 1) call my_stop("ga_maxit must be > 0.")
-      if ( (trim(parents_selection_method) /= "roulette") .and.                &
-           (trim(parents_selection_method) /= "tournament") .and.              &
-           (trim(parents_selection_method) /= "random") )                      &
-        call my_stop("parents_selection_method must be 'roulette', "//&
-                     "'tournament', or 'random'.")
-      if ( (parent_fraction <= 0.d0) .or. (parent_fraction > 1.d0) )           &
-        call my_stop("parent_fraction must be > 0 and <= 1.")
-      if (roulette_selection_pressure <= 0.d0)                                 &
-        call my_stop("roulette_selection_pressure must be > 0.")
-      if ( (tournament_fraction <= 0.d0) .or. (tournament_fraction > 1.d0) )   &
-        call my_stop("tournament_fraction must be > 0 and <= 1.")
-      if (crossover_range_factor < 0.d0)                                       &
-        call my_stop("crossover_range_factor must be >= 0.")
-      if ( (mutant_probability < 0.d0) .or. (mutant_probability > 1.d0) )      &
-        call my_stop("mutant_probability must be >= 0 and <= 1.") 
-      if (chromosome_mutation_rate < 0.d0)                                     &
-        call my_stop("chromosome_mutation_rate must be >= 0.")
-      if (mutation_range_factor < 0.d0)                                        &
-        call my_stop("mutation_range_factor must be >= 0.")
-
-    end if
+    if (ga_pop < 1) call my_stop("ga_pop must be > 0.")
+    if (ga_tol <= 0.d0) call my_stop("ga_tol must be > 0.")
+    if (ga_maxit < 1) call my_stop("ga_maxit must be > 0.")
+    if ( (trim(parents_selection_method) /= "roulette") .and.                &
+          (trim(parents_selection_method) /= "tournament") .and.              &
+          (trim(parents_selection_method) /= "random") )                      &
+      call my_stop("parents_selection_method must be 'roulette', "//&
+                    "'tournament', or 'random'.")
+    if ( (parent_fraction <= 0.d0) .or. (parent_fraction > 1.d0) )           &
+      call my_stop("parent_fraction must be > 0 and <= 1.")
+    if (roulette_selection_pressure <= 0.d0)                                 &
+      call my_stop("roulette_selection_pressure must be > 0.")
+    if ( (tournament_fraction <= 0.d0) .or. (tournament_fraction > 1.d0) )   &
+      call my_stop("tournament_fraction must be > 0 and <= 1.")
+    if (crossover_range_factor < 0.d0)                                       &
+      call my_stop("crossover_range_factor must be >= 0.")
+    if ( (mutant_probability < 0.d0) .or. (mutant_probability > 1.d0) )      &
+      call my_stop("mutant_probability must be >= 0 and <= 1.") 
+    if (chromosome_mutation_rate < 0.d0)                                     &
+      call my_stop("chromosome_mutation_rate must be >= 0.")
+    if (mutation_range_factor < 0.d0)                                        &
+      call my_stop("mutation_range_factor must be >= 0.")
 
   end if
-
-  if (trim(search_type) == 'local' .or.                                        &
-       trim(search_type) == 'global_and_local') then
-
-!   Simplex options
-
-    if (simplex_tol <= 0.d0) call my_stop("simplex_tol must be > 0.")
-    if (simplex_maxit < 1) call my_stop("simplex_maxit must be > 0.")  
-  
-  end if
-
   
 end subroutine read_inputs
 
@@ -1737,10 +1572,10 @@ end subroutine namelist_check
 !=============================================================================80
 subroutine read_clo(input_file, output_prefix, exename)
 
-  character(*), intent(inout) :: input_file, output_prefix
+  character(:), allocatable, intent(inout) :: input_file, output_prefix
   character(*), intent(in), optional :: exename
 
-  character(80) :: arg, exeprint
+  character(100) :: arg, exeprint
   integer i, nargs
   logical getting_args
 
@@ -1765,17 +1600,20 @@ subroutine read_clo(input_file, output_prefix, exename)
       if (i == nargs) then
         call my_stop("Must specify an input file with -i option.")
       else
-        call getarg(i+1, input_file)
+        call getarg(i+1, arg)
+        input_file = trim(arg) 
         i = i+2
       end if
+
     else if (trim(arg) == "-o") then
       if (i == nargs) then
         call my_stop("Must specify an output prefix with -o option.")
       else
-        call getarg(i+1, output_prefix)
+        call getarg(i+1, arg)
+        output_prefix = trim(arg) 
         i = i+2
       end if
-! jx-mod new default re number
+
     else if (trim(arg) == "-r") then
       if (i == nargs) then
         call my_stop("Must specify a re value for -r option.")
@@ -1783,7 +1621,7 @@ subroutine read_clo(input_file, output_prefix, exename)
         call getarg(i+1, arg)
         i = i+2
       end if
-! jx-mod new seed airfoil 
+
     else if (trim(arg) == "-a") then
       if (i == nargs) then
         call my_stop("Must specify filename of seed airfoil for -a option.")
@@ -1791,9 +1629,11 @@ subroutine read_clo(input_file, output_prefix, exename)
         call getarg(i+1, arg)
         i = i+2
       end if
+
     else if ( (trim(arg) == "-h") .or. (trim(arg) == "--help") ) then
       call print_usage(exeprint)
       stop
+
     else
       call print_error ("Unrecognized option "//trim(arg)//".")
       call print_usage (exeprint)

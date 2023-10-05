@@ -24,15 +24,9 @@ module simplex_search
 ! Options type for direct searches
 
   type ds_options_type
-
     double precision :: tol       ! tolerance in simplex radius before
                                   !   triggering a stop condition
     integer :: maxit              ! Max steps allowed before stopping
-    logical :: write_designs      ! Whether to write best design each time it
-                                  !   changes
-    logical :: relative_fmin_report
-                                  ! If .true., reports improvement over seed
-                                  !   design. Otherwise, reports fmin itself.
   end type ds_options_type
 
   contains
@@ -43,8 +37,7 @@ module simplex_search
 !
 !=============================================================================80
 subroutine simplexsearch(xopt, fmin, step, fevals, objfunc, x0, given_f0_ref,  &
-                         f0_ref, ds_options,                                   &
-                         indesigncounter, instep, converterfunc)
+                         f0_ref, ds_options)
 
   !! xopt          out: designvars result 
   !! fmin          out: smallest value of objective function     
@@ -54,14 +47,8 @@ subroutine simplexsearch(xopt, fmin, step, fevals, objfunc, x0, given_f0_ref,  &
   !! x0            start values of designvars 
   !! given_f0_ref  is there a reference reference start value of objective function 
   !! f0_ref        inout: reference start value of objective function 
-  !! indesigncounter   opt: start value for designcounter
-  !! instep            opt: start value for steps 
-  !! converfunc        opt: pretty write of designvars                                              
 
-  use optimization_util, only : bubble_sort, design_radius, write_design,      &
-                                read_run_control
-
-  use vardef, only : design_subdir
+  use optimization_util, only : bubble_sort, design_radius, write_design
 
   double precision, dimension(:), intent(inout) :: xopt
   double precision, intent(out) :: fmin
@@ -78,30 +65,14 @@ subroutine simplexsearch(xopt, fmin, step, fevals, objfunc, x0, given_f0_ref,  &
   double precision, intent(inout) :: f0_ref
   logical, intent(in) :: given_f0_ref
   type (ds_options_type), intent(in) :: ds_options
-  integer, intent(in), optional :: indesigncounter, instep
-
-  optional :: converterfunc
-  interface
-    integer function converterfunc(x, designcounter_dum)
-      double precision, dimension(:), intent(in) :: x
-      integer, intent(in) :: designcounter_dum
-    end function
-  end interface
 
   double precision, dimension(size(x0,1),size(x0,1)+1) :: dv
   double precision, dimension(size(x0,1)+1) :: objvals
   double precision, dimension(size(x0,1)) :: xcen, xr, xe, xc
 
   double precision :: rho, xi, gam, sigma, fr, fe, fc, f0, mincurr, radius
-  integer :: i, j, nvars, stat, designcounter, iunit, ioerr,   &
-             prevsteps, k, ncommands
-  logical :: converged, needshrink, signal_progress, new_history_file
-  character(3) :: filestat
-  character(11) :: stepchar
-  character(20) :: fminchar, radchar
-  character(25) :: relfminchar
-  character(80), dimension(20) :: commands
-  character(100) :: histfile
+  integer :: i, j, nvars, designcounter
+  logical :: converged, needshrink, signal_progress
 
 ! Standard Nelder-Mead constants
 
@@ -134,9 +105,9 @@ subroutine simplexsearch(xopt, fmin, step, fevals, objfunc, x0, given_f0_ref,  &
           dv(i,j) = 0.00025d0
         else
           if (x0(i) > 0) then 
-            dv(i,j) = x0(i) + 0.1d0 ! 1.05d0*x0(i)
+            dv(i,j) = x0(i) + 0.05d0 !0.1d0 ! 1.05d0*x0(i)
           else
-            dv(i,j) = x0(i) - 0.1d0 ! 1.05d0*x0(i)
+            dv(i,j) = x0(i) - 0.05d0 ! 0.1d0 ! 1.05d0*x0(i)
           end if 
         end if
       else
@@ -151,71 +122,25 @@ subroutine simplexsearch(xopt, fmin, step, fevals, objfunc, x0, given_f0_ref,  &
   objvals(nvars+1) = objfunc(x0)
   fevals = fevals + 1
 
-!   Counters
+! Counters
 
   step = 0
-  if (.not. present(indesigncounter)) then
-    designcounter = 0
-  else
-    designcounter = indesigncounter
-  end if
-  if (.not. present(instep)) then
-    prevsteps = 0
-  else
-    prevsteps = instep
-  end if
-
+  designcounter = 0
 
 ! Initial minimum value
 
   fmin = minval(objvals)
   mincurr = fmin
 
-  if (ds_options%write_designs) then
-
-  ! Open file for writing iteration history
-    histfile  = trim(design_subdir)//'Optimization_History.dat'
-    iunit = 17
-    new_history_file = .false.
-    if ( (prevsteps == 0) .and. (step == 0) ) then
-      new_history_file = .true.
-    else
-      open(unit=iunit, file=histfile, status='old',            &
-          position='append', iostat=ioerr)
-      if (ioerr /= 0) then
-        write(*,*) 
-        write(*,*) "Warning: did not find existing "//trim(histfile)//" file."
-        write(*,*) "A new one will be written, but old data will be lost."
-        write(*,*)
-        new_history_file = .true.
-      end if
-    end if
-    if (new_history_file) then
-      open(unit=iunit, file=histfile, status='replace')
-      if (ds_options%relative_fmin_report) then
-        write(iunit,'(A)') "Iteration  Objective function  "//&
-                          "% Improvement over seed  Design radius"
-      else
-        write(iunit,'(A)') "Iteration  Objective function  Design radius"
-      end if
-      flush(iunit)
-    end if
-  end if
-
 ! Iterative procedure for optimization
  
   needshrink = .false.
   converged = .false.
 
-  if (ds_options%write_designs) then
-    write(*,*) 'Simplex optimization progress:'
-  end if 
-
-  step = step + prevsteps
   main_loop: do while (.not. converged)
 
     step = step + 1
-    if (step == ds_options%maxit + prevsteps) converged = .true.
+    if (step == ds_options%maxit) converged = .true.
     
 !   Sort according to ascending objective function value
 
@@ -235,59 +160,6 @@ subroutine simplexsearch(xopt, fmin, step, fevals, objfunc, x0, given_f0_ref,  &
 
     radius = design_radius(dv)
     if (radius < ds_options%tol) converged = .true.
-
-!   Display progress
-
-    if (ds_options%write_designs) then
-      write(*,'(" ",I5,":",F14.7,F14.7,"%   ", ES10.3)') step, fmin, (f0 - fmin)/f0*100.d0, radius
-
-  !   Write design to file if requested
-  !   converterfunc is an optional function supplied to convert design variables
-  !     into something more useful.  If not supplied, the design variables
-  !     themselves are written to a file.
-
-      if (ds_options%write_designs .and. designcounter == 1) then
-        filestat = 'new'
-      else 
-        filestat = 'old'
-      end if
-
-      if ( (signal_progress) .and. (ds_options%write_designs) ) then
-        designcounter = designcounter + 1
-        if (present(converterfunc)) then
-          stat = converterfunc(dv(:,1), designcounter)
-        else
-          call write_design('simplex_designs.dat', filestat, dv(:,1),            &
-                            designcounter)
-        end if
-      end if
-
-  !   Write iteration history
-
-      write(stepchar,'(I11)') step
-      write(fminchar,'(F14.10)') fmin
-      write(radchar,'(ES14.6)') radius
-      if (ds_options%relative_fmin_report) then
-        write(relfminchar,'(F14.10)') (f0 - fmin)/f0*100.d0
-        write(iunit,'(A11,A20,A25,A20)') adjustl(stepchar), adjustl(fminchar),   &
-                                        adjustl(relfminchar), adjustl(radchar)
-      else
-        write(iunit,'(A11,2A20)') adjustl(stepchar), adjustl(fminchar),          &
-                                  adjustl(radchar)
-      end if
-      flush(iunit)
-    end if 
-
-
-!   Check for commands in run_control file
-
-    call read_run_control(commands, ncommands)
-    do k = 1, ncommands
-      if (trim(commands(k)) == "stop") then
-        converged = .true.
-        write(*,*) 'Cleaning up: stop command encountered in run_control.'
-      end if
-    end do
 
 !   Compute the centroid of the best nvals designs
 
@@ -390,11 +262,6 @@ subroutine simplexsearch(xopt, fmin, step, fevals, objfunc, x0, given_f0_ref,  &
   xopt = dv(:,1)
   fmin = objvals(1)
 
-! Remove prevsteps from counter so we return just the number of steps for the
-! simplex search
-
-  step = step - prevsteps
-
 ! Check for convergence one more time
 
   radius = design_radius(dv)
@@ -405,12 +272,6 @@ subroutine simplexsearch(xopt, fmin, step, fevals, objfunc, x0, given_f0_ref,  &
     write(*,*) 'Warning: Simplex optimizer forced to exit due to the max number'
     write(*,*) '         of iterations being reached.'
   end if
-
-! Close iteration history file
-
-  if (ds_options%write_designs) then
-    close(iunit)
-  end if 
 
 end subroutine simplexsearch
 

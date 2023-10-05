@@ -15,6 +15,9 @@
 
 !  Copyright (C) 2017-2019 Daniel Prosser
 
+! ------------------------------------------------
+
+
 program main
 
 !         Main program for airfoil optimization
@@ -35,23 +38,25 @@ program main
 !             xfoil   os_util  vardef
 !
 
-  use omp_lib             ! to switch off multi threading
   use os_util
   use vardef
-  use input_output,        only : read_inputs, read_clo
-  use particle_swarm,      only : pso_options_type
-  use genetic_algorithm,   only : ga_options_type
-  use simplex_search,      only : ds_options_type
-  use airfoil_evaluation,  only : xfoil_geom_options, match_foils, airfoil_te_gap
-  use airfoil_operations,  only : get_seed_airfoil
-  use airfoil_operations,  only : repanel_and_normalize_airfoil
-  use airfoil_operations,  only : split_foil_at_00
-  use memory_util,         only : deallocate_airfoil, allocate_airfoil_data,   &
-                                  deallocate_airfoil_data
-  use input_sanity,        only : check_seed, check_inputs
-  use airfoil_preparation, only : preset_airfoil_to_targets, preset_airfoil_te_gap
-  use airfoil_preparation, only : matchfoils_preprocessing 
-  use optimization_driver, only : optimize, write_final_design
+  use input_output,         only : read_inputs, read_clo
+  use particle_swarm,       only : pso_options_type
+  use genetic_algorithm,    only : ga_options_type
+  use simplex_search,       only : ds_options_type
+  use airfoil_evaluation,   only : xfoil_geom_options, match_foils
+  use airfoil_operations,   only : get_seed_airfoil
+  use airfoil_operations,   only : repanel_and_normalize_airfoil
+  use airfoil_operations,   only : split_foil_at_00, airfoil_write
+  use memory_util,          only : allocate_airfoil_data, deallocate_airfoil_data
+  use memory_util,          only : allocate_optimal_design, allocate_constrained_dvs                                 
+  use input_sanity,         only : check_seed, check_inputs
+  use airfoil_preparation,  only : preset_airfoil_to_targets
+  use airfoil_preparation,  only : matchfoils_preprocessing, transform_to_bezier_based 
+  use optimization_driver,  only : optimize, write_final_design
+  use airfoil_shape_bezier, only : bezier_spec_type, ncp_to_ndv, ndv_to_ncp
+  use xfoil_driver,         only : xfoil_init, xfoil_cleanup
+
 
   implicit none
 
@@ -60,41 +65,31 @@ program main
 #endif
 
   type(airfoil_type) :: original_foil, final_foil
-  character(80) :: search_type, global_search, local_search, seed_airfoil_type,  &
-                   airfoil_file, matchfoil_file
-  character(80) :: input_file, text
   type(pso_options_type) :: pso_options
-  type(ga_options_type) :: ga_options
-  type(ds_options_type) :: ds_options
-  integer :: steps, fevals, nshapedvtop, nshapedvbot,        &
-             restart_write_freq 
-  double precision, dimension(:), allocatable :: optdesign
-  integer, dimension(:), allocatable :: constrained_dvs
-  double precision :: f0, fmin
-  logical :: restart, symmetrical
+  type(ga_options_type)  :: ga_options
+  type(bezier_spec_type) :: bezier_spec
+  double precision, allocatable :: optdesign (:)
+  integer, allocatable          :: constrained_dvs (:)
+  integer           :: steps, fevals
+  double precision  :: f0, fmin
+  logical           :: symmetrical
+  character(80)     :: global_search, seed_airfoil_type, matchfoil_file
+  character(80)     :: airfoil_file
+  character(:), allocatable :: input_file
+
 
 !-------------------------------------------------------------------------------
   
   write(*,'(A)')
-  call print_colored (COLOR_FEATURE,' Xoptfoil')
-  call print_colored (COLOR_FEATURE,'-JX')
+  call print_colored (COLOR_FEATURE,' Xoptfoil-JX')
+
   write(*,'(A)') '             The Airfoil Optimizer            v'//trim(PACKAGE_VERSION)
   write(*,'(A)') 
 
 ! Handle multithreading - be careful with screen output in multi-threaded code parts
-!   macro OPENMP is set in CMakeLists.txt as _OPENMP is not set by default (..?) 
-#ifdef OPENMP                       
-  if (omp_get_max_threads() > 1) then 
-    if (.false. ) then                        ! activate for testing purposes
-      call print_warning ("Because of option 'show_details' CPU multi threading will be switched off")
-      call omp_set_num_threads( 1 )
-    else
-      write (text,'(I2,A)') omp_get_max_threads(),' CPU threads will be used during optimization' 
-      call print_note (text)
-   end if 
-  end if 
-#else
-  text = 'dummy' 
+!   macro OPENMP is set in CMakeLists.txt as _OPENMP is not set by default 
+#ifdef OPENMP 
+  call set_number_of_threads()
 #endif
 
 ! Set default names and read command line arguments
@@ -103,88 +98,90 @@ program main
   output_prefix = 'optfoil'
   call read_clo(input_file, output_prefix,'Xoptfoil-JX')
 
+  ! Create subdirectory for all the design files 
+
+  design_subdir = output_prefix // DESIGN_SUBDIR_POSTFIX
+  call make_directory (design_subdir)
+  design_subdir = design_subdir // '/'
+
+
 ! Read inputs from namelist file
 
   npan_fixed = 200                      ! for optimizing npan is fixed ...
-  call read_inputs(input_file, search_type, global_search, local_search,       &
+  call read_inputs(input_file, global_search,      &
                    seed_airfoil_type, airfoil_file, nparams_top, nparams_bot,  &
-                   restart, restart_write_freq, constrained_dvs,               &
-                   pso_options, ga_options, ds_options, matchfoil_file,        &
-                   symmetrical) 
-
+                   pso_options, ga_options, matchfoil_file, symmetrical) 
   write (*,*) 
   call check_inputs(global_search, pso_options)
     
-  
-! Load seed airfoil into memory, repanel, normalize, rotate if not bezier based 
+
+  ! Load seed airfoil into memory, repanel, normalize, rotate if not bezier based 
 
   call get_seed_airfoil (seed_airfoil_type, airfoil_file, original_foil)
   write (*,*) 
 
-  if (.not. original_foil%bezier_based) then 
-    call repanel_and_normalize_airfoil (original_foil, xfoil_geom_options, symmetrical, seed_foil) 
+  if (original_foil%bezier_based) then 
+    ! Bezier based already in perfect quality - no action needed - leave it at is!
+    seed_foil = original_foil  
+    call airfoil_write (trim(seed_foil%name)//'.dat', trim(seed_foil%name), seed_foil)             
   else 
-    seed_foil = original_foil
+
+    ! repanel and normalize 
+    call repanel_and_normalize_airfoil (original_foil, xfoil_geom_options, symmetrical, seed_foil) 
   end if
-                           !   ... to have run_xfoil results equal airfoil external results
+
+! ... to have run_xfoil results equal airfoil external results
+
   xfoil_geom_options%npan = seed_foil%npoint    ! will use this constant value now
 
+
+! Prepare Airfoil based on optimization shape type  
+
+  if (trim(shape_functions) == 'bezier' .and. seed_foil%bezier_based) then 
+
+      ! ignore 'bezier_options' - take seed bezier definition  
+      nparams_top = ncp_to_ndv(seed_foil%bezier_spec%ncpoints_top) 
+      nparams_bot = ncp_to_ndv(seed_foil%bezier_spec%ncpoints_bot) 
+      write(*,*)  
+      call print_note ("Using number of Bezier control points from seed airfoil. "// &
+                       "Values in 'bezier_options' will be ignored.")
+      call print_text ("Also no preprocessing of seed airfoil will be done.", 7)
+
+  else
+
+    if (trim(shape_functions) == 'bezier') then 
+    ! a new bezier "match foil" is generated to be new seed 
+      bezier_spec%ncpoints_top = ndv_to_ncp (nparams_top)
+      bezier_spec%ncpoints_bot = ndv_to_ncp (nparams_bot)
+      seed_foil%name = trim(seed_foil%name) // '_bezier'
+      call transform_to_bezier_based (bezier_spec, seed_foil%npoint, seed_foil)
+    end if 
+  end if  
+
+
+! Set up for matching airfoils 
+  if (match_foils) then
+    call matchfoils_preprocessing  (matchfoil_file)
+  end if
+
+
+! Allocate optimal solutions, constraints, airfoils, xfoil for optimization 
   
-! Allocate optimal solution
-
-  if (trim(shape_functions) == 'camb-thick') then
-    !Use a fixed number of 6 designvariables for airfoil-generation.
-    !These are camber, thickness, camber-location, thickness-location,
-    !LE radius and blending-range
-    nshapedvtop = 6
-    nshapedvbot = 0
-  else if (trim(shape_functions) == 'camb-thick-plus') then
-    !Use a fixed number of 12 designvariables for airfoil-generation.
-    !Top and Bottom are treated seperately
-    nshapedvtop = 12
-    nshapedvbot = 0
-  else
-    nshapedvtop = nparams_top*3
-    nshapedvbot = nparams_bot*3
-  end if
-  if (.not. symmetrical) then
-    allocate(optdesign(nshapedvtop+nshapedvbot+nflap_optimize))
-  else
-    allocate(optdesign(nshapedvtop+nflap_optimize))
-  end if
-
-! Allocate memory for airfoil analysis
-
+  call allocate_constrained_dvs (symmetrical, constrained_dvs)
+  call allocate_optimal_design  (symmetrical, optdesign)
   call allocate_airfoil_data()
 
-! Create subdirectory for all the design files 
 
-  design_subdir = trim(output_prefix) // DESIGN_SUBDIR_POSTFIX
-  call make_directory (trim(design_subdir))
-  design_subdir = trim(design_subdir) // '/'
-
-! Make sure seed airfoil passes constraints
-!  - preset airfoil to constraints and/or targets
-!  - preset airfoil trailing edge te gap 
-!  - smooth foil if requested
-!  - get scaling factors for operating points, 
-
-  if (match_foils) then
-  ! Set up for matching airfoils 
-    call matchfoils_preprocessing  (matchfoil_file)
-  else
-    call preset_airfoil_to_targets (show_details, seed_foil) 
-    call preset_airfoil_te_gap     (show_details, seed_foil, airfoil_te_gap) 
-  end if
-
+! Make sure seed airfoil passes constraints - final checks, prepare objective function 
+!  - get scaling factors for operating points with xfoil, 
 
   call check_seed()
 
-  ! Optimize
+
+! Optimize
   
-  call optimize(search_type, global_search, local_search, constrained_dvs,     &
-                pso_options, ga_options, ds_options, restart,                  &
-                restart_write_freq, optdesign, f0, fmin, steps, fevals)
+  call optimize (global_search, constrained_dvs, pso_options, ga_options,      &
+                 optdesign, f0, fmin, steps, fevals)
 
 ! Notify of total number of steps and function evals
 
@@ -196,16 +193,7 @@ program main
 
   call write_final_design(optdesign, f0, fmin, final_foil)
 
-
-! Deallocate memory
-  call deallocate_airfoil(original_foil)
-  call deallocate_airfoil(seed_foil)
-  call deallocate_airfoil(final_foil)
-  call deallocate_airfoil(seed_foil_not_smoothed)
-  call deallocate_airfoil_data()
-  deallocate(optdesign)
-  if (allocated(constrained_dvs)) deallocate(constrained_dvs)
-
   write(*,*)
 
 end program main
+

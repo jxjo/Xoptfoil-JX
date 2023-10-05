@@ -40,7 +40,7 @@ module os_util
   public :: print_error
   public :: print_warning
   public :: print_note
-  public :: print_note_only
+  public :: print_text
   public :: print_colored_i
   public :: print_colored_r
   public :: print_colored_s
@@ -48,6 +48,8 @@ module os_util
   public :: i_quality
   public :: r_quality
   
+  public :: set_number_of_threads
+
   interface print_colored
 #ifdef UNIX
   module procedure print_colored
@@ -291,10 +293,13 @@ end subroutine print_colored_windows
 subroutine make_directory_unix (subdirectory)
   character(*),  intent (in) :: subdirectory
   integer         :: istat
-  character (255) :: mkdir_command
+  character (255) :: command
 
-  mkdir_command = 'mkdir '//trim(subdirectory)
-  istat = system (trim(mkdir_command))
+  command = 'rmdir --ignore-fail-on-non-empty '//trim(subdirectory)
+  istat = system (trim(command))
+
+  command = 'mkdir '//trim(subdirectory)
+  istat = system (trim(command))
 
 end subroutine make_directory_unix
 
@@ -303,10 +308,14 @@ end subroutine make_directory_unix
   subroutine make_directory_windows (subdirectory)
     character(*),  intent (in) :: subdirectory
     integer         :: istat
-    character (255) :: mkdir_command
+    character (255) :: command
 
-    mkdir_command = 'if not exist "'//trim(subdirectory)//'" mkdir "'//trim(subdirectory)//'"'
-    istat = system (trim(mkdir_command))
+    command = 'if exist "'//trim(subdirectory)//'" rmdir "'//trim(subdirectory)//'" /s/q'
+    istat = system (trim(command))
+
+    command = '" mkdir "'//trim(subdirectory)//'"'
+    istat = system (trim(command))
+
   end subroutine make_directory_windows
 
 #endif
@@ -316,7 +325,7 @@ end subroutine make_directory_unix
 !------------------------------------------------------------------------------------------
 
   pure function stri (a_int) result (as_string)
-
+    !! integer to string 
     integer,  intent (in) :: a_int
     character (:), allocatable ::as_string
 
@@ -328,7 +337,7 @@ end subroutine make_directory_unix
   end function 
 
   pure function strf (format, a_float) result (as_string)
-
+    !! real to string using format specifier 
     doubleprecision,  intent (in) :: a_float
     character (*),  intent (in) :: format
     character (:), allocatable ::as_string
@@ -373,6 +382,7 @@ subroutine print_warning (text, intent)
 end subroutine print_warning
 
 subroutine print_note (text, intent)
+  !! print a note with an initial 'Note:'
   character(*),  intent (in) :: text
   integer,  intent (in), optional :: intent
   integer :: i
@@ -380,12 +390,12 @@ subroutine print_note (text, intent)
   if (present (intent)) then 
     if (intent >0 .and. intent <80) i = intent
   end if
-  write(*,'(A)', advance = 'no') repeat(' ',i)
-  call print_colored (COLOR_NOTE, 'Note: ')
-  write (*,'(A)') trim(text)
+  call print_colored (COLOR_NOTE, repeat(' ',i) // 'Note: '//trim(text))
+  write (*,*) 
 end subroutine print_note
 
-subroutine print_note_only (text, intent)
+subroutine print_text (text, intent)
+  !! print a note text with an optional intent
   character(*),  intent (in) :: text
   integer,  intent (in), optional :: intent
   integer :: i
@@ -395,7 +405,7 @@ subroutine print_note_only (text, intent)
   end if
   call print_colored (COLOR_NOTE, repeat(' ',i) // trim(text))
   write (*,*)
-end subroutine print_note_only
+end subroutine print_text
 
 !------------------------------------------------------------------------------------------
 ! Stops and prints an error message, or just warns
@@ -603,6 +613,41 @@ subroutine print_colored_rating (strlen, quality)
   
 end subroutine print_colored_rating
 
+
+!-------------------------------------------------------------------------
+! OMP Utils  
+!-------------------------------------------------------------------------
+
+subroutine set_number_of_threads()
+  !! Multithreading: set number of threads used for optimization 
+
+  use omp_lib    
+  
+#ifdef OPENMP 
+  integer         :: max_threads, used_threads
+
+  max_threads = omp_get_max_threads()         ! omp utility function ...                     
+
+  if (max_threads > 1) then 
+    if (.false. ) then                        ! activate for testing purposes
+      call print_warning ("Because of option 'show_details' CPU multi threading will be switched off")
+      call omp_set_num_threads( 1 )
+    else
+      used_threads = max_threads
+      if (max_threads > 10) then 
+        used_threads = max_threads - 2
+      elseif (max_threads > 3) then 
+        used_threads = max_threads - 1
+      else
+        used_threads = max_threads
+      end if 
+      call omp_set_num_threads(used_threads)
+      call print_note (stri(used_threads)//" of "//stri(max_threads)//" CPU threads will be used.")
+    end if 
+  end if
+#endif
+
+end subroutine set_number_of_threads  
 
 !-------------------------------------------------------------------------
 ! measure time to run 

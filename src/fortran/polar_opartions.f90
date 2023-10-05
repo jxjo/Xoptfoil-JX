@@ -106,7 +106,7 @@ subroutine generate_polar_files (show_details, subdirectory, foil, xfoil_geom_op
    
     if (show_details) then 
       write (polar_label,'(A, I7)') 'Re=',  int(polars(i)%re%number)
-      call print_note_only ('- Generating polar ' // trim(polar_label) // '  ')
+      call print_text ('- Generating polar ' // trim(polar_label) // '  ')
     end if 
 
     call run_op_points (foil, xfoil_geom_options, local_xfoil_options,        &
@@ -211,7 +211,7 @@ subroutine generate_polar_set (show_details, csv_format, subdirectory, foil, &
         write (polar_label,'(A,I1,A, I7)') 'Type ',polars(i)%re%type,', Re=',  int(polars(i)%re%number)
       endif 
 
-      call print_note_only ('- Generating polar ' // trim(polar_label) // '  ')
+      call print_text ('- Generating polar ' // trim(polar_label) // '  ')
 
 
       call xfoil_init()
@@ -283,19 +283,17 @@ subroutine read_init_polar_inputs  (input_file, or_iunit, re_default, ncrit, foi
   character (7)   :: op_mode                                 ! 'spec-al' 'spec_cl'
   double precision, dimension (MAXPOLARS) :: polar_reynolds  ! 40000, 70000, 100000
   double precision, dimension (3)  :: op_point_range         ! -1.0, 10.0, 0.5
-  logical                          :: generate_polars        ! compatibility to older version 
 
   integer :: istat, iunit, i
   character (20) :: out_string
 
-  namelist /polar_generation/ generate_polar, generate_polars, type_of_polar, polar_reynolds,   &
+  namelist /polar_generation/ generate_polar, type_of_polar, polar_reynolds,   &
                               op_mode, op_point_range
 
 ! Init default values for polars
 
   npolars         = 0
-  generate_polar  = .false.
-  generate_polars = .false.
+  generate_polar  = .true.
   type_of_polar   = -1
   op_mode         = 'spec-al'
   op_point_range  = (/ -2d0, 10d0 , 1.0d0 /)
@@ -327,7 +325,6 @@ subroutine read_init_polar_inputs  (input_file, or_iunit, re_default, ncrit, foi
     call my_stop('Could not find input file '//trim(input_file)//'.')
   end if
   
-  generate_polar = generate_polar .or. generate_polars    ! compatibility to older version
 
   if (.not. generate_polar) return 
 

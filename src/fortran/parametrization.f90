@@ -73,26 +73,32 @@ subroutine create_shape_functions(xtop, xbot, modestop, modesbot, shapetype,   &
 
   integer :: nmodestop, nmodesbot, ntop, nbot
 
-  ntop = size(xtop,1)
-  nbot = size(xbot,1)
-
   if ((trim(shapetype) == 'camb-thick') .or. &
       (trim(shapetype) == 'camb-thick-plus')) then
     nmodestop = size(modestop,1)
     nmodesbot = 0
+    ntop = 1                                      ! dummy 
+    nbot = 1
+  elseif (trim(shapetype) == 'bezier') then 
+    nmodestop = size(modestop,1)
+    nmodesbot = size(modesbot,1)
+    ntop = 1                                      ! dummy
+    nbot = 1
   else
     nmodestop = size(modestop,1)/3
     nmodesbot = size(modesbot,1)/3
-  end if
+    ntop = size(xtop,1)
+    nbot = size(xbot,1)
+    end if
 
   if (first_time) then
 
 !   Allocate shape functions
-
+    ! #todo  for bezier and camb-thick only the size of shape functions is needed 
+    !        - they do not use shape functions approach ... 
     call allocate_shape_functions(nmodestop, nmodesbot, ntop, nbot)
 
 !   Initialize shape functions
-
     top_shape_function(:,:) = 0.d0
     bot_shape_function(:,:) = 0.d0
 
@@ -100,25 +106,23 @@ subroutine create_shape_functions(xtop, xbot, modestop, modesbot, shapetype,   &
 
   if (.not. first_time) then
 
-!   Create shape functions for top
-
+!   Only Hicks-Henne
+!   Create shape functions for top and bot 
     call create_shape(xtop, modestop, shapetype, top_shape_function)
-
-!   Create shape functions for bottom
-
     call create_shape(xbot, modesbot, shapetype, bot_shape_function)
 
   end if
 
 end subroutine create_shape_functions
 
+
+
 !=============================================================================80
 !
 ! Populates shape function arrays
 ! For Hicks-Hene shape functions, number of elements in modes must be a 
 ! multiple of 3.
-! For camber-thickness shape functions, number of elements in modes must be a 
-! multiple of 4, there is only 1 shape-function with 4 parameters.
+! For camber-thickness and bezier this is dummy 
 !
 !=============================================================================80
 subroutine create_shape(x, modes, shapetype, shape_function)
@@ -193,8 +197,8 @@ end subroutine create_shape
 ! Creates an airfoil surface by perturbing an input "seed" airfoil
 !
 !=============================================================================80
-subroutine create_airfoil(xt_seed, zt_seed, xb_seed, zb_seed, modest, modesb,  &
-                          zt_new, zb_new, shapetype, symmetrical)
+subroutine create_airfoil_hicks_henne (xt_seed, zt_seed, xb_seed, zb_seed, modest, modesb,  &
+                                      zt_new, zb_new, shapetype, symmetrical)
 
   use math_deps,          only : transformed_arccos
 
@@ -208,34 +212,21 @@ subroutine create_airfoil(xt_seed, zt_seed, xb_seed, zb_seed, modest, modesb,  &
   integer :: i, nmodest, nmodesb, npointst, npointsb
   double precision :: strength
 
-  if ((trim(shapetype) == 'camb-thick') .or. &
-      (trim(shapetype) == 'camb-thick-plus')) then
-    nmodest = size(modest,1)
-    nmodesb = 0
-  else
-    nmodest = size(modest,1)/3
-    nmodesb = size(modesb,1)/3
-  end if
+  nmodest = size(modest,1)/3
+  nmodesb = size(modesb,1)/3
   npointst = size(zt_seed,1)
   npointsb = size(zb_seed,1)
 
 ! Create shape functions for Hicks-Henne
 
-  if (trim(shapetype) == 'hicks-henne') then 
-    call create_shape_functions(xt_seed, xb_seed, modest, modesb, shapetype,   &
-                                first_time=.false.)  
-  end if
+  call create_shape_functions(xt_seed, xb_seed, modest, modesb, shapetype,   &
+                              first_time=.false.)  
 
 ! Top surface
 
   zt_new = zt_seed
   do i = 1, nmodest
-    if ((trim(shapetype) == 'camb-thick') .or. &
-        (trim(shapetype) == 'camb-thick-plus')) then
-      strength = modest(i)
-    else
-      strength = 1.d0
-    end if
+    strength = 1.d0
     zt_new = zt_new + strength*top_shape_function(i,1:npointst)
   end do
 
@@ -248,7 +239,7 @@ subroutine create_airfoil(xt_seed, zt_seed, xb_seed, zb_seed, modest, modesb,  &
       zb_new = zb_new + strength*bot_shape_function(i,1:npointsb)
     end do
 
-! For symmetrical airfoils, just mirror the top surface
+  ! For symmetrical airfoils, just mirror the top surface
 
   else
     do i = 1, npointsb
@@ -256,13 +247,70 @@ subroutine create_airfoil(xt_seed, zt_seed, xb_seed, zb_seed, modest, modesb,  &
     end do
   end if
 
-end subroutine create_airfoil
+end subroutine create_airfoil_hicks_henne
 
 
+!-----------------------------------------------------------------------------
+!
+! Create airfoil from bezier design variables 
+!
+!-------------------------------------------------------------------------------
+subroutine create_airfoil_bezier (seed_zt, seed_zb, dv_top, dv_bot, foil) 
+  !! Create airfoil from bezier design variables
+  ! 
+  !  - seed z_coordinates are only needed to determine TE gap 
+  !  - design variables dv are conveted back to bezier control points 
+  !    to generate bezier curve 
 
-!=============================================================================
-! jx-mod routines for the new shapeType to modify thickness and camber 
+  use vardef,                 only : airfoil_type
+  use airfoil_shape_bezier,   only : bezier_spec_type
+  use airfoil_shape_bezier,   only : dv_to_bezier, bezier_eval_airfoil
 
+  double precision, dimension(:), intent(in) :: seed_zt, seed_zb, dv_top, dv_bot
+  type(airfoil_type), intent(out) :: foil 
+
+  double precision, allocatable :: px_top(:), py_top(:), px_bot(:), py_bot(:)
+  type(bezier_spec_type)  :: bez_spec
+  double precision        :: te_gap
+  integer                 :: npt, npb, npoint
+
+  ! retrieve bezier control points 
+
+  npt    = size(seed_zt)
+  te_gap = seed_zt(npt)
+
+  call dv_to_bezier (dv_top, te_gap, px_top, py_top)
+
+  ! write(*,"('px_top: ',100f8.4)") ( px_top(i), i=1,size(px_top) )
+  ! write(*,"('py_top: ',100f8.4)") ( py_top(i), i=1,size(py_top))
+
+  npb    = size(seed_zb)
+  te_gap = seed_zb(npb)
+
+  call dv_to_bezier (dv_bot, te_gap, px_bot, py_bot)
+
+  ! write(*,"('px_bot: ',100f8.4)") ( px_bot(i), i=1,size(px_bot) )
+  ! write(*,"('py_bot: ',100f8.4)") ( py_bot(i), i=1,size(py_bot) )
+  ! write(*,*) 
+
+  ! build airfoil with control points 
+
+  npoint = npt + npb - 1
+
+  bez_spec%ncpoints_top = size (px_top)
+  bez_spec%ncpoints_bot = size (px_bot)  
+  bez_spec%px_top = px_top
+  bez_spec%py_top = py_top
+  bez_spec%px_bot = px_bot
+  bez_spec%py_bot = py_bot
+
+  call bezier_eval_airfoil (bez_spec, npoint, foil%x, foil%z) 
+
+  foil%npoint = size(foil%x)
+  foil%bezier_based = .true.
+  foil%bezier_spec  = bez_spec        ! could be useful to keep 
+
+end subroutine create_airfoil_bezier 
 
 !-----------------------------------------------------------------------------
 !

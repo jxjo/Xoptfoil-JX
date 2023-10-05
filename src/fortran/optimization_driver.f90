@@ -32,40 +32,37 @@ module optimization_driver
 ! Subroutine to drive the optimization
 !
 !=============================================================================80
-subroutine optimize(search_type, global_search, local_search, constrained_dvs, &
-                    pso_options, ga_options, ds_options, restart,              &
-                    restart_write_freq, optdesign, f0_ref, fmin, steps, fevals)
+subroutine optimize(global_search, constrained_dvs, &
+                    pso_options, ga_options, &
+                    optdesign, f0_ref, fmin, steps, fevals)
 
   use vardef,             only : shape_functions, nflap_optimize,              &
                                  initial_perturb, min_flap_degrees,            &
                                  max_flap_degrees, flap_degrees,               &
                                  flap_optimize_points, min_bump_width,         &
-                                 output_prefix, design_subdir 
+                                 seed_foil 
   use particle_swarm,     only : pso_options_type, particleswarm
   use genetic_algorithm,  only : ga_options_type, geneticalgorithm
   use simplex_search,     only : ds_options_type, simplexsearch
   use airfoil_evaluation, only : objective_function,                           &
                                  objective_function_nopenalty, write_function
+  use airfoil_shape_bezier, only : bezier_spec_to_dv
 
-  character(*), intent(in) :: search_type, global_search, local_search
+  character(*), intent(in) :: global_search
   type(pso_options_type), intent(in) :: pso_options
   type(ga_options_type), intent(in) :: ga_options
-  type(ds_options_type), intent(in) :: ds_options
   double precision, dimension(:), intent(inout) :: optdesign
   double precision, intent(out) :: f0_ref, fmin
-  integer, intent(in) :: restart_write_freq
   integer, dimension(:), intent(in) :: constrained_dvs
   integer, intent(out) :: steps, fevals
-  logical, intent(in) :: restart
 
   integer :: counter, nfuncs, ndv
   double precision, dimension(size(optdesign,1)) :: xmin, xmax, x0
+  double precision, allocatable :: dv_bezier(:), dv_min(:), dv_max(:)
   double precision :: t1fact, t2fact, ffact
-  logical :: restart_temp, write_designs
+  logical :: initial_x0_based
   integer :: stepsg, fevalsg, stepsl, fevalsl, i, oppoint, stat,               &
              iunit, ioerr, designcounter
-  character(100) :: restart_status_file, histfile
-  character(19) :: restart_status
   character(14) :: stop_reason
 
 ! Delete existing run_control file and rewrite it
@@ -73,21 +70,6 @@ subroutine optimize(search_type, global_search, local_search, constrained_dvs, &
   iunit = 23
   open(unit=iunit, file='run_control', status='replace')
   close(iunit)
-
-! Delete existing optimization history for visualizer to start new
-
-  histfile  = trim(design_subdir)//'Optimization_History.dat'
-  
-  if (.not. restart) then 
-    iunit = 17
-    open(unit=iunit, file=trim(histfile), status='replace')
-    close(iunit)
-  end if 
-    
-! Restart status file setup
-
-  iunit = 15
-  restart_status_file = 'restart_status_'//trim(output_prefix)
 
 ! Perform optimization: global, local, or global + local
 
@@ -102,32 +84,46 @@ subroutine optimize(search_type, global_search, local_search, constrained_dvs, &
 ! Scale all variables to have a range of initial_perturb
   t1fact = initial_perturb/(1.d0 - 0.001d0)             ! HH location
   t2fact = initial_perturb/(10.d0 - min_bump_width)     ! HH width
-  ffact = initial_perturb/(max_flap_degrees - min_flap_degrees)
+  ffact  = initial_perturb/(max_flap_degrees - min_flap_degrees)
 
 ! Set initial design
 
   if ((trim(shape_functions) == 'camb-thick') .or. &
-      (trim(shape_functions) == 'camb-thick-plus')) then     
-  !---------- camb-thick ----------
+      (trim(shape_functions) == 'camb-thick-plus')) then    
 
     nfuncs = ndv - nflap_optimize
 
-!   Mode strength = 0 (aka seed airfoil)
-
+  ! Mode strength = 0 (aka seed airfoil)
     x0(1:nfuncs) = 0.d0
 
-!   Seed flap deflection as specified in input file
-
+  ! Seed flap deflection as specified in input file
     do i = nfuncs + 1, ndv
       oppoint = flap_optimize_points(i-nfuncs)
       x0(i) = flap_degrees(oppoint)*ffact
     end do
-  else
-  !------------hicks-henne-------------
+
+  elseif (trim(shape_functions) == 'bezier') then
+
+    nfuncs = ndv - nflap_optimize
+
+    ! get initial coordinates of bezier control points from seed 
+
+    call bezier_spec_to_dv (seed_foil%bezier_spec, dv_bezier, dv_min, dv_max)
+    x0(1:nfuncs)   = dv_bezier
+    xmin(1:nfuncs) = dv_min
+    xmax(1:nfuncs) = dv_max
+
+  ! Seed flap deflection as specified in input file
+    do i = nfuncs + 1, ndv
+      oppoint = flap_optimize_points(i-nfuncs)
+      x0(i) = flap_degrees(oppoint)*ffact
+    end do
+
+  else !------------hicks-henne-------------
     
     nfuncs = (ndv - nflap_optimize)/3
 
-!   Bump strength = 0 (aka seed airfoil)
+  ! Bump strength = 0 (aka seed airfoil)
     do i = 1, nfuncs
       counter = 3*(i-1)
       x0(counter+1) = 0.d0
@@ -145,119 +141,62 @@ subroutine optimize(search_type, global_search, local_search, constrained_dvs, &
 
   f0_ref = objective_function_nopenalty(x0) 
 
-  
-! Set default restart status (global or local optimization) from user input
-
-  if (trim(search_type) == 'global_and_local' .or. trim(search_type) ==    &
-      'global') then
-    restart_status = 'global_optimization'
-  else
-    restart_status = 'local_optimization'
-  end if
-
-
-! Design coordinates/polars output handling
-
-  write_designs = .false.
-  if ( (trim(search_type) == 'global_and_local') .or.                          &
-       (trim(search_type) == 'global') ) then
-    if (trim(global_search) == 'particle_swarm')    write_designs = pso_options%write_designs
-    if (trim(global_search) == 'genetic_algorithm') write_designs = ga_options%write_designs
-  else
-    if (ds_options%write_designs) write_designs = .true.
-  end if
-    
 ! Write seed airfoil coordinates and polars to file
 
-  if (write_designs) then
-    stat = write_function(x0, 0) 
-  end if
+  stat = write_function(x0, 0) 
 
-! Set temporary restart variable
+! Set up mins and maxes
+  
+  if ((trim(shape_functions) == 'camb-thick') .or. &
+      (trim(shape_functions) == 'camb-thick-plus')) then
 
-  restart_temp = restart
+    xmin(1:nfuncs) = -0.5d0*initial_perturb
+    xmax(1:nfuncs) = 0.5d0*initial_perturb
+    xmin(nfuncs+1:ndv) = min_flap_degrees*ffact
+    xmax(nfuncs+1:ndv) = max_flap_degrees*ffact
+    initial_x0_based = .false.                     ! inital designs will between xmin & xmax
 
-! Global optimization
+  elseif (trim(shape_functions) == 'bezier') then
 
-  if (trim(restart_status) == 'global_optimization') then
+    ! xmin, xmax for Bezier already set above ... 
+    xmin(nfuncs+1:ndv) = min_flap_degrees*ffact
+    xmax(nfuncs+1:ndv) = max_flap_degrees*ffact
+    initial_x0_based = .true.                     ! inital designs will be close to x0
 
-!   Set up mins and maxes
-    
-    if ((trim(shape_functions) == 'camb-thick') .or. &
-        (trim(shape_functions) == 'camb-thick-plus')) then
+  else      ! Hicks-Henne 
 
-      nfuncs = ndv - nflap_optimize
-
-      xmin(1:nfuncs) = -0.5d0*initial_perturb
-      xmax(1:nfuncs) = 0.5d0*initial_perturb
-      xmin(nfuncs+1:ndv) = min_flap_degrees*ffact
-      xmax(nfuncs+1:ndv) = max_flap_degrees*ffact
-
-    else
-
-      nfuncs = (ndv - nflap_optimize)/3
-
-      do i = 1, nfuncs
-        counter = 3*(i-1)
-        xmin(counter+1) = -initial_perturb/2.d0
-        xmax(counter+1) = initial_perturb/2.d0
-        xmin(counter+2) = 0.0001d0*t1fact
-        xmax(counter+2) = 1.d0*t1fact
-        xmin(counter+3) = min_bump_width*t2fact
-        xmax(counter+3) = 10.d0*t2fact
-      end do
-      do i = 3*nfuncs+1, ndv
-        xmin(i) = min_flap_degrees*ffact
-        xmax(i) = max_flap_degrees*ffact
-      end do
-
-    end if
-
-    if (trim(global_search) == 'particle_swarm') then
-
-!     Particle swarm optimization
-      call particleswarm(optdesign, fmin, stepsg, fevalsg, objective_function, &
-                         x0, xmin, xmax, .true., f0_ref, constrained_dvs,      &
-                         pso_options, designcounter, stop_reason, write_function)
-
-    else if (trim(global_search) == 'genetic_algorithm') then
-
-!     Genetic algorithm optimization
-
-      call geneticalgorithm(optdesign, fmin, stepsg, fevalsg,                  &
-                            objective_function, x0, xmin, xmax, .true.,        &
-                            f0_ref, constrained_dvs, ga_options, restart_temp, &
-                            restart_write_freq, designcounter, stop_reason,    &
-                            write_function)
-
-    end if
-
-!   Update restart status and turn off restarting for local search
-
-    if ( (stop_reason == "completed") .and.                                    &
-         (trim(search_type) == 'global_and_local') )                           &
-        restart_status = 'local_optimization'
-    restart_temp = .false.
+    do i = 1, nfuncs
+      counter = 3*(i-1)
+      xmin(counter+1) = -initial_perturb/2.d0
+      xmax(counter+1) = initial_perturb/2.d0
+      xmin(counter+2) = 0.0001d0*t1fact
+      xmax(counter+2) = 1.d0*t1fact
+      xmin(counter+3) = min_bump_width*t2fact
+      xmax(counter+3) = 10.d0*t2fact
+    end do
+    do i = 3*nfuncs+1, ndv
+      xmin(i) = min_flap_degrees*ffact
+      xmax(i) = max_flap_degrees*ffact
+    end do
+    initial_x0_based = .false.                     ! inital designs will between xmin & xmax
 
   end if
 
-! Local optimization
+! Finally - do optimization -----------
 
-  if (restart_status == 'local_optimization') then
+  if (trim(global_search) == 'particle_swarm') then
 
-    if (trim(local_search) == 'simplex') then
+    call particleswarm(optdesign, fmin, stepsg, fevalsg, objective_function, &
+                        x0, xmin, xmax, initial_x0_based, &
+                        .true., f0_ref, constrained_dvs,      &
+                        pso_options, designcounter, stop_reason, write_function)
 
-!     Simplex optimization
+  else if (trim(global_search) == 'genetic_algorithm') then
 
-      if (trim(search_type) == 'global_and_local') then
-        x0 = optdesign  ! Copy x0 from global search result
-      end if
-
-      call simplexsearch(optdesign, fmin, stepsl, fevalsl, objective_function, &
-                         x0, .true., f0_ref, ds_options, designcounter, stepsg, &
-                         write_function)
-
-    end if
+    call geneticalgorithm(optdesign, fmin, stepsg, fevalsg, objective_function, &
+                          x0, xmin, xmax, initial_x0_based, &
+                          .true., f0_ref, constrained_dvs, ga_options,               &
+                          designcounter, stop_reason, write_function)
 
   end if
 
@@ -277,6 +216,7 @@ subroutine optimize(search_type, global_search, local_search, constrained_dvs, &
 
 end subroutine optimize
 
+
 !=============================================================================80
 !
 ! Writes final airfoil design to a file
@@ -286,12 +226,13 @@ end subroutine optimize
 subroutine write_final_design(optdesign, f0, fmin, final_airfoil)
 
   use vardef
-  use airfoil_operations, only : airfoil_write
-  use xfoil_driver,       only : run_op_points, op_point_result_type
-  use xfoil_driver,       only : op_point_specification_type
-  use airfoil_evaluation, only : create_airfoil_form_design, get_flap_degrees_from_design
-  use airfoil_evaluation, only : xfoil_geom_options, xfoil_options, noppoint
-  use airfoil_evaluation, only : op_points_spec, match_foils
+  use airfoil_operations,     only : airfoil_write
+  use xfoil_driver,           only : run_op_points, op_point_result_type
+  use xfoil_driver,           only : op_point_specification_type
+  use airfoil_evaluation,     only : create_airfoil_form_design, get_flap_degrees_from_design
+  use airfoil_evaluation,     only : xfoil_geom_options, xfoil_options, noppoint
+  use airfoil_evaluation,     only : op_points_spec, match_foils
+  use airfoil_shape_bezier,   only: write_bezier_file
 
   double precision, dimension(:), intent(in) :: optdesign
   double precision, intent(in)               :: f0, fmin
@@ -302,7 +243,7 @@ subroutine write_final_design(optdesign, f0, fmin, final_airfoil)
   type(op_point_result_type), dimension(:), allocatable :: op_points_result
   double precision, dimension(noppoint) :: actual_flap_degrees
   integer :: i, iunit
-  character(80) :: output_file, aero_file
+  character(:), allocatable :: output_file, aero_file
   character(20) :: flapnote
   double precision :: ncrit
 
@@ -329,7 +270,7 @@ subroutine write_final_design(optdesign, f0, fmin, final_airfoil)
 
 !   Write summary to screen and file
 
-    aero_file  = trim(design_subdir)//'Performance_Summary.dat'
+    aero_file  = design_subdir//'Performance_Summary.dat'
 
     iunit = 13
     open(unit=iunit, file=aero_file, status='replace')
@@ -392,7 +333,7 @@ subroutine write_final_design(optdesign, f0, fmin, final_airfoil)
     close(iunit)
 
     write(*,*)
-    call print_note_only ("- Writing summary to "//trim(aero_file))
+    call print_text ("- Writing summary to "//trim(aero_file))
 
 
   else
@@ -401,8 +342,16 @@ subroutine write_final_design(optdesign, f0, fmin, final_airfoil)
 
 ! Write airfoil to file
 
-  output_file = trim(output_prefix)//'.dat'
-  call airfoil_write(output_file, output_prefix, final_airfoil)
+  output_file = output_prefix//'.dat'
+  call airfoil_write (output_file, output_prefix, final_airfoil)
+
+  if (final_airfoil%bezier_based) then
+    output_file = output_prefix//'.bez'
+    call print_colored (COLOR_NOTE, "   Writing bezier  to ")
+    call print_colored (COLOR_HIGH, output_file)
+    write (*,*)
+    call write_bezier_file (output_file, output_prefix, final_airfoil%bezier_spec)
+  end if 
 
 end subroutine write_final_design
 

@@ -25,14 +25,12 @@ module optimization_util
 
   contains
 
-!=============================================================================80
-!
-! Initializes a random seed (subroutine from gcc.gnu.org)
-!
-!=============================================================================80
-subroutine init_random_seed()
 
-! For ifort compatibility
+  subroutine init_random_seed()
+
+  !! Initializes a random seed (subroutine from gcc.gnu.org)
+
+  ! For ifort compatibility
 #ifdef intel_compilers
   use ifport, only : getpid  
 #endif
@@ -96,19 +94,22 @@ subroutine init_random_seed()
 
 end subroutine init_random_seed
 
-!=============================================================================80
-!
-! Creates initial designs and tries to make them feasible, if desired
-!
-!=============================================================================80
-subroutine initial_designs(dv, objval, fevals, objfunc, xmin, xmax, use_x0,    &
-                           x0, feasible_init, feasible_limit, attempts)
+
+
+subroutine initial_designs(dv, objval, fevals, objfunc, xmin, xmax, &
+                           initial_x0_based, x0, &
+                           feasible_init, feasible_limit, attempts)
+
+ !! Creates initial designs and tries to make them feasible, if desired
+ !    With 'initial_x0_based' the designs are close to x0, which is good for Bezier
+ !    whereas  Hicks-Henne and Thickness-Camber get designs within xmin and xmax                        
+ 
 
   double precision, dimension(:,:), intent(inout) :: dv
   double precision, dimension(:), intent(inout) :: objval
   integer, intent(out) :: fevals
   double precision, dimension(:), intent(in) :: xmin, xmax, x0
-  logical, intent(in) :: use_x0, feasible_init
+  logical, intent(in) :: initial_x0_based, feasible_init
   double precision, intent(in) :: feasible_limit
   integer, intent(in) :: attempts
 
@@ -119,19 +120,17 @@ subroutine initial_designs(dv, objval, fevals, objfunc, xmin, xmax, use_x0,    &
     end function
   end interface
 
-  integer :: i, pop, nvars, initcount
-  character(30) :: text1, text2, text3
+  integer :: i, j, pop, nvars, initcount
   double precision, dimension(:), allocatable :: randvec1, designstore
+  double precision, dimension(:,:), allocatable :: dv_delta
   double precision :: minstore
 
-! Initial settings and memory allocation
+  ! Initial settings and memory allocation
 
   nvars = size(dv,1)
   pop = size(dv,2)
   allocate(randvec1(nvars))
   allocate(designstore(nvars))
-
-!$omp master
 
   fevals = pop
 
@@ -139,63 +138,76 @@ subroutine initial_designs(dv, objval, fevals, objfunc, xmin, xmax, use_x0,    &
   
   call random_number(dv)
 
+  dv_delta = (dv - 0.5d0) * 0.05d0          ! deviation factor from x0  
+
 ! Initial population of designs set between xmin and xmax
 
-  write(text3,*) pop
-  text3 = adjustl(text3)
-  write(*,'(/," - ",A)') 'Generating and evaluating '//trim(text3)//' initial designs'
+  write(*,'(/," - ",A)', advance ='no') 'Generating and evaluating '//stri(pop)//' initial designs: '
 
-!$omp end master
-!$omp barrier
+  ! take x0 as initial for the first particle
+  dv(:,1) = x0
+  objval(1) = objfunc(x0, .true.)         ! should always be 1.0 ...
 
-  if (use_x0) then
-    dv(:,1) = x0
-    objval(1) = objfunc(x0, .true.)         ! evaluate only geometry
-!$omp do
-    do i = 2, pop
+
+!$OMP parallel do private(j)
+  do i = 2, pop
+
+    if (initial_x0_based) then
+      ! init values will be random delta to x0        
+      do j = 1, nvars
+        dv(j,i) = x0(j) + dv_delta(j,i) * (xmax(j)-xmin(j))
+        dv(j,i) = max (dv(j,i), xmin(j))
+        dv(j,i) = min (dv(j,i), xmax(j))
+      end do 
+    else 
+      ! freestyle init values between min and max       
       dv(:,i) = maxval(xmax - xmin)*dv(:,i) + xmin
-      objval(i) = objfunc(dv(:,i), .true.)  ! evaluate only geometry
-    end do
-!$omp end do
-  else
-!$omp do
-    do i = 1, pop
-      dv(:,i) = maxval(xmax - xmin)*dv(:,i) + xmin
-      objval(i) = objfunc(dv(:,i), .true.)  ! evaluate only geometry
-    end do
-!$omp end do
-  end if
+    end if 
 
-! Enforce initially feasible designs
+    objval(i) = objfunc(dv(:,i), .true.)  ! evaluate only geometry
+    
+  end do
+!$omp end parallel do
+
+  call show_design_info (feasible_limit, .true., objval)
+  write(*,*) 
+
+
+  ! Enforce initially feasible designs
 
   if (feasible_init) then
 
-    write(text1,*) attempts
-    text1 = adjustl(text1)
-!$omp master
-    write(*,'(" - ",A)') 'Checking initial designs for feasibility using max '//trim(text1)//' init attempts...'
-    write(*,'(12x)', advance ='no') 
+    write(*,'(" - ",A)', advance ='no') 'Trying to improve with max '//stri(attempts)//' init attempts: '
 
-!$omp end master
-!$omp barrier
-
-
-!$omp do
+!$OMP parallel do private(j, initcount, minstore, designstore, randvec1)
     do i = 1, pop
 
-      write(text2,*) i
-      text2 = adjustl(text2)
       initcount = 0
       minstore = objval(i)
       designstore = dv(:,i)
 
-!     Take a number of tries to fix infeasible designs
+      ! Take a number of tries to fix infeasible designs
 
       do while ((initcount <= attempts) .and.                                  &
                (objval(i) >= feasible_limit))
+
         call random_number(randvec1)
-        dv(:,i) = maxval(xmax - xmin)*randvec1 + xmin
-        objval(i) = objfunc(dv(:,i), .true.)
+
+        if (initial_x0_based) then
+          ! init values will be random delta to x0 
+          randvec1 = (randvec1 - 0.5d0) * 0.2d0        
+          do j = 1, nvars
+            dv(j,i) = x0(j) + randvec1 (j) * (xmax(j)-xmin(j))
+            dv(j,i) = max (dv(j,i), xmin(j))
+            dv(j,i) = min (dv(j,i), xmax(j))
+          end do 
+        else 
+          ! freestyle init values between min and max       
+          dv(:,i) = maxval(xmax - xmin)*randvec1 + xmin
+        end if 
+    
+        objval(i) = objfunc(dv(:,i), .true.)  ! evaluate only geometry
+    
         if (objval(i) < minstore) then
           minstore = objval(i)
           designstore = dv(:,i)
@@ -206,37 +218,67 @@ subroutine initial_designs(dv, objval, fevals, objfunc, xmin, xmax, use_x0,    &
 !$omp end critical
       end do
 
-!     Pick the best design tested if a feasible design was not found
+      ! Pick the best design tested if a feasible design was not found
 
       if ((initcount > attempts) .and. (objval(i) >= feasible_limit)) then
         dv(:,i) = designstore
         objval(i) = minstore
       end if
 
-!     Write a message about the feasibility of initial designs
-
-      if ((initcount > attempts) .and. (objval(i) >= feasible_limit)) then
-        call print_colored (COLOR_PALE,'.')         ! no valid design 
-      else
-        call print_colored (COLOR_PALE, '~')      ! valid design found
-      end if
-
     end do
 
-!$omp end do
+!$omp end parallel do
 
-!$omp master
-    write(*,*)
-!$omp end master
-
+    call show_design_info (feasible_limit, .false., objval)
+    write(*,*) 
+  
   end if
 
-! Memory deallocation
-
-  deallocate(randvec1)
-  deallocate(designstore)
-
 end subroutine initial_designs
+
+
+
+
+subroutine  show_design_info (feasible_limit, first_run, objval)
+  !! Shows user info about result of inital design 
+
+  double precision, intent(in)  :: feasible_limit
+  logical                       :: first_run
+  double precision, dimension (:), intent(in)  :: objval
+  integer       :: color, i
+  Character (1) :: sign 
+
+  call print_colored (COLOR_NOTE, ' ')
+
+  do i = 1, size(objval)
+    if (objval(i) == 1d0) then 
+      color = COLOR_NOTE                          
+      ! color = COLOR_GOOD                            
+      sign  = '+'
+    elseif (objval(i) <= feasible_limit) then 
+      color = COLOR_NOTE                           
+      sign  = 'o'
+    else if (objval(i) > feasible_limit) then   
+      if (first_run) then 
+        color = COLOR_NOTE                         
+      else
+        color = COLOR_ERROR                           
+      end if  
+      sign  = 'x'
+    else  
+      color = COLOR_NOTE                         
+      sign  = '-'
+    end if 
+
+    call print_colored (color, sign)            
+  end do 
+  
+end subroutine show_design_info
+
+
+
+
+
 
 !=============================================================================80
 !
@@ -489,5 +531,37 @@ subroutine read_run_control(commands, ncommands)
 ! 502 write(*,*) "Warning: error encountered while reading run_control. Skipping."
 
 end subroutine read_run_control
+
+
+
+subroutine write_history_header (iunit)
+  !! write csv header of op points data 
+
+  integer, intent(in) :: iunit
+  write(iunit,'(A)') 'Iteration; Design; Objective function; % Improvement; Design radius'
+  flush(iunit)
+
+end subroutine
+
+
+subroutine  write_history (iunit, step, new_design, designcounter, radius, fmin, f0)
+  !! write iteration result to history file 'iunit' during optimization
+
+  integer, intent(in)           :: iunit, step, designcounter 
+  logical, intent(in)           :: new_design
+  double precision, intent(in)  :: radius ,fmin, f0 
+  double precision :: relfmin
+
+  relfmin = (f0 - fmin)/f0 * 100.d0
+  if (new_design) then 
+    write(iunit,'(I6,";",I6, 3(";", F11.7))') step, designcounter, fmin, relfmin, radius
+  else 
+    write(iunit,'(I6,";",A6, 3(";", F11.7))') step, ''           , fmin, relfmin, radius
+  end if 
+  flush(iunit)
+
+end subroutine  write_history
+
+
 
 end module optimization_util

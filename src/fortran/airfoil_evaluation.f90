@@ -124,9 +124,8 @@ module airfoil_evaluation
   integer, parameter :: max_geo_targets = 10
   type(geo_target_type), dimension (:), allocatable  :: geo_targets
 
-  logical            :: preset_seed_airfoil       ! .. to geo targets and constraints
   double precision   :: airfoil_te_gap            ! trailing edge gap of (seed) airfoil
-                                                  ! = -1 : noc hange will be done
+                                                  ! = -1 : no hange will be done
   
 ! Parms for operating point specification
   integer :: noppoint
@@ -138,15 +137,12 @@ module airfoil_evaluation
   logical :: match_foils
   double precision :: match_foils_scale_factor 
 
-! Bezier - adapt to airfoil side  
+! Bezier - match to airfoil side  
   double precision, allocatable  :: side_to_match_x (:), side_to_match_y (:)
 
 ! Xfoil options
   type(xfoil_options_type)       :: xfoil_options
   type(xfoil_geom_options_type)  :: xfoil_geom_options
-
-! Generate full polar for each new design 
-  logical    :: generate_polar
 
 ! Save the best result of evaluation for write_design (+ dynamic weighting)
 !    so no extra run_xfoil is needed
@@ -298,9 +294,9 @@ function geo_penalty_function(foil, actual_flap_degrees)
 
   use math_deps,          only : interp_vector, curvature, derv1f1, derv1b1
   use math_deps,          only : count_reversals, derivative2, derivative3
-  use airfoil_operations, only : get_max_te_curvature
   use xfoil_driver,       only : xfoil_geometry_amax, xfoil_set_airfoil, &
                                  xfoil_get_geometry_info
+  use airfoil_operations, only : get_max_te_curvature
 
   type(airfoil_type), intent(in)    :: foil
   double precision, dimension(:), intent(in)  :: actual_flap_degrees
@@ -351,7 +347,7 @@ function geo_penalty_function(foil, actual_flap_degrees)
       penalty_info = trim(penalty_info) // ' maxReversal'
     end if 
 
-  !   ....How many spikes = Rversals of 3rd derivation = Bumps of curvature
+  !   ....How many spikes = Reversals of 3rd derivation = Bumps of curvature
 
     if (c%check_curvature_bumps) then 
       iend   = size(foil%xt) - c%nskip_TE_spikes
@@ -372,7 +368,7 @@ function geo_penalty_function(foil, actual_flap_degrees)
   !    so the curvature (2nd derivative) at the last 10 panels is checked
 
     if (get_max_te_curvature (foil%xt, foil%zt)  > c%max_te_curvature) then 
-      penalty_info = trim(penalty_info) // ' TEmaxCurv'
+      penalty_info = trim(penalty_info) // ' TEmaxCurv ' // strf('(F4.2)', get_max_te_curvature (foil%xt, foil%zt))
       penaltyval = penaltyval + c%max_te_curvature
     end if 
 
@@ -420,7 +416,7 @@ function geo_penalty_function(foil, actual_flap_degrees)
     geo_penalty_function = penaltyval*5.0D+04
 
     if (penaltyval > 0d0) then
-      !if (show_details) write (*,'(4x, A14,F11.1,5x, A)') "    Penalty:", &
+      ! if (show_details) write (*,'(4x, A14,F11.1,5x, A)') "    Penalty:", &
       !                              geo_penalty_function, trim(penalty_info)
       return
     end if
@@ -601,17 +597,12 @@ function geo_objective_function(foil)
 
   type(airfoil_type), intent(in)  :: foil
   type(geo_result_type)           :: geo_result
-  double precision                :: maxt, xmaxt, maxc, xmaxc
 
 ! get airfoil geometry info from xfoil    
 
   call xfoil_set_airfoil (foil)        
-  call xfoil_get_geometry_info (maxt, xmaxt, maxc, xmaxc)
-
-  geo_result%maxt  = maxt
-  geo_result%xmaxt = xmaxt
-  geo_result%maxc  = maxc
-  geo_result%xmaxc = xmaxc
+  call xfoil_get_geometry_info (geo_result%maxt, geo_result%xmaxt, &
+                                geo_result%maxc, geo_result%xmaxc)
 
   geo_objective_function = geo_objective_function_on_results (geo_result )
   
@@ -987,6 +978,7 @@ end function matchfoil_objective_function
 !
 !-----------------------------------------------------------------------------
 function match_side_objective_function(dv, dummy)
+
   !! objective function for adapt bezier to foil side
   
   use airfoil_shape_bezier, only : bezier_eval_y_on_x, dv_to_bezier
@@ -996,9 +988,13 @@ function match_side_objective_function(dv, dummy)
   double precision :: match_side_objective_function 
 
   double precision, allocatable :: px(:), py(:), design_y(:), devi (:), base(:)
-  double precision :: te_gap , shift
-  integer     :: i, ncoord
+  double precision, allocatable :: target_x(:), target_y(:)
+  double precision :: te_gap, shift
+  integer     :: i, ncoord, step, nTarg
   
+  if (dummy) then 
+  end if 
+
   ncoord = size(side_to_match_x)
 
   ! remap bezier control points out of design variables 
@@ -1006,7 +1002,7 @@ function match_side_objective_function(dv, dummy)
   te_gap = side_to_match_y (ncoord)                     ! last bezier point fixed to te gap 
   call dv_to_bezier (dv, te_gap, px, py)
 
-  ! sanity check - nelder mead could have crossed to bounds or chnaged to order of control points 
+  ! sanity check - nelder mead could have crossed to bounds or changed to order of control points 
 
   if (minval(px) < 0d0 .or. maxval(px) > 1.0) then 
     match_side_objective_function = 9999d0              ! penalty crossed bounds
@@ -1014,39 +1010,60 @@ function match_side_objective_function(dv, dummy)
   end if 
 
   do i = 2, size(px) - 1
-    if (((px(i+1) - px(i)) < 0d0) .or. (abs(px(i+1) - px(i)) < 0.05d0)) then  
+    if (((px(i+1) - px(i)) < 0d0) .or. ((px(i+1) - px(i)) < 0.03d0)) then  
       match_side_objective_function = 9999d0            ! penalty changed order or too close 
       return
     end if 
   end do 
 
+  if (abs(py(2)) < 0.006d0) then 
+    match_side_objective_function = 9999d0              ! penalty LE too sharp (tangent too short) 
+    return
+  end if 
+
+
   ! evaluate bezier for all x coord of side to match 
   !     in module: side_to_match_x (:), side_to_match_y (:)
 
-  allocate (design_y(ncoord))
-  allocate (devi(ncoord))
-  allocate (base(ncoord))
-  devi = 0d0
-  base = 0d0
+  i = 1
+  if (ncoord > 120) then
+    step = 6
+  elseif (ncoord > 80) then
+    step = 5
+  else 
+    step = 3
+  end if 
 
-  do i = 1, ncoord
-    design_y(i) = bezier_eval_y_on_x (px, py, side_to_match_x(i), epsilon=1d-9)
+  allocate (target_x(ncoord))
+  allocate (target_y(ncoord))
+
+  nTarg = 0
+  do i = 1, ncoord, step 
+    nTarg = nTarg + 1
+    target_x(nTarg) = side_to_match_x(i)
+    target_y(nTarg) = side_to_match_y(i)
+  end do 
+
+
+  target_x = target_x(1:nTarg) 
+  target_y = target_y(1:nTarg) 
+  allocate (design_y(nTarg))
+  allocate (devi(nTarg))
+  allocate (base(nTarg))
+
+  do i = 1, nTarg 
+    design_y(i) = bezier_eval_y_on_x (px, py, target_x(i), epsilon=1d-9)
+    ! devi (i) = abs (side_to_match_y(i) - design_y(i))
   end do 
   
-  ! absolute norm2
-  ! match_side_objective_function = norm2 (side_to_match_y - design_y)
-
-  ! relative / weighted norm2 
-
-  devi = abs (side_to_match_y - design_y)
-  base = abs (side_to_match_y)
+  devi = abs (design_y - target_y)
+  base = abs(target_y)
 
   ! move base so targets with a small base (at TE) don't become overweighted 
-  ! shift factor is empirical - the lower the more small y will be weighted
-  shift = maxval (base) * 0.3d0
+  shift =  maxVal (base) * 0.4
 
-  match_side_objective_function = norm2 (devi / (base + shift))
- 
+  match_side_objective_function = norm2 (devi / (base+shift))
+
 end function match_side_objective_function
 
 
@@ -1076,33 +1093,34 @@ end function write_function
 
 !===============================================================================
 !
-! Create an airfoil out of a seed airfoil and a design (shape functions)  
+! Create an airfoil out of a seed airfoil and designvars 
 !
 !===============================================================================
 
-subroutine create_airfoil_form_design (seed, designvars, foil)
+subroutine create_airfoil_form_design (seed, dv, foil)
 
-  use vardef,             only: airfoil_type
-  use vardef,             only: shape_functions
-  use airfoil_operations, only: rebuild_airfoil
-  use parametrization,    only: create_airfoil_camb_thick
-  use parametrization,    only: create_airfoil_camb_thick_plus
-  use parametrization,    only: create_airfoil
-  use parametrization,    only: top_shape_function, bot_shape_function
+  use vardef,               only: airfoil_type
+  use vardef,               only: shape_functions
+  use airfoil_operations,   only: rebuild_airfoil, split_foil_at_00
+  use parametrization,      only: create_airfoil_camb_thick
+  use parametrization,      only: create_airfoil_camb_thick_plus
+  use parametrization,      only: create_airfoil_hicks_henne
+  use parametrization,      only: create_airfoil_bezier
+  use parametrization,      only: top_shape_function, bot_shape_function
   
-
   type(airfoil_type), intent(in)              :: seed
   type(airfoil_type), intent(out)             :: foil
-  double precision, dimension(:), intent(in)  :: designvars
+  double precision, dimension(:), intent(in)  :: dv
 
   integer :: nmodest, nmodesb, dvtbnd1, dvtbnd2, dvbbnd1, dvbbnd2
   double precision, dimension(size(seed%xt,1)) :: zt_new
   double precision, dimension(size(seed%xb,1)) :: zb_new
 
+  double precision, allocatable :: dv_top(:), dv_bot(:)
 
 ! Build airfoil to evaluate out of seed airfoil plus shape functions applied
 
-  nmodest = size(top_shape_function,1)
+  nmodest = size(top_shape_function,1)      ! = nfunctions_top (other name space) 
   nmodesb = size(bot_shape_function,1)
 
 ! Set modes for top and bottom surfaces
@@ -1113,6 +1131,11 @@ subroutine create_airfoil_form_design (seed, designvars, foil)
     dvtbnd2 = nmodest
     dvbbnd1 = 1
     dvbbnd2 = dvtbnd2
+  elseif (trim(shape_functions) == 'bezier') then 
+    dvtbnd1 = 1
+    dvtbnd2 = nmodest
+    dvbbnd2 = nmodest + nmodesb 
+    dvbbnd1 = dvtbnd2 + 1
   else
     dvtbnd1 = 1
     dvtbnd2 = nmodest*3
@@ -1120,8 +1143,7 @@ subroutine create_airfoil_form_design (seed, designvars, foil)
     dvbbnd1 = dvtbnd2 + 1
   end if
   
-! Overwrite lower DVs for symmetrical airfoils or camb-thickness-shaping
-! (they are not used)
+! Overwrite lower DVs for symmetrical airfoils 
 
   if (seed%symmetrical) then
     dvbbnd1 = 1
@@ -1130,27 +1152,43 @@ subroutine create_airfoil_form_design (seed, designvars, foil)
   else
     foil%symmetrical = .false.
   end if
-  
+
+! Extract designvars for top and bot 
+
+  dv_top = dv(dvtbnd1:dvtbnd2)
+  dv_bot = dv(dvbbnd1:dvbbnd2)
+
   if (trim(shape_functions) == 'camb-thick') then
+
     ! Create new airfoil by changing camber and thickness of seed airfoil.
     call create_airfoil_camb_thick(seed%xt, seed%zt, seed%xb, seed%zb,       &
-                      designvars(dvtbnd1:dvtbnd2), zt_new, zb_new)
+                                   dv_top, zt_new, zb_new)
+    call rebuild_airfoil (seed%xt, seed%xb, zt_new, zb_new, foil)
+
   else if (trim(shape_functions) == 'camb-thick-plus') then
+
     ! Create new airfoil by changing camber and thickness of seed airfoil, 
     ! top and bottom seperately
     call create_airfoil_camb_thick_plus(seed%xt, seed%zt, seed%xb, seed%zb,       &
-                      designvars(dvtbnd1:dvtbnd2), zt_new, zb_new)                      
+                                        dv_top, zt_new, zb_new)                      
+    call rebuild_airfoil (seed%xt, seed%xb, zt_new, zb_new, foil)
+
+  else if (trim(shape_functions) == 'bezier') then
+    
+    ! Bezier: create new airfoil by control points 
+    ! - it is *not* dependant on seed airfoil  
+    call create_airfoil_bezier (seed%zt, seed%zb, dv_top, dv_bot, foil)
+    call split_foil_at_00 (foil)        ! maybe upper and lower will be needed
+
   else 
+
     ! Create top and bottom surfaces by perturbation of seed airfoil 
-    call create_airfoil(seed%xt, seed%zt, seed%xb, seed%zb,                      &
-                      designvars(dvtbnd1:dvtbnd2), designvars(dvbbnd1:dvbbnd2),&
-                      zt_new, zb_new, shape_functions, seed%symmetrical)
+    call create_airfoil_hicks_henne(seed%xt, seed%zt, seed%xb, seed%zb,                      &
+                        dv_top, dv_bot,&
+                        zt_new, zb_new, shape_functions, seed%symmetrical)
+    call rebuild_airfoil (seed%xt, seed%xb, zt_new, zb_new, foil)
+
   end if
-
-! Rebuild airfoil out of new top and bottom surface
-
-  call rebuild_airfoil (seed%xt, seed%xb, zt_new, zb_new, foil)
-
 
 end subroutine create_airfoil_form_design
 
@@ -1225,53 +1263,37 @@ end subroutine get_flap_degrees_from_design
 
 
 
-!=============================================================================80
-!
-! Writes airfoil coordinates and polars to files during optimization
-!
-!=============================================================================80
+
 function write_airfoil_optimization_progress(designvars, designcounter)
+
+  !! Writes airfoil coordinates and op Points results to files during optimization
 
   use math_deps,          only : interp_vector, min_threshold_for_reversals, derivative3
   use airfoil_operations, only : airfoil_write_to_unit, assess_surface
   use xfoil_driver,       only : run_op_points, op_point_result_type
   use xfoil_driver,       only : xfoil_get_geometry_info, xfoil_set_airfoil
-  use polar_operations,   only : generate_polar_files, set_polar_info
 
   double precision, dimension(:), intent(in) :: designvars
   integer, intent(in) :: designcounter
   integer :: write_airfoil_optimization_progress
 
-  type(airfoil_type)       :: foil
-  integer :: i
-
-  type(op_point_result_type)        :: op
-  type(op_point_result_type), dimension(:), allocatable :: op_points_result
+  type(airfoil_type)                :: foil
   type(xfoil_options_type)          :: local_xfoil_options
   type(geo_result_type)             :: geo_result
-  type(curvature_polyline_specification_type) :: c
-  integer :: idum
-  double precision :: spike_threshold
-
+  type(op_point_result_type), allocatable :: op_points_result (:)
 
   double precision, dimension(noppoint) :: actual_flap_degrees
-  double precision :: maxt, xmaxt, maxc, xmaxc
  
-  character(255) :: foilfile, polarfile, title, full_polar_file
-  character(20)   :: maxtchar, xmaxtchar, maxcchar, xmaxcchar, tcounter
-  integer        :: foilunit, polarunit
+  character(:), allocatable :: foilfile, bezierfile, title, opPointsfile
+  integer        :: foilunit, bezierunit, opPointunit
   logical        :: dynamic_done
-
-  write(tcounter,*) designcounter
-  tcounter = adjustl(tcounter)
+ 
 
   if (designcounter == 0) then
-    write (*,*)
     call print_colored (COLOR_NORMAL,' - Writing design #0 being seed airfoil')
   else
-    call print_colored (COLOR_NORMAL,' -> Writing design #'//trim(tcounter))
+    call print_colored (COLOR_NORMAL,' -> Writing design #'//stri(designcounter))
   end if
-  if (generate_polar) call print_colored (COLOR_NOTE,' & polar')
   write (*,*)
   if (show_details .and. (designcounter > 0)) write (*,*) 
 
@@ -1281,19 +1303,20 @@ function write_airfoil_optimization_progress(designvars, designcounter)
 ! Design > 0 - Build current foil out seed foil and current design 
   else 
     call create_airfoil_form_design (seed_foil, designvars, foil)
-    foil%name = trim(output_prefix)
+    foil%name = output_prefix
   end if
 
 ! Get actual flap angles based on design variables
+
   call get_flap_degrees_from_design (designvars, actual_flap_degrees)
 
 ! Try to get xfoil result for foil from "save best" in objective function
+
   if (allocated(best_op_points_result)) then 
   ! Sanity check - Is the "best" really our current foil
     if (abs(sum(foil%z) - sum(best_foil%z)) < 1d-10 ) then  ! use epsilon (num issues with symmetrical) 
       op_points_result = best_op_points_result
     else
-      write (*,*) sum(foil%x) , sum(best_foil%x) , sum(foil%z) , sum(best_foil%z)
       best_objective = 1d0                 ! reset best store - something wrong...?
     end if 
   end if 
@@ -1306,133 +1329,80 @@ function write_airfoil_optimization_progress(designvars, designcounter)
     local_xfoil_options = xfoil_options
     local_xfoil_options%show_details        = .false.  
     local_xfoil_options%exit_if_unconverged = .false.  ! we need all op points
-    if (designcounter == 0) &
-      local_xfoil_options%reinitialize = .true.        ! ensure convergence for seed 
-
+    if (designcounter == 0) then
+      local_xfoil_options%reinitialize = .false.       ! strange: reinit leeds sometimes to not converged
+      local_xfoil_options%show_details = .false.
+    end if 
     call run_op_points (foil, xfoil_geom_options, local_xfoil_options,  &
                         flap_spec, actual_flap_degrees, &
                         op_points_spec, op_points_result)
-
   end if 
-
-! Generate and write the full polar before design_coordinates and polar
-!     so it's available for the visualizer early enough
-
-  if (generate_polar) then
-    if (designcounter == 0) then  
-      full_polar_file = trim(design_subdir) // 'Seed_FullPolar.txt'
-    else
-      full_polar_file = trim(design_subdir) // 'Design_FullPolar.txt'
-    end if
-    call set_polar_info (foil%name, trim(full_polar_file), 'Design '//trim(tcounter))
-    local_xfoil_options = xfoil_options
-    local_xfoil_options%show_details        = .false.  
-    call generate_polar_files (.false., '' , foil, xfoil_geom_options, local_xfoil_options)
-  end if 
-
-
-! Get geometry info 
-  call xfoil_set_airfoil (foil)   ! last set could have been a flaped version     
-  call xfoil_get_geometry_info(maxt, xmaxt, maxc, xmaxc)
-
-  geo_result%maxt  = maxt
-  geo_result%xmaxt = xmaxt
-  geo_result%maxc  = maxc
-  geo_result%xmaxc = xmaxc
-               
-  write(maxtchar,'(F8.5)') maxt
-  maxtchar = adjustl(maxtchar)
-  write(xmaxtchar,'(F8.5)') xmaxt
-  xmaxtchar = adjustl(xmaxtchar)
-  write(maxcchar,'(F8.5)') maxc
-  maxcchar = adjustl(maxcchar)
-  write(xmaxcchar,'(F8.5)') xmaxc
-  xmaxcchar = adjustl(xmaxcchar)
-
+     
+  
 ! Set output file names and identifiers
 
-  foilfile  = trim(design_subdir)//'Design_Coordinates.dat'
-  polarfile = trim(design_subdir)//'Design_Polars.dat'
+  foilfile      = design_subdir//'Design_Coordinates.dat'
+  opPointsfile  = design_subdir//'Design_OpPoints.csv'
+  bezierfile    = design_subdir//'Design_Beziers.csv'
 
-  foilunit = 13
-  polarunit = 14
-
-! Open files and write headers, if necessary
+  foilunit    = 13
+  opPointunit = 14
+  bezierunit  = 15
 
   if (designcounter == 0) then
 
-!   Header for coordinate file
+  ! Open new files and write headers for design=0 (seed airfoil)
 
-    open(unit=foilunit, file=foilfile, status='replace')
-    write(foilunit,'(A)') 'title="Airfoil coordinates"'
+    open(unit=foilunit,    file=foilfile,     status='replace', err=900)
+    open(unit=opPointunit, file=opPointsfile, status='replace', err=901)
+    call write_design_op_points_header (opPointunit)
 
-!  Add 2nd and 3rd derivative to
-!        ...design_coordinates.dat to show it in visualizer
-    write(foilunit,'(A)') 'variables="x" "z" "2nd derivative" "3rd derivative"'
-
-    title =  'zone t="Seed airfoil, '//'name='//trim(foil%name)//', maxt='//trim(maxtchar)//&
-             ', xmaxt='//trim(xmaxtchar)//', maxc='//&
-              trim(maxcchar)//', xmaxc='//trim(xmaxcchar)//'"'
-
-!   Header for polar file
-
-    open(unit=polarunit, file=polarfile, status='replace')
-    write(polarunit,'(A)') 'title="Airfoil polars"'
-
-!   Add current flap angle to polars to show it in visualizer
-    write(polarunit,'(A)') 'variables="alpha" "cl" "cd" "cm" "xtrt" "xtrb" "flapangle"'
-    write(polarunit,'(A)') 'zone t="Seed airfoil polar"'
+    if (shape_functions == 'bezier') then 
+      open(unit=bezierunit, file= bezierfile, status='replace', err=902)
+      call write_design_bezier_header (bezierunit, foil%bezier_spec)
+    end if 
 
   else
 
-!   Open coordinate file and write zone header
+  ! Open files of design data for design > 0 
 
-    open(unit=foilunit, file=foilfile, status='old', position='append', err=900)
-    title =  'zone t="Airfoil,  '//'name='//trim(adjustl(foil%name))//', maxt='//trim(maxtchar)//&
-             ', xmaxt='//trim(xmaxtchar)//', maxc='//&
-              trim(maxcchar)//', xmaxc='//trim(xmaxcchar)//'", '//&
-             'SOLUTIONTIME='//trim(tcounter)
-
-!   Open polar file and write zone header
-
-    open(unit=polarunit, file=polarfile, status='old', position='append',      &
-         err=901)
-    write(polarunit,'(A)') 'zone t="Polars", SOLUTIONTIME='//trim(tcounter)
+    open (unit=foilunit,    file=foilfile,     status='old', position='append', err=900)
+    open (unit=opPointunit, file=opPointsfile, status='old', position='append', err=901)
+    if (shape_functions == 'bezier') then 
+      open (unit=bezierunit,  file= bezierfile,  status='old', position='append', err=902)
+    end if 
 
   end if
 
-! Write coordinates to file
+! Write design data 
 
-  ! Design 0 is seed airfoil to output - take the original values 
-  ! Take the original, not smoothed seed airfoil to
-  !      ...design_coordinates.dat to show it in visualizer
+  ! Design 0 is seed airfoil to output 
+  title =  'Design #'//stri(designcounter)//', name='//trim(adjustl(foil%name))
+  call airfoil_write_to_unit (foilunit, title, foil)
 
-  if (designcounter == 0) then
-    call  airfoil_write_to_unit (foilunit, title, seed_foil_not_smoothed, .True.)
-    foil = seed_foil_not_smoothed
-  else 
-    call  airfoil_write_to_unit (foilunit, title, foil, .True.)
+! Write op point data to file
+
+  call write_design_op_points_data (opPointunit, designcounter, op_points_result, flap_degrees)
+
+! Write bezier control points to file  
+
+  if (shape_functions == 'bezier') then 
+    call write_design_bezier_data   (bezierunit, designcounter, foil%bezier_spec)
   end if 
 
-! Write polars to file
+! done 
+  close (foilunit)
+  close (opPointunit)
+  close (bezierunit)
 
-  do i = 1, noppoint
 
-    op = op_points_result(i) 
+! ----- Actions when new design was found --------------------------------------
 
-    if (.not. op%converged) then 
-      call print_error ('  Error: Op '//stri(i) // &
-                        ' not converged in final calculation (this should not happen...)')
-    end if 
-    ! Add current flap angle to polars to show it in visualizer
-    write(polarunit,'(6ES14.6, 1ES14.3)') op%alpha, op%cl, op%cd, op%cm, &
-                                          op%xtrt, op%xtrb, actual_flap_degrees (i)
-  end do
+! Evaluate geometry results of current design foil
 
-! Close output files
-
-  close(foilunit)
-  close(polarunit)
+  call xfoil_set_airfoil (foil)        
+  call xfoil_get_geometry_info (geo_result%maxt, geo_result%xmaxt, &
+                                geo_result%maxc, geo_result%xmaxc)
 
 
 ! Dynamic Weighting of op points and geo targets
@@ -1449,55 +1419,89 @@ function write_airfoil_optimization_progress(designvars, designcounter)
   end if
 
 ! Testing:  Write op points deviation to file
-
 !  call write_op_results (designcounter, op_points_result, geo_result) 
 !  call write_designvars (designcounter, designvars) 
 !  call print_designvars (designcounter, designvars) 
 
-! Testing: print spikes for testing purposes 
-  if (.false.) then 
-    c = curv_top_spec
-    write (*,'(8x)',advance ='no') 
-    call assess_surface (show_details, '- Top side ', &
-                        1, size(foil%xt), size(foil%xt), &
-                        c%curv_threshold, c%spike_threshold, foil%xt, foil%zt, idum)
-
-    spike_threshold = min_threshold_for_reversals (1, size(foil%xt), &
-                      derivative3(foil%xt, foil%zt), 0.1d0, c%spike_threshold, c%max_spikes)
-    call print_note_only ('Min threshold for '//stri(c%max_spikes)//' spikes '&
-                          //strf('(F4.2)', spike_threshold), 18)
-
-    c = curv_bot_spec
-    write (*,'(8x)',advance ='no') 
-    call assess_surface (show_details, '- Bot side ', &
-                        1, size(foil%xb), size(foil%xb), &
-                        c%curv_threshold, c%spike_threshold, foil%xb, foil%zb, idum)
-
-    spike_threshold = min_threshold_for_reversals (1, size(foil%xb), &
-                      derivative3( foil%xb, foil%zb), 0.1d0, c%spike_threshold, c%max_spikes)
-    call print_note_only ('Min threshold for '//stri(c%max_spikes)//' spikes '&
-                         //strf('(F4.2)', spike_threshold), 18)
-    write (*,*)
-  end if 
-
-! Set return value (needed for compiler)
-
   write_airfoil_optimization_progress = 0
+
   return
 
-! Warning if there was an error opening design_coordinates file
+! File I/O Warnings 
 
-900 write(*,*) "Warning: unable to open "//trim(foilfile)//". Skipping ..."
+900 call print_warning ("Warning: unable to open "//foilfile//". Skipping ...")
   write_airfoil_optimization_progress = 1
   return
-
-! Warning if there was an error opening design_coordinates file
-
-901 write(*,*) "Warning: unable to open "//trim(polarfile)//". Skipping ..."
+901 call print_warning ("Warning: unable to open "//opPointsfile//". Skipping ...")
   write_airfoil_optimization_progress = 2
+  return
+902 call print_warning ("Warning: unable to open "//bezierfile//". Skipping ...")
+  write_airfoil_optimization_progress = 3
   return
 
 end function write_airfoil_optimization_progress
+
+
+
+subroutine write_design_op_points_header (iunit)
+  !! write csv header of op points data 
+  integer, intent(in) :: iunit
+  write (iunit, '(A5,";",A4,6(";",A11)";",A9)') '  No', "iOp", "alpha", "cl", "cd", "cm", "xtrt", "xtrb", "flap"
+end subroutine
+
+
+subroutine write_design_op_points_data (iunit, design, op_points_result, flap)
+  !! write csv op points result  
+  integer, intent(in)                     :: iunit, design
+  type(op_point_result_type), intent(in)  :: op_points_result (:)
+  double precision, intent(in)            :: flap (:)
+  integer                     :: i
+  type(op_point_result_type)  :: op
+
+  do i = 1, noppoint
+    op = op_points_result(i) 
+    if (.not. op%converged) then 
+      call print_error ('  Op '//stri(i)//' not converged in final calculation (this should not happen...)')
+    end if 
+    write(iunit,'(I5,";",I4, 6(";",F11.6), ";",F9.4)') design, i, op%alpha, op%cl, op%cd, op%cm, &
+                                                       op%xtrt, op%xtrb, flap (i)
+  end do
+end subroutine
+
+
+
+subroutine write_design_bezier_header (iunit, bez_spec)
+  !! write csv header of bezier design data 
+  integer, intent(in) :: iunit
+  type(bezier_spec_type), intent(in)  :: bez_spec
+  integer     :: i
+  write (iunit, '(A5,";",A5)', advance='no') '  No', 'Side'
+  do i = 1,max(bez_spec%ncpoints_top, bez_spec%ncpoints_bot)
+    write (iunit, '(2(";",A12))', advance='no') 'p'//stri(i)//'x', 'p'//stri(i)//'y'
+  end do 
+  write(iunit,*)
+end subroutine
+
+
+
+subroutine write_design_bezier_data (iunit, design, bez_spec)
+  !! write csv design data - coordinates of control points
+  integer, intent(in) :: iunit, design
+  type(bezier_spec_type), intent(in)  :: bez_spec
+  integer     :: i
+  write (iunit, '(I5,";",A5)', advance='no') design, 'Top'
+  do i = 1,bez_spec%ncpoints_top
+    write (iunit, '(2(";",F12.8))', advance='no') bez_spec%px_top(i), bez_spec%py_top(i)
+  end do 
+  write(iunit,*)
+  write (iunit, '(I5,";",A5)', advance='no') design, 'Bot'
+  do i = 1,bez_spec%ncpoints_bot
+    write (iunit, '(2(";",F12.8))', advance='no') bez_spec%px_bot(i), bez_spec%py_bot(i)
+  end do 
+  write(iunit,*)
+end subroutine
+
+
 
 
 !------------------------------------------------------------------------------
@@ -1529,7 +1533,6 @@ subroutine do_dynamic_weighting (designcounter, dyn_weight_spec, &
   doubleprecision                   :: avg_dev, sum_weighting_user, median_dev, weighting_diff
   doubleprecision                   :: new_dyn_obj_fun, cur_dyn_obj_fun, scale_dyn_obj_fun
   doubleprecision                   :: min_new_weighting,max_new_weighting, min_weighting, max_weighting
-  character(15)                     :: text
   logical                           :: show_dev
 
   doubleprecision, parameter        :: EXTRA_PUNCH_THRESHOLD = 1.5d0
@@ -1581,12 +1584,9 @@ subroutine do_dynamic_weighting (designcounter, dyn_weight_spec, &
 
   write (*,*) 
   call print_colored (COLOR_FEATURE,' - Dynamic Weighting')
-  write(text,*) ndyn
-  call print_colored (COLOR_PALE,' of '//trim(adjustl(text))//' targets')
-  write(text,'(F4.1)') avg_dev
-  call print_colored (COLOR_PALE,' having an average deviation of '//trim(adjustl(text))//'%')
-  write(text,'(F4.1)') median_dev
-  call print_colored (COLOR_PALE,' and a median of '//trim(adjustl(text))//'%')
+  call print_colored (COLOR_PALE,' of '//stri(ndyn)//' targets' //&
+                                 ' having an average deviation of '//strf('(F4.1)', avg_dev)//'%' //&
+                                 ' and a median of '//strf('(F4.1)', median_dev)//'%')
                             
   write (*,*) 
   write (*,*) 
@@ -2121,19 +2121,13 @@ subroutine print_improvement_info (intent, header, op_spec, op)
   if (present(op_spec)) then 
     if (trim(op_spec%optimization_type (1:6)) == 'target') then
       opt_type = 'targ'
-      how_good = -1
 
       select case  (op_spec%optimization_type)
         case ('target-drag')
           base  = 'cd'
           value_base = 0.01d0
-          dist  = op%cd - op_spec%target_value                ! positive is worse
+          dist  = op_spec%target_value - op%cd                ! negative is worse
           dev   = dist / op_spec%target_value * 100d0
-          if (op_spec%allow_improved_target .and. dev < 0d0) then
-            how_good = Q_GOOD
-          else
-            how_good = r_quality (abs(dev), 0.1d0, 2d0, 10d0)      ! in percent
-          end if
         case ('target-glide')
           base  = 'glide'
           value_base = 10d0
@@ -2150,12 +2144,11 @@ subroutine print_improvement_info (intent, header, op_spec, op)
           dist = op%cm - op_spec%target_value                 ! negative is worse
           dev  = dist / (op_spec%target_value + 0.05d0) * 100d0 ! cm could be 0
       end select
-      if (how_good == -1) then
-        if (op_spec%allow_improved_target .and. dev >= 0d0) then
-          how_good = Q_GOOD
-        else
-          how_good = r_quality (abs(dev), 0.1d0, 2d0, 10d0)      ! in percent
-        end if
+
+      if (op_spec%allow_improved_target .and. dev >= 0d0) then
+        how_good = Q_GOOD
+      else
+        how_good = r_quality (abs(dev), 0.1d0, 2d0, 10d0)      ! in percent
       end if
 
     else
@@ -2247,7 +2240,7 @@ subroutine print_improvement_info (intent, header, op_spec, op)
       call print_colored (COLOR_PALE, repeat(' ',14))
     end if
 
-else 
+  else 
     write (s,'(A)') header
     call print_colored (COLOR_PALE, s (1:25))
   end if 
@@ -2450,22 +2443,20 @@ function write_matchfoil_optimization_progress(designvars, designcounter)
   character(8) :: maxtchar, xmaxtchar, maxcchar, xmaxcchar
 
 
-  character(255) :: foilfile, text, title
+  character(:), allocatable :: foilfile, title
   integer :: foilunit
 
-  write(text,*) designcounter
-  text = adjustl(text)
 
   ! Set output file names and identifiers
 
-  foilfile = trim(design_subdir)//'Design_Coordinates.dat'
+  foilfile = design_subdir//'Design_Coordinates.dat'
   foilunit = 13
 
   if (designcounter == 0) then
     call print_colored (COLOR_NORMAL,' - Writing seed airfoil')
   else
     write (*,'(2x,A)', advance ='no') '-> Writing design '
-    call  print_colored (COLOR_NORMAL,'#'//trim(text))
+    call  print_colored (COLOR_NORMAL,'#'//stri(designcounter))
   end if
   write (*,*)
 
@@ -2478,7 +2469,7 @@ function write_matchfoil_optimization_progress(designvars, designcounter)
 ! Design > 0 - Build current foil out seed foil and current design 
   else 
     call create_airfoil_form_design (seed_foil, designvars, foil)
-    foil%name = trim(output_prefix)
+    foil%name = output_prefix
   end if
 
   call xfoil_set_airfoil (foil)
@@ -2511,10 +2502,10 @@ function write_matchfoil_optimization_progress(designvars, designcounter)
     title =  'zone t="Airfoil, '//'name='//trim(adjustl(foil%name))//', maxt='//trim(maxtchar)//&
              ', xmaxt='//trim(xmaxtchar)//', maxc='//&
               trim(maxcchar)//', xmaxc='//trim(xmaxcchar)//'", '//&
-             'SOLUTIONTIME='//trim(text)
+             'SOLUTIONTIME='//stri(designcounter)
   end if
 
-  call  airfoil_write_to_unit (foilunit, title, foil, .True.)
+  call  airfoil_write_to_unit (foilunit, title, foil)
 
   close(foilunit)
 
@@ -2525,7 +2516,7 @@ function write_matchfoil_optimization_progress(designvars, designcounter)
     write (*,*)
     title = 'zone t="Match airfoil, '//'name='//trim(foil_to_match%name)//'"'
     open(unit=foilunit, file=foilfile, status='old', position='append', err=910)
-    call  airfoil_write_to_unit (foilunit, title, foil_to_match, .True.)
+    call  airfoil_write_to_unit (foilunit, title, foil_to_match)
     close(foilunit)  
   end if 
 
@@ -2562,7 +2553,7 @@ subroutine write_op_results (designcounter, op_points_result, geo_result)
   type(geo_target_type)             :: geo_target
 
   integer             :: i, nop, ngeo_targets
-  character(255)      :: resultfile
+  character(:), allocatable  :: resultfile
   integer             :: resultunit
   double precision    :: dev, dist
 
@@ -2572,7 +2563,7 @@ subroutine write_op_results (designcounter, op_points_result, geo_result)
 
 ! Initial design: Open file and write header
 
-  resultfile = trim(design_subdir)//'target_result_history.csv'
+  resultfile = design_subdir//'target_result_history.csv'
   resultunit = 13
 
   if (designcounter == 0) then
@@ -2687,7 +2678,7 @@ subroutine write_designvars (designcounter, designvars)
   double precision, dimension(:), intent(in) :: designvars
 
   integer             :: i
-  character(255)      :: filename
+  character(:), allocatable :: filename
   integer             :: iunit, nvars
   integer             :: nmodes, counter1
   double precision    :: st, t1, t2, t1fact, t2fact
@@ -2696,7 +2687,7 @@ subroutine write_designvars (designcounter, designvars)
 
 ! Initial design: Open file and write header
 
-  filename = trim(design_subdir)//'particleswarm_designs.csv'
+  filename = design_subdir//'particleswarm_designs.csv'
   iunit = 13
   if (designcounter == 0) then 
     open(unit=iunit, file=filename, status='replace')
@@ -2771,14 +2762,9 @@ subroutine write_designvars (designcounter, designvars)
 
   close(iunit)
 
-! Next designs: Open file and write data
-
-
-
-  return 
-
-
 end subroutine write_designvars
+
+
 
 !------------------------------------------------------------------------------
 !  For analysis...
@@ -2796,6 +2782,8 @@ subroutine print_designvars (designcounter, designvars)
   integer             :: nvars
   integer             :: nmodes, counter1
   double precision    :: st, t1, t2, t1fact, t2fact
+
+  i = designcounter               ! dummy
 
   nvars = size(designvars,1)
 

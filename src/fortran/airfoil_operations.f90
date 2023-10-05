@@ -24,11 +24,7 @@ module airfoil_operations
 
   implicit none
 
-! Coefficients for 5th-order polynomial (curve fit for leading edge)
-
-  double precision, dimension(6) :: polynomial_coefs
-
-  contains
+contains
 
 !=============================================================================80
 !
@@ -60,7 +56,7 @@ subroutine get_seed_airfoil (seed_airfoil, airfoil_file, foil )
 
     write (*,'(/," - ", A)', advance = 'no') 'Reading bezier curve definition '
     call print_colored (COLOR_HIGH,trim(airfoil_file))
-    write (*,'(A)', advance = 'no') ' and generating airfoil coordinates'
+    write (*,'(A)') ' for seed airfoil'
 
     foil%npoint = 201                   ! 201 points as default - will be repaneled anyway
     call load_bezier_airfoil (airfoil_file, foil%npoint, airfoil_name, foil%x, foil%z, foil%bezier_spec) 
@@ -70,13 +66,12 @@ subroutine get_seed_airfoil (seed_airfoil, airfoil_file, foil )
  
   else
 
-    write(*,*) "Error: seed_airfoil should be 'from_file' or 'from_bezier'."
-    write(*,*)
-    stop
-
+    call my_stop ("'seed_airfoil' must be 'from_file' or 'from_bezier'.")
+  
   end if
 
 end subroutine get_seed_airfoil
+
 
 !=============================================================================80
 !
@@ -87,7 +82,6 @@ end subroutine get_seed_airfoil
 subroutine load_airfoil(filename, foil)
 
   use vardef,      only : airfoil_type
-  use memory_util, only : allocate_airfoil
 
   character(*), intent(in) :: filename
   type(airfoil_type), intent(out) :: foil
@@ -104,7 +98,9 @@ subroutine load_airfoil(filename, foil)
 ! Read number of points and allocate coordinates
 
   call airfoil_points(filename, foil%npoint, labeled)
-  call allocate_airfoil(foil)
+
+  allocate(foil%x(foil%npoint))
+  allocate(foil%z(foil%npoint))
 
 ! Read airfoil from file
 
@@ -464,7 +460,7 @@ end function is_normalized
 !    TE at 1.0 (upper and lower side may have a gap)  
 !
 ! For normalization xfoils LEFIND is used to calculate the (virtual) LE of
-!    the airfoil - then it's shifted, rotated, sclaed to be normalized.
+!    the airfoil - then it's shifted, rotated, scaled to be normalized.
 !
 ! Bad thing: a subsequent xfoil LEFIND won't deliver TE at 0,0 but still with a little 
 !    offset. SO this is iterated until the offset is smaller than epsilon
@@ -477,7 +473,7 @@ subroutine repanel_and_normalize_airfoil (in_foil, xfoil_geom_options, symmetric
   use xfoil_driver, only : smooth_paneling, xfoil_geom_options_type, xfoil_set_airfoil
 
   type(airfoil_type), intent(in)    :: in_foil
-  type(airfoil_type), intent(out)   :: foil
+  type(airfoil_type), intent(inout) :: foil
   type(xfoil_geom_options_type),intent(in)    :: xfoil_geom_options
   logical,            intent(in)    :: symmetrical
 
@@ -495,11 +491,11 @@ subroutine repanel_and_normalize_airfoil (in_foil, xfoil_geom_options, symmetric
   allocate (tmp_foil%x(tmp_foil%npoint))  
   allocate (tmp_foil%z(tmp_foil%npoint))   
 
-  foil%name = in_foil%name 
+  foil%name = trim(in_foil%name) 
 
   ! initial paneling to npoint_new
   call smooth_paneling(in_foil, 0, foil, xfoil_geom_options)
- 
+
   call le_find(foil%x, foil%z, foil%leclose, foil%xle, foil%zle, foil%addpoint_loc)
   le_fixed = .false. 
  
@@ -516,9 +512,11 @@ subroutine repanel_and_normalize_airfoil (in_foil, xfoil_geom_options, symmetric
       le_fixed = .true. 
       exit 
     end if
-    
+     
     tmp_foil%x = foil%x
     tmp_foil%z = foil%z
+    tmp_foil%name = trim(foil%name) 
+
     call smooth_paneling(tmp_foil, 0, foil, xfoil_geom_options)
     call le_find(foil%x, foil%z, foil%leclose, foil%xle, foil%zle, foil%addpoint_loc)
     
@@ -842,26 +840,21 @@ end subroutine split_foil_at_00
 subroutine rebuild_airfoil(xt, xb, zt, zb, foil)
 
   use vardef, only        : airfoil_type
-  use memory_util, only   : deallocate_airfoil
 
   type(airfoil_type), intent(inout) :: foil
   double precision, dimension(:), intent(in) :: xt, xb, zt, zb
   
   integer i, pointst, pointsb
 
-  call deallocate_airfoil(foil)
-
   pointst = size(xt,1)
   pointsb = size(xb,1)
 
   foil%npoint = pointst + pointsb - 1
 
+  if (allocated(foil%x)) deallocate(foil%x)
+  if (allocated(foil%z)) deallocate(foil%z)
   allocate(foil%x(foil%npoint))
   allocate(foil%z(foil%npoint))
-  allocate(foil%xb(size(xb,1)))
-  allocate(foil%xt(size(xt,1)))
-  allocate(foil%zb(size(xb,1)))
-  allocate(foil%zt(size(xt,1)))
 
   foil%xb = xb
   foil%xt = xt
@@ -891,48 +884,43 @@ subroutine airfoil_write(filename, title, foil)
 
   character(*), intent(in) :: filename, title
   type(airfoil_type), intent(in) :: foil
-  integer :: iunit
+  integer :: iunit, ioerr
+  character(len=512) :: msg
 
-  write (*,'(" - ", A)', advance = 'no') 'Writing airfoil to '
-  call print_colored (COLOR_HIGH,trim(filename))
-  write (*,*)
 
 ! Open file for writing and out ...
 
   iunit = 13
-  open  (unit=iunit, file=filename, status='replace')
-  call  airfoil_write_to_unit (iunit, title, foil, .false.)
+  open  (unit=iunit, file=filename, status='replace',  iostat=ioerr, iomsg=msg)
+  if (ioerr /= 0) then 
+    call my_stop ("Unable to write to file '"//trim(filename)//"': "//trim(msg))
+  end if 
+
+  call print_colored (COLOR_NOTE, "   Writing airfoil to ")
+  call print_colored (COLOR_HIGH,trim(filename))
+  write (*,*)
+
+  call  airfoil_write_to_unit (iunit, title, foil)
   close (iunit)
 
 end subroutine airfoil_write
 
 !-----------------------------------------------------------------------------
 !
-! Writes an airfoil with a title to iunit
-!    --> central function for all foil coordinate writes
 !
-! write_derivatives = true: additional to x and y write derivative 2 and 3
 !-----------------------------------------------------------------------------
 
-subroutine airfoil_write_to_unit (iunit, title, foil, write_derivatives)
+subroutine airfoil_write_to_unit (iunit, title, foil)
+
+  !! Writes an airfoil with a title to iunit
+  !    --> central function for all foil coordinate writes
 
   use vardef,          only : airfoil_type
-  use math_deps,       only : derivative2, derivative3 
 
-  integer, intent(in) :: iunit
-  character(*), intent(in) :: title
-  type(airfoil_type), intent(in) :: foil
-  logical, intent(in):: write_derivatives
-
-  double precision, dimension(size(foil%x)) :: deriv2, deriv3
+  integer, intent(in)             :: iunit
+  character(*), intent(in)        :: title
+  type(airfoil_type), intent(in)  :: foil
   integer :: i
-
-! Add 2nd and 3rd derivative to
-!        ...design_coordinates.dat to show it in visualizer
-  if (write_derivatives) then
-    deriv2 = derivative2 (foil%x, foil%z)
-    deriv3 = derivative3 (foil%x, foil%z)
-  end if
 
 ! Write label to file
   
@@ -941,15 +929,11 @@ subroutine airfoil_write_to_unit (iunit, title, foil, write_derivatives)
 ! Write coordinates
 
   do i = 1, foil%npoint
-    if (write_derivatives) then
-      write(iunit,'(2F12.7,2G17.7)')  foil%x(i), foil%z(i), deriv2(i), deriv3(i)
-    else
-      write(iunit,'(2F12.7)')         foil%x(i), foil%z(i)
-    end if
+    write(iunit,'(2F12.7)')         foil%x(i), foil%z(i)
   end do
 
-
 end subroutine airfoil_write_to_unit
+
 
 !=============================================================================80
 !
