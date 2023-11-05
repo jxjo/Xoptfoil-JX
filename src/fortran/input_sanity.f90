@@ -229,13 +229,13 @@ subroutine check_seed()
   if(curv_spec%check_curvature) then
 
     if (trim(shape_functions) == 'hicks-henne' ) then
-      write(*,'(/," - ",A)') "Check_curvature if it's suitable for Hicks-Henne shape type"
+      write(*,'(" - ",A)') "Check_curvature if it's suitable for Hicks-Henne shape type"
       call check_and_smooth_surface (show_details, .false., curv_spec%do_smoothing, seed_foil, overall_quality)
     end if 
 
   ! Get best values fur surface constraints 
     if (curv_spec%auto_curvature) then 
-      write (*,'(/," - ", A)') 'Auto_curvature: Best values for curvature constraints'
+      write (*,'(" - ", A)') 'Auto_curvature: Best values for curvature constraints'
       call auto_curvature_constraints ('Top side', show_details, seed_foil%xt, seed_foil%zt, curv_top_spec)
       if (.not. seed_foil%symmetrical) & 
         call auto_curvature_constraints ('Bot side', show_details, seed_foil%xb, seed_foil%zb, curv_bot_spec)
@@ -295,7 +295,7 @@ subroutine check_seed()
 
   if(check_geometry) then
 
-    write(*,'(/," - ",A)') 'Checking to make sure seed airfoil passes all constraints ...'
+    write(*,'(" - ",A)') 'Checking to make sure seed airfoil passes all constraints ...'
 
   ! Sanity check of thickness and camber 
 

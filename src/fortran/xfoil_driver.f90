@@ -37,7 +37,7 @@ module xfoil_driver
   end type bubble_type                              
 
   ! defines an op_point for xfoil calculation
-
+ 
   type op_point_specification_type                              
     logical          :: spec_cl                 ! op based on alpha or cl
     double precision :: value                   ! base value of cl or alpha

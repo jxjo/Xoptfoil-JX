@@ -411,7 +411,9 @@ module input_output
 
 ! Echo namelist options for checking purposes
 
-  if (.not. match_foils) call echo_op_points_spec  (op_points_spec, xfoil_options) 
+  if (.not. match_foils .and. show_details) then 
+    call echo_op_points_spec  (op_points_spec, xfoil_options) 
+  end  if
 
 
 
@@ -774,7 +776,7 @@ subroutine read_op_points_spec  (input_file, or_iunit, noppoint, re_def, &
   mach(:) = 0.d0
   weighting(:) = 1.d0
   ncrit_pt(:) = -1.d0
-  target_value(:) = -1.d3 
+  target_value(:) = 0 
 
   use_flap     = .false.                
   x_flap       = 0.75d0
@@ -807,6 +809,8 @@ subroutine read_op_points_spec  (input_file, or_iunit, noppoint, re_def, &
     read(iunit, iostat=iostat1, nml=operating_conditions)
     close(iunit)
   end if
+
+  call namelist_check('operating_conditions', iostat1, 'warn')
 
 ! overwrite re_default if specified in command line 
 
@@ -1471,6 +1475,7 @@ subroutine read_xfoil_options_inputs  (input_file, or_iunit, xfoil_options)
     end if
   end if
 
+  call namelist_check ('xfoil_run_options', iostat1, 'no-warn')
 ! XFoil run options
 
   if (ncrit < 0.d0) call my_stop("ncrit must be >= 0.")

@@ -235,6 +235,7 @@ subroutine match_bezier_for_side  (side, match_x, match_y, np, px, py)
   !    x,y:       returns x,y coordinates at u
 
   use os_util
+  use vardef,               only : show_details 
   use simplex_search,       only : simplexsearch, ds_options_type 
   use airfoil_evaluation,   only : side_to_match_x, side_to_match_y, match_side_objective_function
   use airfoil_shape_bezier, only : get_initial_bezier, bezier_to_dv, dv_to_bezier
@@ -269,10 +270,11 @@ subroutine match_bezier_for_side  (side, match_x, match_y, np, px, py)
   call bezier_to_dv (px, py, dv0)
 
   ndv = size(dv0)
-  ! write (*,'(" - ",A,A,A,I2,A,I2,A)') 'Bezier nelder mead optimization for ',side,' side (', &
-  !                                      np, ' points,', ndv, ' variables)'
-  write(*,'(3x)', advance = 'no')
-  call  print_colored (COLOR_NOTE, 'Matching Bezier for '//side//' side ('//stri(np)//' points): ')
+
+  if (show_details) then
+    write(*,'(3x)', advance = 'no')
+    call  print_colored (COLOR_NOTE, 'Matching Bezier for '//side//' side ('//stri(np)//' points): ')
+  end if 
 
   xmin = dv0                                      ! just for allocation 
   xmin = 0d0                                      ! result array 
@@ -290,11 +292,11 @@ subroutine match_bezier_for_side  (side, match_x, match_y, np, px, py)
   dev_norm2  = norm2 (deviation)
   dev_max    = maxval(abs(deviation))
   dev_max_at = match_x(maxloc (abs(deviation),1))
-  ! write (*,'("   ",A,I4,A,A,f8.6,A,f8.6,A,f6.4)') '... ', steps, ' iterations', & 
-  !                                                 ' - norm2 deviation: ', dev_norm2, &
-  !                                                 ', max deviation: ', dev_max,' at x/c: ', dev_max_at
-  call  print_colored (COLOR_NOTE, '... '//stri(steps)//' iterations'//' - deviation: '//strf('(f8.6)',dev_norm2))
-  write(*,*)
+
+  if (show_details) then
+    call  print_colored (COLOR_NOTE, '... '//stri(steps)//' iterations'//' - deviation: '//strf('(f8.6)',dev_norm2))
+    write(*,*)
+  end if 
 
 end subroutine match_bezier_for_side
 

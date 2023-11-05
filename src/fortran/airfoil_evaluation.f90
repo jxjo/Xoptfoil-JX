@@ -92,7 +92,7 @@ module airfoil_evaluation
 ! Public functions and global variables 
 
   public :: objective_function, objective_function_nopenalty
-  public :: write_function 
+  public :: write_progress
   public :: create_airfoil_form_design, get_flap_degrees_from_design
   public :: match_side_objective_function
   double precision, parameter    :: OBJ_XFOIL_FAIL = 55.55d0
@@ -1068,28 +1068,21 @@ end function match_side_objective_function
 
 
 
-!=============================================================================80
-!
-! Generic function to write designs. Selects either 
-! write_airfoil_optimization_progress or write_matchfoil_optimization_progress
-! depending on whether match_foils = .true. or not.
-!
-!=============================================================================80
-function write_function(designvars, designcounter)
+subroutine write_progress (designvars, designcounter)
+  !! Generic function to write designs. Selects either match_foils or 'normaö'
 
   double precision, dimension(:), intent(in) :: designvars
   integer, intent(in) :: designcounter
-  integer :: write_function
+  integer :: write_stat                     ! currently not used 
 
   if (match_foils) then
-    write_function = write_matchfoil_optimization_progress(designvars,         &
-                                                           designcounter)
+    write_stat = write_matchfoil_optimization_progress(designvars, designcounter)
   else
-    write_function = write_airfoil_optimization_progress(designvars,           &
-                                                         designcounter)
+    write_stat = write_airfoil_optimization_progress(designvars, designcounter)
   end if
 
-end function write_function
+end subroutine write_progress
+
 
 !===============================================================================
 !
@@ -1267,14 +1260,15 @@ end subroutine get_flap_degrees_from_design
 function write_airfoil_optimization_progress(designvars, designcounter)
 
   !! Writes airfoil coordinates and op Points results to files during optimization
+  !!   designcounter = 0 will start new files 
 
   use math_deps,          only : interp_vector, min_threshold_for_reversals, derivative3
   use airfoil_operations, only : airfoil_write_to_unit, assess_surface
   use xfoil_driver,       only : run_op_points, op_point_result_type
   use xfoil_driver,       only : xfoil_get_geometry_info, xfoil_set_airfoil
 
-  double precision, dimension(:), intent(in) :: designvars
-  integer, intent(in) :: designcounter
+  double precision, intent(in)  :: designvars (:)
+  integer, intent(in)           :: designcounter
   integer :: write_airfoil_optimization_progress
 
   type(airfoil_type)                :: foil
@@ -1284,8 +1278,8 @@ function write_airfoil_optimization_progress(designvars, designcounter)
 
   double precision, dimension(noppoint) :: actual_flap_degrees
  
-  character(:), allocatable :: foilfile, bezierfile, title, opPointsfile
-  integer        :: foilunit, bezierunit, opPointunit
+  character(:), allocatable :: foil_file, bezier_file, op_points_file
+  integer        :: foil_unit, bezier_unit, op_points_unit
   logical        :: dynamic_done
  
 
@@ -1338,62 +1332,60 @@ function write_airfoil_optimization_progress(designvars, designcounter)
                         op_points_spec, op_points_result)
   end if 
      
-  
 ! Set output file names and identifiers
 
-  foilfile      = design_subdir//'Design_Coordinates.dat'
-  opPointsfile  = design_subdir//'Design_OpPoints.csv'
-  bezierfile    = design_subdir//'Design_Beziers.csv'
+  foil_file       = design_subdir//'Design_Coordinates.csv'
+  op_points_file  = design_subdir//'Design_OpPoints.csv'
+  bezier_file     = design_subdir//'Design_Beziers.csv'
 
-  foilunit    = 13
-  opPointunit = 14
-  bezierunit  = 15
+  foil_unit       = 13
+  op_points_unit  = 14
+  bezier_unit     = 15
+
+! Open files of design data ...
 
   if (designcounter == 0) then
 
-  ! Open new files and write headers for design=0 (seed airfoil)
+  ! ... design=0 (seed airfoil), write header and opPoint specifications
 
-    open(unit=foilunit,    file=foilfile,     status='replace', err=900)
-    open(unit=opPointunit, file=opPointsfile, status='replace', err=901)
-    call write_design_op_points_header (opPointunit)
+    open(unit=op_points_unit, file=op_points_file, status='replace', err=901)
+    call write_design_op_points_header (op_points_unit)
 
     if (shape_functions == 'bezier') then 
-      open(unit=bezierunit, file= bezierfile, status='replace', err=902)
-      call write_design_bezier_header (bezierunit, foil%bezier_spec)
+      open(unit=bezier_unit, file= bezier_file, status='replace', err=902)
+      call write_design_bezier_header (bezier_unit, foil)
+    else 
+      open(unit=foil_unit,   file=foil_file,    status='replace', err=900)
+      call write_design_coord_header (foil_unit, foil)
     end if 
 
   else
 
-  ! Open files of design data for design > 0 
+  ! ... design > 0 
 
-    open (unit=foilunit,    file=foilfile,     status='old', position='append', err=900)
-    open (unit=opPointunit, file=opPointsfile, status='old', position='append', err=901)
+    open (unit=op_points_unit, file=op_points_file, status='old', position='append', err=901)
     if (shape_functions == 'bezier') then 
-      open (unit=bezierunit,  file= bezierfile,  status='old', position='append', err=902)
+      open (unit=bezier_unit,  file= bezier_file,  status='old', position='append', err=902)
+    else
+      open (unit=foil_unit,    file=foil_file,     status='old', position='append', err=900)
     end if 
 
   end if
 
 ! Write design data 
 
-  ! Design 0 is seed airfoil to output 
-  title =  'Design #'//stri(designcounter)//', name='//trim(adjustl(foil%name))
-  call airfoil_write_to_unit (foilunit, title, foil)
-
-! Write op point data to file
-
-  call write_design_op_points_data (opPointunit, designcounter, op_points_result, flap_degrees)
-
-! Write bezier control points to file  
-
+  call write_design_op_points_data (op_points_unit, designcounter, op_points_spec, op_points_result, flap_degrees)
   if (shape_functions == 'bezier') then 
-    call write_design_bezier_data   (bezierunit, designcounter, foil%bezier_spec)
+    call write_design_bezier_data   (bezier_unit, designcounter, foil)
+  else 
+    call write_design_coord_data (foil_unit, designcounter, foil)
   end if 
 
 ! done 
-  close (foilunit)
-  close (opPointunit)
-  close (bezierunit)
+
+  close (foil_unit)
+  close (op_points_unit)
+  close (bezier_unit)
 
 
 ! ----- Actions when new design was found --------------------------------------
@@ -1429,13 +1421,13 @@ function write_airfoil_optimization_progress(designvars, designcounter)
 
 ! File I/O Warnings 
 
-900 call print_warning ("Warning: unable to open "//foilfile//". Skipping ...")
+900 call print_warning ("Warning: unable to open "//foil_file//". Skipping ...")
   write_airfoil_optimization_progress = 1
   return
-901 call print_warning ("Warning: unable to open "//opPointsfile//". Skipping ...")
+901 call print_warning ("Warning: unable to open "//op_points_file//". Skipping ...")
   write_airfoil_optimization_progress = 2
   return
-902 call print_warning ("Warning: unable to open "//bezierfile//". Skipping ...")
+902 call print_warning ("Warning: unable to open "//bezier_file//". Skipping ...")
   write_airfoil_optimization_progress = 3
   return
 
@@ -1446,62 +1438,206 @@ end function write_airfoil_optimization_progress
 subroutine write_design_op_points_header (iunit)
   !! write csv header of op points data 
   integer, intent(in) :: iunit
-  write (iunit, '(A5,";",A4,6(";",A11)";",A9)') '  No', "iOp", "alpha", "cl", "cd", "cm", "xtrt", "xtrb", "flap"
+  write (iunit, '(A5,";",A4,8(";",A11)";",A9)') '  No', "iOp", "alpha", "cl", "cd", "cm", "xtrt", "xtrb", "dist", "dev", "flap"
 end subroutine
 
 
-subroutine write_design_op_points_data (iunit, design, op_points_result, flap)
+
+subroutine write_design_op_points_data (iunit, design, op_points_specification, op_points_result, flap)
   !! write csv op points result  
   integer, intent(in)                     :: iunit, design
+  type(op_point_specification_type), intent(in)  :: op_points_specification (:)
   type(op_point_result_type), intent(in)  :: op_points_result (:)
   double precision, intent(in)            :: flap (:)
-  integer                     :: i
-  type(op_point_result_type)  :: op
+
+  type(op_point_result_type)              :: op
+  type(op_point_specification_type)       :: op_spec 
+  integer                     :: i,how_good
+  double precision            :: dist, dev
 
   do i = 1, noppoint
     op = op_points_result(i) 
+    op_spec = op_points_specification(i) 
+    call get_op_improvement(op_spec, op, dist, dev, how_good)
+
     if (.not. op%converged) then 
       call print_error ('  Op '//stri(i)//' not converged in final calculation (this should not happen...)')
     end if 
-    write(iunit,'(I5,";",I4, 6(";",F11.6), ";",F9.4)') design, i, op%alpha, op%cl, op%cd, op%cm, &
-                                                       op%xtrt, op%xtrb, flap (i)
+    write(iunit,'(I5,";",I4, 8(";",F11.6), ";",F9.4)') & 
+                design, i, op%alpha, op%cl, op%cd, op%cm, op%xtrt, op%xtrb, dist, dev, flap (i)
   end do
 end subroutine
 
 
 
-subroutine write_design_bezier_header (iunit, bez_spec)
-  !! write csv header of bezier design data 
-  integer, intent(in) :: iunit
-  type(bezier_spec_type), intent(in)  :: bez_spec
-  integer     :: i
-  write (iunit, '(A5,";",A5)', advance='no') '  No', 'Side'
-  do i = 1,max(bez_spec%ncpoints_top, bez_spec%ncpoints_bot)
-    write (iunit, '(2(";",A12))', advance='no') 'p'//stri(i)//'x', 'p'//stri(i)//'y'
-  end do 
-  write(iunit,*)
+subroutine write_op_spec (filename, iunit, op_points_specification, xfoil_ncrit)
+  !! write csv op points specification   
+  character(:), allocatable, intent(in)   :: filename
+  integer, intent(in)                     :: iunit
+  type(op_point_specification_type), intent(in)  :: op_points_specification (:)
+  double precision, intent(in)            :: xfoil_ncrit 
+
+  type(op_point_specification_type) :: op_spec
+  double precision                  :: ncrit 
+  integer                           :: i
+
+  open(unit=iunit, file=filename, status='replace', err=900)
+
+  write (iunit, '(" ",A)',   advance='no') 'iOp'
+  write (iunit, '("; ",A)',  advance='no') 'spec_cl'
+  write (iunit, '("; ",A)',  advance='no') 'value'
+  write (iunit, '("; ",A)',  advance='no') 're_number'
+  write (iunit, '("; ",A)',  advance='no') 're_type'
+  write (iunit, '("; ",A)',  advance='no') 'ma_number'
+  write (iunit, '("; ",A)',  advance='no') 'ma_type'
+  write (iunit, '("; ",A)',  advance='no') 'ncrit'
+  write (iunit, '("; ",A)',  advance='no') 'optimization_type'
+  write (iunit, '("; ",A)',  advance='no') 'target_value'
+  write (iunit, '("; ",A)',  advance='no') 'allow_improved_target'
+  write (iunit, '("; ",A)',  advance='no') 'weighting_user'
+  write (iunit, '("; ",A)',  advance='no') 'dynamic_weighting'
+  write (iunit,*)
+
+  do i = 1, size (op_points_specification)
+
+    op_spec = op_points_specification(i) 
+
+    if (op_spec%ncrit /= -1d0) then 
+      ncrit = op_spec%ncrit
+    else
+      ncrit = xfoil_ncrit
+    end if 
+
+    write (iunit, '(I4)',         advance='no') i
+    write (iunit, '(";",L4)',     advance='no') op_spec%spec_cl
+    write (iunit, '(";",F11.6)',  advance='no') op_spec%value
+    write (iunit, '(";",F11.0)',  advance='no') op_spec%re%number
+    write (iunit, '(";",I4)',     advance='no') op_spec%re%type
+    write (iunit, '(";",F11.0)',  advance='no') op_spec%ma%number
+    write (iunit, '(";",I4)',     advance='no') op_spec%ma%type
+    write (iunit, '(";",F7.1)',   advance='no') ncrit
+    write (iunit, '(";",A15)',    advance='no') op_spec%optimization_type
+    write (iunit, '(";",F11.6)',  advance='no') op_spec%target_value
+    write (iunit, '(";",L4)',     advance='no') op_spec%allow_improved_target
+    write (iunit, '(";",F7.2)',   advance='no') op_spec%weighting_user
+    write (iunit, '(";",L4)',     advance='no') op_spec%dynamic_weighting
+    write (iunit,*)
+
+  end do
+
+  close (iunit)
+
+  return
+
+  ! File I/O Warnings 
+
+900 call print_warning ("Warning: unable to open "//filename//". Skipping ...")
+  return
+
 end subroutine
 
 
 
-subroutine write_design_bezier_data (iunit, design, bez_spec)
-  !! write csv design data - coordinates of control points
-  integer, intent(in) :: iunit, design
-  type(bezier_spec_type), intent(in)  :: bez_spec
+subroutine write_design_coord_header (iunit, foil)
+  !! write csv header of design airfoil coordinates 
+
+  integer, intent(in) :: iunit
+  type(airfoil_type), intent(in)  :: foil
   integer     :: i
-  write (iunit, '(I5,";",A5)', advance='no') design, 'Top'
+  write (iunit, '(A5,";",A15, ";",A6)', advance='no') '  No', 'Name', 'Coord'
+  do i = 1,size(foil%x)
+    write (iunit, '(";",I10)', advance='no') i
+  end do 
+  write (iunit,*)
+
+end subroutine
+
+
+
+subroutine write_design_coord_data (iunit, design, foil)
+  !! write csv design data - coordinates of airfoil
+
+  integer, intent(in) :: iunit, design
+  type(airfoil_type), intent(in)  :: foil
+  character(:), allocatable :: name 
+  integer     :: i
+
+  name = design_foil_name (design, foil)
+  write (iunit, '(I5,";",A,";",A5)', advance='no') design, name, 'x'
+  do i = 1,size (foil%x)
+    write (iunit, '(";",F10.7)', advance='no') foil%x(i)
+  end do 
+  write (iunit,*)
+
+  write (iunit, '(I5,";",A,";",A5)', advance='no') design, name, 'y'
+  do i = 1,size (foil%x)
+    write (iunit, '(";",F10.7)', advance='no') foil%z(i)
+  end do 
+  write (iunit,*)
+
+end subroutine
+
+
+
+subroutine write_design_bezier_header (iunit, foil)
+  !! write csv header of bezier design data 
+
+  integer, intent(in) :: iunit
+  type(airfoil_type), intent(in)  :: foil
+  integer     :: i
+  write (iunit, '(A5,";",A15, ";",A5)', advance='no') '  No', 'Name', 'Side'
+  do i = 1,max(foil%bezier_spec%ncpoints_top, foil%bezier_spec%ncpoints_bot)
+    write (iunit, '(2(";",A12))', advance='no') 'p'//stri(i)//'x', 'p'//stri(i)//'y'
+  end do 
+  write (iunit,*)
+
+end subroutine
+
+
+
+subroutine write_design_bezier_data (iunit, design, foil)
+  !! write csv design data - coordinates of control points
+
+  integer, intent(in) :: iunit, design
+  type(airfoil_type), intent(in)  :: foil
+  type(bezier_spec_type)    :: bez_spec
+  character(:), allocatable :: name 
+  integer     :: i
+
+  bez_spec = foil%bezier_spec
+  name = design_foil_name (design, foil)
+  write (iunit, '(I5,";",A,";",A5)', advance='no') design, name, 'Top'
   do i = 1,bez_spec%ncpoints_top
     write (iunit, '(2(";",F12.8))', advance='no') bez_spec%px_top(i), bez_spec%py_top(i)
   end do 
-  write(iunit,*)
-  write (iunit, '(I5,";",A5)', advance='no') design, 'Bot'
+  write (iunit,*)
+  write (iunit, '(I5,";",A,";",A5)', advance='no') design, name, 'Bot'
   do i = 1,bez_spec%ncpoints_bot
     write (iunit, '(2(";",F12.8))', advance='no') bez_spec%px_bot(i), bez_spec%py_bot(i)
   end do 
-  write(iunit,*)
+  write (iunit,*)
+
 end subroutine
 
 
+function design_foil_name (design, foil)
+  !! name of airfoil design when writing design to file 
+  integer, intent(in) :: design
+  type(airfoil_type), intent(in)  :: foil
+  character(:), allocatable       :: design_foil_name
+
+  if (design == 0) then                             ! seed foil 
+    design_foil_name = trim(foil%name)    
+  else                                              ! design foils
+    if (len_trim (foil%name) > 15) then
+      design_foil_name = foil%name (1:15) // '__'
+    else
+      design_foil_name = trim(foil%name)
+    end if 
+    design_foil_name = design_foil_name // '~'//stri(design)
+  end if 
+
+end function
 
 
 !------------------------------------------------------------------------------
@@ -1920,7 +2056,6 @@ subroutine show_optimization_progress (op_points_result, geo_result, &
   integer             :: i, intent
   character (30)      :: s
   doubleprecision     :: val
-  doubleprecision     :: template_drag_initial, template_drag
 
   intent = 10
   call print_colored (COLOR_PALE, repeat(' ',intent))
@@ -1941,22 +2076,10 @@ subroutine show_optimization_progress (op_points_result, geo_result, &
 
 ! All op points - one per line -------------------------
 
-
-  template_drag_initial = 0d0
-  template_drag         = 0d0
-
   do i = 1, size(op_points_result)
 
     op      = op_points_result(i)
     op_spec = op_points_spec(i)
-
-  ! #experimental: All op points with min-drag define with their weightings 
-  !                a flight template which has to be reached by the optimizer
-  !                Seems to work quite well ....
-    if (trim(op_spec%optimization_type) == 'min-drag') then 
-      template_drag_initial = template_drag_initial + op_spec%weighting / op_spec%scale_factor
-      template_drag         = template_drag         + op_spec%weighting * op%cd
-    end if 
 
     call print_colored (COLOR_PALE, repeat(' ',intent))
 
@@ -2001,26 +2124,6 @@ subroutine show_optimization_progress (op_points_result, geo_result, &
     write (*,*)
   end do
 
-
-  ! #experimental Flight template
-
-  if (.false.) then
-  write (*,*) 
-    call print_colored (COLOR_PALE, repeat(' ',intent))
-    call print_colored (COLOR_PALE, repeat(' ',5))
-    call print_colored (COLOR_PALE, 'Template')
-    call print_colored (COLOR_PALE, repeat(' ',10))
-    write (s,'(F6.5)') template_drag
-    call print_colored (COLOR_PALE, trim(s)//'  ')
-    call print_colored (COLOR_PALE, repeat(' ',9))
-    call print_colored (COLOR_PALE, 'min  cd')
-    call print_colored (COLOR_PALE, repeat(' ',4))
-    write (s,'(F7.5)') (template_drag - template_drag_initial)
-    call print_colored (COLOR_PALE, trim(s)//'  ')
-    write (s,'(F4.1)') (template_drag - template_drag_initial) * 100d0/ template_drag_initial
-    call print_colored (COLOR_PALE, trim(s)//'%')
-    write (*,*) 
-  end if 
 
 ! All Geo targets - one per line -------------------------
 
@@ -2100,15 +2203,17 @@ subroutine print_dynamic_weighting_info (intent, header, op_spec)
  
 end subroutine print_dynamic_weighting_info
 
-!-- width = 26 -----------------------------------------------------------------
+
+
 subroutine print_improvement_info (intent, header, op_spec, op)
+  !! print improvement of a single opPoint
 
   use xfoil_driver,       only : op_point_result_type
   character (*), intent(in) :: header
   type(op_point_specification_type), intent(in), optional :: op_spec
   type(op_point_result_type),        intent(in), optional :: op
   integer, intent(in) :: intent
-  doubleprecision     :: dist, dev, improv, value_base
+  doubleprecision     :: dist, dev, value_base
   integer             :: how_good
   character (5)       :: base
   character (4)       :: opt_type
@@ -2119,37 +2224,30 @@ subroutine print_improvement_info (intent, header, op_spec, op)
   call print_colored (COLOR_PALE, repeat(' ',intent))
 
   if (present(op_spec)) then 
+
+  ! calculate distance and improvement   
+
+    call get_op_improvement (op_spec, op, dist, dev, how_good)
+
+  ! nice text for output
+
     if (trim(op_spec%optimization_type (1:6)) == 'target') then
       opt_type = 'targ'
 
       select case  (op_spec%optimization_type)
         case ('target-drag')
-          base  = 'cd'
           value_base = 0.01d0
-          dist  = op_spec%target_value - op%cd                ! negative is worse
-          dev   = dist / op_spec%target_value * 100d0
+          base  = 'cd'
         case ('target-glide')
-          base  = 'glide'
           value_base = 10d0
-          dist  = op%cl /op%cd - op_spec%target_value         ! negative is worse
-          dev   = dist / op_spec%target_value * 100d0
-        case ('target-lift')  
-          base = 'cl'
+          base  = 'glide'
+        case ('target-lift')
           value_base = 1d0
-          dist = op%cl - op_spec%target_value                  ! negative is worse
-          dev  = dist / (1d0 + op_spec%target_value) * 100d0
+          base = 'cl'
         case ('target-moment')
-          base = 'cm'
           value_base = 0.1d0
-          dist = op%cm - op_spec%target_value                 ! negative is worse
-          dev  = dist / (op_spec%target_value + 0.05d0) * 100d0 ! cm could be 0
+          base = 'cm'
       end select
-
-      if (op_spec%allow_improved_target .and. dev >= 0d0) then
-        how_good = Q_GOOD
-      else
-        how_good = r_quality (abs(dev), 0.1d0, 2d0, 10d0)      ! in percent
-      end if
 
     else
       select case  (op_spec%optimization_type)
@@ -2157,60 +2255,34 @@ subroutine print_improvement_info (intent, header, op_spec, op)
           opt_type = 'max'
           base = 'climb'                                       ! scale_factor = seed value
           value_base = 10d0
-          dist = op%cl**1.5d0 / op%cd - op_spec%scale_factor   
-          dev  = dist / op_spec%scale_factor * 100d0
-          improv = dev                                         ! positive is good
         case ('max-glide')
           opt_type = 'max'
           base = 'cl/cd'                                       ! scale_factor = seed value
           value_base = 10d0
-          dist = op%cl / op%cd - op_spec%scale_factor          ! positive is good
-          dev  = dist / op_spec%scale_factor * 100d0
-          improv = dev                                         ! positive is good
         case ('min-drag')
           opt_type = 'min'
           base = 'cd'                                          ! scale_factor = seed value
           value_base = 0.01d0
-          dist = op%cd - 1d0 / op_spec%scale_factor                  
-          dev  = dist * op_spec%scale_factor * 100d0
-          improv = -dev                                        ! negative is good
         case ('max-lift')
           opt_type = 'max'
           base = 'cl'                                          ! scale_factor = seed value
           value_base = 1d0
-          dist = op%cl - op_spec%scale_factor                  
-          dev  = dist / op_spec%scale_factor * 100d0
-          improv = dev                                         ! positive is good
         case ('max-xtr')
           opt_type = 'max'
           base = 'xtr'                                         ! scale_factor = seed value
           value_base = 1d0
-          dist = 0.5d0*(op%xtrt + op%xtrb) + 0.1d0 -  op_spec%scale_factor  
-          dev  = dist / op_spec%scale_factor * 100d0
-          improv = dev                                         ! positive is good
         case default
           opt_type = 'n.a.'
           base  = ' '
           value_base = 1d0
-          dist  = 0d0           
-          dev   = 0d0
-          improv = 0d0                                          
       end select
-      if (improv <= 0d0) then 
-        how_good = Q_BAD
-      elseif (improv < 5d0) then 
-        how_good = Q_OK
-      elseif (improv >= 5d0) then 
-        how_good = Q_GOOD
-      else
-        how_good = Q_BAD
-      end if 
     end if
-  ! --
+
+  ! output all the stuff
+
     call print_colored (COLOR_PALE, opt_type//' ')
-  ! --
     call print_colored (COLOR_PALE, base//' ')
-  ! --
+
     if (trim (opt_type) /= 'n.a.') then 
       if (value_base == 10d0) then 
         call print_colored_r (7,'(SP,F7.2)', -1, dist) 
@@ -2224,28 +2296,105 @@ subroutine print_improvement_info (intent, header, op_spec, op)
         call print_colored_r (7,'(SP,F7.3)', -1, dist) 
       end if 
 
-    ! --
       call print_colored (COLOR_PALE, '  ')
-!      if (how_good == Q_Good .and.  opt_type == 'targ') then 
-!        call print_colored_s (how_good, '  hit') 
-!      else
         if (abs(dev) < 9.95d0) then 
           call print_colored_r (4,'(SP,F4.1)', how_good, dev) 
         else
           call print_colored_i (4, how_good, nint(dev)) 
         end if
         call print_colored_s (               how_good, '%') 
-!      end if
     else
       call print_colored (COLOR_PALE, repeat(' ',14))
     end if
 
   else 
+
+  ! print header text 
+
     write (s,'(A)') header
     call print_colored (COLOR_PALE, s (1:25))
   end if 
 
 end subroutine print_improvement_info 
+
+
+
+subroutine get_op_improvement (op_spec, op, dist, dev, how_good)
+  !! calculate improvement of a single opPoint
+  !! returns distance in base type units and
+  !!         deviation in % 
+
+  use xfoil_driver,       only : op_point_result_type
+  type(op_point_specification_type), intent(in) :: op_spec
+  type(op_point_result_type),        intent(in) :: op
+  doubleprecision, intent(out ) :: dist, dev
+  integer, intent(out )         :: how_good
+
+  doubleprecision       :: improv
+
+  if (trim(op_spec%optimization_type (1:6)) == 'target') then
+
+    select case  (op_spec%optimization_type)
+      case ('target-drag')
+        dist  = op_spec%target_value - op%cd                ! negative is worse
+        dev   = dist / op_spec%target_value * 100d0
+      case ('target-glide')
+        dist  = op%cl /op%cd - op_spec%target_value         ! negative is worse
+        dev   = dist / op_spec%target_value * 100d0
+      case ('target-lift')  
+        dist = op%cl - op_spec%target_value                  ! negative is worse
+        dev  = dist / (1d0 + op_spec%target_value) * 100d0
+      case ('target-moment')
+        dist = op%cm - op_spec%target_value                 ! negative is worse
+        dev  = dist / (op_spec%target_value + 0.1d0) * 100d0 ! cm could be 0
+    end select
+
+    if (op_spec%allow_improved_target .and. dev >= 0d0) then
+      how_good = Q_GOOD
+    else
+      how_good = r_quality (abs(dev), 0.1d0, 2d0, 10d0)      ! in percent
+    end if
+
+  else
+    select case  (op_spec%optimization_type)
+      case ('min-sink')
+        dist = op%cl**1.5d0 / op%cd - op_spec%scale_factor   
+        dev  = dist / op_spec%scale_factor * 100d0
+        improv = dev                                         ! positive is good
+      case ('max-glide')
+        dist = op%cl / op%cd - op_spec%scale_factor          ! positive is good
+        dev  = dist / op_spec%scale_factor * 100d0
+        improv = dev                                         ! positive is good
+      case ('min-drag')
+        dist = op%cd - 1d0 / op_spec%scale_factor                  
+        dev  = -dist * op_spec%scale_factor * 100d0
+        improv = dev                                         ! negative is good
+      case ('max-lift')
+        dist = op%cl - op_spec%scale_factor                  
+        dev  = dist / op_spec%scale_factor * 100d0
+        improv = dev                                         ! positive is good
+      case ('max-xtr')
+        dist = 0.5d0*(op%xtrt + op%xtrb) + 0.1d0 -  op_spec%scale_factor  
+        dev  = dist / op_spec%scale_factor * 100d0
+        improv = dev                                         ! positive is good
+      case default
+        dist  = 0d0           
+        dev   = 0d0
+        improv = 0d0                                          
+    end select
+    if (improv <= 0d0) then 
+      how_good = Q_BAD
+    elseif (improv < 5d0) then 
+      how_good = Q_OK
+    elseif (improv >= 5d0) then 
+      how_good = Q_GOOD
+    else
+      how_good = Q_BAD
+    end if 
+  end if
+
+end subroutine get_op_improvement 
+
 
 !-- width = 26 -----------------------------------------------------------------
 subroutine print_geo_improvement_info (intent, header, geo_spec, geo_result)
@@ -2443,14 +2592,14 @@ function write_matchfoil_optimization_progress(designvars, designcounter)
   character(8) :: maxtchar, xmaxtchar, maxcchar, xmaxcchar
 
 
-  character(:), allocatable :: foilfile, title
-  integer :: foilunit
+  character(:), allocatable :: foil_file, title
+  integer :: foil_unit
 
 
   ! Set output file names and identifiers
 
-  foilfile = design_subdir//'Design_Coordinates.dat'
-  foilunit = 13
+  foil_file = design_subdir//'Design_Coordinates.dat'
+  foil_unit = 13
 
   if (designcounter == 0) then
     call print_colored (COLOR_NORMAL,' - Writing seed airfoil')
@@ -2488,9 +2637,9 @@ function write_matchfoil_optimization_progress(designvars, designcounter)
   if (designcounter == 0) then
 
 !   New File: Header for coordinate file & Seed foil 
-    open(unit=foilunit, file=foilfile, status='replace')
-    write(foilunit,'(A)') 'title="Airfoil coordinates"'
-    write(foilunit,'(A)') 'variables="x" "z"'
+    open(unit=foil_unit, file=foil_file, status='replace')
+    write(foil_unit,'(A)') 'title="Airfoil coordinates"'
+    write(foil_unit,'(A)') 'variables="x" "z"'
     title =  'zone t="Seed airfoil, '//'name='//trim(foil%name)//', maxt='//trim(maxtchar)//&
              ', xmaxt='//trim(xmaxtchar)//', maxc='//&
               trim(maxcchar)//', xmaxc='//trim(xmaxcchar)//'"'
@@ -2498,16 +2647,16 @@ function write_matchfoil_optimization_progress(designvars, designcounter)
   else
 
 !   Append to file: Header for design foil coordinates
-    open(unit=foilunit, file=foilfile, status='old', position='append', err=910)
+    open(unit=foil_unit, file=foil_file, status='old', position='append', err=910)
     title =  'zone t="Airfoil, '//'name='//trim(adjustl(foil%name))//', maxt='//trim(maxtchar)//&
              ', xmaxt='//trim(xmaxtchar)//', maxc='//&
               trim(maxcchar)//', xmaxc='//trim(xmaxcchar)//'", '//&
              'SOLUTIONTIME='//stri(designcounter)
   end if
 
-  call  airfoil_write_to_unit (foilunit, title, foil)
+  call  airfoil_write_to_unit (foil_unit, title, foil)
 
-  close(foilunit)
+  close(foil_unit)
 
 
 ! Append the coordinates of the match foil when seed foil is written
@@ -2515,9 +2664,9 @@ function write_matchfoil_optimization_progress(designvars, designcounter)
     call print_colored (COLOR_NORMAL,' - Writing airfoil to match')
     write (*,*)
     title = 'zone t="Match airfoil, '//'name='//trim(foil_to_match%name)//'"'
-    open(unit=foilunit, file=foilfile, status='old', position='append', err=910)
-    call  airfoil_write_to_unit (foilunit, title, foil_to_match)
-    close(foilunit)  
+    open(unit=foil_unit, file=foil_file, status='old', position='append', err=910)
+    call  airfoil_write_to_unit (foil_unit, title, foil_to_match)
+    close(foil_unit)  
   end if 
 
   write_matchfoil_optimization_progress = 0
@@ -2526,142 +2675,11 @@ function write_matchfoil_optimization_progress(designvars, designcounter)
 
 ! Warning if there was an error opening design_coordinates file
 
-910 write(*,*) "Warning: unable to open "//trim(foilfile)//". Skipping ..."
+910 write(*,*) "Warning: unable to open "//trim(foil_file)//". Skipping ..."
   write_matchfoil_optimization_progress = 1
   return
 
 end function write_matchfoil_optimization_progress
-
-
-
-!------------------------------------------------------------------------------
-!  
-!  Write results (cd) of all op_points to file for further analysis
-!
-!------------------------------------------------------------------------------
-subroutine write_op_results (designcounter, op_points_result, geo_result) 
-
-  use xfoil_driver,       only : op_point_result_type, op_point_specification_type
-  use math_deps,          only : median
-
-  integer, intent(in) :: designcounter
-  type(op_point_result_type), dimension(:), intent(in)    :: op_points_result
-  type(geo_result_type),  intent(in)                      :: geo_result
-
-  type(op_point_result_type)        :: op
-  type(op_point_specification_type) :: op_spec
-  type(geo_target_type)             :: geo_target
-
-  integer             :: i, nop, ngeo_targets
-  character(:), allocatable  :: resultfile
-  integer             :: resultunit
-  double precision    :: dev, dist
-
-  nop    = size(op_points_spec)
-  ngeo_targets = size(geo_targets)
-
-
-! Initial design: Open file and write header
-
-  resultfile = design_subdir//'target_result_history.csv'
-  resultunit = 13
-
-  if (designcounter == 0) then
-
-    open(unit=resultunit, file=resultfile, status='replace')
-
-    write(resultunit,'(1x,A4,1x,A1)', advance='no') 'i',';'
-
-    do i = 1, nop
-      write(resultunit,'(2x,A4)', advance='no') 'op' // stri(i)
-      if ((i < nop) .or. (ngeo_targets > 0)) then 
-        write(resultunit,'(A1)', advance='no') ';'
-      else
-          write(resultunit, *) 
-      end if 
-    end do
-
-    do i = 1, ngeo_targets
-      write(resultunit,'(1x,A5)', advance='no') 'geo' // stri(i)
-      if (i < ngeo_targets) then 
-        write(resultunit,'(A1)', advance='no') ';'
-      else
-          write(resultunit, *) 
-      end if 
-    end do
-
-  else
-
-    open(unit=resultunit, file=resultfile, status='old', position='append', err=910)
-  
-  end if 
-
-! Next designs: Open file and write data
-
-  write(resultunit,'(1x,I4,1x,A1)', advance='no') designcounter,';'
-
-  do i = 1, nop
-
-    op      = op_points_result(i)
-    op_spec = op_points_spec(i)
-
-    if (trim(op_spec%optimization_type (1:6)) == 'target') then
-      select case  (op_spec%optimization_type)
-        case ('target-drag')
-          dist  = op_spec%target_value - op%cd                ! negative is worse
-          dev   = dist / op_spec%target_value * 100d0
-        case ('target-glide')
-          dist  = op%cl /op%cd - op_spec%target_value         ! negative is worse
-          dev   = dist / op_spec%target_value * 100d0
-        case ('target-lift')  
-          dist = op%cl - op_spec%target_value                 ! negative is worse
-          dev  = dist / (1d0 + op_spec%target_value) * 100d0
-        case ('target-moment')
-          dist = op%cm - op_spec%target_value                 ! negative is worse
-          dev  = dist / (op_spec%target_value + 0.05d0) * 100d0 ! cm could be 0
-      end select
-    else
-      dev = 0d0
-    end if 
-
-    write(resultunit,'(F6.2)', advance='no') dev
-    if  ((i < nop) .or. (ngeo_targets > 0)) then 
-      write(resultunit,'(A1)', advance='no') ';'
-    else
-      write(resultunit, *) 
-    end if 
-  end do
-
-  do i = 1, ngeo_targets
-    geo_target = geo_targets(i)
-
-    select case  (trim(geo_target%type))
-      case ('Thickness')
-        dist = geo_result%maxt - geo_target%target_value       ! positive is worse
-        dev  = dist / geo_target%target_value * 100d0
-      case ('Camber')
-        dist = geo_result%maxc - geo_target%target_value       ! positive is worse
-        dev  = dist / geo_target%target_value * 100d0
-    end select
-
-    write(resultunit,'(F6.2)', advance='no') dev
-    if (i < ngeo_targets) then 
-      write(resultunit,'(A1)', advance='no') ';'
-    else
-      write(resultunit, *) 
-    end if 
-  end do
-
-  close(resultunit)
-
-  return 
-
-! Warning if there was an error opening design_coordinates file
-
-910 write(*,*) "Warning: unable to open "//trim(resultfile)//". Skipping ..."
-    return
-
-end subroutine write_op_results
 
 
 

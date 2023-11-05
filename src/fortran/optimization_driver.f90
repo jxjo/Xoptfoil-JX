@@ -27,15 +27,12 @@ module optimization_driver
   contains
 
 
-!=============================================================================80
-!
-! Subroutine to drive the optimization
-!
-!=============================================================================80
 subroutine optimize(global_search, constrained_dvs, &
                     pso_options, ga_options, &
                     optdesign, f0_ref, fmin, steps, fevals)
-
+  !!
+  !! Controler for optimization process - calls either PSO or Genetic 
+  !!
   use vardef,             only : shape_functions, nflap_optimize,              &
                                  initial_perturb, min_flap_degrees,            &
                                  max_flap_degrees, flap_degrees,               &
@@ -45,7 +42,7 @@ subroutine optimize(global_search, constrained_dvs, &
   use genetic_algorithm,  only : ga_options_type, geneticalgorithm
   use simplex_search,     only : ds_options_type, simplexsearch
   use airfoil_evaluation, only : objective_function,                           &
-                                 objective_function_nopenalty, write_function
+                                 objective_function_nopenalty, write_progress
   use airfoil_shape_bezier, only : bezier_spec_to_dv
 
   character(*), intent(in) :: global_search
@@ -61,17 +58,8 @@ subroutine optimize(global_search, constrained_dvs, &
   double precision, allocatable :: dv_bezier(:), dv_min(:), dv_max(:)
   double precision :: t1fact, t2fact, ffact
   logical :: initial_x0_based
-  integer :: stepsg, fevalsg, stepsl, fevalsl, i, oppoint, stat,               &
-             iunit, ioerr, designcounter
-  character(14) :: stop_reason
+  integer :: stepsg, fevalsg, stepsl, fevalsl, i, oppoint, designcounter
 
-! Delete existing run_control file and rewrite it
-
-  iunit = 23
-  open(unit=iunit, file='run_control', status='replace')
-  close(iunit)
-
-! Perform optimization: global, local, or global + local
 
   stepsg = 0
   fevalsg = 0
@@ -143,7 +131,7 @@ subroutine optimize(global_search, constrained_dvs, &
 
 ! Write seed airfoil coordinates and polars to file
 
-  stat = write_function(x0, 0) 
+  call write_progress (x0, 0) 
 
 ! Set up mins and maxes
   
@@ -189,14 +177,14 @@ subroutine optimize(global_search, constrained_dvs, &
     call particleswarm(optdesign, fmin, stepsg, fevalsg, objective_function, &
                         x0, xmin, xmax, initial_x0_based, &
                         .true., f0_ref, constrained_dvs,      &
-                        pso_options, designcounter, stop_reason, write_function)
+                        pso_options, designcounter)
 
   else if (trim(global_search) == 'genetic_algorithm') then
 
     call geneticalgorithm(optdesign, fmin, stepsg, fevalsg, objective_function, &
                           x0, xmin, xmax, initial_x0_based, &
                           .true., f0_ref, constrained_dvs, ga_options,               &
-                          designcounter, stop_reason, write_function)
+                          designcounter)
 
   end if
 
@@ -204,15 +192,6 @@ subroutine optimize(global_search, constrained_dvs, &
 
   steps = stepsg + stepsl
   fevals = fevalsg + fevalsl
-
-! Write stop_monitoring command to run_control file
-
-  iunit = 23
-  open(unit=iunit, file='run_control', status='old', position='append',        &
-       iostat=ioerr)
-  if (ioerr /= 0) open(unit=iunit, file='run_control', status='new')
-  write(iunit,'(A)') "stop_monitoring"
-  close(iunit)
 
 end subroutine optimize
 

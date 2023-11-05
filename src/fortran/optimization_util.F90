@@ -142,7 +142,7 @@ subroutine initial_designs(dv, objval, fevals, objfunc, xmin, xmax, &
 
 ! Initial population of designs set between xmin and xmax
 
-  write(*,'(/," - ",A)', advance ='no') 'Generating and evaluating '//stri(pop)//' initial designs: '
+  write(*,'(" - ",A)', advance ='no') 'Generating and evaluating '//stri(pop)//' initial designs: '
 
   ! take x0 as initial for the first particle
   dv(:,1) = x0
@@ -482,75 +482,88 @@ subroutine write_design(filename, filestat, variables, counter)
 
 end subroutine write_design
 
-!=============================================================================80
-!
-! Reads commands from run_control file and clears any unrecognized commands
-!
-!=============================================================================80
-subroutine read_run_control(commands, ncommands)
 
-  character(80), dimension(:), intent(inout) :: commands
-  integer, intent(out) :: ncommands
+
+subroutine reset_run_control ()
+  !! Write empty run_control file - will update file date
+  integer :: iunit
+  iunit = 23
+  open(unit=iunit, file='run_control', status='replace')
+  close(iunit)
+end subroutine 
+
+
+subroutine delete_run_control()
+  !! Delete run_control file 
+  logical :: exists
+  integer :: io, stat
+  inquire(file="run_control", exist=exists)
+  if (exists) then
+    open(file="run_control", newunit=io, iostat=stat)
+    if (stat == 0) close(io, status="delete", iostat=stat)
+  end if
+end subroutine 
+
+
+function stop_requested () result (is_requested)
+  !! returns .true. if there is a stop command in 'run_control' 
 
   character(80) :: buffer
   integer :: rcunit, ioerr
+  logical :: is_requested
   
-  commands(:) = ""
-  ncommands = 0
+  is_requested = .false.
 
   rcunit = 18
   open(unit=rcunit, file='run_control', status='old', iostat=ioerr, err=501)
-  if (ioerr /= 0) then
-    return
-  else
+  if (ioerr == 0) then
     do while (1 .eq. 1)
-      read(rcunit,'(A)',end=501) buffer
-      if ( (trim(buffer) == "stop") .or.                                       &
-           (trim(buffer) == "stop_monitoring") ) then
-        commands(ncommands+1) = buffer
-        ncommands = ncommands + 1
-      else
-        write(*,*) 'Warning: unrecognized command "'//trim(buffer)//           &
-                   '" in run_control.' 
+      read(rcunit,'(A)',end=501) buffer       ! normal end will jump to 501 
+      if (trim(buffer) == "stop")  then
+        is_requested = .true. 
       end if
     end do
+  else
+    return 
   end if
    
   write(*,*) "Warning: error encountered while reading run_control. Skipping."
   return
-501 close(rcunit)
 
-!   open(unit=rcunit, file='run_control', status='replace', err=502)
-!   do i = 1, ncommands
-!     write(rcunit,'(A)') commands(ncommands)
-!   end do
-!   close(rcunit) 
+  501 close(rcunit)
 
-!   return
-
-! 502 write(*,*) "Warning: error encountered while reading run_control. Skipping."
-
-end subroutine read_run_control
+end function 
 
 
 
-subroutine write_history_header (iunit)
+subroutine write_history_header (filename)
   !! write csv header of op points data 
 
-  integer, intent(in) :: iunit
-  write(iunit,'(A)') 'Iteration; Design; Objective function; % Improvement; Design radius'
-  flush(iunit)
+  character(:), allocatable, intent(in)   :: filename
+
+  !character (:), intent(in)     :: histfile
+  integer           :: iunit
+
+  iunit = 17
+  open (unit=iunit, file=filename, status='replace')
+  write (iunit,'(A)') '  Iter;Design;  Objective;  % Improve; Design rad'
+  close (iunit)
 
 end subroutine
 
 
-subroutine  write_history (iunit, step, new_design, designcounter, radius, fmin, f0)
+subroutine  write_history (filename, step, new_design, designcounter, radius, fmin, f0)
   !! write iteration result to history file 'iunit' during optimization
 
-  integer, intent(in)           :: iunit, step, designcounter 
+  character(:), allocatable, intent(in)   :: filename
+  integer, intent(in)           :: step, designcounter 
   logical, intent(in)           :: new_design
   double precision, intent(in)  :: radius ,fmin, f0 
-  double precision :: relfmin
+  double precision  :: relfmin
+  integer           :: iunit, ioerr
+
+  open (unit=iunit, file=filename, status='old', position='append', iostat=ioerr)
+  if (ioerr /= 0) call my_stop ('Cannot open history file '//trim(filename),'stop')
 
   relfmin = (f0 - fmin)/f0 * 100.d0
   if (new_design) then 
@@ -558,7 +571,7 @@ subroutine  write_history (iunit, step, new_design, designcounter, radius, fmin,
   else 
     write(iunit,'(I6,";",A6, 3(";", F11.7))') step, ''           , fmin, relfmin, radius
   end if 
-  flush(iunit)
+  close (iunit)
 
 end subroutine  write_history
 

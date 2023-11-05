@@ -76,13 +76,11 @@ contains
     ! Create subdirectory for all the design files 
 
     design_subdir = 'a_playground' // DESIGN_SUBDIR_POSTFIX
-    call make_directory (trim(design_subdir))
-    design_subdir = trim(design_subdir) // '/'
+    call make_directory (design_subdir)
+    design_subdir = design_subdir // '/'
 
     ds_options%tol   = 1d-5
     ds_options%maxit = 50
-    ds_options%write_designs = .false.
-    ds_options%relative_fmin_report = .true.
 
     x0 = [1,2]
 
@@ -126,13 +124,11 @@ contains
     ! Create subdirectory for all the design files 
 
     design_subdir = 'a_playground' // DESIGN_SUBDIR_POSTFIX
-    call make_directory (trim(design_subdir))
-    design_subdir = trim(design_subdir) // '/'
+    call make_directory (design_subdir)
+    design_subdir = design_subdir // '/'
 
     ds_options%tol   = 1d-12
     ds_options%maxit = 1000
-    ds_options%write_designs = .false.
-    ds_options%relative_fmin_report = .true.
 
     ! --- setup targets 
     ! airfoil JX-GT-15v2
@@ -167,7 +163,7 @@ program a_playground
   write (*,*) 
 
   !call test_simplex () 
-  !call test_adapt_bezier () 
+  !call test_adapt_bezier ()  
   call test_bezier () 
 
 end program 

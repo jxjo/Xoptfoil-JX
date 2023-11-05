@@ -17,6 +17,8 @@
 
 module genetic_algorithm
 
+  use os_util 
+
 ! Module containing genetic algorithm optimization routine
 
   implicit none
@@ -76,14 +78,16 @@ module genetic_algorithm
 subroutine geneticalgorithm(xopt, fmin, step, fevals, objfunc, &
                             x0, xmin, xmax, initial_x0_based, &
                             given_f0_ref, f0_ref, constrained_dvs, ga_options, &
-                            designcounter, stop_reason, converterfunc)
+                            designcounter)
 
   use optimization_util, only  : init_random_seed, initial_designs,             &
-                                 design_radius, write_design, bubble_sort,      &
-                                 read_run_control
+                                 design_radius, write_design, bubble_sort
+  use optimization_util,  only : reset_run_control, stop_requested
   use optimization_util,  only : write_history_header, write_history
+  use airfoil_evaluation, only : OBJ_XFOIL_FAIL, OBJ_GEO_FAIL, write_progress
 
   use vardef, only :  design_subdir
+
 
   double precision, dimension(:), intent(inout) :: xopt
   double precision, intent(out) :: fmin
@@ -102,20 +106,10 @@ subroutine geneticalgorithm(xopt, fmin, step, fevals, objfunc, &
   logical, intent(in) :: given_f0_ref, initial_x0_based
   type (ga_options_type), intent(in) :: ga_options
   integer, intent(out) :: designcounter
-  character(14), intent(out) :: stop_reason
-
-  optional :: converterfunc
-  interface
-    integer function converterfunc(x, designcnt)
-      double precision, dimension(:), intent(in) :: x
-      integer, intent(in) :: designcnt
-    end function
-  end interface
 
   integer, dimension(:), allocatable :: idxparents
-  integer :: nconstrained, i, j, fminloc, var, stat, nparents
+  integer :: nconstrained, i, j, fminloc, var, nparents
   integer :: idxparent1, idxparent2, idxstack1, idxstack2
-  integer :: iunit, k, ncommands
   double precision :: mincurr, f0, radius, mutate1, mutate2, objchild1,        &
                       objchild2
   double precision, dimension(ga_options%pop) :: objval
@@ -124,7 +118,6 @@ subroutine geneticalgorithm(xopt, fmin, step, fevals, objfunc, &
   double precision, dimension(:,:), allocatable :: stackdv
   double precision, dimension(:), allocatable :: stackobjval
   logical :: converged, signal_progress
-  character(80), dimension(20) :: commands
   character(:), allocatable :: histfile
 
   nconstrained = size(constrained_dvs,1)
@@ -183,9 +176,8 @@ subroutine geneticalgorithm(xopt, fmin, step, fevals, objfunc, &
 ! Open file for writing iteration history
 
   histfile  = design_subdir//'Optimization_History.csv'
-  iunit = 17
-  open(unit=iunit, file=histfile, status='replace')
-  call write_history_header (iunit) 
+  call write_history_header (histfile) 
+  call write_history        (histfile, step, .false., designcounter, design_radius(dv), fmin, f0)
 
 
 ! Begin optimization
@@ -305,24 +297,18 @@ subroutine geneticalgorithm(xopt, fmin, step, fevals, objfunc, &
     write(*,'(A27,F9.6,A1)') '   Improvement over seed: ', (f0 - fmin)/f0*100.d0, '%'
     write(*,'(A27,ES10.3)')  '   Design radius:         ', radius
 
-!   Write design to file if requested
-!   converterfunc is an optional function supplied to convert design variables
-!     into something more useful.  If not supplied, the design variables
-!     themselves are written to a file.
+  ! Write design to file - 
 
     if (signal_progress) then
       designcounter = designcounter + 1
-      if (present(converterfunc)) then
-        stat = converterfunc(xopt, designcounter)
-      else
-        call write_design('geneticalgorithm_designs.dat', 'old', xopt,         &
-                          designcounter)
-      end if
+      call write_progress (xopt, designcounter)
+    else
+      write (*,*)
     end if
 
 !   Write iteration history
 
-    call write_history         (iunit, step, signal_progress, designcounter, radius, fmin, f0)
+    call write_history (histfile, step, signal_progress, designcounter, radius, fmin, f0)
     
 !   Evaluate convergence
 
@@ -330,24 +316,21 @@ subroutine geneticalgorithm(xopt, fmin, step, fevals, objfunc, &
       converged = .false.
     else
       converged = .true.
-      stop_reason = "completed"
       if (step == ga_options%maxit) then
         write(*,*) 'Warning: Genetic algorithm forced to exit due to the max'
         write(*,*) '         number of iterations being reached.'
       end if
     end if 
 
+  ! Check for commands in run_control file - reset (touch) run_control
 
-!   Check for commands in run_control file
+    if (stop_requested()) then
+      converged = .true.
+      write(*,*) 'Cleaning up: stop command encountered in run_control.'
+    end if
 
-    call read_run_control(commands, ncommands)
-    do k = 1, ncommands
-      if (trim(commands(k)) == "stop") then
-        converged = .true.
-        stop_reason = "stop_requested"
-        write(*,*) 'Cleaning up: stop command encountered in run_control.'
-      end if
-    end do
+    call reset_run_control()
+
 
 !$omp end master
 !$omp barrier
@@ -366,12 +349,8 @@ subroutine geneticalgorithm(xopt, fmin, step, fevals, objfunc, &
 
   fevals = fevals + step*nparents
 
-! Close iteration history file
-
-  close(iunit)
-
-
 end subroutine geneticalgorithm
+
 
 !=============================================================================80
 !

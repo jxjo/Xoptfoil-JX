@@ -159,7 +159,7 @@ end subroutine check_and_do_polar_generation
 !-------------------------------------------------------------------------
 
 subroutine set_geometry_value (input_file, outname_auto, output_prefix, seed_foil, &
-                               value_argument, visualizer)
+                               value_argument)
 
   use vardef,             only: airfoil_type
   use xfoil_driver,       only : xfoil_set_thickness_camber, xfoil_set_te_gap
@@ -171,7 +171,7 @@ subroutine set_geometry_value (input_file, outname_auto, output_prefix, seed_foi
   
   character(*), intent(in)     :: output_prefix, value_argument, input_file
   type (airfoil_type), intent (inout)  :: seed_foil
-  logical, intent(in)          :: visualizer, outname_auto
+  logical, intent(in)          :: outname_auto
 
   type (airfoil_type) :: foil, foil_smoothed
   type (xfoil_geom_options_type)  :: geom_options
@@ -237,20 +237,53 @@ subroutine set_geometry_value (input_file, outname_auto, output_prefix, seed_foi
 
   call airfoil_write   (trim(foil%name)//'.dat', trim(foil%name), foil)
 
-  ! Write airfoil to _design_coordinates using Xoptfoil format for visualizer
-  if (visualizer) then 
-    call write_design_coordinates (trim(outname), 0, seed_foil)
-    call write_design_coordinates (trim(outname), 1, foil)
-  end if 
 
 end subroutine set_geometry_value
 
+
+
+!-------------------------------------------------------------------------
+! Checks xoptfoil-jx input file for errors
+!-------------------------------------------------------------------------
+
+subroutine check_input_file (input_file)
+
+  use vardef
+  use input_output,         only : read_inputs, read_clo
+  use particle_swarm,       only : pso_options_type
+  use genetic_algorithm,    only : ga_options_type
+  use input_sanity,         only : check_inputs
+
+
+  character(*), intent(in)     :: input_file
+
+  character(80)     :: global_search, seed_airfoil_type, matchfoil_file
+  character(80)     :: airfoil_file
+  logical           :: symmetrical
+
+
+  type(pso_options_type) :: pso_options
+  type(ga_options_type)  :: ga_options
+
+  write (*,*) 
+  npan_fixed = 200                      ! for optimizing npan is fixed ...
+  call read_inputs(input_file, global_search,      &
+                   seed_airfoil_type, airfoil_file, nparams_top, nparams_bot,  &
+                   pso_options, ga_options, matchfoil_file, symmetrical) 
+  write (*,*) 
+  call check_inputs(global_search, pso_options)
+
+  write(*,*)
+  call print_colored (COLOR_GOOD, '- Input file seems OK')
+  write(*,*)
+
+end subroutine
 
 !-------------------------------------------------------------------------
 ! Checks curvature quality of foil 
 !-------------------------------------------------------------------------
 
-subroutine check_foil_curvature (input_file, output_prefix, seed_foil, visualizer)
+subroutine check_foil_curvature (input_file, seed_foil)
 
   use vardef,             only: airfoil_type
   use airfoil_evaluation, only: curv_spec, curv_top_spec, curv_bot_spec
@@ -263,10 +296,8 @@ subroutine check_foil_curvature (input_file, output_prefix, seed_foil, visualize
   use math_deps,          only: count_reversals, derivative2
 
   character(*), intent(in)     :: input_file
-  character(*), intent(in)     :: output_prefix
   type (airfoil_type), intent (in)  :: seed_foil
   type (xfoil_geom_options_type)  :: geom_options
-  logical, intent(in)          :: visualizer
 
   type (airfoil_type)          :: tmp_foil, norm_foil, smooth_foil
   integer                      :: overall_quality, is, ie, nreversals
@@ -332,15 +363,6 @@ subroutine check_foil_curvature (input_file, output_prefix, seed_foil, visualize
   curv_bot_spec%max_curv_reverse = nreversals 
   call auto_curvature_constraints ('Bot side', .true., norm_foil%xb, norm_foil%zb, curv_bot_spec)
 
-!  ------------ Write coordinates for visualizer  -----
-
-  if (visualizer) then
-    call write_design_coordinates (output_prefix, 0, seed_foil)
-    norm_foil%name   = 'Normalized'
-    call write_design_coordinates (output_prefix, 1, norm_foil)
-    smooth_foil%name = 'Smoothed'
-    call write_design_coordinates (output_prefix, 2, smooth_foil)
-  end if 
 
 end subroutine check_foil_curvature
 
@@ -349,7 +371,7 @@ end subroutine check_foil_curvature
 ! Repanels and optionally smoothes foil based on settings in 'input file'
 !-------------------------------------------------------------------------
 
-subroutine repanel_smooth (input_file, outname_auto, output_prefix, seed_foil, visualizer, do_smoothing)
+subroutine repanel_smooth (input_file, outname_auto, output_prefix, seed_foil, do_smoothing)
 
   use vardef,             only : airfoil_type
   use airfoil_evaluation, only : curv_spec, curv_top_spec, curv_bot_spec
@@ -363,7 +385,7 @@ subroutine repanel_smooth (input_file, outname_auto, output_prefix, seed_foil, v
 
   character(*), intent(in)          :: input_file, output_prefix
   type (airfoil_type), intent (inout)  :: seed_foil
-  logical, intent(in)               :: do_smoothing, visualizer, outname_auto
+  logical, intent(in)               :: do_smoothing,  outname_auto
 
   type (airfoil_type) :: foil_smoothed, foil
   type (xfoil_geom_options_type) :: geom_options
@@ -422,18 +444,6 @@ subroutine repanel_smooth (input_file, outname_auto, output_prefix, seed_foil, v
 
   end if 
 
-! Write all airfoils to _design_coordinates using Xoptfoil format for visualizer
-  
-  if (visualizer) then 
-    call write_design_coordinates (outname, 0, seed_foil)
-    foil%name   = 'Normalized'
-    call write_design_coordinates (outname, 1, foil)
-    if (do_smoothing) then
-      foil_smoothed%name   = 'Smoothed'
-      call write_design_coordinates (outname, 2, foil_smoothed)
-    end if
-  end if 
-
 end subroutine repanel_smooth
 
 
@@ -441,7 +451,7 @@ end subroutine repanel_smooth
 ! Blend to seed_foil a blend_foil by (value) % 
 !-------------------------------------------------------------------------
 
-subroutine blend_foils (input_file, outname_auto, output_prefix, seed_foil_in, blend_foil_in, value_argument, visualizer)
+subroutine blend_foils (input_file, outname_auto, output_prefix, seed_foil_in, blend_foil_in, value_argument)
 
   use vardef,             only : airfoil_type
   use math_deps,          only : interp_vector
@@ -455,7 +465,7 @@ subroutine blend_foils (input_file, outname_auto, output_prefix, seed_foil_in, b
 
   character(*), intent(in)          :: input_file, output_prefix, value_argument
   type (airfoil_type), intent (inout)  :: seed_foil_in, blend_foil_in
-  logical, intent(in)               :: visualizer, outname_auto
+  logical, intent(in)               :: outname_auto
 
   double precision, dimension(:), allocatable :: xt, xb, zt, zb, bxt, bxb, bzt, bzb
   double precision, dimension(:), allocatable :: zttmp, zbtmp, zt_blended, zb_blended
@@ -541,7 +551,7 @@ subroutine blend_foils (input_file, outname_auto, output_prefix, seed_foil_in, b
 
   call rebuild_airfoil (xt, xb, zt_blended, zb_blended, blended_foil)
 
-! Write airfoil to using Xoptfoil format for visualizer
+! Write airfoil 
 
   if (outname_auto) then 
     outname = output_prefix // '-blend'
@@ -552,20 +562,14 @@ subroutine blend_foils (input_file, outname_auto, output_prefix, seed_foil_in, b
   blended_foil%name = trim(outname)
   call airfoil_write   (trim(outname)//'.dat', trim(blended_foil%name), blended_foil)
 
-
-  if (visualizer) then 
-    call write_design_coordinates (outname, 0, in_foil)
-    call write_design_coordinates (outname, 1, blend_foil)
-    call write_design_coordinates (outname, 2, blended_foil)
-  end if 
-
 end subroutine blend_foils
+
 
 !-------------------------------------------------------------------------
 ! Repanels and set flaps of foil based on settings in 'input file'
 !-------------------------------------------------------------------------
 
-subroutine set_flap (input_file, outname_auto, output_prefix, seed_foil, visualizer)
+subroutine set_flap (input_file, outname_auto, output_prefix, seed_foil)
 
   use vardef,             only : airfoil_type, flap_spec_type
   use xfoil_driver,       only : xfoil_geom_options_type
@@ -578,7 +582,7 @@ subroutine set_flap (input_file, outname_auto, output_prefix, seed_foil, visuali
 
   character(*), intent(in)          :: input_file, output_prefix
   type (airfoil_type), intent (inout)  :: seed_foil
-  logical, intent(in)               :: visualizer, outname_auto
+  logical, intent(in)               :: outname_auto
 
   type (airfoil_type)             :: foil, foil_flapped
   type (flap_spec_type)           :: flap_spec
@@ -614,19 +618,13 @@ subroutine set_flap (input_file, outname_auto, output_prefix, seed_foil, visuali
 
   call xfoil_set_airfoil(foil)
 
-! Write airfoil to _design_coordinates using Xoptfoil format for visualizer
+! Write airfoil 
 
   if (outname_auto) then 
     outname = output_prefix // '-f' 
   else
     outname = output_prefix
   end if
-
-
-  if (visualizer) then 
-    foil%name   = output_prefix
-    call write_design_coordinates (output_prefix, 0, foil)
-  end if 
 
 ! Now set flap to all requested angles
 
@@ -656,112 +654,9 @@ subroutine set_flap (input_file, outname_auto, output_prefix, seed_foil, visuali
     foil_flapped%name   = trim(outname) 
     call airfoil_write   (trim(outname)//'.dat', trim(foil_flapped%name), foil_flapped)
 
-    ! Write airfoil to _design_coordinates using Xoptfoil format for visualizer
-  
-    if (visualizer) then 
-      call write_design_coordinates (output_prefix, i, foil_flapped)
-    end if 
-
   end do
 
 end subroutine set_flap
-
-
-!-------------------------------------------------------------------------
-! writes 'output_prefix'_design_coordinates for foil
-!-------------------------------------------------------------------------
-
-subroutine write_design_coordinates (output_prefix, designcounter, foil)
-
-  use vardef,             only : airfoil_type, DESIGN_SUBDIR_POSTFIX
-  use airfoil_operations, only : airfoil_write_to_unit
-  use xfoil_driver,       only : xfoil_set_airfoil, xfoil_get_geometry_info
-
-  character(*), intent(in)          :: output_prefix
-  integer, intent(in)               :: designcounter
-  type (airfoil_type), intent (in)  :: foil
-
-  double precision :: maxt, xmaxt, maxc, xmaxc
-  character(255) :: foilfile, text, title
-  character (:), allocatable :: design_subdir
-  character(8)   :: maxtchar, xmaxtchar, maxcchar, xmaxcchar
-  integer :: foilunit, write_airfoil_optimization_progress
-             
-! Get geometry info
-
-  call xfoil_set_airfoil (foil)
-  call xfoil_get_geometry_info(maxt, xmaxt, maxc, xmaxc)
-
-  write(maxtchar,'(F8.5)') maxt
-  maxtchar = adjustl(maxtchar)
-  write(xmaxtchar,'(F8.5)') xmaxt
-  xmaxtchar = adjustl(xmaxtchar)
-  write(maxcchar,'(F8.5)') maxc
-  maxcchar = adjustl(maxcchar)
-  write(xmaxcchar,'(F8.5)') xmaxc
-  xmaxcchar = adjustl(xmaxcchar)
-
-! Set output file names and identifiers
-
-! Create subdirectory for all the design files 
-
-  design_subdir = output_prefix // DESIGN_SUBDIR_POSTFIX
-  call make_directory (design_subdir)
-  design_subdir = design_subdir // '/'
-
-  foilfile = design_subdir//'Design_Coordinates.dat'
-  foilunit = 13
-
-! Open files and write headers, if necessary
-
-  if (designcounter == 0) then
-
-!   Header for coordinate file
-
-    call print_text ("- Writing coordinates for visualizer to "//design_subdir//'...')
-
-    open(unit=foilunit, file=foilfile, status='replace')
-    write(foilunit,'(A)') 'title="Airfoil coordinates"'
-
-!   Add 2nd and 3rd derivative to
-!        ...design_coordinates.dat to show it in visualizer
-    write(foilunit,'(A)') 'variables="x" "z" "2nd derivative" "3rd derivative"'
-
-    title =  'zone t="Seed airfoil, '//'name='//trim(foil%name)//', maxt='//trim(maxtchar)//&
-             ', xmaxt='//trim(xmaxtchar)//', maxc='//&
-              trim(maxcchar)//', xmaxc='//trim(xmaxcchar)//'"'
-  else
-
-!   Open coordinate file and write zone header
-
-    write(text,*) designcounter
-    text = adjustl(text)
-
-    open(unit=foilunit, file=foilfile, status='old', position='append', err=900)
-    title =  'zone t="Airfoil, '//'name='//trim(adjustl(foil%name))//', maxt='//trim(maxtchar)//&
-             ', xmaxt='//trim(xmaxtchar)//', maxc='//&
-              trim(maxcchar)//', xmaxc='//trim(xmaxcchar)//'", '//&
-             'SOLUTIONTIME='//trim(text)
-
-  end if
-
-! Write coordinates to file
-
-  call  airfoil_write_to_unit (foilunit, title, foil)
-
-! Close output files
-
-  close(foilunit)
-
-  return
-
-! Warning if there was an error opening design_coordinates file
-
-900 Call print_warning ("Warning: unable to open "//trim(foilfile)//". Skipping ...")
-  write_airfoil_optimization_progress = 1
-  return
-
-end subroutine write_design_coordinates
 
 
 !-------------------------------------------------------------------------
@@ -769,11 +664,10 @@ end subroutine write_design_coordinates
 !-------------------------------------------------------------------------
 
 subroutine read_worker_clo(input_file, output_prefix, airfoil_name, action, &
-                           second_airfoil_filename, value_argument, visualizer)
+                           second_airfoil_filename, value_argument)
 
   character(:), allocatable, intent(inout) :: input_file, output_prefix, action, value_argument
   character(:), allocatable, intent(inout) :: airfoil_name, second_airfoil_filename
-  logical,      intent(inout) :: visualizer
 
   character(100) :: arg
   integer i, nargs
@@ -846,9 +740,6 @@ subroutine read_worker_clo(input_file, output_prefix, airfoil_name, action, &
           i = i+1
         end if 
       end if
-    else if (trim(arg) == "-v") then
-      visualizer = .true.
-      i = i+1
     else if ( (trim(arg) == "-h") .or. (trim(arg) == "--help") ) then
       call print_worker_usage
       stop
@@ -875,7 +766,7 @@ subroutine print_worker_usage()
 #define PACKAGE_VERSION ""
 #endif
     
-  write(*,'(A)') 'Xfoil_Worker      Version '//trim(PACKAGE_VERSION)//  &
+  write(*,'(A)') 'Xfoil_Worker      v'//trim(PACKAGE_VERSION)//  &
                  '              (c) 2023 Jochen Guenzel'
   write(*,'(A)')
   write(*,'(A)') "Usage: Xfoil_worker -w worker_action [Options]"
@@ -894,14 +785,14 @@ subroutine print_worker_usage()
   write(*,'(A)') "                       'xt=zz' max. camber location in % chord"
   write(*,'(A)') "                       'te=y'  trailing edge gap in % chord (80% blending)"
   write(*,'(A)') "  -w blend xx       Blend 'airfoil_file' with 'second_airfoil_file' by xx%"
+  write(*,'(A)') "  -w check-input    Check a Xoptfoil-JX input file for errors"
   write(*,'(A)')
   write(*,'(A)') "Options:"
-  write(*,'(A)') "  -i input_file     Specify an input file (default: 'inputs.inp')"
+  write(*,'(A)') "  -i input_file     Specify an input file"
   write(*,'(A)') "  -o output_prefix  Specify an output prefix (default: 'foil')"
   write(*,'(A)') "  -r xxxxxx         Specify a default reynolds number (re_default)"
   write(*,'(A)') "  -a airfoil_file   Specify filename of seed airfoil"
   write(*,'(A)') "  -a2 airfoil_file  Specify filename of a second airfoil (for blending)"
-  write(*,'(A)') "  -v                Generate file 'design_coordinates' for visualizer"
   write(*,'(A)') "  -h, --help        Display usage information and exit"
   write(*,'(A)')
   write(*,'(A)') "Refer to the worker reference guide for complete input help."
@@ -1017,29 +908,40 @@ program xfoil_worker
 
 ! Set default names and read command line arguments
 
-  input_file        = 'inputs.inp'
+  input_file        = ''
   output_prefix     = ''
   action            = ''
   airfoil_filename  = ''
   second_airfoil_filename = ''
   visualizer        = .false.
   call read_worker_clo(input_file, output_prefix, airfoil_filename, action, & 
-                       second_airfoil_filename, value_argument, visualizer)
+                       second_airfoil_filename, value_argument)
 
-  if (trim(action) == "") &
+  if (trim(action) == "") then
     call my_stop("Must specify an action for the worker with -w option.")
-  if (trim(airfoil_filename) == "") &
+
+  else if (trim(action) == "check-input") then 
+    if (trim(input_file) == "") & 
+      call my_stop("Must specify an input file with -i option.")
+
+  else if (trim(airfoil_filename) == "") then
     call my_stop("Must specify an airfoil file with the -a option.")
+  end if 
 
 ! Let's start
 
   write (*,'(1x)', advance = 'no') 
-  call print_colored (COLOR_FEATURE,'Worker on '//trim(airfoil_filename))
+  if (trim(action) == "check-input") then 
+    call print_colored (COLOR_FEATURE,'Worker')
+    write (*,'(3x,A,A,1x,A,3x)', advance = 'no') '-',trim(action), trim(input_file) 
 
-  write (*,'(3x,A,A,3x)', advance = 'no') '-',trim(action)  
+  else
+    call print_colored (COLOR_FEATURE,'Worker on '//trim(airfoil_filename))
+    write (*,'(3x,A,A,3x)', advance = 'no') '-',trim(action)  
 
-! Load airfoil defined in command line 
-  call load_airfoil(airfoil_filename, foil)
+  ! Load airfoil defined in command line 
+    call load_airfoil(airfoil_filename, foil)
+  end if 
 
 ! Allocate xfoil variables
   call xfoil_init()
@@ -1072,23 +974,27 @@ program xfoil_worker
 
     case ('norm')         ! Repanel, Normalize into "<output_prefix>.dat"
 
-      call repanel_smooth (input_file, outname_auto, output_prefix, foil, visualizer, .false.)
+      call repanel_smooth (input_file, outname_auto, output_prefix, foil, .false.)
 
     case ('smooth')       ! Repanel, Normalize and smooth into "<output_prefix>.dat"
 
-      call repanel_smooth (input_file, outname_auto, output_prefix, foil, visualizer, .true.)
+      call repanel_smooth (input_file, outname_auto, output_prefix, foil, .true.)
   
     case ('flap')         ! Repaneland set flap into "<output_prefix>.dat"
 
-      call set_flap (input_file, outname_auto, output_prefix, foil, visualizer)
+      call set_flap (input_file, outname_auto, output_prefix, foil)
 
     case ('check')        ! Check the curvature quality of airfoil surface
 
-      call check_foil_curvature (input_file, output_prefix, foil, visualizer)
+      call check_foil_curvature (input_file, foil)
+
+    case ('check-input')  ! check the input file for erros
+
+      call check_input_file (input_file)
 
     case ('set')          ! set geometry value like thickness etc...
       
-      call set_geometry_value (input_file, outname_auto, output_prefix, foil, value_argument, visualizer)
+      call set_geometry_value (input_file, outname_auto, output_prefix, foil, value_argument)
 
     case ('blend')         ! blend two airfoils...
       
@@ -1096,7 +1002,7 @@ program xfoil_worker
         call my_stop("Must specify a second airfoil file with the -a2 option.")
 
       call load_airfoil(second_airfoil_filename, blend_foil)
-      call blend_foils (input_file, outname_auto, output_prefix, foil, blend_foil, value_argument, visualizer)
+      call blend_foils (input_file, outname_auto, output_prefix, foil, blend_foil, value_argument)
 
     case default
 

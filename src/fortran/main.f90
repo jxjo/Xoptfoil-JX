@@ -32,7 +32,7 @@ program main
 !      airfoil_operations   polar_operations
 !                    memory_util
 !                  parametrization
-!                  airfoil_shape_bezier 
+!       airfoil_shape_bezier optimization_util 
 !                    math_deps
 !                   xfoil_driver
 !             xfoil   os_util  vardef
@@ -54,6 +54,7 @@ program main
   use airfoil_preparation,  only : preset_airfoil_to_targets
   use airfoil_preparation,  only : matchfoils_preprocessing, transform_to_bezier_based 
   use optimization_driver,  only : optimize, write_final_design
+  use optimization_util,    only : reset_run_control, delete_run_control
   use airfoil_shape_bezier, only : bezier_spec_type, ncp_to_ndv, ndv_to_ncp
   use xfoil_driver,         only : xfoil_init, xfoil_cleanup
 
@@ -78,7 +79,7 @@ program main
   character(:), allocatable :: input_file
 
 
-!-------------------------------------------------------------------------------
+  !-------------------------------------------------------------------------------
   
   write(*,'(A)')
   call print_colored (COLOR_FEATURE,' Xoptfoil-JX')
@@ -86,13 +87,13 @@ program main
   write(*,'(A)') '             The Airfoil Optimizer            v'//trim(PACKAGE_VERSION)
   write(*,'(A)') 
 
-! Handle multithreading - be careful with screen output in multi-threaded code parts
-!   macro OPENMP is set in CMakeLists.txt as _OPENMP is not set by default 
+  ! Handle multithreading - be careful with screen output in multi-threaded code parts
+  !   macro OPENMP is set in CMakeLists.txt as _OPENMP is not set by default 
 #ifdef OPENMP 
   call set_number_of_threads()
 #endif
 
-! Set default names and read command line arguments
+  ! Set default names and read command line arguments
   
   input_file = 'inputs.inp'
   output_prefix = 'optfoil'
@@ -113,29 +114,32 @@ program main
                    pso_options, ga_options, matchfoil_file, symmetrical) 
   write (*,*) 
   call check_inputs(global_search, pso_options)
-    
+  
+  
+  ! Delete existing run_control file and rewrite it - most possible errors should be passed
+
+  call reset_run_control()
+
 
   ! Load seed airfoil into memory, repanel, normalize, rotate if not bezier based 
 
   call get_seed_airfoil (seed_airfoil_type, airfoil_file, original_foil)
-  write (*,*) 
 
   if (original_foil%bezier_based) then 
     ! Bezier based already in perfect quality - no action needed - leave it at is!
     seed_foil = original_foil  
     call airfoil_write (trim(seed_foil%name)//'.dat', trim(seed_foil%name), seed_foil)             
   else 
-
     ! repanel and normalize 
     call repanel_and_normalize_airfoil (original_foil, xfoil_geom_options, symmetrical, seed_foil) 
   end if
 
-! ... to have run_xfoil results equal airfoil external results
+  ! ... to have run_xfoil results equal airfoil external results
 
   xfoil_geom_options%npan = seed_foil%npoint    ! will use this constant value now
 
 
-! Prepare Airfoil based on optimization shape type  
+  ! Prepare Airfoil based on optimization shape type  
 
   if (trim(shape_functions) == 'bezier' .and. seed_foil%bezier_based) then 
 
@@ -159,41 +163,47 @@ program main
   end if  
 
 
-! Set up for matching airfoils 
+  ! Set up for matching airfoils 
   if (match_foils) then
     call matchfoils_preprocessing  (matchfoil_file)
   end if
 
 
-! Allocate optimal solutions, constraints, airfoils, xfoil for optimization 
+  ! Allocate optimal solutions, constraints, airfoils, xfoil for optimization 
   
   call allocate_constrained_dvs (symmetrical, constrained_dvs)
   call allocate_optimal_design  (symmetrical, optdesign)
   call allocate_airfoil_data()
 
 
-! Make sure seed airfoil passes constraints - final checks, prepare objective function 
-!  - get scaling factors for operating points with xfoil, 
+  ! Make sure seed airfoil passes constraints - final checks, prepare objective function 
+  !  - get scaling factors for operating points with xfoil, 
 
   call check_seed()
 
 
-! Optimize
+  ! Optimize
   
   call optimize (global_search, constrained_dvs, pso_options, ga_options,      &
                  optdesign, f0, fmin, steps, fevals)
 
-! Notify of total number of steps and function evals
+  ! Notify of total number of steps and function evals
 
   write(*,*)
   write(*,*) 'Optimization complete. Totals: '
   write(*,'(/,A, I5, A, I7)') '  Steps:', steps, '   Objective function evaluations:', fevals
 
-! Write final design and summary
+  ! Write final design and summary
 
   call write_final_design(optdesign, f0, fmin, final_foil)
 
   write(*,*)
+
+  
+  ! remove run_control file after optimization 
+
+  call delete_run_control()
+
 
 end program main
 

@@ -64,17 +64,17 @@ module particle_swarm
 subroutine particleswarm(xopt, fmin, step, fevals, objfunc, &
                          x0, xmin, xmax,  initial_x0_based,  &
                          given_f0_ref, f0_ref, constrained_dvs, pso_options,   &
-                         designcounter,           &
-                         stop_reason, converterfunc)
+                         designcounter)
 
   !! Particle swarm optimization routine. 
                          
   use math_deps,          only : norm_2
   use optimization_util,  only : init_random_seed, initial_designs,             &
-                                 design_radius, write_design, read_run_control
+                                 design_radius, write_design 
+  use optimization_util,  only : reset_run_control, stop_requested
   use optimization_util,  only : write_history_header, write_history
-  use airfoil_evaluation, only : OBJ_XFOIL_FAIL, OBJ_GEO_FAIL
-  use vardef,             only : design_subdir
+  use airfoil_evaluation, only : OBJ_XFOIL_FAIL, OBJ_GEO_FAIL, write_progress
+  use vardef,             only : design_subdir, show_details
 
 
   double precision, dimension(:), intent(inout) :: xopt
@@ -94,15 +94,7 @@ subroutine particleswarm(xopt, fmin, step, fevals, objfunc, &
   logical, intent(in) :: given_f0_ref, initial_x0_based
   type (pso_options_type), intent(in) :: pso_options
   integer, intent(out)        :: designcounter
-  character(14), intent(out)  :: stop_reason
 
-  optional :: converterfunc
-  interface
-    integer function converterfunc(x, designcounter_dummy)
-      double precision, dimension(:), intent(in) :: x
-      integer, intent(in) :: designcounter_dummy
-    end function
-  end interface
 
   double precision, dimension(pso_options%pop) :: objval, minvals, speed, particles_stucked
   double precision, dimension(size(xmin,1)) :: randvec1, randvec2
@@ -111,9 +103,8 @@ subroutine particleswarm(xopt, fmin, step, fevals, objfunc, &
                                    f0, radius, brake_factor 
   logical                       :: use_x0, converged, signal_progress
   character(:), allocatable     :: histfile
-  character(80), dimension(20)  :: commands
-  integer                       :: nconstrained, i, j, fminloc, var, stat, iunit, k, ncommands
-  integer                       :: i_retry, max_retries, ndone      
+  integer                       :: nconstrained, i, j, fminloc, var
+  integer                       :: i_retry, max_retries, ndone     
   
   integer, parameter            :: STUCKED_THRESHOLD = 5              ! no of steps particle failed 
   integer, parameter            :: RESCUE_FREQUENCY  = 10             ! who often particle resuce action is done  
@@ -231,9 +222,8 @@ subroutine particleswarm(xopt, fmin, step, fevals, objfunc, &
 ! Open file for writing iteration history
 
   histfile  = design_subdir//'Optimization_History.csv'
-  iunit = 17
-  open(unit=iunit, file=histfile, status='replace')
-  call write_history_header (iunit) 
+  call write_history_header (histfile) 
+  call write_history        (histfile, step, .false., designcounter, design_radius(dv), fmin, f0)
 
 ! Begin optimization
 
@@ -241,11 +231,14 @@ subroutine particleswarm(xopt, fmin, step, fevals, objfunc, &
   max_retries = initial_max_retries (pso_options) 
 
   write(*,*)
-  write(*,*)
-  call  print_colored (COLOR_FEATURE, ' - Particle swarm ')
-  call  print_colored (COLOR_NORMAL, 'with '//stri(pso_options%pop)// ' members will now try its best ...')
-  write(*,*)
-  write(*,*)
+  if (show_details) then 
+    write(*,*)
+    call  print_colored (COLOR_FEATURE, ' - Particle swarm ')
+    call  print_colored (COLOR_NORMAL, 'with '//stri(pso_options%pop)// ' members will now try its best ...')
+    write(*,*)
+    write(*,*)
+  end if 
+
   call show_optimization_header  (pso_options, max_retries)
 
 !$omp parallel default(shared) private(i, j, var, i_retry)
@@ -261,7 +254,7 @@ subroutine particleswarm(xopt, fmin, step, fevals, objfunc, &
     if (pso_options%auto_retry) &
       max_retries = auto_max_retries (pso_options, step, max_retries, objval) 
 
-    call show_iteration_header (step, max_retries)
+    if (show_details) call show_iteration_number (step, max_retries)
 
 
 !$omp end master
@@ -336,7 +329,7 @@ subroutine particleswarm(xopt, fmin, step, fevals, objfunc, &
 
 !$OMP ATOMIC  
       ndone = ndone + 1
-      call show_particles_progress (pso_options%pop, ndone)
+      if (show_details) call show_particles_progress (pso_options%pop, ndone)
 
     end do    !--------------------------------------------------------------------------
 
@@ -345,6 +338,8 @@ subroutine particleswarm(xopt, fmin, step, fevals, objfunc, &
 !$omp master
 
   ! Display some info about success of single particle 
+
+    if (.not. show_details) call show_iteration_number (step, max_retries)
 
     call show_particles_info (fmin, minvals, particles_stucked, objval)        
 
@@ -366,21 +361,18 @@ subroutine particleswarm(xopt, fmin, step, fevals, objfunc, &
     radius = design_radius(dv)
     call show_iteration_result (radius, fmin, f0, signal_progress)
 
-  ! Write design to file - converterfunc is an optional function to convert design variables
-  !                        into something more useful.  
+  ! Write design to file - 
 
     if (signal_progress) then
       designcounter = designcounter + 1
-      if (present(converterfunc)) then
-        stat = converterfunc(xopt, designcounter)
-      else
-        call write_design('particleswarm_designs.dat', 'old', xopt, designcounter)
-      end if
+      call write_progress (xopt, designcounter)
     else
       write (*,*)
     end if
 
-    call write_history         (iunit, step, signal_progress, designcounter, radius, fmin, f0)
+  ! write history 
+
+    call write_history (histfile, step, signal_progress, designcounter, radius, fmin, f0)
 
 
   ! Now and then rescue stucked particles before updating particle 
@@ -428,23 +420,21 @@ subroutine particleswarm(xopt, fmin, step, fevals, objfunc, &
       converged = .false.
     else
       converged = .true.
-      stop_reason = "completed"
       if (step == pso_options%maxit) then
         write (*,*)
         call print_warning ('PSO optimizer stopped due to the max number of iterations being reached.')
       end if
     end if 
 
-  ! Check for commands in run_control file
+  ! Check for commands in run_control file - reset (touch) run_control
 
-    call read_run_control(commands, ncommands)
-    do k = 1, ncommands
-      if (trim(commands(k)) == "stop") then
-        converged = .true.
-        stop_reason = "stop_requested"
-        write(*,*) 'Cleaning up: stop command encountered in run_control.'
-      end if
-    end do
+    if (stop_requested()) then
+      converged = .true.
+      write(*,*) 'Cleaning up: stop command encountered in run_control.'
+    end if
+
+    call reset_run_control()
+
 
 !$omp end master
 !$omp barrier
@@ -456,11 +446,6 @@ subroutine particleswarm(xopt, fmin, step, fevals, objfunc, &
 ! Calculate number of function evaluations
       
   fevals = fevals + step*pso_options%pop
-
-! Close history file
-
-  close(iunit)
-
 
 end subroutine particleswarm
 
@@ -691,7 +676,7 @@ end subroutine rescue_stucked_particles
 ! Shows user info about result of a single iteration 
 !------------------------------------------------------------------------------
 
-subroutine  show_iteration_header (step, max_retries)
+subroutine  show_iteration_number (step, max_retries)
 
   integer, intent(in)          :: step, max_retries
   character (1) :: s1
@@ -706,7 +691,7 @@ subroutine  show_iteration_header (step, max_retries)
   end if
 
 
-end subroutine  show_iteration_header
+end subroutine  show_iteration_number
 
 !------------------------------------------------------------------------------
 ! Shows user info about result of a single iteration 
