@@ -142,7 +142,7 @@ subroutine check_and_do_polar_generation (input_file, csv_format, output_prefix,
 
       ! Create subdir for polar files if not exist
       polars_subdirectory = output_prefix//'_polars'
-      call make_directory (trim(polars_subdirectory))
+      call make_directory (trim(polars_subdirectory), .true.) ! preserve existing
     end if
     ! Generate polars in this subdir 
     call generate_polar_set (.true., csv_format, trim(polars_subdirectory), foil, &

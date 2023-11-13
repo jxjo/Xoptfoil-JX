@@ -450,11 +450,8 @@ subroutine roulette_selection(objvalconsidered, nconsidered, beta, idx)
   do i = 1, nconsidered
     total = total + exp(-beta*objvalconsidered(i)/worst)
     if (objvalconsidered(i) < 0.d0) then 
-      write(*,*)
-      write(*,*) "Error: roulette selection cannot be used with negative"
-      write(*,*) "objective function values. Try tournament instead."
-      write(*,*)
-      stop
+      call my_stop ("Roulette selection cannot be used with negative"// &
+                    "objective function values. Try tournament instead.")
     end if
   end do
 

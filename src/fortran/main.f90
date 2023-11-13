@@ -99,11 +99,14 @@ program main
   output_prefix = 'optfoil'
   call read_clo(input_file, output_prefix,'Xoptfoil-JX')
 
-  ! Create subdirectory for all the design files 
+  ! Create subdirectory for all the design files, clean existing files 
 
   design_subdir = output_prefix // DESIGN_SUBDIR_POSTFIX
-  call make_directory (design_subdir)
+  call make_directory (design_subdir, .false.)
   design_subdir = design_subdir // '/'
+
+  call delete_file (output_prefix//'.dat')              ! the final airfoil 
+  call delete_file (output_prefix//'.bez')              ! ... could have been bezier 
 
 
 ! Read inputs from namelist file

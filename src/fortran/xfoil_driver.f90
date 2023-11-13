@@ -146,12 +146,10 @@ subroutine run_op_points (foil, geom_options, xfoil_options,         &
 ! Sanity checks
 
   if (.not. allocated(AIJ)) then
-    write(*,*) "Error: xfoil is not initialized!  Call xfoil_init() first."
-    stop
+    call my_stop ("xfoil is not initialized.")
   end if
   if (noppoint == 0) then 
-    write(*,*) "Error in xfoil_driver: No operating points"
-    stop
+    call my_stop ("Error in xfoil_driver: No operating points.")
   end if
 
 ! Init variables
@@ -1076,8 +1074,7 @@ subroutine xfoil_scale_thickness_camber (infoil, f_thick, d_xthick, f_camb, d_xc
 
 ! Check to make sure xfoil is initialized
   if (.not. allocated(AIJ)) then
-    write(*,*) "Error: xfoil is not initialized!  Call xfoil_init() first."
-    stop
+    call my_stop ("xfoil is not initialized")
   end if
 ! Set xfoil airfoil and prepare globals, get current thickness
   call xfoil_set_airfoil (infoil)
@@ -1301,8 +1298,7 @@ subroutine xfoil_scale_LE_radius (infoil, f_radius, x_blend, outfoil)
 
 ! Check to make sure xfoil is initialized
   if (.not. allocated(AIJ)) then
-    write(*,*) "Error: xfoil is not initialized!  Call xfoil_init() first."
-    stop
+    call my_stop ("xfoil is not initialized.")
   end if
 
 ! Set xfoil airfoil and prepare globals, get current thickness
@@ -1346,7 +1342,7 @@ subroutine xfoil_set_te_gap (infoil, te_gap, x_blend, outfoil)
 
 ! Check to make sure xfoil is initialized
   if (.not. allocated(AIJ)) then
-    write(*,*) "Error: xfoil is not initialized!  Call xfoil_init() first."
+    call my_stop ("xfoil is not initialized.")
     stop
   end if
 

@@ -19,6 +19,8 @@ module parametrization
 
 ! Contains subroutines to create an airfoil shape from design variables
 
+  use os_util
+ 
   implicit none
 
 ! Shape functions for creating airfoil shapes (top and bottom)
@@ -371,8 +373,7 @@ subroutine create_airfoil_camb_thick (xt_seed, zt_seed, xb_seed, zb_seed, modes,
 
   ! Sanity check - new_foil may not have different number of points
   if (seed_foil%npoint /= new_foil_2%npoint) then
-    write(*,'(A)') 'Error: Number of points changed during thickness/camber modification'
-    stop 1
+    call my_stop ('Number of points changed during thickness/camber modification')
   end if
 
 ! get new upper and lower z-coordinates from modified airfoil 
@@ -454,8 +455,7 @@ subroutine create_airfoil_camb_thick_plus (xt_seed, zt_seed, xb_seed, zb_seed, m
 
   ! Sanity check - new_foil may not have different number of points
   if (seed_foil%npoint /= new_foil_2%npoint) then
-  write(*,'(A)') 'Error: Number of points changed during thickness/camber modification'
-  stop 1
+    call my_stop ('Number of points changed during thickness/camber modification')
   end if
 
   ! Bottom: Change thickness, camber ... according to new values hidden in modes
@@ -473,8 +473,7 @@ subroutine create_airfoil_camb_thick_plus (xt_seed, zt_seed, xb_seed, zb_seed, m
 
   ! Sanity check - new_foil may not have different number of points
   if (seed_foil%npoint /= new_foil_4%npoint) then
-  write(*,'(A)') 'Error: Number of points changed during thickness/camber modification'
-  stop 1
+    call my_stop ('Number of points changed during thickness/camber modification')
   end if
 
   ! Especially Xfoils HIPNT tends to produce artefacts in curvature

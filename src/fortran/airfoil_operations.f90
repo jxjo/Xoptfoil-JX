@@ -89,10 +89,7 @@ subroutine load_airfoil(filename, foil)
   logical :: labeled
 
   if (trim(filename) == '') then
-    write (*,*) 
-    call print_error ('Error: No airfoil file defined either in input file nor as command line argument')
-    write(*,*)
-    stop
+    call my_stop ('No airfoil file defined either in input file nor as command line argument')
   end if 
 
 ! Read number of points and allocate coordinates
@@ -181,7 +178,7 @@ subroutine airfoil_read(filename, npoints, labeled, name, x, z)
   iunit = 12
   open(unit=iunit, file=filename, status='old', position='rewind', iostat=ioerr)
   if (ioerr /= 0) then
-    call my_stop ('Error: cannot find airfoil file '//trim(filename),'stop')
+    call my_stop ('Cannot find airfoil file '//trim(filename))
   end if
 
 ! Read points from file

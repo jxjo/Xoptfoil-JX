@@ -50,6 +50,8 @@ module os_util
   
   public :: set_number_of_threads
 
+  public :: delete_file
+
   interface print_colored
 #ifdef UNIX
   module procedure print_colored
@@ -286,17 +288,21 @@ end subroutine print_colored_windows
 #endif
 
 !------------------------------------------------------------------------------------------
-!  Create Directory
+!  File functions 
 !------------------------------------------------------------------------------------------
+
 #ifdef UNIX
 
-subroutine make_directory_unix (subdirectory)
+subroutine make_directory_unix (subdirectory, preserve_existing)
   character(*),  intent (in) :: subdirectory
+  logical,  intent (in), optional :: preserve_existing
   integer         :: istat
   character (255) :: command
 
-  command = 'rmdir --ignore-fail-on-non-empty '//trim(subdirectory)
-  istat = system (trim(command))
+  if (.not. (present(preserve_existing) .and.preserve_existing)) then
+    command = 'rmdir --ignore-fail-on-non-empty '//trim(subdirectory)
+    istat = system (trim(command))
+  end if 
 
   command = 'mkdir '//trim(subdirectory)
   istat = system (trim(command))
@@ -305,20 +311,35 @@ end subroutine make_directory_unix
 
 #else
 
-  subroutine make_directory_windows (subdirectory)
+  subroutine make_directory_windows (subdirectory, preserve_existing)
     character(*),  intent (in) :: subdirectory
+    logical,  intent (in), optional :: preserve_existing
     integer         :: istat
     character (255) :: command
 
-    command = 'if exist "'//trim(subdirectory)//'" rmdir "'//trim(subdirectory)//'" /s/q'
-    istat = system (trim(command))
+    if (.not. (present(preserve_existing) .and.preserve_existing)) then
+      command = 'if exist "'//trim(subdirectory)//'" rmdir "'//trim(subdirectory)//'" /s/q'
+      istat = system (trim(command))
+    end if 
 
-    command = '" mkdir "'//trim(subdirectory)//'"'
+    command = 'if not exist "'//trim(subdirectory)//'" mkdir "'//trim(subdirectory)//'"'
     istat = system (trim(command))
 
   end subroutine make_directory_windows
 
 #endif
+
+
+subroutine delete_file (file_path)
+  character(*),  intent (in) :: file_path
+  integer         :: stat
+
+  open(unit=1234, iostat=stat, file=trim(file_path), status='old')
+  if (stat == 0) close(1234, status='delete')  
+
+end subroutine delete_file
+
+
 
 !------------------------------------------------------------------------------------------
 !  String functions - Integer  and Float to string 
@@ -418,12 +439,12 @@ subroutine my_stop(message, stoptype)
 
   if ((.not. present(stoptype)) .or. (stoptype == 'stop')) then
     write(*,*)
-    call print_error (message)
+    call print_error ('Error: '//message)
     write(*,*)
     stop 1
   else
     write(*,*)
-    call print_warning (message)
+    call print_warning ('Error: '//message)
     write(*,*)
   end if
 

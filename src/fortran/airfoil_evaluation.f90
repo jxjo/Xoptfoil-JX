@@ -42,7 +42,7 @@ module airfoil_evaluation
     double precision :: weighting_user          ! original weighting entered by user
     logical          :: dynamic_weighting       ! dynamic weighting for this point 
     logical          :: extra_punch             !  - this op got an extra weighting punch
-    double precision :: weighting_user_cur      !  - info: cuurent scaled user weighting
+    double precision :: weighting_user_cur      !  - info: current scaled user weighting
     double precision :: weighting_user_prv      !  - info: previous scaled user weighting
   end type geo_target_type
 
@@ -926,9 +926,7 @@ function aero_objective_function_on_results (op_points_result, eval_only_dynamic
 
       else
 
-        write(*,*)
-        write(*,*) "Error: requested optimization_type not recognized."
-        stop
+        call my_stop ("Requested optimization_type not recognized.")
 
       end if
 
@@ -1438,7 +1436,8 @@ end function write_airfoil_optimization_progress
 subroutine write_design_op_points_header (iunit)
   !! write csv header of op points data 
   integer, intent(in) :: iunit
-  write (iunit, '(A5,";",A4,8(";",A11)";",A9)') '  No', "iOp", "alpha", "cl", "cd", "cm", "xtrt", "xtrb", "dist", "dev", "flap"
+  write (iunit, '(A5,";",A4,8(";",A11), ";",A9, ";",A9)') "  No", "iOp", "alpha", "cl", "cd", &
+                                                "cm", "xtrt", "xtrb", "dist", "dev", "flap", "weight"
 end subroutine
 
 
@@ -1453,7 +1452,7 @@ subroutine write_design_op_points_data (iunit, design, op_points_specification, 
   type(op_point_result_type)              :: op
   type(op_point_specification_type)       :: op_spec 
   integer                     :: i,how_good
-  double precision            :: dist, dev
+  double precision            :: dist, dev, weighting
 
   do i = 1, noppoint
     op = op_points_result(i) 
@@ -1463,8 +1462,16 @@ subroutine write_design_op_points_data (iunit, design, op_points_specification, 
     if (.not. op%converged) then 
       call print_error ('  Op '//stri(i)//' not converged in final calculation (this should not happen...)')
     end if 
-    write(iunit,'(I5,";",I4, 8(";",F11.6), ";",F9.4)') & 
-                design, i, op%alpha, op%cl, op%cd, op%cm, op%xtrt, op%xtrb, dist, dev, flap (i)
+
+    if (op_spec%weighting_user_cur == 0d0) then           ! in beginning there is no dynamic weight
+      weighting = op_spec%weighting_user
+    else
+      weighting = op_spec%weighting_user_cur
+    end if 
+
+    write(iunit,'(I5,";",I4, 8(";",F11.6), ";",F9.4, ";",F5.2)') &
+                          design, i, op%alpha, op%cl, op%cd, op%cm, op%xtrt, op%xtrb, &
+                          dist, dev, flap (i), weighting
   end do
 end subroutine
 

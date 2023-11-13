@@ -764,7 +764,7 @@ subroutine read_op_points_spec  (input_file, or_iunit, noppoint, re_def, &
 
   ! Set defaults for operating conditions and constraints
 
-  noppoint = 1
+  noppoint = 0
 
   re_default = 100000d0
   re_default_as_resqrtcl = .false.
@@ -1548,22 +1548,22 @@ subroutine namelist_check(nmlname, errcode, action_missing_nml)
     elseif (trim(action_missing_nml) == 'no-warn') then
       ! do nothing
     else
-      call my_stop ('Error: namelist '//trim(nmlname)//&
-                     ' is required and was not found in input file.')
+      call my_stop ('Namelist '//trim(nmlname)//' is required and was not found in input file.')
     end if
+
   else if (errcode == 2) then
     if (trim(action_missing_nml) == 'warn') then
       call print_note ('No input file. Using default values for namelist '// trim(nmlname))
     elseif (trim(action_missing_nml) == 'no-warn') then
       ! do nothing
     else
-      call my_stop ('Error: No input file. Namelist '//trim(nmlname)//&
-                     ' is required for operation.')
+      call my_stop ('No input file. Namelist '//trim(nmlname)//' is required for operation.')
     end if
+
   else if (errcode > 0) then
     write (out_string,'(I5)') errcode
     out_string = ' (err='//trim(adjustl(out_string))//')'
-    call my_stop ('Error: unrecognized variable in namelist '//trim(nmlname)//trim(out_string))
+    call my_stop ('Unrecognized variable in namelist '//trim(nmlname)//trim(out_string))
   else
     continue
   end if

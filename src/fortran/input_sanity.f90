@@ -457,6 +457,7 @@ subroutine check_seed()
 
     op_spec  = op_points_spec(i) 
     opt_type = op_spec%optimization_type
+
     if ((op_spec%value <= 0.d0) .and. (op_spec%spec_cl)) then
       if ( (trim(opt_type) /= 'min-drag') .and.                                &
            (trim(opt_type) /= 'max-xtr') .and.                                 &
@@ -465,21 +466,17 @@ subroutine check_seed()
            (trim(opt_type) /= 'min-lift-slope') .and.                          &
            (trim(opt_type) /= 'min-glide-slope') .and.                         &
            (trim(opt_type) /= 'max-lift-slope') ) then
-        write(*,*) "Error: operating point "//trim(text)//" is at Cl = 0. "//  &
-                 "Cannot use '"//trim(opt_type)//"' optimization in this case."
-        write(*,*) 
-        stop
+        call my_stop ("Operating point "//trim(text)//" is at Cl = 0. "//  &
+                      "Cannot use '"//trim(opt_type)//"' optimization in this case.")
       end if
+
     elseif (op_spec%spec_cl .and. (trim(opt_type) == 'max-lift')) then
-      write(*,*) "Error: Cl is specified for operating point "//trim(text)//   &
-                 ". Cannot use 'max-lift' optimization type in this case."
-      write(*,*) 
-      stop
+      call my_stop ("Cl is specified for operating point "//trim(text)//   &
+                    ". Cannot use 'max-lift' optimization type in this case.")
+
     elseif (op_spec%spec_cl .and. (trim(opt_type) == 'target-lift')) then              
-      write (*,*) ("op_mode = 'spec_cl' doesn't make sense "//                &
+      call my_stop ("op_mode = 'spec_cl' doesn't make sense "//                &
                    "for optimization_type 'target-lift'")
-      write(*,*) 
-      stop
     end if
 
   end do
@@ -590,9 +587,8 @@ subroutine check_seed()
 
     if (op%cl <= 0.d0 .and. (trim(opt_type) == 'min-sink' .or.   &
         trim(opt_type) == 'max-glide') ) then
-      call my_stop( "Error: operating point "//trim(text)//" has Cl <= 0. "//     &
-                 "Cannot use "//trim(opt_type)//" optimization "// &
-                 "in this case.")
+      call my_stop( "Operating point "//trim(text)//" has Cl <= 0. "//     &
+                 "Cannot use "//trim(opt_type)//" optimization in this case.")
     end if
 
     if (trim(opt_type) == 'min-sink') then
@@ -716,10 +712,8 @@ subroutine check_seed()
       checkval   = atan(abs(slope)) + 2.d0*pi
      
     else
-      write(*,*)
-      write(*,*) "Error: requested optimization_type for operating point "//   &
-                 trim(text)//" not recognized."
-      stop
+      call my_stop ("Requested optimization_type for operating point "//   &
+                     trim(text)//" not recognized.")
     end if
 
     op_spec%scale_factor = 1.d0/checkval

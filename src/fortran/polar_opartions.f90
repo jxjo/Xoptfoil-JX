@@ -317,12 +317,12 @@ subroutine read_init_polar_inputs  (input_file, or_iunit, re_default, ncrit, foi
     if (istat > 2) then 
       write (out_string,'(I5)') istat
       out_string = ' (err='//trim(adjustl(out_string))//')'
-      call my_stop ('Error: unrecognized variable in namelist '//'polar_generation'//trim(out_string))
+      call my_stop ('Unrecognized variable in namelist '//'polar_generation'//trim(out_string))
     end if
 
     if (trim(input_file) /= '') close (iunit)
   else
-    call my_stop('Could not find input file '//trim(input_file)//'.')
+    call my_stop('Could not find input file '//trim(input_file))
   end if
   
 
@@ -410,8 +410,7 @@ subroutine init_polars ()
       ! only spec - op_points will be allocated in xfoil driver ...
       allocate (polars(ipol)%op_points_spec(polars(ipol)%n_op_points))
     else
-      write (*,*) "Error: No valid value boundaries for polar"
-      stop
+      call my_stop ("No valid value boundaries for polar")
     endif
 
   ! init op data points of polar
@@ -480,7 +479,7 @@ subroutine set_polar_info (foil_name, file_name, add_info)
       if (trim(add_info)  /= '') polars(i)%add_info  = trim(add_info)
     end do 
   else
-    call my_stop("Internal error: No polar initialized for generate_polar.")
+    call my_stop("No polar initialized for generate_polar.")
   end if 
 
 end subroutine set_polar_info
@@ -682,7 +681,7 @@ subroutine write_polar_header (out_unit, polar)
 !-
 
   if (trim(polar%airfoil_name) == '') &
-    call my_stop ('Internal error: Xfoil polar to write has no name.')
+    call my_stop ('Xfoil polar to write has no name.')
 
   write (out_unit,'(A)') "Xoptfoil-JX" // " " // trim(polar%add_info)
   write (out_unit,*)
