@@ -7,10 +7,14 @@
   </a>
 </p>
 
+
+>[!NOTE]
+>The development of Xoptfoil-JX ended. The successor is **[Xoptfoil2](https://github.com/jxjo/Xoptfoil2)**.
+
+
 # Xoptfoil-JX
 
 This is Xoptfoil-JX, a fork of Xoptfoil - the amazing airfoil optimizer by Daniel Prosser  
-
 
 
 ## About the project
